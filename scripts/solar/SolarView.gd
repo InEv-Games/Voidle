@@ -199,6 +199,10 @@ func _show_access_denied_text(msg: String = "ACCESS DENIED") -> void:
 	tw.chain().tween_callback(lbl.queue_free)
 
 func load_system(data: SolarData) -> void:
+	if not GameState.solar_unlocked:
+		_current = GameState.get_home_solar()
+		load_local(GameState.get_home_planet())
+		return
 	_save_current_angles_to_game_state()
 	_current = data
 

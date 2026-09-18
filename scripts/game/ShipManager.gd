@@ -12,8 +12,15 @@ var _ships: Dictionary = {}
 const ORBIT_SPEED: float = 0.12   # radians per second
 
 func _process(delta: float) -> void:
-	for seed_val: int in _ships:
-		for ship: ShipData in _ships[seed_val]:
+	for seed_val: int in _ships.keys():
+		for ship: ShipData in (_ships[seed_val] as Array).duplicate():
+			if ship.cargo.has("district_label"):
+				var poi := GameState.get_planet(seed_val).find_district(str(ship.cargo["district_label"]))
+				if poi != null:
+					ship.orbit_angle = poi.orbit_angle
+					ship.orbit_inclination = poi.orbit_inclination
+					ship.orbit_node = poi.orbit_node
+				continue
 			if ship.is_travelling():
 				ship.travel_progress += delta / ship.travel_duration
 				if ship.travel_progress >= 1.0:
@@ -33,6 +40,7 @@ func _on_arrived(ship: ShipData) -> void:
 	remove_ship(old_seed, ship.ship_id)
 	add_ship(ship)
 	ship_arrived.emit(ship)
+	GameState.planet_progress_changed.emit(ship.orbit_seed)
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
@@ -69,6 +77,10 @@ func launch(planet_seed: int, name: String, cargo: Dictionary = {}) -> ShipData:
 
 ## Send an orbiting ship to a destination planet.
 func dispatch(ship: ShipData, dest_seed: int, duration_sec: float) -> void:
+	if ship == null or ship.cargo.has("district_label") or ship.is_travelling() or ship.orbit_seed == dest_seed or ship not in ships_for(ship.orbit_seed):
+		return
+	if duration_sec <= 0.0 or not GameState.destination_requirement(dest_seed).is_empty():
+		return
 	ship.dest_seed       = dest_seed
 	ship.travel_duration = duration_sec
 	ship.travel_progress = 0.0

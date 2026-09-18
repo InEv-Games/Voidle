@@ -17,6 +17,7 @@ var _close_btn: Button
 
 # Keep track of active nodes for drawing connections
 var _ui_nodes: Dictionary = {} # id -> PanelContainer
+var _purchase_states: Dictionary = {}
 
 # Drag state variables
 var _is_dragging: bool = false
@@ -104,7 +105,7 @@ func _ready() -> void:
 
 	# Subtitle
 	var sub := Label.new()
-	sub.text = "Invest credits to upgrade colony systems"
+	sub.text = "Invest science to research colony systems"
 	if _font: sub.add_theme_font_override("font", _font)
 	sub.add_theme_font_size_override("font_size", 9)
 	sub.add_theme_color_override("font_color", Color(0.4, 0.48, 0.65))
@@ -156,12 +157,21 @@ func _ready() -> void:
 
 	# Listen to skill unlocks to redraw connections & button states
 	get_node("/root/SkillTree").skill_unlocked.connect(_on_skill_unlocked)
+	var refresh_timer := Timer.new()
+	refresh_timer.wait_time = 0.5
+	refresh_timer.autostart = true
+	refresh_timer.timeout.connect(func() -> void:
+		for id: String in _purchase_states:
+			if _purchase_states[id] != SkillTree.can_purchase(id):
+				_build_tree_graph()
+				break)
+	add_child(refresh_timer)
 
 func _build_tree_graph() -> void:
-	print("DEBUG SkillTree: BuildingDef.all().size() = ", BuildingDef.all().size())
 	for c in _nodes_container.get_children():
 		c.queue_free()
 	_ui_nodes.clear()
+	_purchase_states.clear()
 
 	var st: Node = get_node("/root/SkillTree")
 	for id in st.get("nodes").keys():
@@ -176,6 +186,7 @@ func _build_tree_graph() -> void:
 		var is_max_level := cur_lv >= max_lv
 		var unlocked: bool = cur_lv > 0
 		var purchasable: bool = st.call("can_purchase", id)
+		_purchase_states[id] = purchasable
 
 		var card := PanelContainer.new()
 		card.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -478,6 +489,9 @@ func _build_tree_graph() -> void:
 				
 			# Normal nodes
 			body_str += node.description
+			var requirement: String = st.requirement_text(id)
+			if not requirement.is_empty():
+				body_str += "\n[color=#ffbb66]" + requirement + "[/color]"
 			
 			var effect_text: String = node.effect_desc
 			var def: BuildingDef = null
@@ -486,6 +500,8 @@ func _build_tree_graph() -> void:
 				if bid == "mining": bid = "mine"
 				def = BuildingDef.find(bid)
 				if def:
+					if max_lv > 1:
+						body_str += "\nBuilding level cap: %d -> %d. Upgrade buildings separately with credits." % [maxi(1, cur_lv), mini(max_lv, cur_lv + 1)]
 					effect_text = effect_text.replace(def.display_name, "[color=#fce205]" + def.display_name + "[/color]")
 					var cycle := " / %ds" % def.tick_duration
 					sub_body.append("[color=#fce205]" + def.display_name + " Blueprint[/color]\n\n")

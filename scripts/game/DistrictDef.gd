@@ -96,3 +96,18 @@ static func count_on_planet(def: DistrictDef, data: PlanetData) -> int:
 		if poi.poi_type == def.to_poi_type():
 			n += 1
 	return n
+
+static func can_place(def: DistrictDef, data: PlanetData) -> bool:
+	var pp := GameState.get_planet(data.seed)
+	if not pp.is_colonized or def not in for_planet(data.planet_type):
+		return false
+	if def.is_orbital and pp.level < 3:
+		return false
+	if def.max_per_planet > 0 and count_on_planet(def, data) >= def.max_per_planet:
+		return false
+	pp.recalculate_limits()
+	var count := 0
+	for poi: POIData in data.custom_pois:
+		if poi.is_orbital() == def.is_orbital:
+			count += 1
+	return count < (pp.max_orbital_districts if def.is_orbital else pp.max_districts)

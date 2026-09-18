@@ -100,7 +100,10 @@ static func generate(body_seed: int, res_tag: Tag, res_rarity: int, res_tier: in
 
 ## Create a processed (higher-tier) version of this resource.
 func processed() -> ResourceData:
-	return ResourceData.generate(origin_seed, tag, rarity, tier + 1)
+	var rd := ResourceData.generate(origin_seed, Tag.REFINED_MINERAL, rarity, tier + 1)
+	rd.mineral_name = mineral_name
+	rd.unique_name = mineral_name + " " + _tier_suffix(tier + 1)
+	return rd
 
 static func _tier_suffix(t: int) -> String:
 	const SUFFIXES: Array[String] = ["Ore", "Ingot", "Alloy", "Component", "Core"]

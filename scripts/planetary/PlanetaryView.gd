@@ -759,8 +759,6 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	var cap_data := data
 	var cap_cost := cost
 	confirm.pressed.connect(func() -> void:
-		if not GameState.spend_credits(cap_cost):
-			return
 		var lbl: String = name_edit.text.strip_edges()
 		if lbl.is_empty(): lbl = cap_def.display_name
 		if is_instance_valid(overlay):
@@ -774,6 +772,13 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	name_edit.grab_focus()
 
 func _spawn_district(data: PlanetData, lbl: String, def: DistrictDef) -> void:
+	if not DistrictDef.can_place(def, data) or not GameState.spend_credits(DistrictDef.placement_cost(def, data)):
+		return
+	var base_label := lbl
+	var suffix := 2
+	while GameState.get_planet(data.seed).find_district(lbl) != null:
+		lbl = "%s %d" % [base_label, suffix]
+		suffix += 1
 	var poi          := POIData.new()
 	poi.label        = lbl
 	poi.poi_type     = def.to_poi_type()
@@ -821,6 +826,7 @@ func _spawn_district(data: PlanetData, lbl: String, def: DistrictDef) -> void:
 		_play_rocket_animation(data.seed, launch_poi, func() -> void:
 			poi.constructing = false
 			poi.construct_progress = 1.0
+			GameState.ensure_station_ship(data.seed, poi)
 			AudioManager.play("building_done")
 			GameState.planet_progress_changed.emit(data.seed),
 			"", "Pioneer", "station", {}, "", "", "", 0, false, [], poi)
@@ -1092,26 +1098,29 @@ func _mineral_grid_card(rd: ResourceData, stored: float, show_count: bool, sub_l
 		var expense_lines: Array[String] = []
 		var net: float = 0.0
 		for entry: Dictionary in cap_pp.buildings:
-			if entry.get("constructing", false): continue
+			if entry.get("constructing", false) or entry.get("user_paused", false):
+				continue
 			var def := BuildingDef.find(entry.get("building_id", ""))
-			if def == null: continue
-			var amt: int     = entry.get("amount", 1)
-			var cycle: float = def.tick_duration if def.tick_duration > 0.0 else 1.0
-			# Producer: mine / refinery outputting this specific resource
-			if (def.output_type == BuildingDef.OutputType.RAW_MINERAL or
-					def.output_type == BuildingDef.OutputType.REFINED_MINERAL):
-				var tgt: String = entry.get("target_mineral", "")
-				if tgt == rid:
-					var rate: float = def.output_amount * float(amt) * get_node("/root/SkillTree").get_mine_output_mult() / cycle
-					income_lines.append("+%.2f/s  %s" % [rate, def.display_name])
-					net += rate
-			# Consumer: building that uses this resource as input
-			if def.input_type != BuildingDef.OutputType.NONE:
-				var input_rid: String = entry.get("input_mineral", "")
-				if input_rid == rid:
-					var rate: float = def.input_amount * float(amt) / cycle
-					expense_lines.append("−%.2f/s  %s" % [rate, def.display_name])
-					net -= rate
+			if def == null:
+				continue
+			var key := ProductionManager._key(cap_pp.planet_seed, entry.get("district_id", ""), entry.get("uid", ""))
+			if ProductionManager.is_paused(key):
+				continue
+			var cycle := ProductionManager.get_cycle_duration(cap_pp, entry, def)
+			if is_inf(cycle):
+				continue
+			var outputs := ProductionManager.get_resource_outputs(cap_pp, entry, def)
+			if outputs.has(rid):
+				var rate: float = float(outputs[rid]) / cycle
+				income_lines.append("+%.2f/s  %s" % [rate, def.display_name])
+				net += rate
+			var input_id: String = entry.get("burning_mineral", entry.get("input_mineral", ""))
+			if def.input_type != BuildingDef.OutputType.NONE and input_id == rid:
+				var amount: int = entry.get("cycle_amount", entry.get("amount", 1))
+				var level: int = entry.get("cycle_level", entry.get("level", 1))
+				var rate: float = def.input_amount * amount * ProductionManager.get_building_consume_mult(level) / cycle
+				expense_lines.append("-%.2f/s  %s" % [rate, def.display_name])
+				net -= rate
 		var body_lines: Array[String] = [header]
 		if not income_lines.is_empty() or not expense_lines.is_empty():
 			body_lines.append("")
@@ -1220,48 +1229,17 @@ func _update_poi_night_sizes(data: PlanetData) -> void:
 
 ## Returns total energy balance (positive = surplus) and per-district breakdown dict.
 func _planet_energy_breakdown(pp: PlanetProgress, data: PlanetData) -> Dictionary:
-	var total: float = 0.0
-	var by_district: Dictionary = {}  # label -> float
-	for i in pp.buildings.size():
-		var b: Dictionary = pp.buildings[i]
-		if b.get("constructing", false) or ProductionManager.is_user_paused(
-				"%d:%s:%s" % [pp.planet_seed, b.get("district_id",""), b.get("uid", "-1")]):
-			continue
-		var def := BuildingDef.find(b.get("building_id", ""))
+	var result: Dictionary = {"total": ProductionManager.planet_energy_net(pp)}
+	for poi: POIData in data.custom_pois:
+		result[poi.label] = 0.0
+	for entry: Dictionary in pp.buildings:
+		var def := BuildingDef.find(entry.get("building_id", ""))
 		if def == null:
 			continue
-		var amt: int  = b.get("amount", 1)
-		var label: String = b.get("district_id", "")
-		
-		# Read modified energy flow
-		var etick := def.energy_per_tick
-		if etick > 0.0:
-			if def.building_id == "solar_panel":
-				etick *= get_node("/root/SkillTree").get_solar_mult()
-		elif etick < 0.0:
-			etick *= get_node("/root/SkillTree").get_energy_consume_mult()
-			
-		var contrib: float = etick * amt
-		if def.output_type == BuildingDef.OutputType.ENERGY:
-			var mult := 1.0
-			if def.building_id == "solar_panel":
-				mult = get_node("/root/SkillTree").get_solar_mult()
-			elif def.building_id == "generator":
-				mult = get_node("/root/SkillTree").get_generator_output_mult()
-				var in_min: String = b.get("burning_mineral", "")
-				if in_min != "":
-					var rd: ResourceData = GameState.known_resources.get(in_min)
-					if rd: mult *= float(rd.rarity)
-				else:
-					mult = 0.0 # No fuel, no energy!
-			contrib += def.output_amount * amt * mult
-			
-		total += contrib
-		by_district[label] = by_district.get(label, 0.0) + contrib
-	var result: Dictionary = { "total": total }
-	for poi: POIData in data.custom_pois:
-		if by_district.has(poi.label):
-			result[poi.label] = by_district[poi.label]
+		var label: String = entry.get("district_id", "")
+		result[label] = float(result.get(label, 0.0)) + ProductionManager.get_building_energy(pp, entry, def)
+	if pp.planet_seed == GameState.home_planet_seed:
+		result["Capital"] = float(result.get("Capital", 0.0)) + GameState.base_energy()
 	return result
 
 func _planet_energy_balance(_pp: PlanetProgress) -> float:
@@ -1987,25 +1965,12 @@ func _process(delta: float) -> void:
 			for dl in _stale_dlabels:
 				_district_upgrade_pbars.erase(dl)
 
-		var any_finished = false
 		for poi_label in _district_pbars:
 			var pbar: ProgressBar = _district_pbars[poi_label]
 			if is_instance_valid(pbar):
 				for poi: POIData in current_data.custom_pois:
 					if poi.label == poi_label:
-						if poi.constructing:
-							# Smooth UI update — orbital progress is driven by rocket animation
-							if not poi.is_orbital():
-								poi.construct_progress += delta / max(0.1, poi.construct_duration)
-								if poi.construct_progress >= 1.0:
-									poi.construct_progress = 1.0
-									poi.constructing = false
-									any_finished = true
-									AudioManager.play("building_done")
 						pbar.value = poi.construct_progress * 100.0
-						break
-		if any_finished:
-			GameState.planet_progress_changed.emit(current_data.seed)
 
 	if not _rocket_anims.is_empty():
 		_tick_rocket_anim(delta)
@@ -2124,8 +2089,10 @@ func _show_colonize_popup(data: PlanetData, pp: PlanetProgress) -> void:
 		if GameState.colonize_planet(data.seed):
 			_build_planet_overview(data)
 	)
-	if GameState.credits < 1000.0:
+	var requirement := GameState.colonization_requirement(data.seed)
+	if not requirement.is_empty():
 		confirm.disabled = true
+		desc.text += "\n" + requirement
 	
 	var cancel := Button.new()
 	cancel.text = "CANCEL"
@@ -2224,7 +2191,7 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 			var tier := k_str.trim_prefix("ANY_T").to_int()
 			for rid: String in GameState.global_resources:
 				var rd: ResourceData = GameState.known_resources.get(rid) as ResourceData
-				if rd != null and rd.tag == ResourceData.Tag.RAW_MINERAL and rd.tier == tier:
+				if rd != null and rd.tier == tier and rd.tag == (ResourceData.Tag.RAW_MINERAL if tier == 1 else ResourceData.Tag.REFINED_MINERAL):
 					has_amt += GameState.global_resources[rid]
 
 			display_rd = ResourceData.new()
@@ -2256,7 +2223,7 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 		vbox.add_child(res_flow)
 	
 	var rew_lbl := Label.new()
-	rew_lbl.text = "Upon Level Up:\n+2 Max Districts\n+1 Max District Level"
+	rew_lbl.text = "Upon Level Up:\n+1 Max Surface District\n+1 Max District Level"
 	rew_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_apply_orbitron(rew_lbl, 9)
 	rew_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.3))
@@ -2290,33 +2257,9 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 	up_btn.add_theme_color_override("font_color", Color.WHITE if can_afford else Color(0.5, 0.55, 0.6))
 	up_btn.disabled = not can_afford
 	up_btn.pressed.connect(func():
-		for k in cost.keys():
-			var k_str: String = str(k)
-			if k_str == "credits":
-				GameState.spend_credits(cost[k])
-			elif k_str.begins_with("ANY_T"):
-				var tier := k_str.trim_prefix("ANY_T").to_int()
-				var remain: float = cost[k]
-				var available: Array[ResourceData] = []
-				for rid: String in GameState.global_resources:
-					var rd: ResourceData = GameState.known_resources.get(rid) as ResourceData
-					if rd != null and rd.tag == ResourceData.Tag.RAW_MINERAL and rd.tier == tier and GameState.global_resources[rid] > 0:
-						available.append(rd)
-				available.sort_custom(func(a: ResourceData, b: ResourceData) -> bool: return a.rarity < b.rarity)
-				for rd: ResourceData in available:
-					var rid := rd.resource_id()
-					var take: float = minf(remain, GameState.global_resources.get(rid, 0.0))
-					GameState.global_resources[rid] = GameState.global_resources.get(rid, 0.0) - take
-					remain -= take
-					if remain <= 0.01:
-						break
-				GameState.global_resources_changed.emit()
-			else:
-				GameState.consume_resource(k_str, cost[k])
+		if not pp.start_planet_upgrade():
+			return
 		AudioManager.play("level_up")
-		pp.is_upgrading = true
-		pp.upgrade_progress = 0.0
-		pp.upgrade_duration = 5.0 * pp.level  # Lv2=5s, Lv3=10s, etc.
 		if current_data != null:
 			_build_planet_overview(current_data)
 		overlay.queue_free()
@@ -2419,6 +2362,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 	planet_page.add_theme_constant_override("separation", 8)
 	planet_page.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(planet_page)
+	_build_progression_controls(data, planet_page)
 
 	# ── INVENTORY page ────────────────────────────────────────────────────────
 	var inv_scroll := ScrollContainer.new()
@@ -3305,9 +3249,6 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 		if dropdown_ref[0] != null and is_instance_valid(dropdown_ref[0]):
 			dropdown_ref[0].queue_free()
 			dropdown_ref[0] = null
-		if not GameState.spend_credits(DistrictDef.placement_cost(cap_def, cap_data)):
-			AudioManager.play("error")
-			return
 		_spawn_district(cap_data, cap_def.suggest_name(cap_data), cap_def))
 
 	return btn
@@ -3450,33 +3391,15 @@ func _refresh_bar_label_status(key: String) -> void:
 	var def: BuildingDef = m.get("def", null)
 	var fc: Color = m.get("fc", Color.WHITE)
 	if is_instance_valid(out_lbl) and def != null:
-		var paused := ProductionManager.is_paused(key)
+		var paused := ProductionManager.is_paused(key) or ProductionManager.is_user_paused(key)
 		var out_text := "⏸ waiting"
 		if not paused:
-			var sk := get_node("/root/SkillTree")
-			var amount: int = m.get("entry", {}).get("amount", 1)
-			var b_lv: int = m.get("entry", {}).get("level", 1)
-			var out_val := def.output_amount * ProductionManager.get_building_level_mult(b_lv) * float(amount)
-			if def.output_type == BuildingDef.OutputType.CREDITS:
-				out_val *= sk.get_credits_mult()
-			elif def.output_type == BuildingDef.OutputType.ENERGY:
-				if def.building_id == "solar_panel":
-					out_val *= sk.get_solar_mult()
-				elif def.building_id == "generator":
-					out_val *= sk.get_generator_output_mult()
-					var in_min: String = m.get("entry", {}).get("burning_mineral", "")
-					if in_min != "":
-						var rd: ResourceData = GameState.known_resources.get(in_min)
-						if rd: out_val *= float(rd.rarity)
-					else:
-						out_val = 0.0
-			elif def.output_type == BuildingDef.OutputType.RAW_MINERAL or def.output_type == BuildingDef.OutputType.REFINED_MINERAL:
-				out_val *= sk.get_mine_output_mult()
+			var out_val := ProductionManager.get_building_output(GameState.get_planet(m.get("planet_seed", -1)), m.get("entry", {}), def)
 			match def.output_type:
 				BuildingDef.OutputType.ENERGY:
 					var disp_e := out_val - floorf(out_val) > 0.01
 					out_text = ("+%.1f ⚡" if disp_e else "+%.0f ⚡") % out_val
-				BuildingDef.OutputType.CREDITS:         out_text = "+%.0f cr" % out_val
+				BuildingDef.OutputType.CREDITS:         out_text = "+%.1f cr" % out_val
 				BuildingDef.OutputType.RAW_MINERAL:     out_text = "+%.0f ore" % out_val
 				BuildingDef.OutputType.REFINED_MINERAL: out_text = "+%.0f ref" % out_val
 				BuildingDef.OutputType.SCIENCE:         out_text = "+%.0f sci" % out_val
@@ -3789,7 +3712,7 @@ func _tick_one_rocket(d: Dictionary, delta: float) -> void:
 			var _st_poi: POIData = d.get("station_district_poi", null)
 			if _st_poi != null and _st_poi.constructing:
 				var _launch_frac: float = LAUNCH_DUR / (LAUNCH_DUR + _DEPLOY_DUR)
-				_st_poi.construct_progress = t * _launch_frac
+				pass # ProductionManager owns persistent district progress.
 			var _eta_sec: int = int(ceil((1.0 - t) * LAUNCH_DUR))
 			var _eta_lbl: Label = d.get("eta_lbl")
 			if _eta_lbl != null and is_instance_valid(_eta_lbl):
@@ -4208,7 +4131,7 @@ func _tick_deploy_anims(delta: float) -> void:
 		if dp_poi != null and dp_poi.constructing:
 			const _DEP: float = 2.2
 			var _lf: float = da.get("launch_frac", 1.0 - _DEP / (_DEP + 1.0))
-			dp_poi.construct_progress = lerpf(_lf, 1.0, minf(da["t"] / da["duration"], 1.0))
+			pass # Construction progress belongs to ProductionManager.
 		if da["t"] >= da["duration"]:
 			ctrl2.queue_free()
 			done.append(da)
@@ -4492,11 +4415,11 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	name_lbl.add_theme_color_override("font_color", Color(0.85, 0.92, 1.0))
 	name_row.add_child(name_lbl)
 	var b_lv: int = entry.get("level", 1)
-	if count > 1 or b_lv > 1:
+	if true:
 		var cnt_lbl := Label.new()
 		var txt := ""
 		if count > 1: txt += "×%d" % count
-		if b_lv > 1: txt += (" " if txt != "" else "") + "Lv%d" % b_lv
+		txt += (" " if txt != "" else "") + "Lv %d/%d" % [b_lv, SkillTree.get_building_max_level(def.building_id)]
 		cnt_lbl.text = txt
 		cnt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_apply_orbitron(cnt_lbl, 8)
@@ -4510,30 +4433,16 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	info_row.add_theme_constant_override("separation", 8)
 	
 	# Determine modified output label text
-	var out_val := def.output_amount * ProductionManager.get_building_level_mult(b_lv) * float(count)
-	if def.output_type == BuildingDef.OutputType.CREDITS:
-		out_val *= get_node("/root/SkillTree").get_credits_mult()
-	elif def.output_type == BuildingDef.OutputType.ENERGY:
-		if def.building_id == "solar_panel":
-			out_val *= get_node("/root/SkillTree").get_solar_mult()
-		elif def.building_id == "generator":
-			out_val *= get_node("/root/SkillTree").get_generator_output_mult()
-			var in_min: String = entry.get("burning_mineral", "")
-			if in_min != "":
-				var rd: ResourceData = GameState.known_resources.get(in_min)
-				if rd: out_val *= float(rd.rarity)
-			else:
-				out_val = 0.0 # No fuel
-	elif def.output_type == BuildingDef.OutputType.RAW_MINERAL or def.output_type == BuildingDef.OutputType.REFINED_MINERAL:
-		out_val *= get_node("/root/SkillTree").get_mine_output_mult()
-		
+	var out_val := ProductionManager.get_building_output(pp, entry, def)
+
 	var out_text := "⏸ waiting" if paused else ""
 	if not paused:
 		match def.output_type:
 			BuildingDef.OutputType.ENERGY:
 				var disp_e := absf(out_val - floorf(out_val)) > 0.01
 				out_text = ("+%.1f ⚡" if disp_e else "+%.0f ⚡") % out_val
-			BuildingDef.OutputType.CREDITS:         out_text = "+%.0f cr" % out_val
+			BuildingDef.OutputType.CREDITS:         out_text = "+%.1f cr" % out_val
+			BuildingDef.OutputType.SCIENCE:         out_text = "+%.1f sci" % out_val
 			BuildingDef.OutputType.RAW_MINERAL:     out_text = "+%.0f ore" % out_val
 			BuildingDef.OutputType.REFINED_MINERAL: out_text = "+%.0f ref" % out_val
 
@@ -4547,20 +4456,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	info_row.add_child(out_lbl)
 	
 	if def.energy_per_tick != 0.0:
-		var etick := def.energy_per_tick
-		if etick > 0.0:
-			if def.building_id == "solar_panel":
-				etick *= get_node("/root/SkillTree").get_solar_mult()
-		else:
-			var st_energy_mult: float = get_node("/root/SkillTree").get_energy_consume_mult()
-			var st = get_node("/root/SkillTree")
-			if POIData.POIType.CITY in def.allowed_poi_types and st.is_unlocked("housing_maintenance"):
-				st_energy_mult -= 0.10
-			if def.output_type == BuildingDef.OutputType.SCIENCE and st.is_unlocked("science_maintenance"):
-				st_energy_mult -= 0.10
-			if def.output_type == BuildingDef.OutputType.CREDITS and not (POIData.POIType.CITY in def.allowed_poi_types) and st.is_unlocked("trade_maintenance"):
-				st_energy_mult -= 0.10
-			etick *= st_energy_mult
+		var etick := ProductionManager.get_building_energy(pp, entry, def)
 			
 		var e_lbl := Label.new()
 		var sign := "+" if etick > 0.0 else ""
@@ -4585,8 +4481,8 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 			req_tag = ResourceData.Tag.REFINED_MINERAL
 		
 		var raw_list: Array[ResourceData] = []
-		for rd in br.get_by_tag(req_tag):
-			if rd.tier == def.input_tier:
+		for rd: ResourceData in GameState.known_resources.values():
+			if rd.tag == req_tag and rd.tier == def.input_tier:
 				raw_list.append(rd)
 		
 		if not raw_list.is_empty():
@@ -4688,18 +4584,11 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	if not paused:
 		if def.output_type != BuildingDef.OutputType.NONE:
 			tip_str += "Output: " + out_text + "\n"
-		var tip_etick := def.energy_per_tick
+		var tip_etick := ProductionManager.get_building_energy(pp, entry, def)
 		if tip_etick != 0.0:
-			if tip_etick > 0.0:
-				tip_etick *= ProductionManager.get_building_level_mult(b_lv)
-				if def.building_id == "solar_panel":
-					tip_etick *= get_node("/root/SkillTree").get_solar_mult()
-			else:
-				tip_etick *= ProductionManager.get_building_consume_mult(b_lv)
-				tip_etick *= get_node("/root/SkillTree").get_energy_consume_mult()
-			tip_str += "Energy: " + ("+" if tip_etick > 0 else "") + "%.0f ⚡\n" % (tip_etick * count)
+			tip_str += "Energy: " + ("+" if tip_etick > 0 else "") + "%.1f ⚡\n" % tip_etick
 		if def.input_amount > 0.0:
-			tip_str += "Consumes: %.0f units\n" % (def.input_amount * count)
+			tip_str += "Consumes: %.1f units per cycle\n" % (def.input_amount * count * ProductionManager.get_building_consume_mult(b_lv))
 			
 	card.mouse_entered.connect(func() -> void:
 		AudioManager.play("poi_hover")
@@ -4720,7 +4609,8 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 
 	# Right: "+" stacking and "−" demolish buttons
 	var slots_free: int  = pp.district_slots(poi) - pp.slots_used_in_district(poi.label)
-	var can_add: bool    = slots_free >= def.slot_cost and GameState.credits >= def.base_cost
+	var stack_cost := def.get_build_cost(entry.get("level", 1))
+	var can_add: bool = slots_free >= def.slot_cost and GameState.credits >= stack_cost and pp.can_add_building(poi.label, def)
 	var cap_poi    := poi
 	var cap_def    := def
 	var cap_planet := planet
@@ -4753,9 +4643,9 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	if not can_add and slots_free < def.slot_cost:
 		tip_add = "No slots · Upgrade district"
 	elif not can_add:
-		tip_add = "Need %.0f cr" % def.base_cost
+		tip_add = "Building limit reached" if not pp.can_add_building(poi.label, def) else "Need %.0f cr" % stack_cost
 	else:
-		tip_add = "Stack one more %s\n%.0f cr · %d slot" % [def.display_name, def.base_cost, def.slot_cost]
+		tip_add = "Stack one more %s\n%.0f cr · %d slot" % [def.display_name, stack_cost, def.slot_cost]
 	add_btn.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
 		TooltipManager.show_tip("+ " + def.display_name, tip_add))
@@ -4763,11 +4653,16 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
 	add_btn.pressed.connect(func() -> void:
-		if GameState.spend_credits(cap_def.base_cost):
-			pp.stack_building_unchecked(cap_poi.label, cap_def.building_id)
+		if not pp.can_add_building(cap_poi.label, cap_def):
+			return
+		if GameState.spend_credits(stack_cost):
+			if not pp.stack_building_unchecked(cap_poi.label, cap_def.building_id, cap_entry):
+				GameState.earn_credits(stack_cost)
 			GameState.planet_progress_changed.emit(cap_planet.seed)
 			_refresh_overview_energy()
 			_build_district_panel(cap_poi, cap_planet))
+	_watch_button(add_btn, func() -> bool:
+		return GameState.credits >= stack_cost and pp.can_add_building(cap_poi.label, cap_def) and pp.slots_used_in_district(cap_poi.label) + cap_def.slot_cost <= pp.district_slots(cap_poi))
 
 	var rem_btn := Button.new()
 	rem_btn.text = "-"
@@ -4808,7 +4703,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	rem_btn.pressed.connect(func() -> void:
 		var amt: int = cap_entry.get("amount", 1)
 		if amt <= 1:
-			pp.buildings.erase(cap_entry)
+			pp.remove_building_stack(cap_entry)
 		else:
 			cap_entry["amount"] = amt - 1
 		GameState.planet_progress_changed.emit(cap_planet.seed)
@@ -4818,7 +4713,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	btn_vbox.add_child(rem_btn)
 	
 	var st = null
-	if Engine.has_singleton("SceneTree") and Engine.get_main_loop():
+	if Engine.get_main_loop():
 		st = Engine.get_main_loop().root.get_node_or_null("SkillTree")
 	var max_b_lv = 1
 	if st and st.has_method("get_building_max_level"):
@@ -4829,14 +4724,14 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		var b_upg_cost = def.get_upgrade_cost(cur_lv, cap_entry.get("amount", 1))
 		var can_afford_b_upg = GameState.credits >= b_upg_cost
 		var b_upg_btn := Button.new()
-		b_upg_btn.text = "^"
+		b_upg_btn.text = "Lv+"
 		b_upg_btn.flat = false
 		_apply_orbitron(b_upg_btn, 10)
 		b_upg_btn.custom_minimum_size = Vector2(30, 22)
 		var up_s := StyleBoxFlat.new()
 		up_s.bg_color = Color(0.2, 0.4, 0.8, 1.0) if can_afford_b_upg else Color(0.1, 0.15, 0.25, 1.0)
 		up_s.border_color = Color(0.4, 0.7, 1.0, 1.0) if can_afford_b_upg else Color(0.2, 0.3, 0.4, 1.0)
-		up_s.border_width_all = 1
+		up_s.set_border_width_all(1)
 		up_s.corner_radius_top_left = 3; up_s.corner_radius_top_right = 3
 		up_s.corner_radius_bottom_left = 3; up_s.corner_radius_bottom_right = 3
 		up_s.content_margin_left = 3; up_s.content_margin_right = 3
@@ -4847,7 +4742,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		b_upg_btn.mouse_entered.connect(func():
 			CursorManager.set_state(CursorManager.State.POINTER)
 			var cost_str = "%.0f cr" % b_upg_cost
-			TooltipManager.show_tip("Upgrade Building", "Upgrade to Level %d.\nIncreases output and consumption." % (cur_lv + 1), cost_str))
+			TooltipManager.show_tip("Upgrade Building", "Upgrade to Level %d.\nOutput multiplier: %.2f -> %.2f\nConsumption multiplier: %.2f -> %.2f" % [cur_lv + 1, ProductionManager.get_building_level_mult(cur_lv), ProductionManager.get_building_level_mult(cur_lv + 1), ProductionManager.get_building_consume_mult(cur_lv), ProductionManager.get_building_consume_mult(cur_lv + 1)], cost_str))
 		b_upg_btn.mouse_exited.connect(func():
 			CursorManager.set_state(CursorManager.State.NORMAL)
 			TooltipManager.hide_tip())
@@ -4861,6 +4756,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 					_build_district_panel(cap_poi, cap_planet)
 		)
 		btn_vbox.add_child(b_upg_btn)
+		_watch_button(b_upg_btn, func() -> bool: return GameState.credits >= def.get_upgrade_cost(int(cap_entry.get("level", 1)), int(cap_entry.get("amount", 1))))
 
 	hbox.add_child(btn_vbox)
 
@@ -4916,6 +4812,7 @@ func _build_spaceport_card(def: BuildingDef, pm_key: String,
 	status_lbl.add_theme_color_override("font_color", Color(0.50, 0.65, 0.90, 0.70))
 	status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left_vbox.add_child(status_lbl)
+	left_vbox.add_child(_make_colony_ship_button(pp.planet_seed))
 
 	_bar_meta[pm_key] = {
 		"planet_seed": pp.planet_seed,
@@ -6343,12 +6240,12 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		var can_afford: bool = GameState.credits >= def.base_cost
 		var has_slots:  bool = slots_free >= def.slot_cost
 		
-		var at_limit: bool = false
+		var at_limit: bool = not pp.can_add_building(poi.label, def)
 		if def.max_per_district > 0:
 			var count_in_dist := 0
 			for e in pp.buildings:
 				if e.get("district_id", "") == poi.label and e.get("building_id", "") == def.building_id:
-					count_in_dist += 1
+					count_in_dist += int(e.get("amount", 1))
 			if count_in_dist >= def.max_per_district:
 				at_limit = true
 				
@@ -6445,8 +6342,10 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		if cycle_s > 0.0 and spd_mult > 0.0:
 			cycle_s = cycle_s / spd_mult
 
-		var dyn_output := def.output_amount * out_mult
-		var dyn_energy := def.energy_per_tick  # upkeep doesn't scale with output_mult
+		var preview := {"building_id": def.building_id, "district_id": poi.label, "level": 1, "amount": 1, "cycle_funded": true}
+		cycle_s = ProductionManager.get_cycle_duration(pp, preview, def, false) if def.tick_duration > 0.0 else 0.0
+		var dyn_output := ProductionManager.get_building_output(pp, preview, def)
+		var dyn_energy := ProductionManager.get_building_energy(pp, preview, def)
 
 		# ── Ore icon (colorless gray T1 shape used inline) ─────────
 		var ore_icon := MineralIcon.make(1, Color(0.55, 0.58, 0.70))
@@ -6481,6 +6380,8 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 			tip_body_parts.append("\n+%.0f cr" % dyn_output)
 		elif def.output_type == BuildingDef.OutputType.REFINED_MINERAL:
 			tip_body_parts.append("\n+%.1f refined" % dyn_output)
+		elif def.output_type == BuildingDef.OutputType.SCIENCE:
+			tip_body_parts.append("\n+%.1f science" % dyn_output)
 
 		# Upkeep / consumption (below production)
 		if dyn_energy < 0.0:
@@ -6512,7 +6413,9 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 					if GameState.spend_credits(cap_def.base_cost):
 						AudioManager.play("construct")
 						AchievementManager.notify_trigger(AchievementDef.Trigger.FIRST_BUILDING)
-						pp.build_in_district(cap_poi, cap_def.building_id)
+						if not pp.build_in_district(cap_poi, cap_def.building_id):
+							GameState.earn_credits(cap_def.base_cost)
+							return
 						ProductionManager.building_queued.emit(cap_planet.seed, cap_def.building_id)
 						if is_instance_valid(cap_overlay):
 							cap_overlay.queue_free()
@@ -6727,10 +6630,23 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 			edit.grab_focus()
 			edit.select_all()
 			var _commit := func(new_name: String) -> void:
+				if edit.is_queued_for_deletion():
+					return
 				var trimmed := new_name.strip_edges()
 				if trimmed.is_empty(): trimmed = cap_poi_rename.label
+				var existing := cap_pp_rename.find_district(trimmed)
+				if existing != null and existing != cap_poi_rename:
+					trimmed = cap_poi_rename.label
 				# Update POI label and re-key all building entries
 				var old_label := cap_poi_rename.label
+				for station: ShipData in ShipManager.ships_for(cap_planet_ren.seed):
+					if station.ship_type == "station" and station.ship_name == old_label:
+						station.ship_name = trimmed
+						station.cargo["district_label"] = trimmed
+				if cap_pp_rename.district_upgrading.has(old_label):
+					var upgrade: float = cap_pp_rename.district_upgrading[old_label]
+					cap_pp_rename.district_upgrading.erase(old_label)
+					cap_pp_rename.district_upgrading[trimmed] = upgrade
 				cap_poi_rename.label = trimmed
 				for b: Dictionary in cap_pp_rename.buildings:
 					if b.get("district_id") == old_label:
@@ -6872,11 +6788,11 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		var cap_planet_upg := planet
 		upg_btn.pressed.connect(func() -> void:
 			AudioManager.play("click")
-			if GameState.spend_credits(upg_cost):
-				pp.upgrade_district(cap_poi_upg.label)
+			if pp.upgrade_district(cap_poi_upg.label):
 				GameState.planet_progress_changed.emit(cap_planet_upg.seed)
 			_build_district_panel(cap_poi_upg, cap_planet_upg))
 		root.add_child(upg_btn)
+		_watch_button(upg_btn, func() -> bool: return pp.can_upgrade_district(cap_poi_upg.label) and GameState.credits >= 500 * int(pp.district_levels.get(cap_poi_upg.label, 1)))
 		if can_upg: _notify_tutorial_district_upgrade_btn(upg_btn)
 
 	panel_content.add_child(root)
@@ -6885,6 +6801,12 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 ## Opens a district-style build panel for an orbiting station.
 func _open_station_district(ship: ShipData, _planet_cont: Control) -> void:
 	if current_data == null: return
+	# Orbital districts own their buildings in PlanetProgress, not ShipData.
+	for existing: POIData in current_data.custom_pois:
+		if existing.is_orbital() and existing.label == ship.ship_name:
+			_active_station_ship = null
+			_build_district_panel(existing, current_data)
+			return
 	# Build a synthetic POI that represents the station
 	var poi := POIData.new()
 	poi.label    = ship.ship_name
@@ -7404,3 +7326,80 @@ func _spawn_fly_icon(lon_deg: float, lat_deg: float, icon: Texture2D) -> void:
 	tw2.tween_interval(0.7)
 	tw2.tween_property(_inventory_tab_btn, "scale", Vector2(1.05, 1.05), 0.1)
 	tw2.tween_property(_inventory_tab_btn, "scale", Vector2(1.0, 1.0), 0.1)
+
+func _watch_button(button: Button, can_use: Callable) -> void:
+	var timer := Timer.new()
+	timer.wait_time = 0.5
+	timer.autostart = true
+	timer.timeout.connect(func() -> void: button.disabled = not can_use.call())
+	button.add_child(timer)
+
+func _make_colony_ship_button(seed_val: int) -> Button:
+	var button := Button.new()
+	_apply_orbitron(button, 10)
+	button.pressed.connect(func() -> void: GameState.build_colony_ship(seed_val))
+	var refresh := func() -> void:
+		var reason := GameState.colony_ship_requirement(seed_val)
+		var cost := GameState.ship_cost(seed_val)
+		var order: float = GameState.colony_ship_orders.get(str(seed_val), 0.0)
+		button.text = "ASSEMBLING COLONY SHIP: %ds" % ceili(order) if order > 0.0 else "BUILD COLONY SHIP (%d cr, %d ingots)" % [cost.credits, cost.ingots]
+		button.disabled = not reason.is_empty()
+		button.tooltip_text = reason if not reason.is_empty() else "30 seconds. Send the completed ship from the destination planet's panel."
+	refresh.call()
+	var timer := Timer.new()
+	timer.wait_time = 0.5
+	timer.autostart = true
+	timer.timeout.connect(refresh)
+	button.add_child(timer)
+	return button
+
+func _build_progression_controls(data: PlanetData, parent: VBoxContainer) -> void:
+	var box := VBoxContainer.new()
+	parent.add_child(box)
+	if data.seed == GameState.home_planet_seed:
+		var foundation := Label.new()
+		foundation.text = "Capital grid: +4 energy"
+		_apply_orbitron(foundation, 10)
+		box.add_child(foundation)
+		box.add_child(_make_colony_ship_button(data.seed))
+		if GameState.moon_unlocked:
+			var moon_btn := Button.new()
+			moon_btn.text = "HOME MOON"
+			_apply_orbitron(moon_btn, 10)
+			box.add_child(moon_btn)
+			moon_btn.pressed.connect(func() -> void:
+				SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", GameState.get_home_planet().moons[0]))
+	elif GameState.is_home_moon(data.seed):
+		var home_btn := Button.new()
+		home_btn.text = "HOME PLANET"
+		_apply_orbitron(home_btn, 10)
+		box.add_child(home_btn)
+		home_btn.pressed.connect(func() -> void:
+			SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", GameState.get_home_planet()))
+	if GameState.solar_unlocked:
+		var system_btn := Button.new()
+		system_btn.text = "SOLAR SYSTEM"
+		_apply_orbitron(system_btn, 10)
+		box.add_child(system_btn)
+		system_btn.pressed.connect(func() -> void:
+			SceneTransition.go("res://scenes/solar/SolarView.tscn", GameState.get_home_solar()))
+	if not GameState.get_planet(data.seed).is_colonized:
+		var send_btn := Button.new()
+		_apply_orbitron(send_btn, 10)
+		box.add_child(send_btn)
+		send_btn.pressed.connect(func() -> void: GameState.send_colony_ship(data.seed))
+		var refresh_send := func() -> void:
+			var arrived := GameState.arrived_colony_ship(data.seed) != null
+			var en_route := false
+			for ship: ShipData in ShipManager.ships_for(GameState.home_planet_seed):
+				if ship.dest_seed == data.seed:
+					en_route = true
+			send_btn.text = "COLONY SHIP ARRIVED" if arrived else ("COLONY SHIP EN ROUTE" if en_route else "SEND COLONY SHIP FROM HOME")
+			send_btn.disabled = arrived or en_route or GameState.arrived_colony_ship(GameState.home_planet_seed) == null or not GameState.destination_requirement(data.seed).is_empty()
+			send_btn.tooltip_text = "Build a colony ship at the home Spaceport, send it here, then establish a settlement for 1000 credits."
+		refresh_send.call()
+		var timer := Timer.new()
+		box.add_child(timer)
+		timer.wait_time = 0.5
+		timer.timeout.connect(refresh_send)
+		timer.call_deferred("start")

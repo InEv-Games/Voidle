@@ -51,18 +51,18 @@ func _init() -> void:
 	_add_node("root", "Central Core", "The heart of your colony. Grants basic Low-Density Housing, Solar Panels, and a University.", 0.0, Vector2(0, 0), [], 1, "Unlocks basic structures", 1, NodeShape.CIRCLE)
 
 	# --- BRANCH 1: EXPLORATION (UP) ---
-	_add_node("unlock_space_station", "Orbital Facilities", "Launches basic structural components into Low Orbit.", 300.0, Vector2(0, -160), ["root"], 2, "Unlocks Space Station District", 10)
-	_add_node("unlock_orbital_shipyard", "Orbital Shipyard", "Constructs huge orbital vessels to boost local logistics.", 1000.0, Vector2(160, -160), ["unlock_space_station"], 3, "Unlocks Orbital Shipyard", 10)
+	_add_node("unlock_space_station", "Orbital Facilities", "Launches basic structural components into Low Orbit.", 100.0, Vector2(0, -160), ["root"], 2, "Unlocks Space Station District", 1)
+	_add_node("unlock_orbital_shipyard", "Orbital Shipyard", "Constructs huge orbital vessels to boost local logistics.", 250.0, Vector2(160, -160), ["unlock_space_station"], 3, "Unlocks Orbital Shipyard", 5)
 	_add_node("unlock_orbital_offworld_market", "Offworld Trade Hub", "Secures long-term interstellar trade routes.", 5000.0, Vector2(280, -160), ["unlock_orbital_shipyard"], 4, "Unlocks Offworld Trade Hub", 10)
-	_add_node("unlock_orbital_mirrors", "Orbital Mirrors", "Constructs orbital mirrors to focus sunlight.", 2000.0, Vector2(-160, -160), ["unlock_space_station"], 3, "Unlocks Orbital Mirrors", 10)
+	_add_node("unlock_orbital_mirrors", "Orbital Mirrors", "Constructs orbital mirrors to focus sunlight.", 120.0, Vector2(-160, -160), ["unlock_space_station"], 3, "Unlocks Orbital Mirrors", 5)
 	
-	_add_node("unlock_moon", "Moon Outpost", "Provides orbital mechanics calculations required to establish lunar outposts.", 500.0, Vector2(0, -320), ["unlock_space_station"], 3, "Unlocks Moon Outpost", 1)
-	_add_node("unlock_lunar_observatory", "Lunar Observatory", "Zero-atmosphere deep space observation for massive Science generation.", 1500.0, Vector2(-160, -320), ["unlock_moon"], 4, "Unlocks Lunar Observatory", 10)
-	_add_node("unlock_moon_helium3", "Helium-3 Extractor", "Extracts rare isotopes for energy.", 1500.0, Vector2(160, -320), ["unlock_moon"], 4, "Unlocks Helium-3 Extractor", 10)
+	_add_node("unlock_moon", "Moon Outpost", "Provides orbital mechanics calculations required to establish lunar outposts.", 180.0, Vector2(0, -320), ["unlock_space_station"], 3, "Unlocks Moon Outpost", 1)
+	_add_node("unlock_lunar_observatory", "Lunar Observatory", "Zero-atmosphere deep space observation for massive Science generation.", 250.0, Vector2(-160, -320), ["unlock_moon"], 4, "Unlocks Lunar Observatory", 5)
+	_add_node("unlock_moon_helium3", "Helium-3 Extractor", "Extracts rare isotopes for energy.", 200.0, Vector2(160, -320), ["unlock_moon"], 4, "Unlocks Helium-3 Extractor", 5)
 	
-	_add_node("unlock_asteroids", "Deep Space Tracking", "Allows tracking and mining of resource-rich Asteroids.", 1200.0, Vector2(0, -480), ["unlock_moon"], 4, "Unlocks Asteroid Mining", 1)
+	_add_node("unlock_asteroids", "Deep Space Tracking", "Allows tracking and mining of resource-rich Asteroids.", 600.0, Vector2(0, -480), ["unlock_planetary_colonization"], 4, "Unlocks Asteroid Mining", 1)
 	_add_node("unlock_asteroid_harvester", "Asteroid Harvester", "Colossal mining rig tailored for zero-G asteroid cracking.", 3000.0, Vector2(160, -480), ["unlock_asteroids"], 5, "Unlocks Asteroid Harvester", 1)
-	_add_node("unlock_planetary_colonization", "Planetary Colonization", "Develops extreme environment survival systems, enabling colonization of hostile worlds.", 2000.0, Vector2(0, -640), ["unlock_asteroids"], 5, "Unlocks Specialized Colonization", 1, NodeShape.CIRCLE)
+	_add_node("unlock_planetary_colonization", "Interplanetary Travel", "Uses lunar observatory data to open access to the rest of the home solar system.", 400.0, Vector2(0, -640), ["unlock_lunar_observatory"], 5, "Unlocks solar system travel", 1, NodeShape.CIRCLE)
 	
 	# === TOP-LEFT: ICE (Vertical) ===
 	_add_node("colonize_ice", "Cryo-Habitation", "Thermal insulation tech for Ice Worlds.", 2500.0, Vector2(-160, -800), ["unlock_planetary_colonization"], 5, "Unlocks Ice Planet Colonization", 1)
@@ -114,11 +114,11 @@ func _init() -> void:
 	_add_node("unlock_interstellar", "Interstellar Travel", "Bend spacetime to discover entirely new Star Systems.", 10000.0, Vector2(0, -1600), ["unlock_planetary_colonization"], 7, "Discovers 1 New Star System per level", 999, NodeShape.CIRCLE)
 
 	# --- BRANCH 2: SCIENCE (Staircase Zigzag Left) ---
-	_add_node("unlock_library", "Archival Systems", "Unlocks the Library, boosting Science output in the district by +15% per level.", 150.0, Vector2(-280, 160), ["unlock_lab"], 2, "Unlocks Library", 10)
-	_add_node("science_income_1", "Educational Grants", "Increases global Science output.", 300.0, Vector2(-160, 280), ["unlock_lab"], 2, "+15% Global Science output.", 5, NodeShape.DIAMOND)
+	_add_node("unlock_library", "Archival Systems", "Unlocks the Library, boosting Science output in the district by +15% per level.", 60.0, Vector2(-280, 160), ["unlock_lab"], 2, "Unlocks Library", 5)
+	_add_node("science_income_1", "Educational Grants", "Increases global Science output.", 60.0, Vector2(-160, 280), ["unlock_lab"], 2, "+15% Global Science output.", 5, NodeShape.DIAMOND)
 	
-	_add_node("unlock_advanced_lab", "Advanced Research", "Upgrades the basic University into a dedicated high-yield Research Lab.", 500.0, Vector2(-280, 400), ["science_income_1"], 3, "Unlocks Institute of Technology", 10)
-	_add_node("unlock_observatory", "Deep Space Optics", "Unlocks the Observatory, increasing Science tick speed in the district by +10% per level.", 800.0, Vector2(-400, 400), ["unlock_advanced_lab"], 3, "Unlocks Observatory", 10)
+	_add_node("unlock_advanced_lab", "Advanced Research", "Upgrades the basic University into a dedicated high-yield Research Lab.", 120.0, Vector2(-280, 400), ["science_income_1"], 3, "Unlocks Institute of Technology", 5)
+	_add_node("unlock_observatory", "Deep Space Optics", "Unlocks the Observatory, increasing Science tick speed in the district by +10% per level.", 150.0, Vector2(-400, 400), ["unlock_advanced_lab"], 3, "Unlocks Observatory", 5)
 	_add_node("science_income_2", "Unified Theory", "A breakthrough in theoretical physics boosts all research.", 1200.0, Vector2(-280, 520), ["unlock_advanced_lab"], 4, "+20% Global Science output.", 5, NodeShape.DIAMOND)
 	
 	_add_node("unlock_research_academy", "Research Academy", "Large-scale science academy to generate massive passive Science.", 2000.0, Vector2(-400, 640), ["science_income_2"], 4, "Unlocks Research Academy", 10)
@@ -127,7 +127,7 @@ func _init() -> void:
 	# --- BRANCH 3: MINING (Left-Down) ---
 	_add_node("unlock_mining", "Mining Operations", "Establishes the geological survey programs needed to locate and extract raw minerals from planetary crust.\nUpgrade to increase Mine max level.", 20.0, Vector2(-360, 0), ["root"], 1, "Unlocks Mining District & Mine & +1 Max Level", 10, NodeShape.HEXAGON)
 	
-	_add_node("unlock_deep_drill", "Deep Drill", "Unlocks high-yield Deep Drills to penetrate bedrock.", 200.0, Vector2(-600, 160), ["unlock_mining"], 2, "Unlocks Deep Drill", 10)
+	_add_node("unlock_deep_drill", "Deep Drill", "Unlocks high-yield Deep Drills to penetrate bedrock.", 60.0, Vector2(-600, 160), ["unlock_mining"], 2, "Unlocks Deep Drill", 5)
 	
 	# Main Extractor Line
 	_add_node("unlock_precision_extractor", "Precision Extractor", "Extracts only the TARGETED raw mineral.", 1000.0, Vector2(-720, 160), ["unlock_deep_drill"], 3, "Unlocks Precision Extractor", 10)
@@ -135,16 +135,16 @@ func _init() -> void:
 	_add_node("unlock_quantum_harvester", "Quantum Harvester", "Godlike TARGETED extraction via quantum teleportation.", 10000.0, Vector2(-960, 220), ["unlock_mantle_cracker"], 5, "Unlocks Quantum Harvester", 10)
 
 	# Main Refinery Line
-	_add_node("unlock_refinery", "Refinery", "Unlocks ore-to-mineral Refineries.", 400.0, Vector2(-600, 40), ["unlock_deep_drill"], 2, "Unlocks Refinery", 10)
+	_add_node("unlock_refinery", "Refinery", "Unlocks ore-to-mineral Refineries.", 80.0, Vector2(-600, 40), ["unlock_deep_drill"], 2, "Unlocks Refinery", 5)
 	_add_node("unlock_plasma_smelter", "Plasma Smelter", "Uses plasma to rapidly smelt minerals.", 1500.0, Vector2(-600, -80), ["unlock_refinery"], 3, "Unlocks Plasma Smelter", 10)
 	_add_node("unlock_molecular_forge", "Molecular Forge", "Reconstructs minerals at the molecular level.", 5000.0, Vector2(-600, -200), ["unlock_plasma_smelter"], 4, "Unlocks Molecular Forge", 10)
 	_add_node("unlock_singularity_forge", "Singularity Forge", "Extreme gravity compression refining.", 15000.0, Vector2(-600, -320), ["unlock_molecular_forge"], 5, "Unlocks Singularity Forge", 10)
 
 	# Passive Skills (Diamonds)
-	_add_node("mine_speed", "Excavation Drills", "Equips mining facilities with high-torque diamond drills.", 50.0, Vector2(-600, 280), ["unlock_deep_drill"], 2, "+5% Mining speed per level", 10, NodeShape.DIAMOND)
-	_add_node("deep_mining", "Seismic Sensors", "Deep scans tectonic plates to output higher yields.", 350.0, Vector2(-720, 280), ["unlock_deep_drill"], 3, "+2% Mine output multiplier per level", 10, NodeShape.DIAMOND)
-	_add_node("mining_logistics", "Automated Conveyors", "Reduces operational energy costs.", 900.0, Vector2(-840, 280), ["deep_mining"], 4, "-2% Mining Energy Cost per level", 10, NodeShape.DIAMOND)
-	_add_node("refinery_efficiency", "Refinery Optimization", "Enhances standard smelting procedures.", 450.0, Vector2(-720, 40), ["unlock_refinery"], 3, "+5% Refinery speed per level", 10, NodeShape.DIAMOND)
+	_add_node("mine_speed", "Excavation Drills", "Equips mining facilities with high-torque diamond drills.", 25.0, Vector2(-600, 280), ["unlock_deep_drill"], 2, "+5% Mining speed per level", 10, NodeShape.DIAMOND)
+	_add_node("deep_mining", "Seismic Sensors", "Deep scans tectonic plates to output higher yields.", 50.0, Vector2(-720, 280), ["unlock_deep_drill"], 3, "+2% Mine output multiplier per level", 10, NodeShape.DIAMOND)
+	_add_node("mining_logistics", "Automated Conveyors", "Reduces operational energy costs.", 80.0, Vector2(-840, 280), ["deep_mining"], 4, "-2% Mining Energy Cost per level", 10, NodeShape.DIAMOND)
+	_add_node("refinery_efficiency", "Refinery Optimization", "Enhances standard smelting procedures.", 40.0, Vector2(-720, 40), ["unlock_refinery"], 3, "+5% Refinery speed per level", 10, NodeShape.DIAMOND)
 
 	# Buff Buildings
 	_add_node("unlock_extraction_optimizer", "Extraction Optimizer", "Increases raw output for all extractors.", 800.0, Vector2(-600, 400), ["mine_speed"], 3, "Unlocks Extraction Optimizer", 10)
@@ -156,10 +156,10 @@ func _init() -> void:
 	# Specialized: Asteroid
 	_add_node("unlock_micro_g_drill", "Micro-G Drill", "Fires tethers deep into the core.\n[color=#ff5555]Requires: Deep Drill[/color]", 1200.0, Vector2(-160, -480), ["unlock_asteroids"], 3, "Unlocks Micro-G Drill (Asteroid)", 10)
 	_add_node("unlock_zero_g_sorter", "Zero-G Sorter", "Improves extraction speed on Asteroids.", 1500.0, Vector2(-320, -480), ["unlock_micro_g_drill"], 4, "Unlocks Zero-G Sorter", 10)	# --- BRANCH 4: HOUSING / URBANIZATION (Staircase Zigzag) ---
-	_add_node("unlock_culture_center", "Cultural Investments", "Unlocks the Culture Center, boosting Residential credit output in the district by +20% per level.", 150.0, Vector2(280, 160), ["unlock_residential"], 2, "Unlocks Culture Center", 10)
-	_add_node("housing_income_1", "Subsidized Housing", "Global initiative to subsidize residential developments.", 300.0, Vector2(160, 280), ["unlock_residential"], 2, "+15% Global credit payout from all housing.", 5, NodeShape.DIAMOND)
+	_add_node("unlock_culture_center", "Cultural Investments", "Unlocks the Culture Center, boosting Residential credit output in the district by +20% per level.", 60.0, Vector2(280, 160), ["unlock_residential"], 2, "Unlocks Culture Center", 5)
+	_add_node("housing_income_1", "Subsidized Housing", "Global initiative to subsidize residential developments.", 60.0, Vector2(160, 280), ["unlock_residential"], 2, "+15% Global credit payout from all housing.", 5, NodeShape.DIAMOND)
 	
-	_add_node("unlock_apartments", "Apartments", "Unlocks denser housing for higher income.", 500.0, Vector2(280, 400), ["housing_income_1"], 3, "Unlocks Apartments", 10)
+	_add_node("unlock_apartments", "Apartments", "Unlocks denser housing for higher income.", 100.0, Vector2(280, 400), ["housing_income_1"], 3, "Unlocks Apartments", 5)
 	_add_node("unlock_recreation_center", "Public Entertainment", "Unlocks the Recreation Center, boosting Apartment credit output in the district by +25% per level.", 800.0, Vector2(400, 400), ["unlock_apartments"], 3, "Unlocks Recreation Center", 10)
 	_add_node("housing_income_2", "Urban Sprawl", "Expands city limits globally.", 1200.0, Vector2(280, 520), ["unlock_apartments"], 4, "+20% Global credit payout from all housing.", 5, NodeShape.DIAMOND)
 	
@@ -170,7 +170,7 @@ func _init() -> void:
 	# --- BRANCH 5: TRADE/LOGISTICS (Mid-Down) ---
 	_add_node("unlock_market_square", "Market Square", "Unlocks the Market Square, providing basic passive credit generation.", 30.0, Vector2(0, 240), ["root"], 2, "Unlocks Market Square", 10, NodeShape.HEXAGON)
 	
-	_add_node("trade_income_1", "Free Trade Agreement", "Stimulates local economies.", 300.0, Vector2(-120, 360), ["unlock_market_square"], 2, "+15% Global credit output from Trade", 5, NodeShape.DIAMOND)
+	_add_node("trade_income_1", "Free Trade Agreement", "Stimulates local economies.", 60.0, Vector2(-120, 360), ["unlock_market_square"], 2, "+15% Global credit output from Trade", 5, NodeShape.DIAMOND)
 	
 	_add_node("unlock_trading_post", "Trading Post", "Unlocks the Trading Post, which consumes Tier 1 Refined Minerals for high profit.", 500.0, Vector2(0, 480), ["trade_income_1"], 3, "Unlocks Trading Post", 10)
 	_add_node("unlock_customs_office", "Customs Authority", "Unlocks the Customs Office to boost district trade output.", 800.0, Vector2(120, 600), ["unlock_trading_post"], 3, "Unlocks Customs Office", 10)
@@ -196,12 +196,12 @@ func _init() -> void:
 	_add_node("unlock_interstellar_syndicate", "Interstellar Syndicate", "Unlocks the Interstellar Syndicate. Trades Tier 5 Refined Minerals for unimaginable wealth.", 50000.0, Vector2(-120, 1320), ["unlock_orbital_trade_port"], 7, "Unlocks Interstellar Syndicate", 10)
 
 	# --- BRANCH 6: ENERGY (Right-Down) ---
-	_add_node("unlock_generator", "Thermal Plant", "Unlocks the standard mineral-burning Thermal Generator.", 100.0, Vector2(480, 160), ["unlock_solar_panel"], 2, "Unlocks Thermal Generator.", 10)
-	_add_node("solar_efficiency", "Solar Arrays", "Improves basic solar cell design to absorb more stellar energy.", 50.0, Vector2(480, 280), ["unlock_generator"], 2, "+10% Solar Array output", 5, NodeShape.DIAMOND)
-	_add_node("generator_efficiency", "Heat Capture Loops", "Adds heat capture loops to standard Generators.", 250.0, Vector2(600, 160), ["unlock_generator"], 3, "+5% Generator Energy output", 5, NodeShape.DIAMOND)
-	_add_node("power_transmission", "Superconducting Grid", "Reduces losses inside energy lines.", 400.0, Vector2(600, 280), ["unlock_generator"], 3, "-5% Energy consumption on all buildings", 1, NodeShape.DIAMOND)
-	_add_node("supercharged_generators", "Plasma Ignition", "Drastically increases output of all generators.", 800.0, Vector2(720, 160), ["generator_efficiency"], 4, "+2% Generator Energy output", 10, NodeShape.DIAMOND)
-	_add_node("energy_efficiency", "Zero-Point Regulators", "Reduces overall energy consumption via quantum stabilization.", 800.0, Vector2(720, 280), ["power_transmission"], 4, "-2% global energy consumption", 5, NodeShape.DIAMOND)
+	_add_node("unlock_generator", "Thermal Plant", "Unlocks the standard mineral-burning Thermal Generator.", 40.0, Vector2(480, 160), ["unlock_solar_panel"], 2, "Unlocks Thermal Generator.", 5)
+	_add_node("solar_efficiency", "Solar Arrays", "Improves basic solar cell design to absorb more stellar energy.", 25.0, Vector2(480, 280), ["unlock_solar_panel"], 2, "+10% Solar Array output", 5, NodeShape.DIAMOND)
+	_add_node("generator_efficiency", "Heat Capture Loops", "Adds heat capture loops to standard Generators.", 40.0, Vector2(600, 160), ["unlock_generator"], 3, "+5% Generator Energy output", 5, NodeShape.DIAMOND)
+	_add_node("power_transmission", "Superconducting Grid", "Reduces losses inside energy lines.", 100.0, Vector2(600, 280), ["unlock_generator"], 3, "-5% Energy consumption on all buildings", 1, NodeShape.DIAMOND)
+	_add_node("supercharged_generators", "Plasma Ignition", "Drastically increases output of all generators.", 120.0, Vector2(720, 160), ["generator_efficiency"], 4, "+2% Generator Energy output", 10, NodeShape.DIAMOND)
+	_add_node("energy_efficiency", "Zero-Point Regulators", "Reduces overall energy consumption via quantum stabilization.", 120.0, Vector2(720, 280), ["power_transmission"], 4, "-2% global energy consumption", 5, NodeShape.DIAMOND)
 	_add_node("unlock_fusion_reactor", "Fusion Reactor", "Unlocks massive industrial Fusion Reactors.", 1000.0, Vector2(840, 220), ["power_transmission", "generator_efficiency"], 4, "Unlocks Fusion Reactor.", 10)
 	
 	_add_node("find_available_star", "Find Available Star", "Locate a stable G-type main-sequence star for megastructure construction.", 9999999.0, Vector2(1080, 220), ["dyson_swarm_dummy"], 6, "Required for Dyson Swarm.", 1)
@@ -229,10 +229,26 @@ func _init() -> void:
 
 # Get the maximum allowed level for a building (based on skill upgrades)
 	# --- DEFAULT BUILDING UNLOCKS & UPGRADES ---
-	_add_node("unlock_solar_panel", "Energy Operations", "Unlocks Energy Districts and Solar Panels.\nUpgrade to increase Solar Panel max level.", 50.0, Vector2(240, 0), ["root"], 1, "Unlocks Solar Panel & +1 Max Level", 10, NodeShape.HEXAGON)
-	_add_node("unlock_residential", "Habitation Operations", "Unlocks Urban Districts and Residential blocks.\nUpgrade to increase Habitation max level.", 50.0, Vector2(160, 160), ["root"], 1, "Unlocks Residential & +1 Max Level", 10, NodeShape.HEXAGON)
-	_add_node("unlock_lab", "Research Operations", "Unlocks University facilities.\nUpgrade to increase University max level.", 100.0, Vector2(-160, 160), ["root"], 1, "Unlocks University & +1 Max Level", 10, NodeShape.HEXAGON)
+	_add_node("unlock_solar_panel", "Energy Operations", "Unlocks Energy Districts and Solar Panels.\nUpgrade to increase Solar Panel max level.", 30.0, Vector2(240, 0), ["root"], 1, "Unlocks Solar Panel & +1 Max Level", 10, NodeShape.HEXAGON)
+	_add_node("unlock_residential", "Habitation Operations", "Unlocks Urban Districts and Residential blocks.\nUpgrade to increase Habitation max level.", 30.0, Vector2(160, 160), ["root"], 1, "Unlocks Residential & +1 Max Level", 10, NodeShape.HEXAGON)
+	_add_node("unlock_lab", "Research Operations", "Unlocks University facilities.\nUpgrade to increase University max level.", 40.0, Vector2(-160, 160), ["root"], 1, "Unlocks University & +1 Max Level", 10, NodeShape.HEXAGON)
+	_add_node("unlock_spaceport", "Launch Engineering", "Build a Spaceport and prepare colony ships. Requires a developed home colony.", 80.0, Vector2(160, -80), ["unlock_space_station"], 2, "Unlocks Spaceport and colony ship construction", 1)
+	for id: String in nodes:
+		var n: SkillNode = nodes[id]
+		if id.begins_with("unlock_") and n.max_level > 1 and id != "unlock_interstellar":
+			n.description = "First purchase unlocks the building. Further research raises its maximum building level. Upgrade each building separately with credits."
+			n.effect_desc = "Unlock building / raise maximum building level"
+	nodes["unlock_space_station"].description = "Build orbital districts after developing the home planet to level 3. Does not unlock other planets."
+	nodes["unlock_moon"].description = "Explore the home moon. Requires a completed orbital district and a Spaceport."
+	nodes["unlock_planetary_colonization"].description = "Open the solar system. Requires home planet level 4 and an operating Lunar Observatory on a colonized home moon."
+	nodes["power_transmission"].effect_desc = "-15% global energy consumption"
+	nodes["generator_efficiency"].effect_desc = "+5% generator output per level"
+	nodes["science_income_1"].effect_desc = "+15% science output per level"
+	nodes["housing_income_1"].effect_desc = "+15% housing output per level"
+
 func get_building_max_level(building_id: String) -> int:
+	if building_id in ["spaceport", "zero_g_nexus"]:
+		return 1
 	# Default level is 1. Upgrades increase this.
 	var max_lv = 1
 	
@@ -275,11 +291,11 @@ func get_next_cost(id: String) -> float:
 	var cur_lv := get_skill_level(id)
 	if cur_lv >= node.max_level:
 		return 0.0
-	# unlock_mining uses a custom curve: Lv1=20, Lv2=110, Lv3+=linear
+	# Mining follows 20 science per target level.
 	if id == "unlock_mining":
 		match cur_lv:
 			0: return 20.0
-			1: return 110.0
+			1: return 40.0
 			_: return node.cost * (1.0 + cur_lv)
 	# Linear cost scaling: Base cost * (1 + current_level)
 	return node.cost * (1.0 + cur_lv)
@@ -290,6 +306,8 @@ func can_purchase(id: String) -> bool:
 	if node == null:
 		return false
 		
+	if not requirement_text(id).is_empty():
+		return false
 	var cur_lv := get_skill_level(id)
 	if cur_lv >= node.max_level:
 		return false
@@ -327,8 +345,9 @@ func purchase_skill(id: String) -> bool:
 			skill_levels[id] = 1
 			
 			if id == "unlock_space_station":
-				GameState.solar_unlocked = true
-				GameState.unlock_changed.emit("solar_unlocked", true)
+				GameState.unlock_changed.emit("orbital", true)
+			elif id == "unlock_planetary_colonization":
+				GameState.set_unlock("solar", true)
 			elif id == "unlock_moon":
 				GameState.moon_unlocked = true
 				GameState.unlock_changed.emit("moon_unlocked", true)
@@ -383,7 +402,7 @@ func get_mine_speed_mult() -> float:
 func get_generator_output_mult() -> float:
 	var base := 1.0
 	if "generator_efficiency" in unlocked_skills:
-		base += 0.05
+		base += 0.05 * get_skill_level("generator_efficiency")
 	if "supercharged_generators" in unlocked_skills:
 		var lv := get_skill_level("supercharged_generators")
 		base += 0.02 * lv
@@ -399,8 +418,8 @@ func get_generator_output_mult() -> float:
 
 func get_credits_mult() -> float:
 	var mult := 1.0
-	if "housing_income_1" in unlocked_skills: mult += 0.15
-	if "housing_income_2" in unlocked_skills: mult += 0.20
+	if "housing_income_1" in unlocked_skills: mult += 0.15 * get_skill_level("housing_income_1")
+	if "housing_income_2" in unlocked_skills: mult += 0.20 * get_skill_level("housing_income_2")
 	return mult
 
 func get_mine_output_mult() -> float:
@@ -464,3 +483,24 @@ func get_trade_maintenance_mult() -> float:
 		mult -= 0.10 * get_skill_level("trade_maintenance")
 	return maxf(0.1, mult)
 
+
+func requirement_text(id: String) -> String:
+	var home := GameState.get_planet(GameState.home_planet_seed)
+	if id == "unlock_space_station" and home.level < 3:
+		return "Requires home planet level 3"
+	if id == "unlock_spaceport":
+		if home.level < 3:
+			return "Requires home planet level 3"
+		if not is_unlocked("unlock_space_station"):
+			return "Requires Orbital Facilities"
+	if id == "unlock_moon":
+		if not GameState.has_home_orbital():
+			return "Complete an orbital district above the home planet"
+		if not home.has_building("spaceport"):
+			return "Complete a Spaceport on the home planet"
+	if id == "unlock_planetary_colonization":
+		if home.level < 4:
+			return "Requires home planet level 4"
+		if not GameState.has_lunar_observatory():
+			return "Complete and power a Lunar Observatory on the home moon"
+	return ""

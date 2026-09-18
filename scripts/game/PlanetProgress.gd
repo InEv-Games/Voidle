@@ -35,6 +35,20 @@ func has_building(bid: String) -> bool:
 			return true
 	return false
 
+func has_active_building(bid: String) -> bool:
+	for entry: Dictionary in buildings:
+		if entry.get("building_id", "") == bid and not entry.get("constructing", false) and not entry.get("user_paused", false):
+			return true
+	return false
+
+func find_district(label: String) -> POIData:
+	var pd := GameState.get_planet_data(planet_seed)
+	if pd != null:
+		for poi: POIData in pd.custom_pois:
+			if poi.label == label:
+				return poi
+	return null
+
 # ── Unlock flags ─────────────────────────────────────────────────────────────
 @export var is_colonizing:      bool = false
 @export var colonize_progress:  float = 0.0
@@ -64,13 +78,49 @@ func get_upgrade_cost() -> Dictionary:
 			cost["credits"] = 250
 		3:
 			cost["credits"] = 1000
-			cost["ANY_T1"]  = 5
+			cost["ANY_T1"]  = 50
+		4:
+			cost["credits"] = 2000
+			cost["ANY_T1"] = 400
 		_:
 			cost["credits"] = 500 * next_lv
 			cost["ANY_T1"]  = 250 * next_lv
 			if next_lv > 4:
 				cost["ANY_T2"] = 50 * (next_lv - 4)
 	return cost
+
+func start_planet_upgrade() -> bool:
+	if not is_colonized or is_upgrading:
+		return false
+	var cost := get_upgrade_cost()
+	var payments: Dictionary = {}
+	if GameState.credits < float(cost.get("credits", 0.0)):
+		return false
+	for key: String in cost:
+		if key == "credits":
+			continue
+		var remaining: float = cost[key]
+		for id: String in GameState.global_resources:
+			var rd: ResourceData = GameState.known_resources.get(id)
+			var matches := id == key
+			if key.begins_with("ANY_T"):
+				var tier := key.trim_prefix("ANY_T").to_int()
+				matches = rd != null and rd.tier == tier and rd.tag == (ResourceData.Tag.RAW_MINERAL if tier == 1 else ResourceData.Tag.REFINED_MINERAL)
+			if matches:
+				var take := minf(remaining, GameState.get_resource(id))
+				payments[id] = float(payments.get(id, 0.0)) + take
+				remaining -= take
+			if remaining <= 0.00001:
+				break
+		if remaining > 0.00001:
+			return false
+	GameState.spend_credits(float(cost.get("credits", 0.0)))
+	for id: String in payments:
+		GameState.consume_resource(id, float(payments[id]))
+	is_upgrading = true
+	upgrade_progress = 0.0
+	upgrade_duration = 5.0 * level
+	return true
 
 func recalculate_limits() -> void:
 	max_districts         = BASE_DISTRICTS + (level - 1)
@@ -80,7 +130,7 @@ func recalculate_limits() -> void:
 		max_districts += 2
 
 	var st = null
-	if Engine.has_singleton("SceneTree") and Engine.get_main_loop():
+	if Engine.get_main_loop():
 		st = Engine.get_main_loop().root.get_node_or_null("SkillTree")
 	if st and st.has_method("get_max_districts_add"):
 		max_districts += st.get_max_districts_add()
@@ -110,14 +160,19 @@ func district_slots(poi: POIData) -> int:
 
 func can_upgrade_district(district_label: String) -> bool:
 	var lv: int = district_levels.get(district_label, 1)
-	return lv < level and not district_upgrading.has(district_label)
+	var poi := find_district(district_label)
+	return is_colonized and poi != null and not poi.constructing and lv < level and not district_upgrading.has(district_label)
 
 func is_district_upgrading(district_label: String) -> bool:
 	return district_upgrading.has(district_label)
 
-func upgrade_district(district_label: String) -> void:
-	if can_upgrade_district(district_label):
-		district_upgrading[district_label] = 0.0  # progress 0..1
+func upgrade_district(district_label: String) -> bool:
+	if not can_upgrade_district(district_label):
+		return false
+	if not GameState.spend_credits(500.0 * int(district_levels.get(district_label, 1))):
+		return false
+	district_upgrading[district_label] = 0.0
+	return true
 
 func slots_used_in_district(district_label: String) -> int:
 	var total: int = 0
@@ -132,6 +187,15 @@ func build_in_district(district: POIData, building_id: String,
 	var def := BuildingDef.find(building_id)
 	if def == null:
 		return false
+	if district.constructing or not is_colonized or def.min_planet_lv > level:
+		return false
+	var pd: PlanetData = GameState.get_planet_data(planet_seed)
+	if pd == null or not district in pd.custom_pois:
+		return false
+	if not def in BuildingDef.for_poi_and_planet(district.poi_type, pd.planet_type):
+		return false
+	if not can_add_building(district.label, def):
+		return false
 	if slots_used_in_district(district.label) + def.slot_cost > district_slots(district):
 		return false
 	
@@ -139,7 +203,7 @@ func build_in_district(district: POIData, building_id: String,
 	var merge_idx := -1
 	for i in buildings.size():
 		var b: Dictionary = buildings[i]
-		if b.get("district_id") == district.label and b.get("building_id") == building_id and not b.get("constructing", false):
+		if b.get("district_id") == district.label and b.get("building_id") == building_id and not b.get("constructing", false) and int(b.get("level", 1)) == 1 and not b.get("cycle_funded", false):
 			var b_tgt: String = b.get("target_mineral", "")
 			if target_mineral == b_tgt or target_mineral == "":
 				merge_idx = i
@@ -160,6 +224,12 @@ func build_in_district(district: POIData, building_id: String,
 
 ## Stack one more of an existing building — goes through construction before merging.
 func stack_building_unchecked(district_label: String, building_id: String, merge_into_entry: Dictionary = {}) -> bool:
+	var def := BuildingDef.find(building_id)
+	var poi := find_district(district_label)
+	if def == null or poi == null or poi.constructing or not is_colonized or not can_add_building(district_label, def):
+		return false
+	if slots_used_in_district(district_label) + def.slot_cost > district_slots(poi):
+		return false
 	for i in buildings.size():
 		var b: Dictionary = buildings[i]
 		# If we specified an exact entry, merge into that, otherwise find any matching one
@@ -169,6 +239,7 @@ func stack_building_unchecked(district_label: String, building_id: String, merge
 				"district_id": district_label,
 				"building_id": building_id,
 				"amount": 1,
+				"level": b.get("level", 1),
 				"constructing": true,
 				"merge_into": i,
 				"uid": str(randi())
@@ -185,6 +256,8 @@ func upgrade_building(entry: Dictionary) -> bool:
 	if def == null: return false
 	
 	var cur_lv: int = b.get("level", 1)
+	if b.get("constructing", false) or cur_lv >= SkillTree.get_building_max_level(def.building_id):
+		return false
 	var amt: int = b.get("amount", 1)
 	var cost := def.get_upgrade_cost(cur_lv, amt)
 	
@@ -197,6 +270,9 @@ func split_building(entry: Dictionary, split_amount: int) -> bool:
 	var idx := building_real_index(entry)
 	if idx == -1: return false
 	var b := buildings[idx]
+	var def := BuildingDef.find(b.get("building_id", ""))
+	if b.get("constructing", false) or (def != null and def.input_type != BuildingDef.OutputType.NONE and b.get("cycle_funded", false)):
+		return false
 	var current_amt: int = b.get("amount", 1)
 	if split_amount <= 0 or split_amount >= current_amt:
 		return false
@@ -250,3 +326,17 @@ func get_total_building_levels() -> int:
 		if not b.get("constructing", false):
 			total += b.get("level", 1) * b.get("amount", 1)
 	return total
+
+func can_add_building(district_label: String, def: BuildingDef) -> bool:
+	var count := 0
+	var planet_count := 0
+	for entry: Dictionary in buildings:
+		if entry.get("building_id", "") == def.building_id:
+			planet_count += int(entry.get("amount", 1))
+			if entry.get("district_id", "") == district_label:
+				count += int(entry.get("amount", 1))
+	if def.max_per_district > 0 and count >= def.max_per_district:
+		return false
+	if def.building_id in ["moon_helium3", "zero_g_nexus", "spaceport"] and planet_count >= 1:
+		return false
+	return true

@@ -316,6 +316,8 @@ func _draw() -> void:
 	var center := _planet_center if _planet_center != Vector2.ZERO else size * 0.5
 
 	for ship: ShipData in ShipManager.ships_for(_planet_seed):
+		if ship.cargo.has("district_label"):
+			continue
 		if _landing.has(ship.ship_id):
 			continue  # drawn by _draw_landing below
 
@@ -749,6 +751,8 @@ func _ship_at(global_pos: Vector2) -> ShipData:
 		return null
 	var center := get_global_rect().position + (_planet_center if _planet_center != Vector2.ZERO else size * 0.5)
 	for ship: ShipData in ShipManager.ships_for(_planet_seed):
+		if ship.cargo.has("district_label"):
+			continue
 		var sv := _project(ship, ship.orbit_angle)
 		if _is_occluded(sv):
 			continue

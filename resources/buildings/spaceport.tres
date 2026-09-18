@@ -19,3 +19,5 @@ tick_duration = 45.0
 energy_per_tick = 0.0
 logic = SubResource("Resource_logic")
 unlocked_by_default = false
+unlock_skill = "unlock_spaceport"
+min_planet_lv = 3

@@ -84,16 +84,19 @@ var _home_solar: SolarData  = null
 
 # ────────────────────────────────────────────────────────────────────────────
 
+var _loaded_save := false
+var colony_ship_orders: Dictionary = {}
 var _autosave_timer: float = 0.0
 const AUTOSAVE_INTERVAL := 60.0
 
 func _ready() -> void:
-	load_save()
+	_loaded_save = load_save()
 	if home_planet_seed < 0:
 		home_planet_seed = randi_range(1000, 99999)
 	_bootstrap_world()
 
 func _process(delta: float) -> void:
+	_tick_colony_ship_orders(delta)
 	_autosave_timer += delta
 	if _autosave_timer >= AUTOSAVE_INTERVAL:
 		_autosave_timer = 0.0
@@ -221,12 +224,14 @@ func _build_home_solar() -> SolarData:
 	sd.set_meta("__is_home", true)
 
 	# Apply starting config
-	credits         = start_credits
-	solar_unlocked  = start_solar_unlocked
-	galaxy_unlocked = start_galaxy_unlocked
+	if not _loaded_save:
+		credits = start_credits
+		solar_unlocked = start_solar_unlocked
+		galaxy_unlocked = start_galaxy_unlocked
 
 	var home_pp := get_planet(home_planet_seed)
-	home_pp.is_colonized = start_colonized
+	if not _loaded_save:
+		home_pp.is_colonized = start_colonized
 
 	# Attach starting Capital POI only once (first time world is built)
 	if home_pd.custom_pois.is_empty():
@@ -372,11 +377,15 @@ func spend_science(amount: float) -> bool:
 	science_points -= amount
 	return true
 
-## Stub colonize — no ship requirement yet. Returns false if can't afford.
-func colonize_planet(planet_seed: int, cost: float = 1000.0) -> bool:
-	if not spend_credits(cost):
+## Establish a settlement using an arrived colony ship and the fixed settlement cost.
+func colonize_planet(planet_seed: int) -> bool:
+	if not colonization_requirement(planet_seed).is_empty():
+		return false
+	if not spend_credits(1000.0):
 		return false
 	var pp := get_planet(planet_seed)
+	var colony_ship := arrived_colony_ship(planet_seed)
+	ShipManager.remove_ship(planet_seed, colony_ship.ship_id)
 	pp.is_colonizing = true
 	pp.colonize_progress = 0.0
 	pp.colonize_duration = 30.0 # 30 seconds
@@ -430,6 +439,7 @@ func save() -> void:
 		"home_planet_idx":      home_planet_idx,
 		"unlocked_skills":      get_node("/root/SkillTree").unlocked_skills if has_node("/root/SkillTree") else ["root"],
 		"skill_levels":         get_node("/root/SkillTree").skill_levels if has_node("/root/SkillTree") else {},
+		"colony_ship_orders": colony_ship_orders,
 		"ships":                get_node("/root/ShipManager").serialize() if has_node("/root/ShipManager") else [],
 		"planet_progress":      {},
 	}
@@ -510,43 +520,21 @@ func load_save() -> bool:
 	discovered_asteroids     = data.get("discovered_asteroids", [])
 	asteroid_scan_counts     = data.get("asteroid_scan_counts", {})
 	
-	var st := get_node("/root/SkillTree")
-	st.unlocked_skills.clear()
-	st.unlocked_skills.append("root")
-	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab"]:
-		if not def_node in st.unlocked_skills:
-			st.unlocked_skills.append(def_node)
-
-	if data.has("unlocked_skills"):
-		for s in data["unlocked_skills"]:
-			if not s in st.unlocked_skills:
-				st.unlocked_skills.append(s)
-		
-	st.skill_levels.clear()
-	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab"]:
-		st.skill_levels[def_node] = 1
-	if data.has("skill_levels"):
-		for k in data["skill_levels"]:
-			st.skill_levels[k] = data["skill_levels"][k]
-
-	global_resources    = data.get("global_resources",   {})
-	unlocked_buildings  = data.get("unlocked_buildings", {})
-	light_angle         = data.get("light_angle",        0.8)
-
-	if data.has("achievements"):
-		AchievementManager.load_save(data["achievements"])
-
-	TutorialManager._tutorial_done    = data.get("tutorial_done",        false)
-	TutorialManager._quest_done       = data.get("tutorial_quest_done",  false)
-	TutorialManager._guided_step      = data.get("tutorial_guided_step", 0)
-	TutorialManager._action_sub       = data.get("tutorial_action_sub",  0)
-	TutorialManager._quest_step       = data.get("tutorial_quest_step",  0)
-	TutorialManager._quest_sub        = data.get("tutorial_quest_sub",   0)
-	TutorialManager._solar_count      = data.get("tutorial_solar_count", 0)
-	TutorialManager._inventory_shown  = data.get("tutorial_inv_shown",   false)
-
-	if has_node("/root/ShipManager"):
-		get_node("/root/ShipManager").deserialize(data.get("ships", []))
+	global_resources = data.get("global_resources", {})
+	unlocked_buildings = data.get("unlocked_buildings", {})
+	light_angle = data.get("light_angle", 0.8)
+	for id: String in global_resources:
+		var parts := id.split("_")
+		if parts.size() >= 4 and parts[0].begins_with("R") and parts[1].begins_with("T"):
+			var tag := ResourceData.Tag.REFINED_MINERAL if id.contains("REFINED_MINERAL") else ResourceData.Tag.RAW_MINERAL
+			var rd := ResourceData.generate(home_planet_seed, tag, int(parts[0].trim_prefix("R")), int(parts[1].trim_prefix("T")))
+			if tag == ResourceData.Tag.REFINED_MINERAL:
+				var ore := ResourceData.generate(home_planet_seed, ResourceData.Tag.RAW_MINERAL, rd.rarity, 1)
+				rd.mineral_name = ore.mineral_name
+				rd.unique_name = ore.mineral_name + " " + ResourceData.TIER_SUFFIXES[clampi(rd.tier - 1, 0, 4)]
+			known_resources[id] = rd
+	colony_ship_orders = data.get("colony_ship_orders", {})
+	call_deferred("_restore_services", data)
 
 	for key in data.get("planet_progress", {}).keys():
 		var seed_val: int    = int(key)
@@ -574,6 +562,17 @@ func load_save() -> bool:
 	return true
 
 func delete_save() -> void:
+	_loaded_save = false
+	colony_ship_orders.clear()
+	_planet_data_cache.clear()
+	_body_resources.clear()
+	known_resources.clear()
+	_pending_poi_restore.clear()
+	ShipManager.deserialize([])
+	ProductionManager._progress.clear()
+	ProductionManager._construct.clear()
+	ProductionManager._paused.clear()
+	ProductionManager._user_paused.clear()
 	if FileAccess.file_exists(SAVE_PATH):
 		DirAccess.remove_absolute(SAVE_PATH)
 	save_deleted.emit()
@@ -601,3 +600,207 @@ func delete_save() -> void:
 	global_resources.clear()
 	_planet_progress.clear()
 	_bootstrap_world()
+
+func _restore_services(data: Dictionary) -> void:
+	var st := get_node("/root/SkillTree")
+	st.unlocked_skills.clear()
+	st.unlocked_skills.append("root")
+	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab"]:
+		if not def_node in st.unlocked_skills:
+			st.unlocked_skills.append(def_node)
+
+	if data.has("unlocked_skills"):
+		for s in data["unlocked_skills"]:
+			if not s in st.unlocked_skills:
+				st.unlocked_skills.append(s)
+
+	st.skill_levels.clear()
+	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab"]:
+		st.skill_levels[def_node] = 1
+	if data.has("skill_levels"):
+		for k in data["skill_levels"]:
+			st.skill_levels[k] = data["skill_levels"][k]
+
+	if data.has("achievements"):
+		AchievementManager.load_save(data["achievements"])
+
+	TutorialManager._tutorial_done    = data.get("tutorial_done",        false)
+	TutorialManager._quest_done       = data.get("tutorial_quest_done",  false)
+	TutorialManager._guided_step      = data.get("tutorial_guided_step", 0)
+	TutorialManager._action_sub       = data.get("tutorial_action_sub",  0)
+	TutorialManager._quest_step       = data.get("tutorial_quest_step",  0)
+	TutorialManager._quest_sub        = data.get("tutorial_quest_sub",   0)
+	TutorialManager._solar_count      = data.get("tutorial_solar_count", 0)
+	TutorialManager._inventory_shown  = data.get("tutorial_inv_shown",   false)
+
+	if has_node("/root/ShipManager"):
+		get_node("/root/ShipManager").deserialize(data.get("ships", []))
+
+	# Migrate removed access levels while keeping already-earned progress.
+	for id: String in st.skill_levels.keys():
+		if st.nodes.has(id):
+			st.skill_levels[id] = mini(int(st.skill_levels[id]), st.nodes[id].max_level)
+	solar_unlocked = st.is_unlocked("unlock_planetary_colonization")
+	moon_unlocked = st.is_unlocked("unlock_moon")
+	if st.is_unlocked("unlock_spaceport"):
+		unlock_building("spaceport")
+	for pp: PlanetProgress in _planet_progress.values():
+		for entry: Dictionary in pp.buildings:
+			if not entry.has("cycle_funded") and entry.get("burning_mineral", "") != "":
+				entry["cycle_funded"] = true
+		pp.recalculate_limits()
+		var pd := get_planet_data(pp.planet_seed)
+		if pd != null:
+			for poi: POIData in pd.custom_pois:
+				if poi.is_orbital() and not poi.constructing:
+					ensure_station_ship(pp.planet_seed, poi)
+	world_ready.emit()
+
+func base_energy() -> float:
+	return 4.0 if get_planet(home_planet_seed).is_colonized else 0.0
+
+func is_home_moon(seed_val: int) -> bool:
+	var home := get_home_planet()
+	if home == null:
+		return false
+	for moon: PlanetData in home.moons:
+		if moon.seed == seed_val:
+			return true
+	return false
+
+func has_home_orbital() -> bool:
+	var home := get_home_planet()
+	if home != null:
+		for poi: POIData in home.custom_pois:
+			if poi.is_orbital() and not poi.constructing:
+				return true
+	return false
+
+func has_lunar_observatory() -> bool:
+	for moon: PlanetData in get_home_planet().moons:
+		var pp := get_planet(moon.seed)
+		if not pp.is_colonized:
+			continue
+		for entry: Dictionary in pp.buildings:
+			if entry.get("building_id", "") == "lunar_observatory" and not entry.get("constructing", false) and not entry.get("user_paused", false):
+				return ProductionManager.get_energy_ratio() > 0.0
+	return false
+
+func arrived_colony_ship(seed_val: int) -> ShipData:
+	for ship: ShipData in ShipManager.ships_for(seed_val):
+		if ship.ship_type == "colony" and not ship.is_travelling():
+			return ship
+	return null
+
+func destination_requirement(seed_val: int) -> String:
+	if get_planet_data(seed_val) == null:
+		return "Unknown destination"
+	if is_home_moon(seed_val):
+		return "" if moon_unlocked else "Research Moon Outpost first"
+	if seed_val != home_planet_seed and not solar_unlocked:
+		return "Complete lunar research to unlock interplanetary travel"
+	var pd := get_planet_data(seed_val)
+	var habitat_skill: String = {
+		PlanetData.Type.ICE: "colonize_ice", PlanetData.Type.ARID: "colonize_desert",
+		PlanetData.Type.GAS_GIANT: "colonize_gas", PlanetData.Type.VOLCANIC: "colonize_volcanic"
+	}.get(pd.planet_type, "")
+	if not habitat_skill.is_empty() and not SkillTree.is_unlocked(habitat_skill):
+		return "Research %s first" % SkillTree.nodes[habitat_skill].name
+	return ""
+
+func colonization_requirement(seed_val: int) -> String:
+	var pp := get_planet(seed_val)
+	if pp.is_colonized or pp.is_colonizing:
+		return "Settlement already established or underway"
+	var requirement := destination_requirement(seed_val)
+	if not requirement.is_empty():
+		return requirement
+	if arrived_colony_ship(seed_val) == null:
+		return "Send a colony ship here before establishing a settlement"
+	if credits < 1000.0:
+		return "Settlement requires 1000 credits"
+	return ""
+
+func ship_cost(seed_val: int) -> Dictionary:
+	var discount := 0.0
+	for entry: Dictionary in get_planet(seed_val).buildings:
+		if entry.get("building_id", "") == "orbital_shipyard" and not entry.get("constructing", false) and not entry.get("user_paused", false):
+			discount = maxf(discount, minf(0.4, 0.20 + 0.05 * (int(entry.get("level", 1)) - 1)))
+	var multiplier := 1.0 - discount
+	return {"credits": 600.0 * multiplier, "ingots": 20.0 * multiplier}
+
+func available_ingots() -> float:
+	var amount := 0.0
+	for id: String in global_resources:
+		var rd: ResourceData = known_resources.get(id)
+		if rd != null and rd.tag == ResourceData.Tag.REFINED_MINERAL and rd.tier == 2:
+			amount += float(global_resources[id])
+	return amount
+
+func colony_ship_requirement(seed_val: int) -> String:
+	var pp := get_planet(seed_val)
+	if not pp.is_colonized or not pp.has_building("spaceport"):
+		return "Complete a Spaceport first"
+	if not SkillTree.is_unlocked("unlock_spaceport"):
+		return "Research Launch Engineering first"
+	if colony_ship_orders.has(str(seed_val)):
+		return "Colony ship assembly: %ds remaining" % ceili(float(colony_ship_orders[str(seed_val)]))
+	var cost := ship_cost(seed_val)
+	if credits < float(cost.credits) or available_ingots() < float(cost.ingots):
+		return "Needs %d credits and %d T2 ingots" % [cost.credits, cost.ingots]
+	return ""
+
+func build_colony_ship(seed_val: int) -> bool:
+	if not colony_ship_requirement(seed_val).is_empty():
+		return false
+	var cost := ship_cost(seed_val)
+	spend_credits(float(cost.credits))
+	var remaining: float = cost.ingots
+	for id: String in global_resources.keys():
+		var rd: ResourceData = known_resources.get(id)
+		if rd != null and rd.tag == ResourceData.Tag.REFINED_MINERAL and rd.tier == 2:
+			var take := minf(float(global_resources[id]), remaining)
+			consume_resource(id, take)
+			remaining -= take
+			if remaining <= 0.00001:
+				break
+	colony_ship_orders[str(seed_val)] = 30.0
+	planet_progress_changed.emit(seed_val)
+	save()
+	return true
+
+func _tick_colony_ship_orders(delta: float) -> void:
+	for key: String in colony_ship_orders.keys():
+		colony_ship_orders[key] = float(colony_ship_orders[key]) - delta
+		if float(colony_ship_orders[key]) <= 0.0:
+			colony_ship_orders.erase(key)
+			var ship := ShipManager.launch(int(key), "Colony Ship")
+			ship.ship_type = "colony"
+			ShipManager.ship_changed.emit(ship)
+			planet_progress_changed.emit(int(key))
+
+func send_colony_ship(destination: int) -> bool:
+	if not destination_requirement(destination).is_empty() or get_planet(destination).is_colonized or get_planet(destination).is_colonizing or arrived_colony_ship(destination) != null:
+		return false
+	for pending: ShipData in ShipManager.ships_for(home_planet_seed):
+		if pending.ship_type == "colony" and pending.dest_seed == destination:
+			return false
+	var ship := arrived_colony_ship(home_planet_seed)
+	if ship == null or destination == home_planet_seed:
+		return false
+	ShipManager.dispatch(ship, destination, 60.0 if is_home_moon(destination) else 120.0)
+	planet_progress_changed.emit(destination)
+	save()
+	return true
+
+func ensure_station_ship(seed_val: int, poi: POIData) -> void:
+	for ship: ShipData in ShipManager.ships_for(seed_val):
+		if ship.ship_type == "station" and ship.ship_name == poi.label:
+			ship.cargo["district_label"] = poi.label
+			return
+	var ship := ShipManager.launch(seed_val, poi.label)
+	ship.ship_type = "station"
+	ship.cargo["district_label"] = poi.label
+	ship.orbit_radius = poi.orbit_radius
+	ship.orbit_angle = poi.orbit_angle
+	ShipManager.ship_changed.emit(ship)

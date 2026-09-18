@@ -25,6 +25,6 @@ output_type = 2
 output_amount = 60.0
 input_type = 4
 input_amount = 10.0
-input_tier = 1
+input_tier = 2
 logic = SubResource("Resource_logic")
 unlocked_by_default = false
