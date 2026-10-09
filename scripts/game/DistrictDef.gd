@@ -24,6 +24,19 @@ enum Type { CITY, GENERATOR, MINING, SPACE_STATION }
 @export var name_pool:    Array[String] = []
 ## Required skill node to unlock this district. Empty = unlocked by default.
 @export var unlock_skill: String = ""
+## Bonuses this district gets from neighbouring districts, keyed by the
+## neighbour's type key ("city", "generator", "mining", "space_station") →
+## player-facing description, e.g. {"generator": "+10% credits"}.
+## Shown during placement; gameplay effects are not wired up yet.
+@export var neighbor_bonuses: Dictionary = {}
+
+## Lower-case type key used by neighbor_bonuses and POIData.type_tag.
+func type_key() -> String:
+	return Type.keys()[id].to_lower()
+
+## Districts every connected system needs one of (they may be placed anywhere).
+func is_system_anchor() -> bool:
+	return id == Type.CITY
 
 # ── Registry ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +67,12 @@ static func for_planet(planet_type: PlanetData.Type) -> Array[DistrictDef]:
 		if d.allowed_planet_types.is_empty() or planet_type in d.allowed_planet_types:
 			result.append(d)
 	return result
+
+static func find_by_key(key: String) -> DistrictDef:
+	for d: DistrictDef in all():
+		if d.type_key() == key:
+			return d
+	return null
 
 static func find(district_type: Type) -> DistrictDef:
 	for d: DistrictDef in all():

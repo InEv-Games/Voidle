@@ -10,6 +10,11 @@ var _energy_bar_left: ProgressBar = null
 var _energy_bar_right: ProgressBar = null
 var _energy_hud_poll: float = 0.0
 var _energy_hud_node: Control = null
+var _energy_hbox: Control = null
+## Fraction of the screen width the game view occupies (left of the side panel).
+## The energy readout stays centred on it; PlanetaryView animates it when the
+## side panel slides in or out.
+var view_area_fraction: float = 0.7
 ## Current displayed value (tweened, may lag behind GameState.credits)
 var _credits_display: float = 0.0
 var _credits_tween: Tween = null
@@ -864,13 +869,22 @@ func _setup_energy_hud() -> void:
 	right_pc.add_child(_energy_bar_right)
 	hbox.add_child(right_pc)
 
+	_energy_hbox = hbox
 	call_deferred("_center_energy_hud", hbox)
 
 func _center_energy_hud(hbox: Control) -> void:
 	await get_tree().process_frame
 	if not is_instance_valid(hbox):
 		return
-	var area_w := get_viewport().get_visible_rect().size.x * 0.7
+	_place_energy_hud(hbox)
+
+func set_view_area_fraction(f: float) -> void:
+	view_area_fraction = f
+	if is_instance_valid(_energy_hbox):
+		_place_energy_hud(_energy_hbox)
+
+func _place_energy_hud(hbox: Control) -> void:
+	var area_w := get_viewport().get_visible_rect().size.x * view_area_fraction
 	var pw := hbox.size.x
 	if pw <= 0.0:
 		return

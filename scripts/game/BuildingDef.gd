@@ -44,6 +44,21 @@ func output_label() -> String:
 		OutputType.SCIENCE:         return "+%.0f sci" % output_amount
 	return ""
 
+## How much one of these grows its district's settlement on the planet map.
+## -1 = derive from output_type (housing / trade grow it most, energy least).
+@export var settlement_size: float = -1.0
+
+func settlement_weight() -> float:
+	if settlement_size >= 0.0:
+		return settlement_size
+	match output_type:
+		OutputType.CREDITS:         return 1.0   # residential, commercial
+		OutputType.SCIENCE:         return 0.7
+		OutputType.REFINED_MINERAL: return 0.5
+		OutputType.RAW_MINERAL:     return 0.4
+		OutputType.ENERGY:          return 0.3   # solar arrays, generators
+	return 0.5
+
 @export var logic: BuildingLogic
 @export var unlocked_by_default: bool = true
 

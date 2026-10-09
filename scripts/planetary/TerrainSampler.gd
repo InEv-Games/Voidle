@@ -21,7 +21,9 @@ enum Terrain {
 ## Districts can't be placed beyond this latitude (matches LocationFinder's range).
 const MAX_PLACE_LAT_DEG: float = 70.0
 ## Minimum angular distance between two surface districts.
-const MIN_SPACING_DEG: float = 8.0
+const MIN_SPACING_DEG: float = 4.0
+## Districts whose settlements are within this gap of each other are neighbours.
+const NEIGHBOR_GAP_DEG: float = 9.0
 ## How far to look for water when deciding if a land point is coastal.
 const COAST_PROBE_DEG: float = 4.0
 

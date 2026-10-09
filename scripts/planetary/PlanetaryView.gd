@@ -67,11 +67,23 @@ var _poi_overview_cards: Dictionary = {}  # poi.label -> PanelContainer card
 const ZOOM_MIN:  float = 1.0
 const ZOOM_MAX:  float = 4.0
 const ZOOM_STEP: float = 1.25
+## Surface district count is uncapped for now (planet level no longer limits it).
+const UNLIMITED_SURFACE_DISTRICTS: bool = true
 const RING_VIEW_ANGLE: float = 0.263   # asin(0.26) — the original fixed ring ellipse
 var _zoom:        float   = 1.0
 var _zoom_target: float   = 1.0
 var _zoom_anchor: Vector2 = Vector2.INF   # global point kept under the cursor while zooming
 var _base_radius:      float = 0.42
+
+# ── Side panel slide ──────────────────────────────────────────────────────────
+# The right panel can slide off-screen; the planet view (and the HUD energy
+# readout) widen with it so the globe stays centred in whatever space is left.
+const PANEL_FRACTION:  float = 0.3    # panel width as a fraction of the screen
+const PANEL_SLIDE_SEC: float = 0.35
+var _panel_open:       bool    = true
+var _panel_t:          float   = 1.0  # 1 = fully open, 0 = fully hidden
+var _panel_tween:      Tween   = null
+var _panel_toggle_btn: Button  = null
 
 # ── Manual district placement ─────────────────────────────────────────────────
 var _placing_def: DistrictDef = null   # non-null while the player picks a site
@@ -95,6 +107,8 @@ func _ready() -> void:
 			(planet_renderer.get_parent() as Control).mouse_filter = Control.MOUSE_FILTER_PASS
 	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
 	planet_renderer.planet_clicked.connect(_on_planet_clicked)
+	_build_panel_toggle()
+	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - PANEL_FRACTION))
 	poi_layer.territory_lookup = _territory_at_screen
 	SettingsManager.night_shadow_changed.connect(func(v: float) -> void:
 		if planet_renderer.material:
@@ -699,22 +713,70 @@ func _setup_material(data: PlanetData) -> void:
 # It grows with district level and active buildings, and hosts the night lights.
 
 const MAX_TERRITORIES:     int   = 16     # must match MAX_DISTRICTS in the shader include
-const TERRITORY_BASE_DEG:  float = 3.0
-const TERRITORY_LEVEL_DEG: float = 1.2    # per district level above 1
-const TERRITORY_BLDG_DEG:  float = 0.3    # per active building (capped)
+const MAX_ROADS:           int   = 16     # must match MAX_ROADS in the shader include
+# Settlement radius = BASE + LEVEL·(level-1) + SIZE·√(Σ building weights).
+# A fresh district is a hamlet of a few pixels; housing grows it fastest.
+const SETTLE_BASE_DEG:     float = 0.9
+const SETTLE_LEVEL_DEG:    float = 0.5
+const SETTLE_SIZE_DEG:     float = 1.1
 const TERRITORY_WARP:      float = 0.18   # edge raggedness — same as the shader
+## Hide district borders while zoomed out (fully visible from ZOOM_BORDER_FULL).
+const ZOOM_BORDER_START:   float = 1.4
+const ZOOM_BORDER_FULL:    float = 2.0
 ## { n: Vector3 world normal, r: float angular radius } — same order as poi_layer._pois.
 var _territories: Array[Dictionary] = []
 
+## Σ settlement weights of the finished buildings in a district.
+func _district_settlement_size(data: PlanetData, district_label: String) -> float:
+	var pp := GameState.get_planet(data.seed)
+	if pp == null:
+		return 0.0
+	var total := 0.0
+	for b: Dictionary in pp.buildings_in_district(district_label):
+		if b.get("constructing", false):
+			continue
+		var def := BuildingDef.find(b.get("building_id", ""))
+		var w: float = def.settlement_weight() if def != null else 0.5
+		total += w * float(b.get("amount", 1))
+	return total
+
 func _territory_radius_deg(data: PlanetData, pd: POIData) -> float:
 	if pd.constructing:
-		return TERRITORY_BASE_DEG * 0.6
+		return SETTLE_BASE_DEG * 0.7
 	var pp := GameState.get_planet(data.seed)
 	var lv: int = pp.district_levels.get(pd.label, 1) if pp != null else 1
-	var bldgs: int = mini(_district_night_size(data, pd.label), 12)
-	return TERRITORY_BASE_DEG + float(lv - 1) * TERRITORY_LEVEL_DEG + float(bldgs) * TERRITORY_BLDG_DEG
+	return SETTLE_BASE_DEG + float(lv - 1) * SETTLE_LEVEL_DEG \
+		+ SETTLE_SIZE_DEG * sqrt(_district_settlement_size(data, pd.label))
 
-## Night-light intensity for a district with `active` running buildings.
+## Surface districts that count as neighbours of each other (settlements within
+## NEIGHBOR_GAP_DEG). Returns index pairs into the territory / poi_layer order.
+func _neighbor_pairs() -> Array[Vector2i]:
+	var pairs: Array[Vector2i] = []
+	var gap := deg_to_rad(TerrainSampler.NEIGHBOR_GAP_DEG)
+	for a in _territories.size():
+		for b in range(a + 1, _territories.size()):
+			var ta: Dictionary = _territories[a]
+			var tb: Dictionary = _territories[b]
+			var ang := acos(clampf((ta["n"] as Vector3).dot(tb["n"]), -1.0, 1.0))
+			if ang <= float(ta["r"]) + float(tb["r"]) + gap:
+				pairs.append(Vector2i(a, b))
+	return pairs
+
+## Labels of the districts neighbouring `district_label` on the current planet.
+func district_neighbors(district_label: String) -> Array[String]:
+	var out: Array[String] = []
+	var idx := -1
+	for i in poi_layer._pois.size():
+		if poi_layer._pois[i]["label"] == district_label:
+			idx = i
+	if idx < 0:
+		return out
+	for p: Vector2i in _neighbor_pairs():
+		if p.x == idx: out.append(poi_layer._pois[p.y]["label"])
+		elif p.y == idx: out.append(poi_layer._pois[p.x]["label"])
+	return out
+
+## Share of a settlement's pixels lit at night, from its running buildings.
 static func _territory_light(active: int) -> float:
 	return 0.0 if active <= 0 else clampf(0.3 + float(active) * 0.07, 0.0, 1.0)
 
@@ -738,18 +800,99 @@ func _upload_territories(data: PlanetData) -> void:
 			else _territory_light(_district_night_size(data, pd.label))
 		pos.append(Vector4(n.x, n.y, n.z, r))
 		col.append(Vector4(c.r, c.g, c.b, light))
-		_territories.append({"n": n, "r": r})
+		_territories.append({"n": n, "r": r, "poi": pd})
 	var count := _territories.size()
 	while pos.size() < MAX_TERRITORIES:
 		pos.append(Vector4.ZERO)
 		col.append(Vector4.ZERO)
+	# Neighbours get a road between their centres (POILayer also merges their
+	# labels); separate systems are joined by long roads / sea lanes.
+	var pairs := _neighbor_pairs()
+	var roads := PackedVector2Array()
+	for pr: Vector2i in pairs + _system_links(pairs):
+		if roads.size() < MAX_ROADS:
+			roads.append(Vector2(pr.x, pr.y))
+	var road_count := roads.size()
+	while roads.size() < MAX_ROADS:
+		roads.append(Vector2.ZERO)
+	_push_label_clusters(pairs)
 	var mat := planet_renderer.material as ShaderMaterial
 	if mat == null:
 		return
 	mat.set_shader_parameter("district_pos",   pos)
 	mat.set_shader_parameter("district_col",   col)
 	mat.set_shader_parameter("district_count", count)
+	mat.set_shader_parameter("district_roads", roads)
+	mat.set_shader_parameter("road_count",     road_count)
 	mat.set_shader_parameter("poi_count",      0)
+
+## Connected-component id per territory: districts linked through neighbour
+## pairs form one "system".
+func _components(pairs: Array[Vector2i]) -> Array[int]:
+	var comp: Array[int] = []
+	for i in _territories.size():
+		comp.append(i)
+	var changed := true
+	while changed:   # tiny union-find: propagate the smallest index through pairs
+		changed = false
+		for pr: Vector2i in pairs:
+			var m := mini(comp[pr.x], comp[pr.y])
+			if comp[pr.x] != m or comp[pr.y] != m:
+				comp[pr.x] = m
+				comp[pr.y] = m
+				changed = true
+	return comp
+
+## Long-distance links joining separate systems: a minimum spanning tree over
+## one hub per system (its City, else its biggest settlement), by surface
+## distance. Returns territory index pairs.
+func _system_links(pairs: Array[Vector2i]) -> Array[Vector2i]:
+	var comp := _components(pairs)
+	var hubs := {}   # component id -> territory index
+	for i in _territories.size():
+		var c := comp[i]
+		var is_anchor := _is_system_anchor_poi(_territories[i]["poi"])
+		if not hubs.has(c):
+			hubs[c] = i
+			continue
+		var cur: int = hubs[c]
+		var cur_anchor := _is_system_anchor_poi(_territories[cur]["poi"])
+		if (is_anchor and not cur_anchor) or (is_anchor == cur_anchor \
+				and float(_territories[i]["r"]) > float(_territories[cur]["r"])):
+			hubs[c] = i
+	var nodes: Array = hubs.values()
+	var links: Array[Vector2i] = []
+	if nodes.size() < 2:
+		return links
+	# Prim's algorithm
+	var in_tree := {nodes[0]: true}
+	while in_tree.size() < nodes.size():
+		var best := Vector2i(-1, -1)
+		var best_d := INF
+		for a: int in in_tree:
+			for b: int in nodes:
+				if in_tree.has(b):
+					continue
+				var d := acos(clampf((_territories[a]["n"] as Vector3).dot(_territories[b]["n"]), -1.0, 1.0))
+				if d < best_d:
+					best_d = d
+					best = Vector2i(a, b)
+		in_tree[best.y] = true
+		links.append(best)
+	return links
+
+## Settlements a system can form around: cities (and moon outposts, their colony equivalent).
+static func _is_system_anchor_poi(pd: POIData) -> bool:
+	return pd.poi_type == POIData.POIType.CITY or pd.poi_type == POIData.POIType.OUTPOST
+
+## Tells POILayer which districts are neighbours (cluster id) and how big they
+## are, so zoomed out it can show one label per crowded cluster.
+func _push_label_clusters(pairs: Array[Vector2i]) -> void:
+	var cluster := _components(pairs)
+	poi_layer.links = pairs
+	for i in mini(poi_layer._pois.size(), _territories.size()):
+		poi_layer._pois[i]["data"]["cluster"] = cluster[i]
+		poi_layer._pois[i]["data"]["size"]    = _territories[i]["r"]
 
 ## Which territory owns a surface point (index into poi_layer._pois), or -1.
 ## Mirrors district_owner() in district_territory.gdshaderinc.
@@ -2033,6 +2176,7 @@ func _process(delta: float) -> void:
 	if pmat != null:
 		pmat.set_shader_parameter("district_hover",    poi_layer._hovered_index)
 		pmat.set_shader_parameter("district_selected", poi_layer._selected_index)
+		pmat.set_shader_parameter("border_alpha", smoothstep(ZOOM_BORDER_START, ZOOM_BORDER_FULL, _zoom))
 
 	# Construction loop audio — active whenever any POI is constructing
 	if current_data != null:
@@ -2181,6 +2325,84 @@ func _rotate_to_lon(lon_deg: float, duration: float = 0.45) -> void:
 			func(v: float) -> void: planet_renderer.set_tilt(v),
 			planet_renderer.tilt, 0.0, duration)
 
+## Spins and tilts the globe so (lon, lat) lands in the centre of the view.
+## The view centre sits at latitude = tilt, so tilt goes to the site's latitude;
+## set_tilt() clamps it to the polar limit (±MAX_TILT).
+func _focus_on_site(lon_deg: float, lat_deg: float, duration: float = 0.45) -> void:
+	var target  := fposmod(deg_to_rad(lon_deg), TAU)
+	var current := fposmod(planet_renderer.get_rotation_offset(), TAU)
+	var diff    := fposmod(target - current + PI, TAU) - PI
+	var tween   := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_method(
+		func(v: float) -> void: planet_renderer.set_rotation_offset(v),
+		current, current + diff, duration)
+	if not planet_renderer.tilt_locked:
+		var tilt_target := clampf(deg_to_rad(lat_deg), -planet_renderer.MAX_TILT, planet_renderer.MAX_TILT)
+		tween.parallel().tween_method(
+			func(v: float) -> void: planet_renderer.set_tilt(v),
+			planet_renderer.tilt, tilt_target, duration)
+
+# ── Side panel slide ──────────────────────────────────────────────────────────
+
+func _build_panel_toggle() -> void:
+	var btn := Button.new()
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.z_index = 201
+	btn.z_as_relative = false
+	btn.tooltip_text = ""
+	_apply_orbitron(btn, 12)
+	var st := _make_hud_style(Color(0.07, 0.08, 0.13, 0.95), 0)
+	st.corner_radius_top_left = 6
+	st.corner_radius_bottom_left = 6
+	st.border_color = Color(0.2, 0.25, 0.4, 0.5)
+	st.border_width_left = 1; st.border_width_top = 1; st.border_width_bottom = 1
+	st.border_width_right = 0
+	st.content_margin_left = 6; st.content_margin_right = 6
+	var hov := st.duplicate() as StyleBoxFlat
+	hov.bg_color = Color(0.12, 0.16, 0.30, 0.98)
+	btn.add_theme_stylebox_override("normal",  st)
+	btn.add_theme_stylebox_override("hover",   hov)
+	btn.add_theme_stylebox_override("pressed", hov)
+	btn.add_theme_color_override("font_color",       Color(0.55, 0.70, 1.0))
+	btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
+	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
+	btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
+	btn.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		_set_panel_open(not _panel_open))
+	add_child(btn)
+	_panel_toggle_btn = btn
+	_apply_panel_t(_panel_t)
+
+func _set_panel_open(open: bool) -> void:
+	_panel_open = open
+	if _panel_tween != null and _panel_tween.is_valid():
+		_panel_tween.kill()
+	_panel_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_panel_tween.tween_method(_apply_panel_t, _panel_t, 1.0 if open else 0.0, PANEL_SLIDE_SEC)
+
+## Lays out panel, planet area, toggle tab and HUD for a slide position t (1 = open).
+func _apply_panel_t(t: float) -> void:
+	_panel_t = t
+	var view_frac := 1.0 - PANEL_FRACTION * t
+	var panel := $RightPanel as Control
+	panel.anchor_left  = view_frac
+	panel.anchor_right = view_frac + PANEL_FRACTION
+	panel.offset_left  = 0.0
+	panel.offset_right = 0.0
+	($PlanetContainer as Control).anchor_right = view_frac
+	HUDManager.set_view_area_fraction(view_frac)
+	if _panel_toggle_btn != null:
+		_panel_toggle_btn.text = "›" if _panel_open else "‹"
+		_panel_toggle_btn.anchor_left   = view_frac
+		_panel_toggle_btn.anchor_right  = view_frac
+		_panel_toggle_btn.anchor_top    = 0.5
+		_panel_toggle_btn.anchor_bottom = 0.5
+		_panel_toggle_btn.offset_left   = -26.0
+		_panel_toggle_btn.offset_right  = 0.0
+		_panel_toggle_btn.offset_top    = -28.0
+		_panel_toggle_btn.offset_bottom = 28.0
+
 # ── Zoom / pan ────────────────────────────────────────────────────────────────
 
 ## True when the point is over the globe area and not over a UI control on top of it.
@@ -2259,6 +2481,8 @@ func _begin_district_placement(def: DistrictDef) -> void:
 	_placing_def = def
 	poi_layer.placement_mode = true
 	poi_layer.spacing_deg = TerrainSampler.MIN_SPACING_DEG
+	# reach of each district's neighbour ring = its own radius + this
+	poi_layer.neighbor_reach_extra = deg_to_rad(SETTLE_BASE_DEG + TerrainSampler.NEIGHBOR_GAP_DEG)
 	poi_layer.deselect_all()
 	CursorManager.set_state(CursorManager.State.NORMAL)
 	_show_place_hint(def)
@@ -2317,9 +2541,105 @@ func _update_placement_hover() -> void:
 	var site_name := TerrainSampler.label(t["terrain"], current_data.planet_type)
 	if t["coastal"] and t["terrain"] != TerrainSampler.Terrain.COAST:
 		site_name += "  ·  Coastal"
-	var detail: String = "Click to place" if chk["ok"] else chk["reason"]
-	var tag: String = DistrictDef.Type.keys()[_placing_def.id].to_lower()
-	poi_layer.set_ghost(hit["lon"], hit["lat"], chk["ok"], site_name, detail, tag)
+	var sys := _placement_system_check(_placing_def, hit["lon"], hit["lat"])
+	var lines := _placement_detail_lines(_placing_def, chk, sys)
+	poi_layer.set_ghost(hit["lon"], hit["lat"], chk["ok"] and sys["ok"], site_name, lines,
+		_placing_def.type_key(), sys["neighbors"])
+
+## Rules beyond terrain for a new district at (lon, lat): which existing districts
+## it would neighbour, and whether that joins a system that has a City. Cities
+## may go anywhere; every other district must join a City's system.
+## Returns { ok, reason, neighbors: Array[int] (territory indices), anchor: String }.
+func _placement_system_check(def: DistrictDef, lon: float, lat: float) -> Dictionary:
+	var n := _lonlat_to_world(lon, lat)
+	var reach := deg_to_rad(SETTLE_BASE_DEG + TerrainSampler.NEIGHBOR_GAP_DEG)
+	var neighbors: Array[int] = []
+	for i in _territories.size():
+		var t: Dictionary = _territories[i]
+		if acos(clampf(n.dot(t["n"]), -1.0, 1.0)) <= reach + float(t["r"]):
+			neighbors.append(i)
+	var comp := _components(_neighbor_pairs())
+	var anchor := ""
+	for i in neighbors:
+		for j in _territories.size():
+			if comp[j] == comp[i] and _is_system_anchor_poi(_territories[j]["poi"]):
+				anchor = (_territories[j]["poi"] as POIData).label
+				break
+		if anchor != "":
+			break
+	var ok := def.is_system_anchor() or anchor != ""
+	var reason := ""
+	if not ok:
+		# how far outside neighbour range the closest City system is
+		var best_excess := INF
+		var best_label := ""
+		for j in _territories.size():
+			var anchored := false
+			for k in _territories.size():
+				if comp[k] == comp[j] and _is_system_anchor_poi(_territories[k]["poi"]):
+					anchored = true
+					break
+			if not anchored:
+				continue
+			var t: Dictionary = _territories[j]
+			var excess := acos(clampf(n.dot(t["n"]), -1.0, 1.0)) - reach - float(t["r"])
+			if excess < best_excess:
+				best_excess = excess
+				best_label = (t["poi"] as POIData).label
+		if best_label == "":
+			reason = "Must neighbour a system that has a City"
+		else:
+			reason = "%s is %s beyond neighbour range" % [best_label, _surface_km(best_excess)]
+	return {
+		"ok": ok,
+		"reason": reason,
+		"neighbors": neighbors,
+		"anchor": anchor,
+	}
+
+## Angular distance → readable surface distance (Earth-sized planet at size 1.0).
+func _surface_km(angle_rad: float) -> String:
+	var km := angle_rad * 6371.0 * (current_data.planet_size if current_data != null else 1.0)
+	return "%d km" % int(round(km)) if km < 10000.0 else "%.1fk km" % (km / 1000.0)
+
+## Detail lines for the placement preview: outcome, system, neighbours, bonuses.
+## Each entry is [text, Color].
+func _placement_detail_lines(def: DistrictDef, chk: Dictionary, sys: Dictionary) -> Array:
+	var good := Color(0.45, 1.0, 0.55)
+	var bad  := Color(1.0, 0.45, 0.40)
+	var info := Color(0.65, 0.82, 1.0)
+	var dim  := Color(0.60, 0.64, 0.75)
+	var lines: Array = []
+	if not chk["ok"]:
+		lines.append([chk["reason"], bad])
+	elif not sys["ok"]:
+		lines.append([sys["reason"], bad])
+	else:
+		lines.append(["Click to place", good])
+	if sys["anchor"] != "":
+		lines.append(["Joins the %s system" % sys["anchor"], info])
+	elif def.is_system_anchor():
+		lines.append(["Founds a new system", info])
+	var neighbors: Array = sys["neighbors"]
+	if neighbors.is_empty():
+		return lines
+	var names: Array[String] = []
+	var bonus_lines: Array = []
+	for i: int in neighbors:
+		var pd: POIData = _territories[i]["poi"]
+		names.append(pd.label)
+		# what the new district gets from this neighbour, and vice versa
+		if def.neighbor_bonuses.has(pd.type_tag):
+			bonus_lines.append(["+ %s  (from %s)" % [def.neighbor_bonuses[pd.type_tag], pd.label], good])
+		var ndef := DistrictDef.find_by_key(pd.type_tag)
+		if ndef != null and ndef.neighbor_bonuses.has(def.type_key()):
+			bonus_lines.append(["+ %s for %s" % [ndef.neighbor_bonuses[def.type_key()], pd.label], good])
+	lines.append(["Neighbours: " + ", ".join(names), Color(0.92, 0.92, 0.95)])
+	if bonus_lines.is_empty():
+		lines.append(["No neighbour bonuses defined yet", dim])
+	else:
+		lines.append_array(bonus_lines)
+	return lines
 
 func _try_place_district(global_pos: Vector2) -> void:
 	var hit := _screen_to_lonlat(global_pos)
@@ -2327,7 +2647,7 @@ func _try_place_district(global_pos: Vector2) -> void:
 		return
 	var def := _placing_def
 	var chk := TerrainSampler.check_site(current_data, def, hit["lon"], hit["lat"])
-	if not chk["ok"]:
+	if not chk["ok"] or not _placement_system_check(def, hit["lon"], hit["lat"])["ok"]:
 		AudioManager.play("error")
 		return
 	if not GameState.spend_credits(DistrictDef.placement_cost(def, current_data)):
@@ -2985,7 +3305,9 @@ func _build_planet_overview(data: PlanetData) -> void:
 	var limits_row := HBoxContainer.new()
 	limits_row.add_theme_constant_override("separation", 0)
 	limits_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var slot_info_arr: Array = [ ["Surface", surface_pois.size(), pp.max_districts] ]
+	# -1 max = unlimited: show one pip per district and an ∞ in the label
+	var slot_info_arr: Array = [ ["Surface", surface_pois.size(),
+		-1 if UNLIMITED_SURFACE_DISTRICTS else pp.max_districts] ]
 	if has_orbital_unlocked:
 		slot_info_arr.append(["Orbital", orbital_pois.size(), p_max_orbital])
 		
@@ -3001,6 +3323,9 @@ func _build_planet_overview(data: PlanetData) -> void:
 			slots_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
 		slots_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var filled: int = slot_info[1]; var total: int = slot_info[2]
+		var unlimited := total < 0
+		if unlimited:
+			total = mini(filled, 12)
 		for idx in total:
 			var slot_pc := PanelContainer.new()
 			slot_pc.custom_minimum_size = Vector2(14, 10)
@@ -3017,7 +3342,8 @@ func _build_planet_overview(data: PlanetData) -> void:
 			slot_pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slots_hbox.add_child(slot_pc)
 		group_vbox.add_child(slots_hbox)
-		var si_lbl := Label.new(); si_lbl.text = slot_info[0]
+		var si_lbl := Label.new()
+		si_lbl.text = "%s  %d / ∞" % [slot_info[0], filled] if unlimited else slot_info[0]
 		_apply_orbitron(si_lbl, 9)
 		si_lbl.add_theme_color_override("font_color", Color(0.50, 0.55, 0.70))
 		si_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -3063,7 +3389,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 	for poi: POIData in surface_pois:
 		districts_page.add_child(_build_district_overview_card(poi, data, pp, panel_content, root))
 
-	var can_add_surface := surface_pois.size() < pp.max_districts
+	var can_add_surface := UNLIMITED_SURFACE_DISTRICTS or surface_pois.size() < pp.max_districts
 	if can_add_surface:
 		var add_dist_card := _build_add_district_card(data, true, false)
 		districts_page.add_child(add_dist_card)
@@ -3406,7 +3732,7 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 				_rotate_to_lon(eq_lon)
 			else:
 				_select_district_on_planet(cap_poi.label)
-				_rotate_to_lon(cap_poi.lon_deg)
+				_focus_on_site(cap_poi.lon_deg, cap_poi.lat_deg)
 			if cap_poi.constructing:
 				TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\nBuild time: %.0fs" % cap_poi.construct_duration)
 				return

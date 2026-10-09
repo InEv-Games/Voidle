@@ -13,6 +13,13 @@ uniform vec4 district_col[MAX_DISTRICTS];  // rgb = territory colour, a = night-
 uniform int  district_count    = 0;
 uniform int  district_hover    = -1;
 uniform int  district_selected = -1;
+// Borders fade in only once zoomed in (set from PlanetaryView).
+uniform float border_alpha     = 1.0;
+
+#define MAX_ROADS 16
+// Roads between neighbouring districts: each entry = (index a, index b) into district_pos.
+uniform vec2 district_roads[MAX_ROADS];
+uniform int  road_count = 0;
 
 // Owner of a world-space surface point: the district with the smallest
 // noise-warped normalised distance, if that distance is < 1. -1 = unclaimed.
@@ -57,5 +64,69 @@ bool territory_is_border(vec2 uvp, vec2 px, int owner) {
 
 // Border colour strength (borders only draw while hovered or selected).
 float territory_border_strength(int owner) {
-	return owner == district_selected ? 1.0 : 0.75;
+	return (owner == district_selected ? 1.0 : 0.75) * border_alpha;
+}
+
+// ── Roads ────────────────────────────────────────────────────────────────────
+// Roads follow the great circle between two neighbouring districts and meander
+// like rivers (world-space noise, two octaves). The meander tapers to zero at
+// both ends so the road always meets the settlements. Over water a road becomes
+// a dashed sea lane with little ships sailing it (see planet_rocky.gdshader).
+
+float road_wiggle(vec3 p, int i, float arc, float t) {
+	// amplitude scales with length but is capped, so long inter-system roads
+	// meander like the short ones instead of swinging across the continent
+	return (noise3(p * 6.0  + vec3(float(i) * 3.7)) * 0.65
+	      + noise3(p * 17.0 + vec3(float(i) * 1.3)) * 0.35) * min(arc * 0.55, 0.06) * sin(PI * t);
+}
+
+// Point on road i at parameter t (0 = district a, 1 = district b).
+vec3 road_point(vec3 a, vec3 b, vec3 nrm, float arc, int i, float t) {
+	vec3 p = normalize(a * sin((1.0 - t) * arc) + b * sin(t * arc));
+	return normalize(p + nrm * road_wiggle(p, i, arc, t));
+}
+
+// (hit 0/1, t along the road, road arc length in radians).
+// half_w = half the road width in radians (≈ a fraction of one screen pixel).
+vec3 road_info(vec3 rn, float half_w) {
+	for (int i = 0; i < MAX_ROADS; i++) {
+		if (i >= road_count) break;
+		vec3 a = district_pos[int(district_roads[i].x)].xyz;
+		vec3 b = district_pos[int(district_roads[i].y)].xyz;
+		vec3 plane = cross(a, b);
+		float pl = length(plane);
+		if (pl < 0.0001) continue;
+		float ab = dot(a, b);
+		if (dot(rn, a) < ab || dot(rn, b) < ab) continue;     // outside the segment
+		float arc = acos(clamp(ab, -1.0, 1.0));
+		vec3  nrm = plane / pl;
+		float off = dot(rn, nrm);
+		// Meander is sampled on the great circle (rn projected onto it), so the
+		// road has constant width and ships (road_point) sit exactly on it.
+		vec3  p0  = normalize(rn - nrm * off);
+		float t   = clamp(acos(clamp(dot(p0, a), -1.0, 1.0)) / arc, 0.0, 1.0);
+		if (abs(off - road_wiggle(p0, i, arc, t)) < half_w)
+			return vec3(1.0, t, arc);
+	}
+	return vec3(0.0);
+}
+
+// 1 where a ship sits: two per road, sailing opposite ways at a steady pace.
+float ship_mask(vec3 rn, float half_w, float time) {
+	for (int i = 0; i < MAX_ROADS; i++) {
+		if (i >= road_count) break;
+		vec3 a = district_pos[int(district_roads[i].x)].xyz;
+		vec3 b = district_pos[int(district_roads[i].y)].xyz;
+		vec3 plane = cross(a, b);
+		float pl = length(plane);
+		if (pl < 0.0001) continue;
+		float arc = acos(clamp(dot(a, b), -1.0, 1.0));
+		for (int k = 0; k < 2; k++) {
+			float ts = fract(time * 0.02 / arc + float(i) * 0.37 + float(k) * 0.5);
+			if (k == 1) ts = 1.0 - ts;
+			vec3 sp = road_point(a, b, plane / pl, arc, i, ts);
+			if (dot(rn, sp) > cos(half_w)) return 1.0;
+		}
+	}
+	return 0.0;
 }

@@ -19,13 +19,21 @@ var _selected_index: int = -1
 ## and spacing rings are drawn around existing districts.
 var placement_mode: bool = false
 var spacing_deg:    float = 8.0
+## Placement: a new district within (district size + this) radians becomes its neighbour.
+var neighbor_reach_extra: float = 0.0
 ## { lon, lat, ok, title, detail } — empty when the cursor is off the planet.
 var _ghost: Dictionary = {}
 ## Optional: global screen pos → index of the district whose territory is there (-1 = none).
 var territory_lookup: Callable
+## Neighbouring district pairs (indices into _pois), drawn as animated arcs.
+var links: Array[Vector2i] = []
 
-func set_ghost(lon: float, lat: float, ok: bool, title: String, detail: String, tag: String = "") -> void:
-	_ghost = {"lon": lon, "lat": lat, "ok": ok, "title": title, "detail": detail, "tag": tag}
+## `lines`: Array of [text: String, color: Color] shown under the title.
+## `neighbors`: indices into _pois this site would neighbour (preview arcs).
+func set_ghost(lon: float, lat: float, ok: bool, title: String, lines: Array = [],
+		tag: String = "", neighbors: Array = []) -> void:
+	_ghost = {"lon": lon, "lat": lat, "ok": ok, "title": title, "lines": lines,
+		"tag": tag, "neighbors": neighbors}
 
 func clear_ghost() -> void:
 	_ghost = {}
@@ -90,11 +98,14 @@ func _draw_surface_circle(lon: float, lat: float, radius_rad: float, col: Color,
 	var up := Vector3.UP if absf(c.y) < 0.95 else Vector3.RIGHT
 	var u := c.cross(up).normalized()
 	var v := c.cross(u).normalized()
-	const SEGS := 48
 	var clip := _clip_rect()
 	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
-	for i in SEGS:
-		var a := TAU * float(i) / float(SEGS)
+	# keep dot spacing roughly constant on screen, whatever the circle size
+	var p := _get_planet_params()
+	var r_px: float = p.get("r_px", 200.0)
+	var segs := clampi(int(TAU * sin(radius_rad) * r_px / (block * 3.0)), 24, 220)
+	for i in segs:
+		var a := TAU * float(i) / float(segs)
 		var d := (c * cos(radius_rad) + (u * cos(a) + v * sin(a)) * sin(radius_rad)).normalized()
 		var pt := project(atan2(d.x, d.z), asin(clampf(d.y, -1.0, 1.0)))
 		if pt.z > 0.0 and clip.has_point(Vector2(pt.x, pt.y)):
@@ -104,6 +115,10 @@ func _draw_surface_circle(lon: float, lat: float, radius_rad: float, col: Color,
 func _draw_placement_overlay(font: Font) -> void:
 	var spacing := deg_to_rad(spacing_deg)
 	for poi in _pois:
+		# neighbour range (cyan) and no-build spacing (red)
+		var reach: float = float(poi["data"].get("size", 0.0)) + neighbor_reach_extra
+		if reach > 0.0:
+			_draw_surface_circle(poi["lon"], poi["lat"], reach, Color(0.45, 0.85, 1.0, 0.40), 1.0)
 		_draw_surface_circle(poi["lon"], poi["lat"], spacing, Color(1.0, 0.45, 0.35, 0.45), 1.0)
 	if _ghost.is_empty():
 		return
@@ -118,21 +133,37 @@ func _draw_placement_overlay(font: Font) -> void:
 	_draw_site_beam(_ghost["lon"], _ghost["lat"], col)
 	_draw_pixel_icon(sp, _marker_icon(_ghost.get("tag", "")), block, col, 1.0)
 	_draw_pixel_brackets(sp, block * 6.0, block, Color(col, 0.9))
-	# Info label next to the cursor.
-	var title: String  = _ghost["title"]
-	var detail: String = _ghost["detail"]
-	var pos := sp + Vector2(14, -6)
-	for ox: int in [-1, 0, 1]:
-		for oy: int in [-1, 0, 1]:
-			if ox == 0 and oy == 0:
-				continue
-			var o := Vector2(ox * 1.5, oy * 1.5)
-			draw_string(font, pos + o, title, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0, 0, 0, 0.9))
-			if detail != "":
-				draw_string(font, pos + o + Vector2(0, 15), detail, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0, 0, 0, 0.9))
-	draw_string(font, pos, title, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)
-	if detail != "":
-		draw_string(font, pos + Vector2(0, 15), detail, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(col, 0.95))
+	# preview arcs to the districts this one would neighbour
+	for ni in _ghost.get("neighbors", []):
+		if int(ni) < _pois.size():
+			var other: Dictionary = _pois[int(ni)]
+			_draw_arc(_ghost["lon"], _ghost["lat"], other["lon"], other["lat"],
+				0.85, Color(0.55, 1.0, 0.65) if ok else Color(1.0, 0.55, 0.45))
+	_draw_ghost_info(font, sp, ok)
+
+## Title + detail lines in a dark box beside the cursor.
+func _draw_ghost_info(font: Font, sp: Vector2, ok: bool) -> void:
+	const TITLE_SIZE := 12
+	const LINE_SIZE  := 9
+	const PAD        := 6.0
+	var title: String = _ghost["title"]
+	var lines: Array  = _ghost.get("lines", [])
+	var w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_SIZE).x
+	for ln: Array in lines:
+		w = maxf(w, font.get_string_size(ln[0], HORIZONTAL_ALIGNMENT_LEFT, -1, LINE_SIZE).x)
+	var h := 16.0 + 13.0 * lines.size()
+	var box := Rect2(sp + Vector2(16, -14), Vector2(w + PAD * 2.0, h + PAD))
+	# keep the box on screen: flip left of the cursor near the right edge
+	var clip := _clip_rect()
+	if box.end.x + global_position.x > clip.end.x:
+		box.position.x = sp.x - 16 - box.size.x
+	draw_rect(box, Color(0.04, 0.06, 0.12, 0.88))
+	draw_rect(box, Color(0.45, 1.0, 0.55, 0.5) if ok else Color(1.0, 0.45, 0.4, 0.5), false, 1.0)
+	var pos := box.position + Vector2(PAD, PAD + 10.0)
+	draw_string(font, pos, title, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_SIZE, Color.WHITE)
+	for ln: Array in lines:
+		pos.y += 13.0
+		draw_string(font, pos, ln[0], HORIZONTAL_ALIGNMENT_LEFT, -1, LINE_SIZE, ln[1])
 
 # ── Pixel-art helpers ─────────────────────────────────────────────────────────
 # Markers snap to the planet shader's pixel grid so they read as part of the art.
@@ -247,6 +278,74 @@ func _draw_pixel_glow(center: Vector2, radius: float, a: float) -> void:
 		var t := 1.0 - float(i) / float(steps + 1)
 		var col := Color(1.0, lerpf(0.72, 1.0, t), lerpf(0.28, 0.9, t), a * lerpf(0.10, 0.75, t))
 		draw_rect(Rect2(c - Vector2(ext, ext), Vector2(ext * 2.0 + block, ext * 2.0 + block)), col)
+
+# ── Neighbour links ───────────────────────────────────────────────────────────
+# Grand-strategy style connection arcs. Each arc follows the great circle between
+# two districts but is lifted along the surface normal (peaking mid-way), and is
+# projected like the globe — so it leaves each settlement perpendicular to the
+# surface and bends with the viewing angle. Dashes flow toward the bigger one.
+const LINK_HEIGHT_MIN  := 0.03    # arc peak above the surface, × planet radius
+const LINK_HEIGHT_PER  := 0.35    # extra peak height per radian of distance
+const LINK_DASH_BLOCKS := 6.0     # dash period, in pixel blocks
+const LINK_SPEED       := 1.1     # dash periods per second
+
+static func _ll_to_vec(lon: float, lat: float) -> Vector3:
+	return Vector3(sin(lon) * cos(lat), sin(lat), cos(lon) * cos(lat))
+
+func _draw_links() -> void:
+	for lk: Vector2i in links:
+		if lk.x >= _pois.size() or lk.y >= _pois.size():
+			continue
+		var from_i := lk.x
+		var to_i := lk.y
+		# flow toward the larger settlement
+		if float(_pois[from_i]["data"].get("size", 0.0)) > float(_pois[to_i]["data"].get("size", 0.0)):
+			from_i = lk.y
+			to_i = lk.x
+		var focus := from_i == _hovered_index or to_i == _hovered_index \
+			or from_i == _selected_index or to_i == _selected_index
+		_draw_arc(_pois[from_i]["lon"], _pois[from_i]["lat"], _pois[to_i]["lon"], _pois[to_i]["lat"],
+			0.75 if focus else 0.45, Color(0.70, 0.88, 1.0))
+
+## One dashed, animated arc from (lon_a, lat_a) to (lon_b, lat_b); dashes flow a → b.
+func _draw_arc(lon_a: float, lat_a: float, lon_b: float, lat_b: float, base_a: float, tint: Color) -> void:
+	var p := _get_planet_params()
+	if p.is_empty():
+		return
+	var center: Vector2 = p["center"]
+	var r_px: float     = p["r_px"]
+	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
+	var clip := _clip_rect()
+	var now := float(Time.get_ticks_msec()) / 1000.0
+	var a := _ll_to_vec(lon_a, lat_a)
+	var b := _ll_to_vec(lon_b, lat_b)
+	var arc := acos(clampf(a.dot(b), -1.0, 1.0))
+	if arc < 0.0001:
+		return
+	var height := LINK_HEIGHT_MIN + LINK_HEIGHT_PER * arc
+	var steps := maxi(12, int(arc * r_px * (1.0 + height) / block * 1.3))
+	var dash_len := arc * r_px / (block * LINK_DASH_BLOCKS)   # dash periods along the arc
+	var last := Vector2(-INF, -INF)
+	for i in steps + 1:
+		var t := float(i) / float(steps)
+		# dashed + animated: skip the "off" half of each period
+		if fposmod(t * dash_len - now * LINK_SPEED, 1.0) > 0.55:
+			continue
+		var d := a.slerp(b, t)
+		var v: Vector3 = _planet.lonlat_to_view(atan2(d.x, d.z), asin(clampf(d.y, -1.0, 1.0)))
+		var q := v * (1.0 + height * sin(PI * t))          # lifted along the normal
+		if q.z < 0.0 and Vector2(q.x, q.y).length() < 1.0:
+			continue                                        # behind the globe
+		var sp := center + Vector2(q.x, q.y) * r_px
+		if not clip.has_point(sp):
+			continue
+		var cell := ((sp - global_position) / block).floor() * block
+		if cell == last:
+			continue
+		last = cell
+		# fade in/out at the ends so the arc grows out of the settlements
+		var ends := smoothstep(0.0, 0.12, t) * smoothstep(1.0, 0.88, t)
+		draw_rect(Rect2(cell, Vector2(block, block)), Color(tint, base_a * lerpf(0.35, 1.0, ends)))
 
 ## Light beam rising straight up from a surface point. It is projected like the
 ## planet (orthographic), so its on-screen length and direction show how that
@@ -385,12 +484,49 @@ func spawn_floating_text(lon_deg: float, lat_deg: float, text: String, color: Co
 func _ready() -> void:
 	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
 
+## Neighbouring districts (same "cluster" id) that crowd together on screen show
+## one label — the biggest settlement's, with a "+N" count. Zooming in spreads
+## them apart and every label comes back. Hovered / selected always keep theirs.
+const LABEL_MERGE_PX := 90.0
+
+## Returns { hidden: Dictionary(poi index -> true), extra: Dictionary(index -> hidden count) }.
+func _label_merges() -> Dictionary:
+	var hidden := {}
+	var extra := {}
+	var groups := {}
+	for i in _pois.size():
+		var poi: Dictionary = _pois[i]
+		if not poi["visible"]:
+			continue
+		var cid: int = poi["data"].get("cluster", i)
+		if not groups.has(cid):
+			groups[cid] = []
+		groups[cid].append(i)
+	for cid in groups:
+		var members: Array = groups[cid]
+		if members.size() < 2:
+			continue
+		var lead: int = members[0]
+		for m: int in members:
+			if float(_pois[m]["data"].get("size", 0.0)) > float(_pois[lead]["data"].get("size", 0.0)):
+				lead = m
+		for m: int in members:
+			if m == lead or m == _hovered_index or m == _selected_index:
+				continue
+			var d: float = (_pois[m]["screen"] as Vector2).distance_to(_pois[lead]["screen"])
+			if d < LABEL_MERGE_PX:
+				hidden[m] = true
+				extra[lead] = int(extra.get(lead, 0)) + 1
+	return {"hidden": hidden, "extra": extra}
+
 func _draw() -> void:
 	var font: Font = _orbitron if _orbitron else ThemeDB.fallback_font
 	if placement_mode:
 		_draw_placement_overlay(font)
 	if _pois.is_empty() and _floating_texts.is_empty():
 		return
+	var merges := _label_merges()
+	_draw_links()
 
 	for ft in _floating_texts:
 		if not ft.visible: continue
@@ -473,19 +609,26 @@ func _draw() -> void:
 		var dot_col := base_col.lightened(0.45) if active else base_col
 		dot_col.a = alpha
 
-		# leader lines — chunky pixel steps, drawn first so the marker sits on top
 		var line_px := maxf(2.0, roundf(px * 0.5))
-		_draw_pixel_line(sp, diag_end, line_px, col)
-		_draw_pixel_line(diag_end, horiz_end, line_px, col)
+		var label_hidden: bool = merges["hidden"].has(i)
+
+		# leader lines — chunky pixel steps, drawn first so the marker sits on top
+		if not label_hidden:
+			_draw_pixel_line(sp, diag_end, line_px, col)
+			_draw_pixel_line(diag_end, horiz_end, line_px, col)
 
 		# marker — pixel icon per district type, bracket frame when hovered/selected
 		_draw_pixel_icon(sp, _marker_icon(tag), line_px, dot_col, alpha)
 		if active:
 			var frame_col := Color(1.0, 0.95, 0.5, alpha * (0.9 if selected else 0.6))
 			_draw_pixel_brackets(sp, line_px * 6.0, line_px, frame_col)
+		if label_hidden:
+			continue
 
-		# label
+		# label (+N when crowded neighbours are folded into it)
 		var label: String = poi["label"]
+		if merges["extra"].has(i):
+			label += "  +%d" % int(merges["extra"][i])
 		var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE)
 		var label_pos := horiz_end + Vector2(horiz_dir * 3.0, text_size.y * 0.35)
 		if horiz_dir < 0.0:
