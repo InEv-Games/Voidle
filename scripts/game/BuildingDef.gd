@@ -44,6 +44,43 @@ func output_label() -> String:
 		OutputType.SCIENCE:         return "+%.0f sci" % output_amount
 	return ""
 
+## ── Site requirements (the district's resource tags, see ResourceMap) ──────
+## Tag this building needs at the district site: "geothermal", "solar", "wind",
+## "tidal" or "" for none, and the minimum value (0..1) of that tag.
+@export var required_tag: String = ""
+@export var required_min: float  = 0.0
+## Needs a coastal site.
+@export var requires_coastal: bool = false
+## Output scales with this tag at the site: ×(0.5 + value), so a 50% site = 1×.
+@export var output_tag: String = ""
+
+static func tag_label(key: String) -> String:
+	match key:
+		"geothermal": return "Geothermal"
+		"solar":      return "Solar"
+		"wind":       return "Wind"
+		"tidal":      return "Tidal"
+	return key.capitalize()
+
+## Why this building can't be built at the district, or "" if it can.
+func site_block_reason(poi: POIData) -> String:
+	if poi == null:
+		return ""
+	if requires_coastal and not poi.coastal:
+		return "Needs a coastal site"
+	if required_tag != "":
+		var v: float = float(poi.resource_tags.get(required_tag, 0.0))
+		if v < required_min:
+			return "Needs %s %d%% (site %d%%)" % [tag_label(required_tag),
+				int(round(required_min * 100.0)), int(round(v * 100.0))]
+	return ""
+
+## Output multiplier from the site's resources (1.0 when not site-dependent).
+func site_mult(poi: POIData) -> float:
+	if output_tag == "" or poi == null or not poi.resource_tags.has(output_tag):
+		return 1.0
+	return 0.5 + float(poi.resource_tags[output_tag])
+
 ## How much one of these grows its district's settlement on the planet map.
 ## -1 = derive from output_type (housing / trade grow it most, energy least).
 @export var settlement_size: float = -1.0

@@ -158,15 +158,15 @@ const GUIDED_STEPS: Array = [
 				"Now let's put that to use.",
 			],
 			[
-				"Your Energy district can be upgraded to hold more buildings.",
-				"Open your Generator Facility district and press Upgrade District.",
+				"Districts level up on their own: a City gains a level per district under it,",
+				"and every other district a level per neighbour. Higher levels hold more buildings.",
 				"A stronger energy grid means a stronger colony.",
 			],
 		],
 	},
 	{
 		"type":        "action",
-		"instruction": "Open Generator Facility  →  Press  UPGRADE DISTRICT",
+		"instruction": "Add another district to your City to reach Lv 2",
 		"targets":     [{"type": "district_upgrade"}],
 		"reward_credits": 400.0,
 		"reward_science": 10.0,
@@ -233,7 +233,7 @@ const QUESTS := [
 	{
 		"id":           "district_upgrade",
 		"title":        "Expand the Grid",
-		"desc":         "Upgrade your Generator Facility district.",
+		"desc":         "Grow a district to Lv 2 by adding districts to your City.",
 		"sub_steps":    [{"type": "district_upgrade"}],
 		"reward_credits": 400.0,
 		"reward_science": 10.0,
@@ -614,7 +614,7 @@ func _target_hint(tgt: Dictionary) -> String:
 	match tgt["type"]:
 		"district":         return "Place a Generator Facility district"
 		"planet_level_up":  return "Open Planet Panel  →  Press  LEVEL UP"
-		"district_upgrade": return "Open Generator Facility  →  Press  UPGRADE DISTRICT"
+		"district_upgrade": return "Add another district to your City to reach Lv 2"
 	match tgt.get("id", ""):
 		"residential": return "Build  →  Residential House"
 		"solar_panel":  return "Build  →  Solar Array inside the district"

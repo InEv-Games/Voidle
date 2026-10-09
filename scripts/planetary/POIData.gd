@@ -36,6 +36,16 @@ static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⬡", "�
 @export var terrain: int  = -1
 @export var coastal: bool = false
 
+## Label of the City this district belongs to. Empty for cities themselves
+## (and orbital stations). Cities are parent districts; every other surface
+## district is built under one.
+@export var parent_city: String = ""
+
+## Natural resources measured at the placed site (ResourceMap.sample):
+## { geothermal, solar, wind, tidal: 0..1, minerals: { resource_id: 0..1 } }.
+## Empty until sampled.
+@export var resource_tags: Dictionary = {}
+
 ## Legacy string tag kept for shader/ring logic only — do not use for type checks.
 @export var type_tag: String = ""
 
@@ -48,6 +58,10 @@ static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⬡", "�
 
 func is_orbital() -> bool:
 	return poi_type == POIType.STATION
+
+## Cities (and a moon's outpost colony, their equivalent) are parent districts.
+func is_city() -> bool:
+	return poi_type == POIType.CITY or poi_type == POIType.OUTPOST
 
 func max_building_slots() -> int:
 	if poi_type == POIType.STATION:

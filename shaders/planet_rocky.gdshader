@@ -123,36 +123,27 @@ void fragment() {
 		float urban   = 0.0;
 		float core    = 0.0;
 		float ur      = 0.0;
-		float on_land = step(0.07, h);
+		// "land" for settlements = where sand/grass actually shows; the 0.07–0.10
+		// band is still drawn mostly as shallow water
+		float on_land = step(0.10, h);
 		if (d_owner >= 0) {
 			core = smoothstep(1.0, 0.15, d_score) * 0.92;                // density, peaks at the centre
 			float blob = fbm3(rn * 55.0 + vec3(11.0), 3) * 0.5 + 0.5;    // sprawl patches / parks
 			vec3  ucell = floor(rn * 140.0);                              // world-space blocks
 			ur = fract(sin(dot(ucell, vec3(41.3, 289.1, 97.7))) * 15731.743);
-			urban = on_land * step(1.0 - core, blob * 0.8 + ur * 0.35);
-			// satellite-style mix: concrete, pale roofs, terracotta
+			// land districts build on land, sea districts on the water
+			float d_sea = district_sea[d_owner];
+			float site  = mix(on_land, 1.0 - on_land, d_sea);
+			urban = site * step(1.0 - core, blob * 0.8 + ur * 0.35);
+			// satellite-style mix: concrete, pale roofs, terracotta — or steel platforms at sea
 			vec3 u_col = ur < 0.45 ? vec3(0.42, 0.41, 0.40)
 			           : ur < 0.80 ? vec3(0.68, 0.63, 0.55)
 			           :             vec3(0.64, 0.45, 0.34);
+			if (d_sea > 0.5)
+				u_col = ur < 0.5 ? vec3(0.40, 0.45, 0.50) : vec3(0.66, 0.70, 0.74);
 			u_col = mix(u_col, d_col, 0.10);   // faint hint of the district type
 			surf = mix(surf, u_col, urban * 0.9);
 		}
-		// roads between neighbouring districts: thin asphalt on land, dashed sea
-		// lanes over water. One screen pixel ≈ 1 / (pixel_count · planet_radius) rad.
-		float px_rad = 1.0 / (pixel_count * planet_radius);
-		vec3  rinfo  = road_info(rn, px_rad * 0.55);
-		float road   = 0.0;
-		if (rinfo.x > 0.5) {
-			if (on_land > 0.5) {
-				road = 1.0;
-				surf = mix(surf, vec3(0.36, 0.34, 0.31), 0.7);
-			} else {
-				float px_along = rinfo.y * rinfo.z / px_rad;          // pixels from district a
-				if (fract(px_along / 4.0) < 0.5)
-					surf = mix(surf, vec3(0.72, 0.84, 0.94), 0.35);
-			}
-		}
-		float ship = (1.0 - on_land) * ship_mask(rn, px_rad * 0.6, TIME);
 
 		surf = mix(surf, color_cloud, cm * 0.90);
 
@@ -170,7 +161,7 @@ void fragment() {
 		}
 
 		// city lights: the settlement's own pixels light up at night (same world-space
-		// blocks as the sprawl), plus a sparse string of lights along the roads
+		// blocks as the sprawl). Road lights are drawn with the roads (POILayer).
 		float night = smoothstep(0.15, 0.0, diff) * night_shadow;
 		if (night > 0.0 && city_lights > 0.0) {
 			vec3 lc = vec3(1.0, 0.75, 0.3) * 2.8;
@@ -183,21 +174,25 @@ void fragment() {
 				float dots = smoothstep(threshold, 1.0, city_noise) * pop;
 				float haze = smoothstep(threshold - 0.15, 1.0, city_noise) * pop * 0.8;
 				surf = mix(surf, surf + (lc * 3.2 / 2.8) * dots + lc * 0.35 * haze, night * city_lights);
-			} else {
-				float lit = 0.0;
-				if (urban > 0.0) {
-					float chance = district_col[d_owner].a * mix(0.35, 1.0, core);
-					lit = step(fract(ur * 7.31 + 0.13), chance);   // second hash of the same block
-				}
-				vec3 rcell = floor(rn * 140.0);
-				float rr = fract(sin(dot(rcell, vec3(17.1, 113.7, 59.3))) * 24634.63);
-				lit = max(lit, road * on_land * step(rr, 0.35) * 0.6);
-				surf += lc * lit * night * city_lights * (1.0 - cm * 0.65);
+			} else if (d_owner >= 0) {
+				// Real city lights seen from orbit: an orange sodium haze over the
+				// built-up area that thickens toward the core, uneven block by block,
+				// a few warm-white hotspots in the dense centre, and a faint spill of
+				// light pollution around the settlement.
+				float lvl   = district_col[d_owner].a;                 // 0..1, running buildings
+				float dens  = urban * (0.30 + 0.70 * core);
+				float vary  = 0.55 + 0.45 * fract(ur * 7.31 + 0.13);  // per block, same cells as the sprawl
+				float hot   = urban * step(0.86, fract(ur * 3.17 + 0.41)) * core;
+				float d_site = mix(on_land, 1.0 - on_land, district_sea[d_owner]);
+				float spill = smoothstep(1.0, 0.2, d_score) * 0.18 * d_site;
+				vec3 sodium = vec3(1.0, 0.52, 0.16);
+				vec3 warm   = vec3(1.0, 0.82, 0.55);
+				vec3 glow   = sodium * (dens * vary + spill) * 0.9 + warm * hot * 0.6;
+				surf += glow * lvl * night * city_lights * 1.9 * (1.0 - cm * 0.65);
 			}
 		}
 
-		// ships carry their own lights, so they read day and night
-		surf = mix(surf, vec3(1.0, 0.96, 0.85), ship);
+		surf = apply_lens(surf, rn);
 
 		// territory border — only while hovered/selected; after lighting so it reads at night
 		if (d_owner >= 0 && (d_owner == district_hover || d_owner == district_selected)

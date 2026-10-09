@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://bid_tidal_generator"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_1"]
+
+[resource]
+script = ExtResource("1_1")
+building_id = "tidal_generator"
+display_name = "Tidal Generator"
+description = "Turns the tides into energy. Needs a coastal site with tidal flow; output scales with it."
+allowed_poi_types = Array[int]([2])
+allowed_planet_types = Array[int]([])
+base_cost = 400.0
+slot_cost = 1
+min_planet_lv = 1
+construct_duration = 4.0
+tick_duration = 30.0
+energy_per_tick = 0.0
+output_type = 1
+output_amount = 3.0
+input_type = 0
+input_amount = 0.0
+input_tier = 1
+unlocked_by_default = true
+requires_coastal = true
+required_tag = "tidal"
+required_min = 0.2
+output_tag = "tidal"

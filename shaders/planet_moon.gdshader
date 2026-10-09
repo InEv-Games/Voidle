@@ -115,6 +115,8 @@ void fragment() {
 		float lit  = smoothstep(0.0, 0.25, diff);
 		surf *= mix(1.0, 0.04 + 0.96 * lit, night_shadow);
 
+		surf = apply_lens(surf, d_rn);
+
 		// territory border — after lighting so it stays readable at night
 		if (d_owner >= 0 && (d_owner == district_hover || d_owner == district_selected)
 				&& territory_is_border(uv, 1.0 / grid, d_owner))

@@ -21,3 +21,4 @@ input_type = 0
 input_amount = 0.0
 input_tier = 1
 unlocked_by_default = false
+output_tag = "solar"

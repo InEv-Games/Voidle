@@ -19,14 +19,25 @@ var _selected_index: int = -1
 ## and spacing rings are drawn around existing districts.
 var placement_mode: bool = false
 var spacing_deg:    float = 8.0
-## Placement: a new district within (district size + this) radians becomes its neighbour.
-var neighbor_reach_extra: float = 0.0
+## Placement guide rings: [{lon, lat, r (radians), color}] (city zones / reach).
+var placement_rings: Array = []
+## 0..1 — how visible non-city districts are. Zoomed out only cities show.
+var detail: float = 1.0
 ## { lon, lat, ok, title, detail } — empty when the cursor is off the planet.
 var _ghost: Dictionary = {}
 ## Optional: global screen pos → index of the district whose territory is there (-1 = none).
 var territory_lookup: Callable
 ## Neighbouring district pairs (indices into _pois), drawn as animated arcs.
 var links: Array[Vector2i] = []
+## Routed roads (RoadNetwork.route results):
+## [{ segments: [{ sea: bool, points: PackedVector2Array (lon, lat) }], ports: PackedVector2Array }]
+var roads: Array = []
+## 0..1 — road network visibility (zoom-driven; hidden when far out).
+var road_vis: float = 1.0
+## Port under the cursor: { lon, lat, name } or empty.
+var _hover_port: Dictionary = {}
+## View-space light direction (planet shader's light_direction) for road shading.
+var light_dir: Vector3 = Vector3(0, 0, 1)
 
 ## `lines`: Array of [text: String, color: Color] shown under the title.
 ## `neighbors`: indices into _pois this site would neighbour (preview arcs).
@@ -114,11 +125,10 @@ func _draw_surface_circle(lon: float, lat: float, radius_rad: float, col: Color,
 
 func _draw_placement_overlay(font: Font) -> void:
 	var spacing := deg_to_rad(spacing_deg)
+	for ring: Dictionary in placement_rings:
+		_draw_surface_circle(ring["lon"], ring["lat"], ring["r"], ring["color"], 1.0)
 	for poi in _pois:
-		# neighbour range (cyan) and no-build spacing (red)
-		var reach: float = float(poi["data"].get("size", 0.0)) + neighbor_reach_extra
-		if reach > 0.0:
-			_draw_surface_circle(poi["lon"], poi["lat"], reach, Color(0.45, 0.85, 1.0, 0.40), 1.0)
+		# no-build spacing around every district
 		_draw_surface_circle(poi["lon"], poi["lat"], spacing, Color(1.0, 0.45, 0.35, 0.45), 1.0)
 	if _ghost.is_empty():
 		return
@@ -131,7 +141,8 @@ func _draw_placement_overlay(font: Font) -> void:
 	var sp := _snap(Vector2(pt.x, pt.y)) - global_position
 	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
 	_draw_site_beam(_ghost["lon"], _ghost["lat"], col)
-	_draw_pixel_icon(sp, _marker_icon(_ghost.get("tag", "")), block, col, 1.0)
+	var gtag: String = _ghost.get("tag", "")
+	_draw_pixel_icon(sp, _marker_icon(gtag, gtag == "city"), block, col, 1.0)
 	_draw_pixel_brackets(sp, block * 6.0, block, Color(col, 0.9))
 	# preview arcs to the districts this one would neighbour
 	for ni in _ghost.get("neighbors", []):
@@ -169,6 +180,19 @@ func _draw_ghost_info(font: Font, sp: Vector2, ok: bool) -> void:
 # Markers snap to the planet shader's pixel grid so they read as part of the art.
 
 const _ICONS := {
+	# 9×9 metropolis skyline — cities are parent districts and read differently
+	# from the rest. The 1-px gaps fill with the outline: building edges + windows.
+	"capital_city": [
+		"....#....",
+		"....#....",
+		"...###.#.",
+		".#.#.#.#.",
+		".#.###.##",
+		"##.#.#.##",
+		"##.###.##",
+		"##.###.##",
+		"#########",
+	],
 	"city": [
 		"...#...",
 		"..##.#.",
@@ -178,36 +202,33 @@ const _ICONS := {
 		"#######",
 		"#######",
 	],
+	# Districts use compact 5×5 icons so cities stand out when zoomed in.
 	"generator": [
-		"...###.",
-		"..###..",
-		".###...",
-		"######.",
-		"..###..",
-		".###...",
-		".##....",
+		"..###",
+		".##..",
+		"#####",
+		"..##.",
+		".##..",
 	],
 	"mining": [
-		"...#...",
-		"..###..",
-		".##.##.",
-		"###.###",
-		".##.##.",
-		"..###..",
-		"...#...",
+		"..#..",
+		".###.",
+		"##.##",
+		".###.",
+		"..#..",
 	],
 	"default": [
-		"..###..",
-		".#####.",
-		"#######",
-		"#######",
-		"#######",
-		".#####.",
-		"..###..",
+		".###.",
+		"#####",
+		"#####",
+		"#####",
+		".###.",
 	],
 }
 
-func _marker_icon(tag: String) -> Array:
+func _marker_icon(tag: String, is_city: bool = false) -> Array:
+	if is_city:
+		return _ICONS["capital_city"]
 	return _ICONS.get(tag, _ICONS["default"])
 
 func _marker_color(tag: String) -> Color:
@@ -279,6 +300,195 @@ func _draw_pixel_glow(center: Vector2, radius: float, a: float) -> void:
 		var col := Color(1.0, lerpf(0.72, 1.0, t), lerpf(0.28, 0.9, t), a * lerpf(0.10, 0.75, t))
 		draw_rect(Rect2(c - Vector2(ext, ext), Vector2(ext * 2.0 + block, ext * 2.0 + block)), col)
 
+# ── Roads ─────────────────────────────────────────────────────────────────────
+# Routes follow the land and switch to sea lanes at ports (RoadNetwork). Drawn
+# as pixel blocks on the globe, shaded by the same sun as the planet; at night
+# land roads show a sparse string of lights. Ships sail the sea lanes.
+const ROAD_COL  := Color(0.34, 0.32, 0.29)
+const SEA_COL   := Color(0.90, 0.95, 1.0)    # shipping-lane dashes
+const PORT_COL  := Color(0.95, 0.97, 1.0)    # port rings
+const SHIP_COL  := Color(1.0, 0.97, 0.88)
+const SHIP_SPEED := 0.03     # radians of surface per second (average)
+const SEA_DASH_ON  := 3      # dash pattern along a lane, in pixel blocks
+const SEA_DASH_OFF := 2
+
+func _shade(v: Vector3) -> float:
+	return 0.25 + 0.75 * smoothstep(-0.05, 0.4, v.dot(light_dir))
+
+func _draw_roads() -> void:
+	if roads.is_empty() or road_vis <= 0.02:
+		return
+	var p := _get_planet_params()
+	if p.is_empty():
+		return
+	var center: Vector2 = p["center"] - global_position
+	var r_px: float     = p["r_px"]
+	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
+	var clip := _clip_rect()
+	clip.position -= global_position
+	var now := float(Time.get_ticks_msec()) / 1000.0
+	for road: Dictionary in roads:
+		for seg: Dictionary in road.get("segments", []):
+			_draw_road_segment(seg["points"], seg["sea"], center, r_px, block, clip, now)
+		for pt: Vector2 in road.get("ports", PackedVector2Array()):
+			var v: Vector3 = _planet.lonlat_to_view(pt.x, pt.y)
+			var sp := center + Vector2(v.x, v.y) * r_px
+			if v.z <= 0.0 or not clip.has_point(sp):
+				continue
+			# a small pixel ring, like a port marker on a shipping map
+			var c := (sp / block).floor() * block
+			var ring_a := (0.45 + 0.35 * _shade(v)) * road_vis
+			for oy in range(-1, 2):
+				for ox in range(-1, 2):
+					if ox == 0 and oy == 0:
+						continue
+					draw_rect(Rect2(c + Vector2(ox, oy) * block, Vector2(block, block)), Color(PORT_COL, ring_a))
+			draw_rect(Rect2(c, Vector2(block, block)), Color(0.05, 0.10, 0.20, ring_a))
+	_draw_port_label(center, r_px, block)
+
+## Every port with its screen position: [{ lon, lat, name, screen (global) }].
+func _visible_ports() -> Array:
+	var out: Array = []
+	var p := _get_planet_params()
+	if p.is_empty():
+		return out
+	var clip := _clip_rect()
+	for road: Dictionary in roads:
+		var ports: PackedVector2Array = road.get("ports", PackedVector2Array())
+		var names: PackedStringArray = road.get("port_names", PackedStringArray())
+		for k in ports.size():
+			var v: Vector3 = _planet.lonlat_to_view(ports[k].x, ports[k].y)
+			var sp: Vector2 = p["center"] + Vector2(v.x, v.y) * float(p["r_px"])
+			if v.z > 0.0 and clip.has_point(sp):
+				out.append({"lon": ports[k].x, "lat": ports[k].y,
+					"name": names[k] if k < names.size() else "", "screen": sp})
+	return out
+
+func _port_at(global_pos: Vector2) -> Dictionary:
+	if road_vis < 0.5:
+		return {}
+	var reach := maxf(8.0, _pixel_size() * 2.0)
+	for port: Dictionary in _visible_ports():
+		if (port["screen"] as Vector2).distance_to(global_pos) <= reach:
+			return port
+	return {}
+
+## Small "PORT <name>" tag over the hovered port.
+func _draw_port_label(center: Vector2, r_px: float, block: float) -> void:
+	if _hover_port.is_empty() or _hover_port.get("name", "") == "":
+		return
+	var v: Vector3 = _planet.lonlat_to_view(_hover_port["lon"], _hover_port["lat"])
+	if v.z <= 0.0:
+		return
+	var font: Font = _orbitron if _orbitron else ThemeDB.fallback_font
+	var text := "PORT  " + String(_hover_port["name"]).to_upper()
+	const SIZE := 9
+	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE).x
+	var anchor := center + Vector2(v.x, v.y) * r_px + Vector2(0, -block * 3.0)
+	var box := Rect2(anchor - Vector2(tw * 0.5 + 5.0, 13.0), Vector2(tw + 10.0, 15.0))
+	draw_rect(box, Color(0.04, 0.07, 0.14, 0.88))
+	draw_rect(box, Color(PORT_COL, 0.6), false, 1.0)
+	draw_string(font, box.position + Vector2(5.0, 11.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, PORT_COL)
+
+func _draw_road_segment(pts: PackedVector2Array, sea: bool, center: Vector2, r_px: float,
+		block: float, clip: Rect2, now: float) -> void:
+	if pts.size() < 2:
+		return
+	var view := PackedVector3Array()
+	var along := PackedFloat32Array()     # cumulative surface distance (radians)
+	var total := 0.0
+	for k in pts.size():
+		var v: Vector3 = _planet.lonlat_to_view(pts[k].x, pts[k].y)
+		if k > 0:
+			total += acos(clampf(v.dot(view[k - 1]), -1.0, 1.0))
+		view.append(v)
+		along.append(total)
+	var steps_done := 0
+	var last := Vector2(-INF, -INF)
+	for k in range(1, view.size()):
+		var va := view[k - 1]
+		var vb := view[k]
+		if va.z <= 0.0 and vb.z <= 0.0:
+			continue
+		var a := center + Vector2(va.x, va.y) * r_px
+		var b := center + Vector2(vb.x, vb.y) * r_px
+		var n := maxi(1, int(ceil(a.distance_to(b) / block)))
+		for s in n + 1:
+			var t := float(s) / float(n)
+			var v := va.lerp(vb, t)
+			if v.z <= 0.0:
+				continue
+			var cell := ((a.lerp(b, t)) / block).floor() * block
+			if cell == last or not clip.has_point(cell):
+				continue
+			last = cell
+			steps_done += 1
+			var shade := _shade(v.normalized())
+			if sea:
+				# faint long dashes — present, but never louder than the sea
+				if steps_done % (SEA_DASH_ON + SEA_DASH_OFF) < SEA_DASH_ON:
+					draw_rect(Rect2(cell, Vector2(block, block)),
+						Color(SEA_COL, (0.12 + 0.16 * shade) * road_vis))
+			else:
+				draw_rect(Rect2(cell, Vector2(block, block)), Color(ROAD_COL * shade, 0.85 * road_vis))
+				# night: a thin continuous line of sodium street light
+				if shade < 0.45:
+					var night := (0.45 - shade) / 0.45
+					var bright := 0.25 + (0.25 if steps_done % 4 == 0 else 0.0)
+					draw_rect(Rect2(cell, Vector2(block, block)),
+						Color(1.0, 0.58, 0.22, night * bright * road_vis))
+	if sea and total > 0.0001:
+		_draw_ships(view, along, total, center, r_px, block, clip, now)
+
+## Ships sail a lane like real traffic: a few per lane (more on long ones),
+## each with its own pace, direction and side of the lane, drifting a little —
+## they follow the route roughly instead of riding the dashes. Position and
+## side-offset live on the globe (not in screen pixels) and snap to the planet's
+## pixel grid like the markers, so ships stay steady while zooming / spinning.
+const SHIP_LANE_OFFSET := 0.006   # how far a ship keeps off the lane (radians)
+
+func _lane_point(view: PackedVector3Array, along: PackedFloat32Array, d: float) -> Array:
+	var k := 1
+	while k < along.size() - 1 and along[k] < d:
+		k += 1
+	var seg_len := maxf(along[k] - along[k - 1], 0.000001)
+	var v := view[k - 1].slerp(view[k], clampf((d - along[k - 1]) / seg_len, 0.0, 1.0))
+	return [v, (view[k] - view[k - 1]).normalized()]
+
+func _draw_ships(view: PackedVector3Array, along: PackedFloat32Array, total: float,
+		center: Vector2, r_px: float, block: float, clip: Rect2, now: float) -> void:
+	var count := clampi(int(total / 0.12), 1, 4)
+	for i in count:
+		var h := fposmod(sin(float(i) * 12.9898 + total * 78.233) * 43758.5453, 1.0)
+		var speed := SHIP_SPEED * (0.7 + 0.6 * h)
+		var forward := i % 2 == 0
+		var tt := fposmod(now * speed / total + h * 3.7, 1.0)
+		if not forward:
+			tt = 1.0 - tt
+		var d := tt * total
+		var here: Array = _lane_point(view, along, d)
+		var v: Vector3 = here[0]
+		var tangent: Vector3 = here[1] * (1.0 if forward else -1.0)
+		# keep to one side of the lane and wander slowly — measured on the globe
+		var side := ((h - 0.5) * 1.6 + sin(now * 0.6 + float(i) * 2.3) * 0.5) * SHIP_LANE_OFFSET
+		var normal := v.cross(tangent).normalized()
+		var pos := (v + normal * side).normalized()
+		if pos.z <= 0.0:
+			continue
+		var sp := center + Vector2(pos.x, pos.y) * r_px
+		if not clip.has_point(sp):
+			continue
+		var cell := _snap(sp + global_position) - global_position - Vector2(block, block) * 0.5
+		var lit := (0.55 + 0.45 * _shade(pos)) * road_vis   # ships carry lights
+		# faint wake one step behind along the lane
+		var back: Array = _lane_point(view, along, clampf(d - (1.0 if forward else -1.0) * block * 2.0 / r_px, 0.0, total))
+		var bpos := ((back[0] as Vector3) + normal * side).normalized()
+		var stern := _snap(center + Vector2(bpos.x, bpos.y) * r_px + global_position) - global_position \
+			- Vector2(block, block) * 0.5
+		if stern != cell and bpos.z > 0.0:
+			draw_rect(Rect2(stern, Vector2(block, block)), Color(SHIP_COL, 0.35 * lit))   # wake
+		draw_rect(Rect2(cell, Vector2(block, block)), Color(SHIP_COL, lit))
+
 # ── Neighbour links ───────────────────────────────────────────────────────────
 # Grand-strategy style connection arcs. Each arc follows the great circle between
 # two districts but is lifted along the surface normal (peaking mid-way), and is
@@ -293,6 +503,8 @@ static func _ll_to_vec(lon: float, lat: float) -> Vector3:
 	return Vector3(sin(lon) * cos(lat), sin(lat), cos(lon) * cos(lat))
 
 func _draw_links() -> void:
+	if detail <= 0.02:
+		return
 	for lk: Vector2i in links:
 		if lk.x >= _pois.size() or lk.y >= _pois.size():
 			continue
@@ -305,7 +517,7 @@ func _draw_links() -> void:
 		var focus := from_i == _hovered_index or to_i == _hovered_index \
 			or from_i == _selected_index or to_i == _selected_index
 		_draw_arc(_pois[from_i]["lon"], _pois[from_i]["lat"], _pois[to_i]["lon"], _pois[to_i]["lat"],
-			0.75 if focus else 0.45, Color(0.70, 0.88, 1.0))
+			(0.75 if focus else 0.45) * detail, Color(0.70, 0.88, 1.0))
 
 ## One dashed, animated arc from (lon_a, lat_a) to (lon_b, lat_b); dashes flow a → b.
 func _draw_arc(lon_a: float, lat_a: float, lon_b: float, lat_b: float, base_a: float, tint: Color) -> void:
@@ -498,6 +710,8 @@ func _label_merges() -> Dictionary:
 		var poi: Dictionary = _pois[i]
 		if not poi["visible"]:
 			continue
+		if detail < 0.5 and not poi["data"].get("is_city", false):
+			continue   # zoomed out: hidden districts can't take a city's label
 		var cid: int = poi["data"].get("cluster", i)
 		if not groups.has(cid):
 			groups[cid] = []
@@ -526,6 +740,7 @@ func _draw() -> void:
 	if _pois.is_empty() and _floating_texts.is_empty():
 		return
 	var merges := _label_merges()
+	_draw_roads()
 	_draw_links()
 
 	for ft in _floating_texts:
@@ -587,7 +802,10 @@ func _draw() -> void:
 		if not poi["visible"]:
 			continue
 
-		var alpha: float  = poi["alpha"]
+		var is_city: bool = poi["data"].get("is_city", false)
+		var alpha: float  = poi["alpha"] * (1.0 if is_city else detail)
+		if alpha <= 0.02:
+			continue
 		var px: float     = _pixel_size()
 		var sp: Vector2   = _snap(poi["screen"]) - global_position
 		var view: Vector3 = poi["view"]
@@ -618,10 +836,10 @@ func _draw() -> void:
 			_draw_pixel_line(diag_end, horiz_end, line_px, col)
 
 		# marker — pixel icon per district type, bracket frame when hovered/selected
-		_draw_pixel_icon(sp, _marker_icon(tag), line_px, dot_col, alpha)
+		_draw_pixel_icon(sp, _marker_icon(tag, is_city), line_px, dot_col, alpha)
 		if active:
 			var frame_col := Color(1.0, 0.95, 0.5, alpha * (0.9 if selected else 0.6))
-			_draw_pixel_brackets(sp, line_px * 6.0, line_px, frame_col)
+			_draw_pixel_brackets(sp, line_px * (6.0 if is_city else 4.5), line_px, frame_col)
 		if label_hidden:
 			continue
 
@@ -668,6 +886,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventMouseMotion:
+		_hover_port = _port_at(event.global_position)
 		var prev := _hovered_index
 		var on_marker := _get_poi_at(event.global_position)
 		_hovered_index = on_marker
@@ -711,6 +930,8 @@ func _get_poi_at(global_pos: Vector2) -> int:
 	for i in _pois.size():
 		var poi: Dictionary = _pois[i]
 		if not poi["visible"] or poi["alpha"] < 0.3:
+			continue
+		if not poi["data"].get("is_city", false) and detail < 0.5:
 			continue
 		var sp: Vector2 = poi["screen"]
 		if global_pos.distance_to(sp) <= DOT_HOVER_RADIUS + 4.0:

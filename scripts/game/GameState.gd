@@ -149,6 +149,8 @@ func _apply_pending_pois() -> void:
 			poi.lat_deg            = pd_entry.get("lat_deg",            0.0)
 			poi.terrain            = pd_entry.get("terrain",            -1)
 			poi.coastal            = pd_entry.get("coastal",            false)
+			poi.parent_city        = pd_entry.get("parent_city",        "")
+			poi.resource_tags      = pd_entry.get("resource_tags",      {})
 			poi.constructing       = pd_entry.get("constructing",       false)
 			poi.construct_progress = pd_entry.get("construct_progress", 0.0)
 			poi.construct_duration = pd_entry.get("construct_duration", 15.0)
@@ -453,6 +455,8 @@ func save() -> void:
 					"lat_deg":            poi.lat_deg,
 					"terrain":            poi.terrain,
 					"coastal":            poi.coastal,
+					"parent_city":        poi.parent_city,
+					"resource_tags":      poi.resource_tags,
 					"constructing":       poi.constructing,
 					"construct_progress": poi.construct_progress,
 					"construct_duration": poi.construct_duration,

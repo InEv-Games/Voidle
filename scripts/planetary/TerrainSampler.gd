@@ -18,6 +18,13 @@ enum Terrain {
 	REGOLITH,    # asteroid: loose rubble everywhere
 }
 
+## Height (above sea level) where land visibly begins — below it the shader
+## still paints shallow water. Shared by placement, resources, roads and the
+## settlement mask in planet_rocky.gdshader.
+const SHORE_H: float = 0.10
+## Height where green land begins (above the sand band). Roads only run on green.
+const GREEN_H: float = 0.12
+
 ## Districts can't be placed beyond this latitude (matches LocationFinder's range).
 const MAX_PLACE_LAT_DEG: float = 70.0
 ## Minimum angular distance between two surface districts.
@@ -50,7 +57,7 @@ static func _rocky_terrain(h: float, lat: float) -> Terrain:
 		return Terrain.POLAR
 	if h < -0.12: return Terrain.DEEP_OCEAN
 	if h <  0.00: return Terrain.OCEAN
-	if h <  0.07: return Terrain.SHALLOWS
+	if h <  SHORE_H: return Terrain.SHALLOWS
 	if h <  0.12: return Terrain.COAST
 	if h <  0.26: return Terrain.LOWLANDS
 	if h <  0.38: return Terrain.HIGHLANDS
@@ -76,7 +83,7 @@ static func _water_nearby(data: PlanetData, lon: float, lat: float) -> bool:
 		var a := TAU * float(i) / 8.0
 		var plat := clampf(lat + sin(a) * r, -PI * 0.5, PI * 0.5)
 		var plon := lon + cos(a) * r / maxf(cos(lat), 0.2)
-		if _height(data, plon, plat) < 0.07:
+		if _height(data, plon, plat) < SHORE_H:
 			return true
 	return false
 
@@ -156,6 +163,12 @@ static func angular_distance(lon_a: float, lat_a: float, lon_b: float, lat_b: fl
 	var b := Vector3(sin(lon_b) * cos(lat_b), sin(lat_b), cos(lon_b) * cos(lat_b))
 	return acos(clampf(a.dot(b), -1.0, 1.0))
 
+## Minimum distance between two cities, scaled by planet size. With the ±70°
+## placement band this fits (simulated, random play) ~2 cities on a moon,
+## 2-4 on terran worlds (size 0.85-1.15) and 5-8 on gas giants.
+static func city_spacing_deg(data: PlanetData) -> float:
+	return clampf(100.0 * pow(maxf(data.planet_size, 0.1), -0.73), 55.0, 170.0)
+
 ## Full placement check for a surface district at (lon, lat).
 ## Returns { ok: bool, reason: String, terrain: Dictionary }.
 static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: float) -> Dictionary:
@@ -170,11 +183,18 @@ static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: floa
 		result.reason = "%s must be built on %s" % [def.display_name, placement_label(def.placement)]
 		return result
 	var min_d := deg_to_rad(MIN_SPACING_DEG)
+	var city_d := deg_to_rad(city_spacing_deg(data))
 	for p: POIData in data.custom_pois:
 		if p.is_orbital():
 			continue
-		if angular_distance(lon, lat, deg_to_rad(p.lon_deg), deg_to_rad(p.lat_deg)) < min_d:
+		var d := angular_distance(lon, lat, deg_to_rad(p.lon_deg), deg_to_rad(p.lat_deg))
+		if d < min_d:
 			result.ok = false
 			result.reason = "Too close to %s" % p.label
+			return result
+		# a city claims a wide area no other city may be founded in
+		if def.is_system_anchor() and p.is_city() and d < city_d:
+			result.ok = false
+			result.reason = "Inside %s's territory" % p.label
 			return result
 	return result

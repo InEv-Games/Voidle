@@ -22,6 +22,8 @@ func produce(pp: PlanetProgress, def: BuildingDef, amount: int, mods: Array, ent
 		else:
 			rng.seed = pd.seed ^ (rd.rarity * 0x4E3D)
 			d = pd.deposit_density * rng.randf_range(0.75, 1.25)
+		# local deposits under this district shift the mix (ProductionManager.local_mineral_factor)
+		d *= ProductionManager.local_mineral_factor(pp, entry.get("district_id", ""), r_id)
 		densities.append(d)
 		total_density += d
 		

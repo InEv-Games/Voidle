@@ -11,5 +11,6 @@ icon = "⚡"
 placement = 0
 base_cost = 300.0
 allowed_planet_types = Array[int]([])
-building_ids = Array[String](["solar_panel", "generator", "power_plant"])
+building_ids = Array[String](["solar_panel", "generator", "power_plant", "geothermal_plant", "wind_turbine", "tidal_generator"])
 name_pool = Array[String](["Prometheus Array", "Grid Station Alpha", "Helios Platform", "Solara Base", "Arc Station", "Photon Plant", "Voltex Hub", "Enerion Core", "Tesla Relay", "Surge Complex", "Dawn Array"])
+name_suffixes = Array[String](["Power Grid", "Energy Works", "Dynamo Quarter", "Generator Yards"])

@@ -20,8 +20,10 @@ enum Type { CITY, GENERATOR, MINING, SPACE_STATION }
 @export var allowed_planet_types: Array[PlanetData.Type] = []
 ## Which BuildingDef building_ids are available inside this district type.
 @export var building_ids: Array[String] = []
-## Name pool used for random name suggestions.
+## Name pool used for random name suggestions (cities, stations).
 @export var name_pool:    Array[String] = []
+## Districts under a City are named "<City> <suffix>" from this list.
+@export var name_suffixes: Array[String] = []
 ## Required skill node to unlock this district. Empty = unlocked by default.
 @export var unlock_skill: String = ""
 ## Bonuses this district gets from neighbouring districts, keyed by the
@@ -82,22 +84,53 @@ static func find(district_type: Type) -> DistrictDef:
 
 # ── Factory ───────────────────────────────────────────────────────────────────
 
-## Compute actual placement cost based on how many same-type districts already exist.
-## Cost doubles for each additional district of the same type.
-static func placement_cost(def: DistrictDef, data: PlanetData) -> float:
+## Compute actual placement cost. Cost doubles for each district of the same type
+## already built under the same City (`parent_city`), so a new City starts with
+## fresh prices. Cities themselves double per City on the planet.
+static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: String = "") -> float:
 	var same_count: int = 0
 	for poi: POIData in data.custom_pois:
-		if poi.poi_type == def.to_poi_type():
+		if poi.poi_type != def.to_poi_type():
+			continue
+		if def.is_system_anchor() or poi.parent_city == parent_city:
 			same_count += 1
 	return def.base_cost * pow(2.0, float(same_count))
 
-## Suggest a random name from the pool using planet seed + current district count for variation.
-func suggest_name(data: PlanetData) -> String:
-	if name_pool.is_empty():
-		return display_name
-	var rng := RandomNumberGenerator.new()
-	rng.seed = data.seed ^ (data.custom_pois.size() * 0xA7F3 + id * 0x1234)
-	return name_pool[rng.randi() % name_pool.size()]
+## Suggests a name. Cities (and stations) draw from name_pool; a district
+## built under a City is named after it: "<City> <suffix>", cycling through
+## name_suffixes. Always unique on the planet (" II", " III" … when taken).
+func suggest_name(data: PlanetData, parent_city: String = "") -> String:
+	var base := display_name
+	if parent_city != "" and not name_suffixes.is_empty():
+		var n := 0
+		for poi: POIData in data.custom_pois:
+			if poi.parent_city == parent_city and poi.poi_type == to_poi_type():
+				n += 1
+		base = "%s %s" % [parent_city, name_suffixes[n % name_suffixes.size()]]
+	elif not name_pool.is_empty():
+		var rng := RandomNumberGenerator.new()
+		rng.seed = data.seed ^ (data.custom_pois.size() * 0xA7F3 + id * 0x1234)
+		base = name_pool[rng.randi() % name_pool.size()]
+	return unique_label(data, base)
+
+## `base`, or `base` + " II" / " III" … so no two districts share a label —
+## labels key buildings, levels and City membership.
+static func unique_label(data: PlanetData, base: String, ignore: POIData = null) -> String:
+	var taken := {}
+	for poi: POIData in data.custom_pois:
+		if poi != ignore:
+			taken[poi.label] = true
+	if not taken.has(base):
+		return base
+	const NUMERALS := ["II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
+	for numeral: String in NUMERALS:
+		var candidate := "%s %s" % [base, numeral]
+		if not taken.has(candidate):
+			return candidate
+	var k := 11
+	while taken.has("%s %d" % [base, k]):
+		k += 1
+	return "%s %d" % [base, k]
 
 ## Convert DistrictDef.Type → POIData.POIType for placement.
 func to_poi_type() -> POIData.POIType:

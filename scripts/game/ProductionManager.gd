@@ -290,6 +290,7 @@ func _on_tick_complete(pp: PlanetProgress, def: BuildingDef,
 				else:
 					rng.seed = pd.seed ^ ((rd as ResourceData).rarity * 0x4E3D)
 					d = pd.deposit_density * rng.randf_range(0.75, 1.25)
+				d *= local_mineral_factor(pp, poi_lbl, r_id)
 				densities.append(d)
 				total_density += d
 			var total_out := def.output_amount * amount * mult
@@ -335,7 +336,7 @@ func get_building_output(pp: PlanetProgress, entry: Dictionary, def: BuildingDef
 	var lv_mult := get_building_level_mult(lv)
 	var dbuffs := get_district_buffs(pp, entry.get("district_id", ""))
 	var st := get_node("/root/SkillTree")
-	var out_val := def.output_amount * amt * lv_mult
+	var out_val := def.output_amount * amt * lv_mult * get_site_mult(pp, entry, def)
 	
 	if def.output_type == BuildingDef.OutputType.CREDITS:
 		out_val *= st.get_credits_mult()
@@ -355,6 +356,33 @@ func get_building_output(pp: PlanetProgress, entry: Dictionary, def: BuildingDef
 			out_val *= dbuffs.magma_dredge_output_mult
 	return out_val
 
+
+## The district POI an entry belongs to, or null.
+func _district_poi(pp: PlanetProgress, district_id: String) -> POIData:
+	var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+	if pd == null:
+		return null
+	for poi: POIData in pd.custom_pois:
+		if poi.label == district_id:
+			return poi
+	return null
+
+## Output multiplier from the district site's resources (BuildingDef.output_tag).
+func get_site_mult(pp: PlanetProgress, entry: Dictionary, def: BuildingDef) -> float:
+	if def.output_tag == "":
+		return 1.0
+	return def.site_mult(_district_poi(pp, entry.get("district_id", "")))
+
+## Mines draw the planet's minerals in proportion to what lies under the
+## district: planet density × this factor (≈1 for an average deposit).
+func local_mineral_factor(pp: PlanetProgress, district_id: String, resource_id: String) -> float:
+	var poi := _district_poi(pp, district_id)
+	if poi == null or not poi.resource_tags.has("minerals"):
+		return 1.0
+	var mins: Dictionary = poi.resource_tags["minerals"]
+	if not mins.has(resource_id):
+		return 1.0
+	return 0.15 + 1.7 * float(mins[resource_id])
 
 func get_district_buffs(pp: PlanetProgress, district_id: String) -> Dictionary:
 	var buffs := {
@@ -473,7 +501,7 @@ func _calc_global_energy() -> void:
 			var dbuffs := get_district_buffs(pp, entry.get("district_id", ""))
 			
 			if def.energy_per_tick > 0.0:
-				var mult: float = lv_mult
+				var mult: float = lv_mult * get_site_mult(pp, entry, def)
 				if def.building_id == "solar_panel" or def.building_id == "solar_matrix":
 					mult *= st.get_solar_mult() * dbuffs.clean_energy_mult * dbuffs.solar_mult
 				elif def.building_id == "geothermal_plant":
@@ -499,7 +527,7 @@ func _calc_global_energy() -> void:
 				net += contrib
 				
 			if def.output_type == BuildingDef.OutputType.ENERGY:
-				var mult: float = lv_mult
+				var mult: float = lv_mult * get_site_mult(pp, entry, def)
 				if def.building_id == "solar_panel" or def.building_id == "solar_matrix":
 					mult *= st.get_solar_mult() * dbuffs.clean_energy_mult * dbuffs.solar_mult
 				elif def.building_id == "geothermal_plant":
@@ -538,7 +566,7 @@ func planet_energy_net(pp: PlanetProgress) -> float:
 		var dbuffs := get_district_buffs(pp, entry.get("district_id", ""))
 		
 		if def.energy_per_tick > 0.0:
-			var mult: float = lv_mult
+			var mult: float = lv_mult * get_site_mult(pp, entry, def)
 			if def.building_id == "solar_panel" or def.building_id == "solar_matrix":
 				mult *= st.get_solar_mult() * dbuffs.clean_energy_mult * dbuffs.solar_mult
 			elif def.building_id == "geothermal_plant":
@@ -551,7 +579,7 @@ func planet_energy_net(pp: PlanetProgress) -> float:
 			total += def.energy_per_tick * amt * building_consume * (st.get_energy_consume_mult() as float)
 			
 		if def.output_type == BuildingDef.OutputType.ENERGY:
-			var mult: float = lv_mult
+			var mult: float = lv_mult * get_site_mult(pp, entry, def)
 			if def.building_id == "solar_panel" or def.building_id == "solar_matrix":
 				mult *= st.get_solar_mult() * dbuffs.clean_energy_mult * dbuffs.solar_mult
 			elif def.building_id == "geothermal_plant":
