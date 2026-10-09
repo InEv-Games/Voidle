@@ -195,7 +195,7 @@ void fragment() {
 		surf = apply_lens(surf, rn);
 
 		// territory border — only while hovered/selected; after lighting so it reads at night
-		if (d_owner >= 0 && (d_owner == district_hover || d_owner == district_selected)
+		if (d_owner >= 0 && territory_border_on(d_owner)
 				&& territory_is_border(uv, 1.0 / grid, d_owner)) {
 			float bs = territory_border_strength(d_owner);
 			surf = mix(surf, d_col * 1.2 + vec3(0.12), bs);

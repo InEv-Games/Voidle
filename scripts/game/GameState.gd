@@ -151,6 +151,7 @@ func _apply_pending_pois() -> void:
 			poi.coastal            = pd_entry.get("coastal",            false)
 			poi.parent_city        = pd_entry.get("parent_city",        "")
 			poi.resource_tags      = pd_entry.get("resource_tags",      {})
+			poi.spoke_birth        = pd_entry.get("spoke_birth",        {})
 			poi.constructing       = pd_entry.get("constructing",       false)
 			poi.construct_progress = pd_entry.get("construct_progress", 0.0)
 			poi.construct_duration = pd_entry.get("construct_duration", 15.0)
@@ -457,6 +458,7 @@ func save() -> void:
 					"coastal":            poi.coastal,
 					"parent_city":        poi.parent_city,
 					"resource_tags":      poi.resource_tags,
+					"spoke_birth":        poi.spoke_birth,
 					"constructing":       poi.constructing,
 					"construct_progress": poi.construct_progress,
 					"construct_duration": poi.construct_duration,

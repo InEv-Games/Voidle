@@ -3,7 +3,7 @@
 class_name DistrictDef
 extends Resource
 
-enum Type { CITY, GENERATOR, MINING, SPACE_STATION }
+enum Type { CITY, GENERATOR, MINING, SPACE_STATION, RESIDENTIAL }
 
 @export var id:           Type
 @export var display_name: String
@@ -139,6 +139,7 @@ func to_poi_type() -> POIData.POIType:
 		Type.GENERATOR:     return POIData.POIType.ENERGY
 		Type.MINING:        return POIData.POIType.MINING
 		Type.SPACE_STATION: return POIData.POIType.STATION
+		Type.RESIDENTIAL:   return POIData.POIType.RESIDENTIAL
 		_:                  return POIData.POIType.CITY
 
 ## Returns how many of this district type exist on the planet.

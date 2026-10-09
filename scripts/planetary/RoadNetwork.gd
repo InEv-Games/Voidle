@@ -25,6 +25,14 @@ const LAT_LIMIT: float = 1.40     # rad — no roads over the poles
 const PORT_LIFT: float = 0.08     # cost of entering a port, in radians of surface
 const BRIDGE_MAX_CELLS: int = 4   # widest gap a land road may bridge (~2 planet pixels at 1x)
 const PORT_REACH_CELLS: int = 2   # a port may reach the sea across this much sand
+## Once a route uses a port it becomes cheap for later routes, so a city's sea
+## lanes share one harbour instead of opening a new port next door each time.
+const PORT_REUSE_WEIGHT: float = 0.1
+## Land cells a road already runs over become this much cheaper, so later roads
+## join existing ones and share trunks instead of running in parallel.
+const ROAD_REUSE_FACTOR: float = 0.4
+
+var _road_cells: Dictionary = {}   # land cell id -> true once a road uses it
 const COST_SEA:      float = 0.55
 const COST_DEEP_SEA: float = 0.50
 const COST_LAND:     float = 1.0
@@ -32,7 +40,7 @@ const COST_HIGHLAND: float = 1.6
 const COST_MOUNTAIN: float = 3.0
 
 var planet_seed: int
-var _astar := AStar3D.new()
+var _astar := RoadAStar.new()
 var _kind := PackedByteArray()      # per cell: 0 = land, 1 = sea, 2 = shore (sand), 255 = outside graph
 var _task_id: int = -1
 var _ready := false
@@ -154,7 +162,7 @@ func _try_bridge(x: int, y: int, d: Vector2i) -> void:
 			return
 		var j := ny * WIDTH + posmod(x + d.x * step, WIDTH)
 		if _kind[j] == 0:
-			_astar.connect_points(y * WIDTH + x, j)
+			_astar.add_bridge(y * WIDTH + x, j)   # costs extra: green detours win unless much longer
 			return
 		if _kind[j] == 255:
 			return
@@ -175,6 +183,12 @@ func route(lon_a: float, lat_a: float, lon_b: float, lat_b: float,
 	if ids.is_empty():
 		return {}
 	var n := WIDTH * HEIGHT
+	for id: int in ids:
+		if id >= n:
+			_astar.set_point_weight_scale(id, PORT_REUSE_WEIGHT)
+		elif _kind[id] == 0 and not _road_cells.has(id):
+			_road_cells[id] = true
+			_astar.set_point_weight_scale(id, _astar.get_point_weight_scale(id) * ROAD_REUSE_FACTOR)
 	var segments: Array = []
 	var ports := PackedVector2Array()
 	var cur := PackedVector3Array()

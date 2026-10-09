@@ -27,8 +27,18 @@ var detail: float = 1.0
 var _ghost: Dictionary = {}
 ## Optional: global screen pos → index of the district whose territory is there (-1 = none).
 var territory_lookup: Callable
-## Neighbouring district pairs (indices into _pois), drawn as animated arcs.
+## Arcs shown while Alt is held: (district index → its City index) into _pois.
 var links: Array[Vector2i] = []
+## Top-left of the planet's pixel grid on screen (set by PlanetaryView from the
+## low-res render) — markers snap to it.
+var pixel_grid_origin: Vector2 = Vector2.INF
+## 0..1 — all markers and labels (cities included). 0 at the closest zoom.
+var marker_vis: float = 1.0
+## Neighbouring district pairs (indices into _pois). Hovering the selected
+## district draws arcs to its neighbours.
+var neighbor_pairs: Array[Vector2i] = []
+## Alt held: network overview (arcs to each district's City, every district visible).
+var show_overlay: bool = false
 ## Routed roads (RoadNetwork.route results):
 ## [{ segments: [{ sea: bool, points: PackedVector2Array (lon, lat) }], ports: PackedVector2Array }]
 var roads: Array = []
@@ -217,6 +227,13 @@ const _ICONS := {
 		".###.",
 		"..#..",
 	],
+	"residential": [
+		"..#..",
+		".###.",
+		"#####",
+		".#.#.",
+		".###.",
+	],
 	"default": [
 		".###.",
 		"#####",
@@ -235,6 +252,7 @@ func _marker_color(tag: String) -> Color:
 	match tag:
 		"generator": return Color(0.45, 0.85, 1.0)
 		"mining":    return Color(1.0, 0.58, 0.28)
+		"residential": return Color(0.60, 0.95, 0.60)
 		_:           return Color(1.0, 0.82, 0.25)
 
 ## Size of one shader pixel on screen.
@@ -247,7 +265,7 @@ func _pixel_size() -> float:
 ## Snaps a global point to the shader's pixel grid (cell centres).
 func _snap(global_pt: Vector2) -> Vector2:
 	var cell := _pixel_size()
-	var origin := _planet.global_position
+	var origin := pixel_grid_origin if pixel_grid_origin.is_finite() else _planet.global_position
 	return origin + ((global_pt - origin) / cell).floor() * cell + Vector2(cell, cell) * 0.5
 
 func _snap_local(local_pt: Vector2) -> Vector2:
@@ -327,9 +345,15 @@ func _draw_roads() -> void:
 	var clip := _clip_rect()
 	clip.position -= global_position
 	var now := float(Time.get_ticks_msec()) / 1000.0
+	# Land road pixels are collected first (cell -> [roads through it, shade])
+	# and drawn once: shared stretches become one trunk, drawn wider.
+	var land_cells := {}
 	for road: Dictionary in roads:
 		for seg: Dictionary in road.get("segments", []):
-			_draw_road_segment(seg["points"], seg["sea"], center, r_px, block, clip, now)
+			_draw_road_segment(seg["points"], seg["sea"], center, r_px, block, clip, now, land_cells)
+	_draw_land_road_cells(land_cells, block)
+	# ports on top of the roads
+	for road: Dictionary in roads:
 		for pt: Vector2 in road.get("ports", PackedVector2Array()):
 			var v: Vector3 = _planet.lonlat_to_view(pt.x, pt.y)
 			var sp := center + Vector2(v.x, v.y) * r_px
@@ -390,8 +414,25 @@ func _draw_port_label(center: Vector2, r_px: float, block: float) -> void:
 	draw_rect(box, Color(PORT_COL, 0.6), false, 1.0)
 	draw_string(font, box.position + Vector2(5.0, 11.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, PORT_COL)
 
+## Land road pixels, accumulated over all roads. A cell several roads share is a
+## trunk: drawn 2×2 and a touch lighter. Night adds sodium street light.
+func _draw_land_road_cells(cells: Dictionary, block: float) -> void:
+	var k := 0
+	for cell: Vector2 in cells:
+		var info: Array = cells[cell]
+		var shared: bool = int(info[0]) > 1
+		var shade: float = info[1]
+		var col := (ROAD_COL.lightened(0.12) if shared else ROAD_COL) * shade
+		var size := Vector2(block, block) * (2.0 if shared else 1.0)
+		draw_rect(Rect2(cell, size), Color(col, 0.85 * road_vis))
+		if shade < 0.45:
+			var night := (0.45 - shade) / 0.45
+			var bright := (0.35 if shared else 0.25) + (0.25 if k % 4 == 0 else 0.0)
+			draw_rect(Rect2(cell, size), Color(1.0, 0.58, 0.22, night * bright * road_vis))
+		k += 1
+
 func _draw_road_segment(pts: PackedVector2Array, sea: bool, center: Vector2, r_px: float,
-		block: float, clip: Rect2, now: float) -> void:
+		block: float, clip: Rect2, now: float, land_cells: Dictionary) -> void:
 	if pts.size() < 2:
 		return
 	var view := PackedVector3Array()
@@ -430,13 +471,11 @@ func _draw_road_segment(pts: PackedVector2Array, sea: bool, center: Vector2, r_p
 					draw_rect(Rect2(cell, Vector2(block, block)),
 						Color(SEA_COL, (0.12 + 0.16 * shade) * road_vis))
 			else:
-				draw_rect(Rect2(cell, Vector2(block, block)), Color(ROAD_COL * shade, 0.85 * road_vis))
-				# night: a thin continuous line of sodium street light
-				if shade < 0.45:
-					var night := (0.45 - shade) / 0.45
-					var bright := 0.25 + (0.25 if steps_done % 4 == 0 else 0.0)
-					draw_rect(Rect2(cell, Vector2(block, block)),
-						Color(1.0, 0.58, 0.22, night * bright * road_vis))
+				# count once per road (consecutive repeats were skipped above)
+				if land_cells.has(cell):
+					(land_cells[cell] as Array)[0] = int(land_cells[cell][0]) + 1
+				else:
+					land_cells[cell] = [1, shade]
 	if sea and total > 0.0001:
 		_draw_ships(view, along, total, center, r_px, block, clip, now)
 
@@ -503,21 +542,27 @@ static func _ll_to_vec(lon: float, lat: float) -> Vector3:
 	return Vector3(sin(lon) * cos(lat), sin(lat), cos(lon) * cos(lat))
 
 func _draw_links() -> void:
-	if detail <= 0.02:
+	# hovering the selected district: arcs to everything it neighbours
+	if _selected_index >= 0 and _hovered_index == _selected_index and _selected_index < _pois.size():
+		var me: Dictionary = _pois[_selected_index]
+		for pr: Vector2i in neighbor_pairs:
+			var other := -1
+			if pr.x == _selected_index: other = pr.y
+			elif pr.y == _selected_index: other = pr.x
+			if other < 0 or other >= _pois.size():
+				continue
+			_draw_arc(me["lon"], me["lat"], _pois[other]["lon"], _pois[other]["lat"],
+				0.85, Color(0.55, 1.0, 0.65))
+	if not show_overlay:
 		return
+	# arcs: every district flows to the City it belongs to
 	for lk: Vector2i in links:
 		if lk.x >= _pois.size() or lk.y >= _pois.size():
 			continue
-		var from_i := lk.x
-		var to_i := lk.y
-		# flow toward the larger settlement
-		if float(_pois[from_i]["data"].get("size", 0.0)) > float(_pois[to_i]["data"].get("size", 0.0)):
-			from_i = lk.y
-			to_i = lk.x
-		var focus := from_i == _hovered_index or to_i == _hovered_index \
-			or from_i == _selected_index or to_i == _selected_index
-		_draw_arc(_pois[from_i]["lon"], _pois[from_i]["lat"], _pois[to_i]["lon"], _pois[to_i]["lat"],
-			(0.75 if focus else 0.45) * detail, Color(0.70, 0.88, 1.0))
+		var focus := lk.x == _hovered_index or lk.x == _selected_index \
+			or lk.y == _hovered_index or lk.y == _selected_index
+		_draw_arc(_pois[lk.x]["lon"], _pois[lk.x]["lat"], _pois[lk.y]["lon"], _pois[lk.y]["lat"],
+			0.85 if focus else 0.6, Color(0.70, 0.88, 1.0))
 
 ## One dashed, animated arc from (lon_a, lat_a) to (lon_b, lat_b); dashes flow a → b.
 func _draw_arc(lon_a: float, lat_a: float, lon_b: float, lat_b: float, base_a: float, tint: Color) -> void:
@@ -803,7 +848,7 @@ func _draw() -> void:
 			continue
 
 		var is_city: bool = poi["data"].get("is_city", false)
-		var alpha: float  = poi["alpha"] * (1.0 if is_city else detail)
+		var alpha: float  = poi["alpha"] * (1.0 if is_city else detail) * marker_vis
 		if alpha <= 0.02:
 			continue
 		var px: float     = _pixel_size()
@@ -932,6 +977,8 @@ func _get_poi_at(global_pos: Vector2) -> int:
 		if not poi["visible"] or poi["alpha"] < 0.3:
 			continue
 		if not poi["data"].get("is_city", false) and detail < 0.5:
+			continue
+		if marker_vis < 0.5:
 			continue
 		var sp: Vector2 = poi["screen"]
 		if global_pos.distance_to(sp) <= DOT_HOVER_RADIUS + 4.0:

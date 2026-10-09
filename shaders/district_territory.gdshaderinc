@@ -11,6 +11,16 @@
 uniform vec4 district_pos[MAX_DISTRICTS];  // xyz = world-space centre normal, w = angular radius (rad)
 uniform vec4 district_col[MAX_DISTRICTS];  // rgb = territory colour, a = night-light intensity 0..1
 uniform float district_sea[MAX_DISTRICTS]; // 1 = district built on water (platforms)
+// Settlements stretch along the roads / sea lanes leaving them. Up to
+// MAX_SPOKES per district: xyz = unit tangent (at the district) pointing down a
+// road, w = 0..1 how far it has grown that way (grows with the district after
+// the road appeared). Must match PlanetaryView (SPOKE_* constants).
+#define MAX_SPOKES 4
+uniform vec4 district_spokes[MAX_DISTRICTS * MAX_SPOKES];
+const float SPOKE_STRETCH = 1.6;   // extra reach along a road (× radius)
+const float SPOKE_SHARP   = 12.0;  // how narrow the stretched lobe is
+// Alt held: every district's border is shown (set from PlanetaryView).
+uniform float show_all_borders = 0.0;
 uniform int  district_count    = 0;
 uniform int  district_hover    = -1;
 uniform int  district_selected = -1;
@@ -22,10 +32,26 @@ uniform float border_alpha     = 1.0;
 uniform sampler2D lens_tex : filter_linear, repeat_enable;
 uniform float lens_alpha = 0.0;
 
+// Radius multiplier for district i toward rn: 1 off-road, up to 1+STRETCH along a spoke.
+float spoke_stretch(int i, vec3 rn, vec3 c) {
+	vec3 t = rn - c * dot(rn, c);
+	float tl = length(t);
+	if (tl < 0.00001) return 1.0;
+	t /= tl;
+	float best = 0.0;
+	for (int k = 0; k < MAX_SPOKES; k++) {
+		vec4 s = district_spokes[i * MAX_SPOKES + k];
+		if (s.w > 0.0) best = max(best, s.w * pow(max(dot(t, s.xyz), 0.0), SPOKE_SHARP));
+	}
+	return 1.0 + SPOKE_STRETCH * best;
+}
+
 // Owner of a world-space surface point: the district with the smallest
-// noise-warped normalised distance, if that distance is < 1. -1 = unclaimed.
-// Overlapping districts split the overlap along a shared border.
-int district_owner(vec3 rn, out float score) {
+// noise-warped normalised distance, if < 1 (-1 = unclaimed). Owners only decide
+// borders, hover and tint — the sprawl itself is drawn from that smallest
+// distance, i.e. the union of all settlements, so merged cities stay merged
+// and a new district never removes built-up ground.
+int district_owner_raw(vec3 rn, out float score) {
 	score = 2.0;
 	if (district_count <= 0) return -1;
 	int owner = -1;
@@ -34,10 +60,30 @@ int district_owner(vec3 rn, out float score) {
 		if (i >= district_count) break;
 		vec4 d = district_pos[i];
 		float ang = acos(clamp(dot(rn, d.xyz), -1.0, 1.0));
-		float s = ang / max(d.w, 0.0001) + warp;
+		float s = ang / max(d.w * spoke_stretch(i, rn, d.xyz), 0.0001) + warp;
 		if (s < score) { score = s; owner = i; }
 	}
 	return score < 1.0 ? owner : -1;
+}
+
+// Owner with exclaves dropped: a point only belongs to its district if every
+// check point on the way back to the district centre belongs to it too, so each
+// territory is one piece reachable from its centre. Detached patches (cut off
+// by a neighbour, or stretched out along a sea lane) are unclaimed.
+#define EXCLAVE_CHECKS 6
+int district_owner(vec3 rn, out float score) {
+	int owner = district_owner_raw(rn, score);
+	if (owner < 0) return -1;
+	vec3 c = district_pos[owner].xyz;
+	float s2;
+	for (int k = 1; k <= EXCLAVE_CHECKS; k++) {
+		float t = float(k) / float(EXCLAVE_CHECKS + 1);
+		if (district_owner_raw(normalize(mix(c, rn, t)), s2) != owner) {
+			score = 2.0;
+			return -1;
+		}
+	}
+	return owner;
 }
 
 // World-space surface point under a (pixel-snapped) UV, untilted spin only.
@@ -63,9 +109,16 @@ bool territory_is_border(vec2 uvp, vec2 px, int owner) {
 	return false;
 }
 
-// Border colour strength (borders only draw while hovered or selected).
+// Whether a district's border is drawn: hovered, selected, or Alt held.
+bool territory_border_on(int owner) {
+	return owner == district_hover || owner == district_selected || show_all_borders > 0.5;
+}
+
+// Border colour strength.
 float territory_border_strength(int owner) {
-	return (owner == district_selected ? 1.0 : 0.75) * border_alpha;
+	if (owner == district_selected) return border_alpha;
+	if (owner == district_hover)    return 0.75 * border_alpha;
+	return 0.6 * border_alpha;   // Alt overview
 }
 
 // Lens colour at a world-space surface point.

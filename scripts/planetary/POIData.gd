@@ -9,10 +9,11 @@ enum POIType {
 	SCIENCE,    # research, anomaly study
 	SPACEPORT,  # launch pads, orbital logistics — one per planet
 	STATION,    # orbital station — ship-based district
+	RESIDENTIAL,# housing — built under a City
 }
 
-static var TYPE_LABELS: Array[String] = ["City", "Mining", "Energy", "Outpost", "Science", "Spaceport", "Station"]
-static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⬡", "🚀", "◈"]
+static var TYPE_LABELS: Array[String] = ["City", "Mining", "Energy", "Outpost", "Science", "Spaceport", "Station", "Residential"]
+static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⬡", "🚀", "◈", "⌂"]
 
 @export var label:         String  = "Site"
 @export var poi_type:      POIType = POIType.CITY
@@ -45,6 +46,12 @@ static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⬡", "�
 ## { geothermal, solar, wind, tidal: 0..1, minerals: { resource_id: 0..1 } }.
 ## Empty until sampled.
 @export var resource_tags: Dictionary = {}
+
+## Settlement growth along roads: for each road (keyed by the district at its
+## other end) the settlement size this district had when the road appeared.
+## The settlement only stretches toward a road as it grows *after* that, so
+## new roads never reshape a district instantly.
+@export var spoke_birth: Dictionary = {}
 
 ## Legacy string tag kept for shader/ring logic only — do not use for type checks.
 @export var type_tag: String = ""

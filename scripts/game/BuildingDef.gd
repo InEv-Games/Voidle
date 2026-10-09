@@ -147,10 +147,15 @@ static func find(bid: String) -> BuildingDef:
 			return b
 	return null
 
+## Buildings a district of `poi_type` can hold. A City is the metropolis core:
+## it can build anything that goes on the surface (everything but station-only).
 static func for_poi_and_planet(poi_type: POIData.POIType, planet_type: PlanetData.Type) -> Array[BuildingDef]:
 	var result: Array[BuildingDef] = []
 	for b in available_buildings():
-		if poi_type in b.allowed_poi_types:
+		var allowed: bool = poi_type in b.allowed_poi_types
+		if poi_type == POIData.POIType.CITY:
+			allowed = b.allowed_poi_types.any(func(t) -> bool: return t != POIData.POIType.STATION)
+		if allowed:
 			if b.allowed_planet_types.is_empty() or planet_type in b.allowed_planet_types:
 				result.append(b)
 	return result
