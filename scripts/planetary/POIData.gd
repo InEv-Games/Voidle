@@ -31,6 +31,11 @@ static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⬡", "�
 @export var lon_deg:         float = 0.0
 @export var lat_deg:         float = 0.0
 
+## Terrain under the district, sampled when it was placed (TerrainSampler.Terrain).
+## -1 = not sampled yet (legacy saves) — use TerrainSampler.sample() to fill it.
+@export var terrain: int  = -1
+@export var coastal: bool = false
+
 ## Legacy string tag kept for shader/ring logic only — do not use for type checks.
 @export var type_tag: String = ""
 

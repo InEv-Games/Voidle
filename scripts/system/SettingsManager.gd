@@ -2,12 +2,17 @@ extends Node
 
 const SETTINGS_PATH = "user://settings.cfg"
 
+## Emitted when a visual setting changes so open views can re-apply it.
+signal night_shadow_changed(value: float)
+
 var master_volume: float = 1.0
 var music_volume:  float = 1.0
 var ui_volume:     float = 1.0
 var sfx_volume:    float = 1.0
 var is_fullscreen: bool = true
 var tutorial_ever_done: bool = false
+## How dark the night side of planets gets: 0 = fully lit, 1 = full shadow.
+var night_shadow: float = 1.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -33,6 +38,7 @@ func load_settings() -> void:
 		sfx_volume         = config.get_value("audio",    "sfx_volume",    1.0)
 		is_fullscreen      = config.get_value("video",    "fullscreen",    true)
 		tutorial_ever_done = config.get_value("tutorial", "ever_done",     false)
+		night_shadow       = config.get_value("video",    "night_shadow",  1.0)
 	else:
 		master_volume = 1.0
 		music_volume  = 1.0
@@ -47,6 +53,7 @@ func save_settings() -> void:
 	config.set_value("audio",    "ui_volume",     ui_volume)
 	config.set_value("audio",    "sfx_volume",    sfx_volume)
 	config.set_value("video",    "fullscreen",    is_fullscreen)
+	config.set_value("video",    "night_shadow",  night_shadow)
 	config.set_value("tutorial", "ever_done",     tutorial_ever_done)
 	config.save(SETTINGS_PATH)
 
@@ -86,6 +93,11 @@ func set_ui_volume(val: float) -> void:
 func set_sfx_volume(val: float) -> void:
 	sfx_volume = clamp(val, 0.0, 1.0)
 	apply_settings(); save_settings()
+
+func set_night_shadow(val: float) -> void:
+	night_shadow = clamp(val, 0.0, 1.0)
+	save_settings()
+	night_shadow_changed.emit(night_shadow)
 
 func set_fullscreen(val: bool) -> void:
 	is_fullscreen = val

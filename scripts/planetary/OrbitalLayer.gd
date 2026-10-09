@@ -6,6 +6,7 @@ extends Control
 var _planet_seed:     int     = -1
 var _planet_radius:   float   = 0.0
 var _planet_rotation: float   = 0.0   # Y-axis rotation (longitude) from planet drag
+var _planet_tilt:     float   = 0.0   # camera tilt around screen X (PlanetRenderer.tilt)
 var _planet_center:   Vector2 = Vector2.ZERO   # actual planet center in local coords
 var _hovered_ship:    ShipData = null
 var _selected_ship:   ShipData = null
@@ -150,8 +151,10 @@ func _project_2d(ship: ShipData, angle: float) -> Vector2:
 	var py: float  = r * sin(angle) * sin(inc)
 	var pz: float  = r * sin(angle) * cos(inc)
 	var rot: float = _planet_rotation + ship.orbit_node
-	var rx: float  = px * cos(rot) + pz * sin(rot)
-	return Vector2(rx, py)
+	var rx: float  =  px * cos(rot) + pz * sin(rot)
+	var rz: float  = -px * sin(rot) + pz * cos(rot)
+	var v := _tilted(rx, py, rz)
+	return Vector2(v.x, v.y)
 
 func _project_at_node(ship: ShipData, node: float) -> Vector3:
 	var r: float   = _planet_radius * ship.orbit_radius
@@ -163,7 +166,7 @@ func _project_at_node(ship: ShipData, node: float) -> Vector3:
 	var rot: float = _planet_rotation + node
 	var rx: float  =  px * cos(rot) + pz * sin(rot)
 	var rz: float  = -px * sin(rot) + pz * cos(rot)
-	return Vector3(rx, py, rz)
+	return _tilted(rx, py, rz)
 
 func _tick_landing(delta: float) -> void:
 	var finished: Array[String] = []
@@ -228,7 +231,14 @@ func _project(ship: ShipData, angle: float) -> Vector3:
 	var rot: float = _planet_rotation + ship.orbit_node
 	var rx: float  =  px * cos(rot) + pz * sin(rot)
 	var rz: float  = -px * sin(rot) + pz * cos(rot)
-	return Vector3(rx, py, rz)
+	return _tilted(rx, py, rz)
+
+## Applies the camera tilt to an orbit-space point (x right, y down, z away from camera),
+## matching the planet shader so orbits stay glued to the tilted globe.
+func _tilted(x: float, y: float, z: float) -> Vector3:
+	var c := cos(_planet_tilt)
+	var s := sin(_planet_tilt)
+	return Vector3(x, y * c - z * s, y * s + z * c)
 
 func _is_occluded(proj: Vector3) -> bool:
 	return proj.z > 0.0 and Vector2(proj.x, proj.y).length() < _planet_radius
@@ -403,7 +413,9 @@ func _project_r(ship: ShipData, angle: float, orbit_r: float) -> Vector2:
 	var pz: float  = r * sin(angle) * cos(inc)
 	var rot: float = _planet_rotation + ship.orbit_node
 	var rx: float  =  px * cos(rot) + pz * sin(rot)
-	return center + Vector2(rx, py)
+	var rz: float  = -px * sin(rot) + pz * cos(rot)
+	var v := _tilted(rx, py, rz)
+	return center + Vector2(v.x, v.y)
 
 func _draw_landing(ld: Dictionary) -> void:
 	var phase:    int   = int(ld["phase"])
@@ -722,7 +734,7 @@ func _project_poi(poi: POIData, angle: float) -> Vector3:
 	var rot := _planet_rotation + poi.orbit_node
 	var rx  :=  px * cos(rot) + pz * sin(rot)
 	var rz  := -px * sin(rot) + pz * cos(rot)
-	return Vector3(rx, py, rz)
+	return _tilted(rx, py, rz)
 
 func _is_occluded_r(proj: Vector3) -> bool:
 	return proj.z > 0.0 and Vector2(proj.x, proj.y).length() < _planet_radius

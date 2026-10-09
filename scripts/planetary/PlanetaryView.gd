@@ -60,6 +60,23 @@ var _tut_panel_node:     Control = null   # right-panel card secondary pulse
 var _tut_panel_tween:    Tween   = null
 var _poi_overview_cards: Dictionary = {}  # poi.label -> PanelContainer card
 
+# ── Zoom / pan ────────────────────────────────────────────────────────────────
+# Zooming scales the shader's planet radius; the pixel grid keeps its on-screen
+# size, so zooming in resolves more terrain detail. Horizontal drag spins the
+# globe, vertical drag tilts it (PlanetRenderer), so any latitude can be centred.
+const ZOOM_MIN:  float = 1.0
+const ZOOM_MAX:  float = 4.0
+const ZOOM_STEP: float = 1.25
+const RING_VIEW_ANGLE: float = 0.263   # asin(0.26) — the original fixed ring ellipse
+var _zoom:        float   = 1.0
+var _zoom_target: float   = 1.0
+var _zoom_anchor: Vector2 = Vector2.INF   # global point kept under the cursor while zooming
+var _base_radius:      float = 0.42
+
+# ── Manual district placement ─────────────────────────────────────────────────
+var _placing_def: DistrictDef = null   # non-null while the player picks a site
+var _place_hint:  Control     = null
+
 func _make_system(root: PlanetData) -> Array[PlanetData]:
 	var arr: Array[PlanetData] = [root]
 	for m in root.moons:
@@ -78,6 +95,10 @@ func _ready() -> void:
 			(planet_renderer.get_parent() as Control).mouse_filter = Control.MOUSE_FILTER_PASS
 	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
 	planet_renderer.planet_clicked.connect(_on_planet_clicked)
+	poi_layer.territory_lookup = _territory_at_screen
+	SettingsManager.night_shadow_changed.connect(func(v: float) -> void:
+		if planet_renderer.material:
+			(planet_renderer.material as ShaderMaterial).set_shader_parameter("night_shadow", v))
 	poi_layer.poi_clicked.connect(_on_district_clicked)
 	get_tree().root.size_changed.connect(_on_resize)
 	# back button removed — navigation handled via system dock / unlock flow
@@ -387,11 +408,24 @@ func _on_unlock_changed(_key: String, _val: bool) -> void:
 func _refresh_solar_btn() -> void:
 	pass   # navigation via right-click only
 
-var _back_charge: int = 0
 
 func _input(event: InputEvent) -> void:
 	if SkillTreeView.is_open:
 		return
+	# Right-click / ESC cancels district placement
+	if _placing_def != null:
+		var cancel := false
+		if event is InputEventKey:
+			var cke := event as InputEventKey
+			cancel = cke.pressed and cke.keycode == KEY_ESCAPE
+		elif event is InputEventMouseButton:
+			var cmb := event as InputEventMouseButton
+			cancel = cmb.pressed and cmb.button_index == MOUSE_BUTTON_RIGHT
+		if cancel:
+			_end_district_placement()
+			AudioManager.play("click")
+			get_viewport().set_input_as_handled()
+			return
 	# ESC closes radial menu if open
 	if event is InputEventKey:
 		var ke := event as InputEventKey
@@ -442,35 +476,43 @@ func _input(event: InputEvent) -> void:
 				else:
 					_go_back()
 				get_viewport().set_input_as_handled()
+		# Wheel / pinch only zoom. Leaving the planet view on zoom-out is disabled
+		# for now — it will be bound to another control.
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			_back_charge += 1
-			if _back_charge >= 4:
-				_back_charge = 0
-				_go_back()
+			if _is_over_planet_area(mb.global_position):
+				_set_zoom_target(_zoom_target / ZOOM_STEP, mb.global_position)
+				get_viewport().set_input_as_handled()
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			_back_charge = 0
+			if _is_over_planet_area(mb.global_position):
+				_set_zoom_target(_zoom_target * ZOOM_STEP, mb.global_position)
+				get_viewport().set_input_as_handled()
 	elif event is InputEventMagnifyGesture:
-		if event.factor < 1.0:
-			_back_charge += 1
-			if _back_charge >= 4:
-				_back_charge = 0
-				_go_back()
-		else:
-			_back_charge = 0
+		var mg := event as InputEventMagnifyGesture
+		if _is_over_planet_area(mg.position):
+			_set_zoom_target(_zoom_target * mg.factor, mg.position)
+			get_viewport().set_input_as_handled()
 	elif event is InputEventPanGesture:
-		# 2-finger horizontal swipe → rotate planet
-		if abs(event.delta.x) > abs(event.delta.y) * 0.5:
-			var r_px: float = planet_renderer.size.x * 0.5
+		# 2-finger drag moves the globe like a mouse drag: x spins, y tilts.
+		var pg := event as InputEventPanGesture
+		if _is_over_planet_area(pg.position):
+			var r_px := _planet_r_px()
 			if r_px > 0.0:
-				var delta_rot: float = event.delta.x / r_px
-				planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset() + delta_rot)
+				var spin_r := r_px * maxf(cos(planet_renderer.tilt), 0.35)
+				planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset() + pg.delta.x / spin_r)
+				if not planet_renderer.tilt_locked:
+					planet_renderer.set_tilt(planet_renderer.tilt - pg.delta.y / r_px)
 			get_viewport().set_input_as_handled()
 
 func load_planet(data: PlanetData) -> void:
-	if current_data == null or current_data.seed != data.seed:
+	var planet_changed: bool = current_data == null or current_data.seed != data.seed
+	if planet_changed:
 		_top_tab_active   = "DETAILS"
 		_inner_tab_active = "SURFACE"
 		_panel_scroll_pos = 0   # reset scroll on planet switch
+		_zoom = ZOOM_MIN
+		_zoom_target = ZOOM_MIN
+		planet_renderer.set_tilt(0.0)
+		_end_district_placement()
 	current_data = data
 	_active_district_poi = null   # clear stale reference on planet switch
 	_open_mineral_switchers.clear()
@@ -491,10 +533,26 @@ func load_planet(data: PlanetData) -> void:
 	_build_details_panel(data)
 
 	_refresh_pois(data)
-	# rotate so the first (primary) POI faces the viewer at load (if any)
-	if poi_layer._pois.size() > 0:
+	if TerrainMap.mode_for(data) >= 0 and not TerrainMap.has_map(data.seed, TerrainMap.mode_for(data)):
+		_bake_terrain_map(data)
+	# rotate so the first (primary) POI faces the viewer when arriving at a planet
+	if planet_changed and poi_layer._pois.size() > 0:
 		planet_renderer.set_rotation_offset(poi_layer._pois[0]["lon"])
 	_build_planet_overview(data)
+
+## Bakes the exact GPU terrain for CPU lookups, then re-reads everything that was
+## sampled from the (inexact) GDScript noise fallback in the meantime.
+func _bake_terrain_map(data: PlanetData) -> void:
+	await TerrainMap.bake(data, self)
+	if current_data != data or not TerrainMap.has_map(data.seed, TerrainMap.mode_for(data)):
+		return
+	for pd: POIData in data.custom_pois:
+		if pd.is_orbital() or not pd.manual_position:
+			continue
+		var t := TerrainSampler.sample(data, deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg))
+		pd.terrain = t["terrain"]
+		pd.coastal = t["coastal"]
+	_refresh_pois(data)   # also resolves auto-placed districts against real terrain
 
 func _clean_custom_pois(data: PlanetData) -> void:
 	if data == null or data.custom_pois.is_empty():
@@ -541,7 +599,14 @@ func _refresh_pois(data: PlanetData) -> void:
 				# Store resolved position back so rotation and overview card can use it
 				pd.lon_deg = rad_to_deg(lon)
 				pd.lat_deg = rad_to_deg(lat)
-				pd.manual_position = true
+				# Only lock it in once the real terrain map is available — until then
+				# LocationFinder sees the inexact noise fallback and may pick water.
+				var map_mode := TerrainMap.mode_for(data)
+				pd.manual_position = map_mode < 0 or TerrainMap.has_map(data.seed, map_mode)
+			if pd.terrain < 0 and pd.manual_position:
+				var t := TerrainSampler.sample(data, lon, lat)
+				pd.terrain = t["terrain"]
+				pd.coastal = t["coastal"]
 			pois.append({
 				"lon_deg": rad_to_deg(lon), "lat_deg": rad_to_deg(lat),
 				"label": pd.label,
@@ -558,7 +623,7 @@ func _refresh_pois(data: PlanetData) -> void:
 		d["district_level"] = pp_poi.district_levels.get(poi["label"], 1) if pp_poi != null else 1
 		poi_layer.add_poi(poi["lon_deg"], poi["lat_deg"], poi["label"], d)
 
-	_upload_poi_lights(pois, data)
+	_upload_territories(data)
 	# After POIs are loaded, sync night sizes so shader glow starts correctly
 	_update_poi_night_sizes(data)
 	_refresh_poi_lights(data)
@@ -582,11 +647,17 @@ func _setup_material(data: PlanetData) -> void:
 	var pcount: float = 140.0
 	if sz > 1.2:
 		pcount = round(clamp(140.0 * (sz / 1.2), 140.0, 280.0))
-	mat.set_shader_parameter("rotation_offset",   0.0)
+	# Carry over the renderer's current spin: load_planet() also runs when a district
+	# is placed, and a fresh material at 0 would show a different patch of the globe
+	# than the markers (which read the renderer) until the next drag.
+	mat.set_shader_parameter("rotation_offset",   planet_renderer.get_rotation_offset())
 	mat.set_shader_parameter("planet_radius",     base_radius)
 	mat.set_shader_parameter("pixel_count",       pcount)
 	mat.set_shader_parameter("seed",              data.seed)
 	mat.set_shader_parameter("terrain_roughness", data.terrain_roughness)
+	_base_radius      = base_radius
+	mat.set_shader_parameter("tilt", planet_renderer.tilt)
+	mat.set_shader_parameter("night_shadow", SettingsManager.night_shadow)
 
 	var stype := PlanetData.get_shader_type(data.planet_type)
 	match stype:
@@ -621,49 +692,96 @@ func _setup_material(data: PlanetData) -> void:
 			mat.set_shader_parameter("elongation",   1.0 + data.irregularity * 0.8)
 
 	planet_renderer.material = mat
-	_update_aspect()
+	_apply_zoom()
 
-func _upload_poi_lights(pois: Array[Dictionary], data: PlanetData) -> void:
+# ── District territories ──────────────────────────────────────────────────────
+# Each surface district owns a pixel region on the globe (district_territory.gdshaderinc).
+# It grows with district level and active buildings, and hosts the night lights.
+
+const MAX_TERRITORIES:     int   = 16     # must match MAX_DISTRICTS in the shader include
+const TERRITORY_BASE_DEG:  float = 3.0
+const TERRITORY_LEVEL_DEG: float = 1.2    # per district level above 1
+const TERRITORY_BLDG_DEG:  float = 0.3    # per active building (capped)
+const TERRITORY_WARP:      float = 0.18   # edge raggedness — same as the shader
+## { n: Vector3 world normal, r: float angular radius } — same order as poi_layer._pois.
+var _territories: Array[Dictionary] = []
+
+func _territory_radius_deg(data: PlanetData, pd: POIData) -> float:
+	if pd.constructing:
+		return TERRITORY_BASE_DEG * 0.6
+	var pp := GameState.get_planet(data.seed)
+	var lv: int = pp.district_levels.get(pd.label, 1) if pp != null else 1
+	var bldgs: int = mini(_district_night_size(data, pd.label), 12)
+	return TERRITORY_BASE_DEG + float(lv - 1) * TERRITORY_LEVEL_DEG + float(bldgs) * TERRITORY_BLDG_DEG
+
+## Night-light intensity for a district with `active` running buildings.
+static func _territory_light(active: int) -> float:
+	return 0.0 if active <= 0 else clampf(0.3 + float(active) * 0.07, 0.0, 1.0)
+
+static func _lonlat_to_world(lon: float, lat: float) -> Vector3:
+	return Vector3(sin(lon) * cos(lat), -sin(lat), cos(lon) * cos(lat))
+
+func _upload_territories(data: PlanetData) -> void:
+	_territories.clear()
+	var pos := PackedVector4Array()
+	var col := PackedVector4Array()
+	for pd: POIData in data.custom_pois:
+		if pd.is_orbital():
+			continue
+		if _territories.size() >= MAX_TERRITORIES:
+			break
+		var n := _lonlat_to_world(deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg))
+		var r := deg_to_rad(_territory_radius_deg(data, pd))
+		var c: Color = poi_layer._marker_color(pd.type_tag)
+		# Night lights scale with active buildings: none while constructing / empty.
+		var light: float = 0.0 if pd.constructing \
+			else _territory_light(_district_night_size(data, pd.label))
+		pos.append(Vector4(n.x, n.y, n.z, r))
+		col.append(Vector4(c.r, c.g, c.b, light))
+		_territories.append({"n": n, "r": r})
+	var count := _territories.size()
+	while pos.size() < MAX_TERRITORIES:
+		pos.append(Vector4.ZERO)
+		col.append(Vector4.ZERO)
 	var mat := planet_renderer.material as ShaderMaterial
 	if mat == null:
 		return
-	var stype := PlanetData.get_shader_type(data.planet_type)
-	if stype != PlanetData.ShaderType.ROCKY:
-		return
+	mat.set_shader_parameter("district_pos",   pos)
+	mat.set_shader_parameter("district_col",   col)
+	mat.set_shader_parameter("district_count", count)
+	mat.set_shader_parameter("poi_count",      0)
 
-	var count: int = mini(pois.size(), 5)
-	mat.set_shader_parameter("poi_count", count)
-	var names := ["poi_lights_0","poi_lights_1","poi_lights_2","poi_lights_3","poi_lights_4"]
-	for i in range(5):
-		if i < count:
-			var lon: float = deg_to_rad(float(pois[i].get("lon_deg", 0.0)))
-			var lat: float = deg_to_rad(float(pois[i].get("lat_deg", 0.0)))
-			# Scale intensity by active building count: 0 bldgs = 0, 1 = tiny, max ~10 = ~0.35
-			var ns: int     = int(pois[i].get("data", {}).get("night_size", 0))
-			var intensity: float = clampf(float(ns) * 0.035, 0.0, 0.35)
-			var nx: float = sin(lon) * cos(lat)
-			var ny: float = -sin(lat)
-			var nz: float = cos(lon) * cos(lat)
-			mat.set_shader_parameter(names[i], Vector4(nx, ny, nz, intensity))
-		else:
-			mat.set_shader_parameter(names[i], Vector4(0,0,0,0))
+## Which territory owns a surface point (index into poi_layer._pois), or -1.
+## Mirrors district_owner() in district_territory.gdshaderinc.
+func _territory_owner(lon: float, lat: float) -> int:
+	if _territories.is_empty() or current_data == null:
+		return -1
+	var rn := _lonlat_to_world(lon, lat)
+	var w := TerrainMap.warp(current_data.seed, lon, lat)
+	if is_nan(w):
+		w = PlanetNoise.noise3(rn * 22.0, current_data.seed)
+	var warp := w * TERRITORY_WARP
+	var best := 2.0
+	var owner := -1
+	for i in _territories.size():
+		var t: Dictionary = _territories[i]
+		var ang := acos(clampf(rn.dot(t["n"]), -1.0, 1.0))
+		var score: float = ang / maxf(t["r"], 0.0001) + warp
+		if score < best:
+			best = score
+			owner = i
+	return owner if best < 1.0 else -1
+
+func _territory_at_screen(global_pos: Vector2) -> int:
+	if not _is_over_planet_area(global_pos):
+		return -1
+	var hit := _screen_to_lonlat(global_pos)
+	return _territory_owner(hit["lon"], hit["lat"]) if hit["hit"] else -1
 
 func _refresh_poi_lights(data: PlanetData) -> void:
 	if current_data == null or current_data.seed != data.seed:
 		return
-	var pp := GameState.get_planet(data.seed)
-	var pois_fresh: Array[Dictionary] = []
-	for pd: POIData in data.custom_pois:
-		pois_fresh.append({
-			"lon_deg": pd.lon_deg, "lat_deg": pd.lat_deg,
-			"label":   pd.label,
-			"data":    {
-				"type": pd.type_tag,
-				"light_intensity": pd.light_intensity,
-				"night_size": _district_night_size(data, pd.label),
-			}
-		})
-	_upload_poi_lights(pois_fresh, data)
+	_upload_territories(data)
 
 func _update_panel(data: PlanetData) -> void:
 	var name_label  := $RightPanel/PanelContent/PlanetName as Label
@@ -773,7 +891,8 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	_name_form_overlay = overlay
 	name_edit.grab_focus()
 
-func _spawn_district(data: PlanetData, lbl: String, def: DistrictDef) -> void:
+## `site` = Vector2(lon_rad, lat_rad) picked by the player; INF = auto-place.
+func _spawn_district(data: PlanetData, lbl: String, def: DistrictDef, site: Vector2 = Vector2.INF) -> void:
 	var poi          := POIData.new()
 	poi.label        = lbl
 	poi.poi_type     = def.to_poi_type()
@@ -815,7 +934,7 @@ func _spawn_district(data: PlanetData, lbl: String, def: DistrictDef) -> void:
 		const _BASE_LD: float = 22.0
 		const _REF_R:   float = 200.0
 		const _DEPLOY:  float = 2.2
-		poi.construct_duration = (planet_renderer._planet_radius_px / _REF_R) * _BASE_LD + _DEPLOY
+		poi.construct_duration = (planet_renderer._planet_radius_px / _zoom / _REF_R) * _BASE_LD + _DEPLOY
 		# Add immediately so panel shows "Constructing"; OrbitalLayer skips constructing=true pois
 		data.custom_pois.append(poi)
 		_play_rocket_animation(data.seed, launch_poi, func() -> void:
@@ -827,20 +946,25 @@ func _spawn_district(data: PlanetData, lbl: String, def: DistrictDef) -> void:
 		load_planet(data)
 	else:
 		poi.light_intensity = 1.0
-		# Pre-seed LocationFinder with existing district positions so new ones spread out.
-		var lf := LocationFinder.new(
-			data.seed ^ (data.custom_pois.size() * 0xBEEF),
-			data.sea_level, data.terrain_roughness, data.continent_scale)
-		for existing: POIData in data.custom_pois:
-			if existing.manual_position:
-				var lon := deg_to_rad(existing.lon_deg)
-				lf._used_lons.append(lon)
-				if existing.poi_type == def.to_poi_type():
-					lf._used_lons.append(fposmod(lon + deg_to_rad(5.0), TAU))
-		var pos := lf.find(def.placement)
+		var pos := site
+		if not pos.is_finite():
+			# Pre-seed LocationFinder with existing district positions so new ones spread out.
+			var lf := LocationFinder.new(
+				data.seed ^ (data.custom_pois.size() * 0xBEEF),
+				data.sea_level, data.terrain_roughness, data.continent_scale)
+			for existing: POIData in data.custom_pois:
+				if existing.manual_position:
+					var lon := deg_to_rad(existing.lon_deg)
+					lf._used_lons.append(lon)
+					if existing.poi_type == def.to_poi_type():
+						lf._used_lons.append(fposmod(lon + deg_to_rad(5.0), TAU))
+			pos = lf.find(def.placement)
 		poi.lon_deg = rad_to_deg(pos.x)
 		poi.lat_deg = rad_to_deg(pos.y)
 		poi.manual_position = true
+		var t := TerrainSampler.sample(data, pos.x, pos.y)
+		poi.terrain = t["terrain"]
+		poi.coastal = t["coastal"]
 		AudioManager.play("construct")
 		AchievementManager.notify_trigger(AchievementDef.Trigger.FIRST_DISTRICT)
 		data.custom_pois.append(poi)
@@ -1384,7 +1508,7 @@ func _update_aspect() -> void:
 
 func _on_resize() -> void:
 	await get_tree().process_frame
-	_update_aspect()
+	_apply_zoom()
 
 func _setup_orbital_layer(planet_seed: int) -> void:
 	# Disconnect any previous ShipManager bindings to avoid accumulation
@@ -1903,6 +2027,12 @@ func _add_orbit_toggle(planet_cont: Control, layer: OrbitalLayer) -> void:
 func _process(delta: float) -> void:
 	_update_tutorial_highlight()
 	_update_aspect()
+	_tick_zoom(delta)
+	_update_placement_hover()
+	var pmat := planet_renderer.material as ShaderMaterial
+	if pmat != null:
+		pmat.set_shader_parameter("district_hover",    poi_layer._hovered_index)
+		pmat.set_shader_parameter("district_selected", poi_layer._selected_index)
 
 	# Construction loop audio — active whenever any POI is constructing
 	if current_data != null:
@@ -1924,6 +2054,7 @@ func _process(delta: float) -> void:
 	if _orbital_layer != null and is_instance_valid(_orbital_layer):
 		_orbital_layer._planet_radius   = planet_renderer._planet_radius_px
 		_orbital_layer._planet_rotation = planet_renderer.get_rotation_offset()
+		_orbital_layer._planet_tilt     = planet_renderer.tilt
 		var _oc: Control = planet_renderer.get_parent()
 		_orbital_layer._planet_center   = planet_renderer.global_position + planet_renderer.size * 0.5 - _oc.get_global_rect().position
 		# Advance space station orbit angles
@@ -2007,6 +2138,8 @@ func _process(delta: float) -> void:
 		if any_finished:
 			GameState.planet_progress_changed.emit(current_data.seed)
 
+	# Launch / deploy animations assume an untilted globe.
+	planet_renderer.tilt_locked = not _rocket_anims.is_empty() or not _deploy_anims.is_empty()
 	if not _rocket_anims.is_empty():
 		_tick_rocket_anim(delta)
 
@@ -2042,26 +2175,187 @@ func _rotate_to_lon(lon_deg: float, duration: float = 0.45) -> void:
 	tween.tween_method(
 		func(v: float) -> void: planet_renderer.set_rotation_offset(v),
 		current, current + diff, duration)
+	# Rocket / orbit animations project without tilt — level the camera first.
+	if not is_zero_approx(planet_renderer.tilt):
+		tween.parallel().tween_method(
+			func(v: float) -> void: planet_renderer.set_tilt(v),
+			planet_renderer.tilt, 0.0, duration)
+
+# ── Zoom / pan ────────────────────────────────────────────────────────────────
+
+## True when the point is over the globe area and not over a UI control on top of it.
+func _is_over_planet_area(global_pos: Vector2) -> bool:
+	var cont := planet_renderer.get_parent() as Control
+	if cont == null or not cont.get_global_rect().has_point(global_pos):
+		return false
+	# Only controls that actually swallow the mouse (panels, buttons…) block it;
+	# pass-through HUD layers and the planet itself don't.
+	var hovered := get_viewport().gui_get_hovered_control()
+	return hovered == null or hovered == planet_renderer or hovered == cont \
+		or hovered.mouse_filter != Control.MOUSE_FILTER_STOP
+
+func _set_zoom_target(z: float, anchor: Vector2) -> void:
+	_zoom_target = clampf(z, ZOOM_MIN, ZOOM_MAX)
+	_zoom_anchor = anchor
+
+func _apply_zoom() -> void:
+	var mat := planet_renderer.material as ShaderMaterial
+	var cont := planet_renderer.get_parent() as Control
+	if mat == null or cont == null or cont.size.y <= 0.0:
+		return
+	# Radius may exceed the rect once zoomed in — the shader just fills the view.
+	mat.set_shader_parameter("planet_radius", _base_radius * _zoom * cont.size.y / planet_renderer.size.y)
+	# Orbits and rings grow with the planet; keep them out of the HUD while zoomed.
+	cont.clip_contents = _zoom > ZOOM_MIN + 0.001
+	_update_aspect()
+	planet_renderer._update_radius()
+
+func _tick_zoom(delta: float) -> void:
+	if is_equal_approx(_zoom, _zoom_target):
+		return
+	var prev := _zoom
+	_zoom = lerpf(_zoom, _zoom_target, 1.0 - exp(-delta * 14.0))
+	if absf(_zoom - _zoom_target) < 0.002:
+		_zoom = _zoom_target
+	_keep_anchor_fixed(prev, _zoom)
+	_apply_zoom()
+
+## Spins/tilts the globe so the surface under the zoom anchor stays roughly under it.
+func _keep_anchor_fixed(z0: float, z1: float) -> void:
+	if not _zoom_anchor.is_finite() or not _screen_to_lonlat(_zoom_anchor)["hit"]:
+		return
+	var cont := planet_renderer.get_parent() as Control
+	var d: Vector2 = _zoom_anchor - (planet_renderer.global_position + planet_renderer.size * 0.5)
+	var r0: float = cont.size.y * _base_radius * z0
+	var r1: float = cont.size.y * _base_radius * z1
+	var k: float = 1.0 / r0 - 1.0 / r1   # angle the anchor drifts by, per px of offset
+	planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset()
+		+ d.x * k / maxf(cos(planet_renderer.tilt), 0.35))
+	if not planet_renderer.tilt_locked:
+		planet_renderer.set_tilt(planet_renderer.tilt - d.y * k)
+
+func _planet_r_px() -> float:
+	var mat := planet_renderer.material as ShaderMaterial
+	if mat == null:
+		return 0.0
+	return planet_renderer.size.y * float(mat.get_shader_parameter("planet_radius"))
+
+## Global screen point → surface point. Returns { hit, lon, lat } (radians).
+func _screen_to_lonlat(global_pos: Vector2) -> Dictionary:
+	var r := _planet_r_px()
+	if r <= 0.0:
+		return {"hit": false}
+	var center := planet_renderer.global_position + planet_renderer.size * 0.5
+	var d := (global_pos - center) / r
+	if d.length_squared() > 1.0:
+		return {"hit": false}
+	var ll: Vector2 = planet_renderer.view_to_lonlat(Vector3(d.x, d.y, sqrt(1.0 - d.length_squared())))
+	return {"hit": true, "lon": ll.x, "lat": ll.y}
+
+# ── Manual district placement ─────────────────────────────────────────────────
+
+func _begin_district_placement(def: DistrictDef) -> void:
+	_end_district_placement()
+	_placing_def = def
+	poi_layer.placement_mode = true
+	poi_layer.spacing_deg = TerrainSampler.MIN_SPACING_DEG
+	poi_layer.deselect_all()
+	CursorManager.set_state(CursorManager.State.NORMAL)
+	_show_place_hint(def)
+
+func _end_district_placement() -> void:
+	_placing_def = null
+	if poi_layer:
+		poi_layer.placement_mode = false
+		poi_layer.clear_ghost()
+	if _place_hint != null and is_instance_valid(_place_hint):
+		_place_hint.queue_free()
+	_place_hint = null
+
+func _show_place_hint(def: DistrictDef) -> void:
+	var cont := planet_renderer.get_parent() as Control
+	var hint := PanelContainer.new()
+	hint.add_theme_stylebox_override("panel", _make_hud_style(Color(0.06, 0.08, 0.16, 0.92), 6))
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.z_index = 50
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 3)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.add_child(vbox)
+	var title := Label.new()
+	title.text = "PLACE  %s  %s   ·   ◈ %s" % [def.icon, def.display_name.to_upper(),
+		HUDManager.fmt_credits(DistrictDef.placement_cost(def, current_data))]
+	_apply_orbitron(title, 10)
+	title.add_theme_color_override("font_color", Color(0.90, 0.82, 0.45))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(title)
+	var help := Label.new()
+	help.text = "Click a site on %s  ·  Drag to rotate  ·  Scroll to zoom  ·  Right-click to cancel" \
+		% TerrainSampler.placement_label(def.placement)
+	_apply_orbitron(help, 7)
+	help.add_theme_color_override("font_color", Color(0.55, 0.62, 0.80))
+	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	help.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(help)
+	cont.add_child(hint)
+	# Sits below the top HUD bar now that the globe extends behind it.
+	hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 88)
+	hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_place_hint = hint
+
+func _update_placement_hover() -> void:
+	if _placing_def == null or current_data == null:
+		return
+	var mouse := get_viewport().get_mouse_position()
+	var hit := _screen_to_lonlat(mouse)
+	if not hit["hit"] or not _is_over_planet_area(mouse):
+		poi_layer.clear_ghost()
+		return
+	var chk := TerrainSampler.check_site(current_data, _placing_def, hit["lon"], hit["lat"])
+	var t: Dictionary = chk["terrain"]
+	var site_name := TerrainSampler.label(t["terrain"], current_data.planet_type)
+	if t["coastal"] and t["terrain"] != TerrainSampler.Terrain.COAST:
+		site_name += "  ·  Coastal"
+	var detail: String = "Click to place" if chk["ok"] else chk["reason"]
+	var tag: String = DistrictDef.Type.keys()[_placing_def.id].to_lower()
+	poi_layer.set_ghost(hit["lon"], hit["lat"], chk["ok"], site_name, detail, tag)
+
+func _try_place_district(global_pos: Vector2) -> void:
+	var hit := _screen_to_lonlat(global_pos)
+	if not hit["hit"] or current_data == null:
+		return
+	var def := _placing_def
+	var chk := TerrainSampler.check_site(current_data, def, hit["lon"], hit["lat"])
+	if not chk["ok"]:
+		AudioManager.play("error")
+		return
+	if not GameState.spend_credits(DistrictDef.placement_cost(def, current_data)):
+		AudioManager.play("error")
+		return
+	_end_district_placement()
+	_spawn_district(current_data, def.suggest_name(current_data), def,
+		Vector2(hit["lon"], hit["lat"]))
 
 func _on_planet_clicked(_screen_pos: Vector2) -> void:
+	if _placing_def != null:
+		_try_place_district(_screen_pos)
+		return
+	var owned := _territory_at_screen(_screen_pos)
+	if owned >= 0:
+		AudioManager.play("poi_select")
+		poi_layer.select_poi(owned)
+		_on_district_clicked(owned, {})
+		return
 	if _orbital_layer != null and is_instance_valid(_orbital_layer):
 		_orbital_layer.deselect()
 	if current_data != null:
 		_build_planet_overview(current_data)
-	
-	var center := planet_renderer.size * 0.5
-	var local_click := _screen_pos - center
-	var ar: float = planet_renderer.size.x / planet_renderer.size.y if planet_renderer.size.y > 0 else 1.0
-	var nx: float = (local_click.x * ar) / float(planet_renderer._planet_radius_px)
-	var ny: float = local_click.y / float(planet_renderer._planet_radius_px)
-	if nx*nx + ny*ny <= 1.0:
-		var z := sqrt(1.0 - nx*nx - ny*ny)
-		var lat_rad := asin(-ny)
-		var lon_rad := atan2(nx, z)
-		var actual_lon := fposmod(planet_renderer.get_rotation_offset() + lon_rad, TAU)
 
-		var lat_d := rad_to_deg(lat_rad)
-		var lon_d := rad_to_deg(actual_lon)
+	var hit := _screen_to_lonlat(_screen_pos)
+	if hit["hit"]:
+		var lat_d := rad_to_deg(float(hit["lat"]))
+		var lon_d := rad_to_deg(float(hit["lon"]))
 
 		if DevConsole.show_planet_coords:
 			var text := "%.1f : %.1f" % [lon_d, lat_d]
@@ -3305,6 +3599,11 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 		if dropdown_ref[0] != null and is_instance_valid(dropdown_ref[0]):
 			dropdown_ref[0].queue_free()
 			dropdown_ref[0] = null
+		TooltipManager.hide_tip()
+		# Surface districts: the player picks the site; credits are spent on placement.
+		if not cap_def.is_orbital:
+			_begin_district_placement(cap_def)
+			return
 		if not GameState.spend_credits(DistrictDef.placement_cost(cap_def, cap_data)):
 			AudioManager.play("error")
 			return
@@ -7284,8 +7583,10 @@ func _draw_planet_rings(target: Node2D, from_a: float, to_a: float, is_back: boo
 	var r:    Rect2 = planet_renderer.get_rect()
 	var cx:   float = r.position.x + r.size.x * 0.5
 	var cy:   float = r.position.y + r.size.y * 0.5
-	var half: float = r.size.x * 0.5
-	var yr:   float = 0.26
+	var half: float = r.size.x * 0.5 * _zoom
+	# Rings sit ~15° off edge-on; camera tilt opens/closes them. Negative = seen
+	# from below, which flips which half is in front — the same draw split still holds.
+	var yr:   float = sin(RING_VIEW_ANGLE + planet_renderer.tilt)
 	var ir:   float = half * current_data.ring_inner
 	var or_:  float = half * current_data.ring_outer
 	var col:  Color = current_data.ring_color
@@ -7346,27 +7647,10 @@ func _draw_planet_rings(target: Node2D, from_a: float, to_a: float, is_back: boo
 func _spawn_fly_icon(lon_deg: float, lat_deg: float, icon: Texture2D) -> void:
 	if icon == null or poi_layer == null or _inventory_tab_btn == null: return
 	
-	if not poi_layer.has_method("_get_planet_params") or not poi_layer.has_method("_get_rotation"):
-		return
-
-	var p2 = poi_layer.call("_get_planet_params")
-	if typeof(p2) != TYPE_DICTIONARY or p2.is_empty(): return
-	
-	var center: Vector2 = p2.get("center", Vector2.ZERO)
-	var r_px: float     = p2.get("r_px", 0.0)
-	var rot: float      = poi_layer.call("_get_rotation")
-	
-	var lon: float = deg_to_rad(lon_deg) - rot
-	var lat: float = deg_to_rad(lat_deg)
-	
-	# If behind the planet, maybe don't spawn or spawn faded
-	var sz: float = cos(lon) * cos(lat)
-	if sz <= 0.0: return
-	
-	var sx: float  = sin(lon) * cos(lat)
-	var sy: float  = -sin(lat)
-	
-	var start_pos: Vector2 = center + Vector2(sx * r_px, sy * r_px)
+	# Projected with spin + tilt; skip when the site faces away from the camera.
+	var proj: Vector3 = poi_layer.project(deg_to_rad(lon_deg), deg_to_rad(lat_deg))
+	if proj.z <= 0.0: return
+	var start_pos := Vector2(proj.x, proj.y)
 	
 	var tr := TextureRect.new()
 	tr.texture = icon

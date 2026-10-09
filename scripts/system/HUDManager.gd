@@ -557,7 +557,24 @@ func show_settings_popup() -> void:
 	fs_chk.mouse_entered.connect(func(): CursorManager.set_state(CursorManager.State.POINTER))
 	fs_chk.mouse_exited.connect(func(): CursorManager.set_state(CursorManager.State.NORMAL))
 	fs_hbox.add_child(fs_chk)
-	
+
+	var ns_row := HBoxContainer.new()
+	ns_row.add_theme_constant_override("separation", 12)
+	var ns_lbl := Label.new()
+	ns_lbl.text = "Night Shadows"
+	ns_lbl.custom_minimum_size = Vector2(90, 0)
+	if _orbitron: ns_lbl.add_theme_font_override("font", _orbitron)
+	ns_lbl.add_theme_font_size_override("font_size", 11)
+	ns_lbl.add_theme_color_override("font_color", Color(0.70, 0.78, 0.95))
+	ns_row.add_child(ns_lbl)
+	var ns_sl := HSlider.new()
+	ns_sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ns_sl.min_value = 0.0; ns_sl.max_value = 1.0; ns_sl.step = 0.05
+	ns_sl.value = SettingsManager.night_shadow
+	ns_sl.value_changed.connect(func(v: float): SettingsManager.set_night_shadow(v))
+	ns_row.add_child(ns_sl)
+	vbox.add_child(ns_row)
+
 	vbox.add_child(HSeparator.new())
 
 	var tut_row := HBoxContainer.new()

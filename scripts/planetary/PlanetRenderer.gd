@@ -32,7 +32,14 @@ var _drag_velocity := 0.0
 var _last_drag_time := 0
 var _drag_total_px := 0.0
 var _rotation_offset := 0.0
+## Camera tilt around the screen X axis (radians). + brings the north pole into view.
+var tilt := 0.0
+var _tilt_velocity := 0.0
+const MAX_TILT := 1.4   # ~80°
+## Set while something (e.g. a rocket launch) relies on the untilted projection.
+var tilt_locked := false
 var _last_mouse_x := 0.0
+var _last_mouse_y := 0.0
 var _planet_radius_px := 0.0
 ## Global light angle (shared time-of-day clock, advances in PlanetaryView._process)
 var light_angle: float = 0.0
@@ -122,6 +129,31 @@ func _update_radius() -> void:
 	# radius in screen pixels = height * planet_radius (aspect-corrected circle)
 	_planet_radius_px = size.y * r
 
+func set_tilt(val: float) -> void:
+	tilt = clampf(val, -MAX_TILT, MAX_TILT)
+	if material:
+		(material as ShaderMaterial).set_shader_parameter("tilt", tilt)
+		_update_light_direction()
+
+## Surface point → view-space unit vector (x right, y down, z toward the camera).
+## Inverse of the shader's view → world transform (tilt, then spin).
+func lonlat_to_view(lon: float, lat: float) -> Vector3:
+	var l := lon - _rotation_offset
+	var x := sin(l) * cos(lat)
+	var y := -sin(lat)
+	var z := cos(l) * cos(lat)
+	var c := cos(tilt)
+	var s := sin(tilt)
+	return Vector3(x, y * c + z * s, -y * s + z * c)
+
+## View-space unit vector → Vector2(lon, lat) in radians.
+func view_to_lonlat(v: Vector3) -> Vector2:
+	var c := cos(tilt)
+	var s := sin(tilt)
+	var y := v.y * c - v.z * s
+	var z := v.y * s + v.z * c
+	return Vector2(fposmod(_rotation_offset + atan2(v.x, z), TAU), asin(clampf(-y, -1.0, 1.0)))
+
 func get_rotation_offset() -> float:
 	return _rotation_offset
 
@@ -144,6 +176,10 @@ func _update_light_direction() -> void:
 	var lx := cos(eff) * 0.85
 	var lz := sin(eff) * 0.55
 	var ld := Vector3(lx, -0.45, lz).normalized()
+	# Tilt the light with the camera so the terminator stays put on the terrain.
+	var c := cos(tilt)
+	var s := sin(tilt)
+	ld = Vector3(ld.x, ld.y * c + ld.z * s, -ld.y * s + ld.z * c)
 	(material as ShaderMaterial).set_shader_parameter("light_direction", ld)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -169,14 +205,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.pressed and dist < _planet_radius_px:
 			_dragging = true
 			_drag_velocity = 0.0
+			_tilt_velocity = 0.0
 			_drag_total_px = 0.0
 			_last_mouse_x = float(event.position.x)
+			_last_mouse_y = float(event.position.y)
 		elif not event.pressed:
 			# Only treat as a tap if total drag distance was small
 			if _dragging and _drag_total_px < 8.0:
 				planet_clicked.emit(event.position)
 			if Time.get_ticks_msec() - _last_drag_time > 100:
 				_drag_velocity = 0.0
+				_tilt_velocity = 0.0
 			_dragging = false
 			_drag_total_px = 0.0
 
@@ -195,10 +234,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 				
 		var delta_x: float = float(event.position.x) - _last_mouse_x
-		_drag_total_px += abs(delta_x)
+		var delta_y: float = float(event.position.y) - _last_mouse_y
+		_drag_total_px += abs(delta_x) + abs(delta_y)
 		_last_mouse_x = float(event.position.x)
+		_last_mouse_y = float(event.position.y)
+		# Vertical drag tilts the globe: dragging down brings the north into view.
+		if delta_y != 0.0 and not tilt_locked:
+			var delta_tilt: float = delta_y / _planet_radius_px
+			set_tilt(tilt + delta_tilt)
+			_tilt_velocity = delta_tilt if _tilt_velocity == 0.0 else lerp(_tilt_velocity, delta_tilt, 0.6)
 		# 1:1 surface mapping: dragging by r_px = π radians rotation
-		var delta_rot: float = delta_x / _planet_radius_px
+		# Keep the surface under the cursor moving 1:1: the view centre sits at
+		# latitude = tilt, where a radian of spin covers only cos(tilt) of the radius.
+		var delta_rot: float = delta_x / (_planet_radius_px * maxf(cos(tilt), 0.35))
 		_rotation_offset = fposmod(_rotation_offset - delta_rot, TAU)
 		
 		# Smooth velocity so a single tiny mouse event doesn't kill momentum
@@ -214,11 +262,21 @@ func _unhandled_input(event: InputEvent) -> void:
 			# light_direction synced at end of _process every frame
 
 func _process(_delta: float) -> void:
+	# @tool script: in the editor only the preview runs. Hot-reloaded editor
+	# instances also carry null for newly added members, so stay out entirely.
+	if Engine.is_editor_hint():
+		return
 	if not _dragging and abs(_drag_velocity) > 0.0001:
 		_drag_velocity *= momentum_decay
 		_rotation_offset = fposmod(_rotation_offset + _drag_velocity, TAU)
 		if material:
 			material.set_shader_parameter("rotation_offset", _rotation_offset)
+	if not _dragging and abs(_tilt_velocity) > 0.0001:
+		_tilt_velocity *= momentum_decay
+		if tilt_locked:
+			_tilt_velocity = 0.0
+		else:
+			set_tilt(tilt + _tilt_velocity)
 	# Always sync light direction at the END of every frame so both
 	# rotation_offset (updated above or in _input) and light_angle
 	# (updated by PlanetaryView._process which runs before us as the parent)

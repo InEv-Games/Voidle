@@ -1,6 +1,10 @@
 shader_type canvas_item;
 
 uniform float rotation_offset    : hint_range(0.0, 6.2832) = 0.0;
+// Camera tilt around the screen X axis (radians). + shows the north pole.
+uniform float tilt = 0.0;
+// 0 = night side fully lit, 1 = full day/night shadow (player setting).
+uniform float night_shadow : hint_range(0.0, 1.0) = 1.0;
 uniform float cloud_speed        : hint_range(0.0, 2.0)    = 0.10;
 uniform float atmosphere_density : hint_range(0.0, 3.0)    = 2.0;
 uniform float terrain_roughness  : hint_range(0.2, 2.0)    = 0.6;
@@ -42,9 +46,14 @@ vec3 rot_y(vec3 p, float a) {
 	float c=cos(a),s=sin(a);
 	return vec3(p.x*c+p.z*s, p.y, -p.x*s+p.z*c);
 }
+vec3 rot_x(vec3 p, float a) { float c=cos(a),s=sin(a); return vec3(p.x, p.y*c-p.z*s, p.y*s+p.z*c); }
+
+#include "res://shaders/district_territory.gdshaderinc"
 
 void fragment() {
-	vec2 uv = floor(UV * pixel_count) / pixel_count;
+	// Square pixels: same cell size on both axes regardless of the rect aspect.
+	vec2 grid = vec2(pixel_count * aspect_ratio, pixel_count);
+	vec2 uv = floor(UV * grid) / grid;
 	vec2 c  = uv - vec2(0.5);
 	c.x    *= aspect_ratio;
 	float dist = length(c);
@@ -61,10 +70,11 @@ void fragment() {
 		float ny = c.y / planet_radius;
 		float nz = sqrt(max(0.0, 1.0 - nx*nx - ny*ny));
 		vec3  n  = normalize(vec3(nx, ny, nz));
-		float lat = asin(clamp(ny, -1.0, 1.0));
+		vec3 tn = rot_x(n, tilt);   // view → world: tilt first, then spin
+		float lat = asin(clamp(tn.y, -1.0, 1.0));
 
 		// bands: distorted horizontal stripes with turbulence
-		vec3 rn = rot_y(n, rotation_offset + TIME * cloud_speed);
+		vec3 rn = rot_y(tn, rotation_offset + TIME * cloud_speed);
 		float turbulence = fbm3(rn * 3.0 * terrain_roughness, 5) * 0.3;
 		float band = sin((lat + turbulence) * 8.0);
 
@@ -78,12 +88,26 @@ void fragment() {
 		// detail layer
 		surf += vec3(fbm3(rn * 10.0, 3) * 0.06 - 0.03);
 
+		// district territory tint
+		vec3 d_rn;
+		float d_score = 2.0;
+		int d_owner = territory_uv_to_world(uv, d_rn) ? district_owner(d_rn, d_score) : -1;
+		vec3 d_col = d_owner >= 0 ? district_col[d_owner].rgb : vec3(0.0);
+		if (d_owner >= 0)
+			surf = mix(surf, vec3(0.55, 0.53, 0.50), 0.18 * smoothstep(1.0, 0.3, d_score));
+
 		// limb darkening
 		float limb = pow(nz, 0.4);
 		vec3  ld   = normalize(light_direction);
 		float diff = max(dot(n, ld), 0.0);
 		float lit  = smoothstep(0.0, 0.5, diff) * limb;
-		surf *= 0.08 + 0.92 * lit;
+		surf *= mix(0.08 + 0.92 * limb, 0.08 + 0.92 * lit, night_shadow);
+
+		// territory border — after lighting so it stays readable at night
+		if (d_owner >= 0 && (d_owner == district_hover || d_owner == district_selected)
+				&& territory_is_border(uv, 1.0 / grid, d_owner))
+			surf = mix(surf, d_col * 1.2 + vec3(0.12), territory_border_strength(d_owner));
+
 
 		COLOR = vec4(clamp(surf, vec3(0.0), vec3(1.0)), 1.0);
 	}

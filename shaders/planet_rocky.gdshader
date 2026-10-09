@@ -1,6 +1,8 @@
 shader_type canvas_item;
 
 uniform float rotation_offset    : hint_range(0.0, 6.2832) = 0.0;
+// Camera tilt around the screen X axis (radians). + shows the north pole.
+uniform float tilt = 0.0;
 uniform float cloud_speed        : hint_range(0.0, 2.0)    = 0.12;
 uniform float cloud_coverage     : hint_range(0.0, 1.0)    = 0.5;
 uniform float has_clouds         : hint_range(0.0, 1.0)    = 1.0;
@@ -15,13 +17,11 @@ uniform float pixel_count        : hint_range(32.0, 512.0) = 140.0;
 uniform float aspect_ratio       : hint_range(0.1, 4.0)    = 1.0;
 uniform int   seed               : hint_range(0, 99999)    = 12345;
 
-// POI city light hotspots (world-space sphere normals + intensity)
-uniform vec4 poi_lights_0 = vec4(0.0);
-uniform vec4 poi_lights_1 = vec4(0.0);
-uniform vec4 poi_lights_2 = vec4(0.0);
-uniform vec4 poi_lights_3 = vec4(0.0);
-uniform vec4 poi_lights_4 = vec4(0.0);
+// Negative = IconExporter ecumenopolis (city lights everywhere). District
+// lights now come from territories (district_territory.gdshaderinc).
 uniform int  poi_count    = 0;
+// 0 = night side fully lit, 1 = full day/night shadow (player setting).
+uniform float night_shadow : hint_range(0.0, 1.0) = 1.0;
 
 uniform vec3 light_direction = vec3(0.6, -0.55, 0.65);
 
@@ -60,10 +60,15 @@ float fbm3(vec3 p, int oct) {
 	return v;
 }
 vec3 rot_y(vec3 p, float a) { float c=cos(a),s=sin(a); return vec3(p.x*c+p.z*s,p.y,-p.x*s+p.z*c); }
+vec3 rot_x(vec3 p, float a) { float c=cos(a),s=sin(a); return vec3(p.x, p.y*c-p.z*s, p.y*s+p.z*c); }
+
+#include "res://shaders/district_territory.gdshaderinc"
 
 
 void fragment() {
-	vec2 uv = floor(UV * pixel_count) / pixel_count;
+	// Square pixels: same cell size on both axes regardless of the rect aspect.
+	vec2 grid = vec2(pixel_count * aspect_ratio, pixel_count);
+	vec2 uv = floor(UV * grid) / grid;
 	vec2 c  = uv - vec2(0.5);
 	c.x    *= aspect_ratio;
 	float dist = length(c);
@@ -81,9 +86,10 @@ void fragment() {
 		float ny = c.y / planet_radius;
 		float nz = sqrt(max(0.0, 1.0 - nx*nx - ny*ny));
 		vec3  n  = normalize(vec3(nx, ny, nz));
-		float lat = asin(clamp(ny, -1.0, 1.0));
+		vec3 tn = rot_x(n, tilt);   // view → world: tilt first, then spin
+		float lat = asin(clamp(tn.y, -1.0, 1.0));
 
-		vec3 rn = rot_y(n, rotation_offset);
+		vec3 rn = rot_y(tn, rotation_offset);
 
 		// continent_scale: low = big features (fewer, larger continents)
 		float h = fbm3(rn * 3.2 * continent_scale * terrain_roughness, 7) - sea_level;
@@ -103,19 +109,40 @@ void fragment() {
 		surf += vec3(fbm3(rn * 14.0, 2) * 0.04 - 0.02);
 
 		// clouds — auto-rotate with TIME (always animating)
-		vec3 crn = rot_y(n, rotation_offset + TIME * cloud_speed);
+		vec3 crn = rot_y(tn, rotation_offset + TIME * cloud_speed);
 		float cv  = fbm3(crn * 3.5 + vec3(73.1, float(seed)*0.007, 0.0), 6);
 		float ct  = mix(0.30, 0.08, cloud_coverage);
 		float cm  = smoothstep(ct, ct + 0.14, cv)
 		            * (1.0 - smoothstep(0.80, 0.96, polar))
 		            * has_clouds;
+		// district settlement: organic urban sprawl on land, dense at the core
+		// and breaking into patches toward the edge (under the clouds)
+		float d_score;
+		int   d_owner = district_owner(rn, d_score);
+		vec3  d_col   = d_owner >= 0 ? district_col[d_owner].rgb : vec3(0.0);
+		float urban   = 0.0;
+		if (d_owner >= 0) {
+			float on_land = step(0.07, h);
+			float core    = smoothstep(1.0, 0.15, d_score) * 0.92;      // density, peaks at the centre
+			float blob    = fbm3(rn * 55.0 + vec3(11.0), 3) * 0.5 + 0.5; // sprawl patches / parks
+			vec3  ucell   = floor(rn * 140.0);                          // world-space blocks
+			float ur      = fract(sin(dot(ucell, vec3(41.3, 289.1, 97.7))) * 15731.743);
+			urban = on_land * step(1.0 - core, blob * 0.8 + ur * 0.35);
+			// satellite-style mix: concrete, pale roofs, terracotta
+			vec3 u_col = ur < 0.45 ? vec3(0.42, 0.41, 0.40)
+			           : ur < 0.80 ? vec3(0.68, 0.63, 0.55)
+			           :             vec3(0.64, 0.45, 0.34);
+			u_col = mix(u_col, d_col, 0.10);   // faint hint of the district type
+			surf = mix(surf, u_col, urban * 0.9);
+		}
+
 		surf = mix(surf, color_cloud, cm * 0.90);
 
 		// lighting
 		vec3  ld   = normalize(light_direction);
 		float diff = max(dot(n, ld), 0.0);
 		float lit  = smoothstep(0.0, 0.45, diff);
-		surf *= 0.07 + 0.93 * lit;
+		surf *= mix(1.0, 0.07 + 0.93 * lit, night_shadow);
 
 		// ocean specular (controlled by specular_strength)
 		if (h < 0.07) {
@@ -124,21 +151,14 @@ void fragment() {
 			surf += vec3(spec * 0.30 * lit * specular_strength);
 		}
 
-		// city lights: POI-based, world-space cells (rotate with terrain)
-		float night = smoothstep(0.15, 0.0, diff);
+		// city lights: inside district territories, brighter toward the core
+		float night = smoothstep(0.15, 0.0, diff) * night_shadow;
 		if (night > 0.0 && city_lights > 0.0) {
-			// gaussian density from each POI
 			float poi_density = 0.0;
-			float spread = 28.0;
-			if (poi_count > 0) poi_density += exp(-dot(rn-poi_lights_0.xyz, rn-poi_lights_0.xyz) * spread) * poi_lights_0.w;
-			if (poi_count > 1) poi_density += exp(-dot(rn-poi_lights_1.xyz, rn-poi_lights_1.xyz) * spread) * poi_lights_1.w;
-			if (poi_count > 2) poi_density += exp(-dot(rn-poi_lights_2.xyz, rn-poi_lights_2.xyz) * spread) * poi_lights_2.w;
-			if (poi_count > 3) poi_density += exp(-dot(rn-poi_lights_3.xyz, rn-poi_lights_3.xyz) * spread) * poi_lights_3.w;
-			if (poi_count > 4) poi_density += exp(-dot(rn-poi_lights_4.xyz, rn-poi_lights_4.xyz) * spread) * poi_lights_4.w;
-			
+			if (d_owner >= 0)
+				poi_density = district_col[d_owner].a * smoothstep(1.0, 0.35, d_score) * urban;
 			// If poi_count is negative, it's a signal from IconExporter to render a full ecumenopolis
 			if (poi_count < 0) poi_density = 1.0;
-			
 			poi_density = clamp(poi_density, 0.0, 1.0);
 
 			if (poi_density > 0.003) {
@@ -148,14 +168,16 @@ void fragment() {
 				// Organic sprawling city light pattern using FBM
 				float city_noise = fbm3(rn * 25.0 + vec3(float(seed) * 0.01), 4);
 				city_noise = city_noise * 0.5 + 0.5; // Map from [-1, 1] to [0, 1]
-				
-				// Mask FBM noise with 'pop' (which represents POI density)
-				// This ensures cities ONLY appear around districts in the normal game
+
 				float threshold = 0.85 - pop * 0.35;
 				float dots = smoothstep(threshold, 1.0, city_noise) * pop;
-				
 				// Soft ambient haze (simulated bloom for transparency support)
 				float haze = smoothstep(threshold - 0.15, 1.0, city_noise) * pop * 0.8;
+				// Pixel city lights: world-space cells (stable while the globe spins)
+				// light up at random, denser toward the district core.
+				vec3  cell  = floor(rn * 90.0);
+				float rnd   = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+				dots = max(dots, step(rnd, pop * 0.45) * (0.5 + 0.5 * pop));
 
 				// HDR color for bloom effect: 3.2 for IconExporter (poi_count < 0), 2.8 for in-game
 				float hdr_mult = (poi_count < 0) ? 3.2 : 2.8;
@@ -163,6 +185,13 @@ void fragment() {
 
 				surf = mix(surf, surf + lc * dots + lc * 0.35 * haze, night * city_lights);
 			}
+		}
+
+		// territory border — only while hovered/selected; after lighting so it reads at night
+		if (d_owner >= 0 && (d_owner == district_hover || d_owner == district_selected)
+				&& territory_is_border(uv, 1.0 / grid, d_owner)) {
+			float bs = territory_border_strength(d_owner);
+			surf = mix(surf, d_col * 1.2 + vec3(0.12), bs);
 		}
 
 		COLOR = vec4(clamp(surf, vec3(0.0), vec3(1.0)), 1.0);

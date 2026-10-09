@@ -1,6 +1,10 @@
 shader_type canvas_item;
 
 uniform float rotation_offset : hint_range(0.0, 6.2832) = 0.0;
+// Camera tilt around the screen X axis (radians). + shows the north pole.
+uniform float tilt = 0.0;
+// 0 = night side fully lit, 1 = full day/night shadow (player setting).
+uniform float night_shadow : hint_range(0.0, 1.0) = 1.0;
 uniform float planet_radius   : hint_range(0.05, 0.45)  = 0.18;
 uniform float pixel_count     : hint_range(32.0, 512.0) = 140.0;
 uniform float aspect_ratio    : hint_range(0.1, 4.0)    = 1.0;
@@ -37,6 +41,7 @@ float fbm3(vec3 p, int oct) {
 	return v;
 }
 vec3 rot_y(vec3 p, float a) { float c=cos(a),s=sin(a); return vec3(p.x*c+p.z*s,p.y,-p.x*s+p.z*c); }
+vec3 rot_x(vec3 p, float a) { float c=cos(a),s=sin(a); return vec3(p.x, p.y*c-p.z*s, p.y*s+p.z*c); }
 
 // Irregular silhouette: bumps along the edge circle
 float silhouette_bump(float angle) {
@@ -48,7 +53,9 @@ float silhouette_bump(float angle) {
 }
 
 void fragment() {
-	vec2 uv = floor(UV * pixel_count) / pixel_count;
+	// Square pixels: same cell size on both axes regardless of the rect aspect.
+	vec2 grid = vec2(pixel_count * aspect_ratio, pixel_count);
+	vec2 uv = floor(UV * grid) / grid;
 	vec2 c  = uv - vec2(0.5);
 	c.x    *= aspect_ratio;
 
@@ -66,7 +73,7 @@ void fragment() {
 		float snz = sqrt(max(0.0, 1.0 - snd * snd));
 		vec3  n   = normalize(vec3(sn2, snz));
 
-		vec3 rn = rot_y(n, rotation_offset);
+		vec3 rn = rot_y(rot_x(n, tilt), rotation_offset);
 		vec3 rp = rn * terrain_roughness;
 
 		// single-toned rocky surface with subtle variation
@@ -89,7 +96,7 @@ void fragment() {
 		vec3  ld   = normalize(vec3(0.6, -0.55, 0.65));
 		float diff = max(dot(n, ld), 0.0);
 		float lit  = smoothstep(0.0, 0.35, diff);
-		surf *= 0.04 + 0.96 * lit;
+		surf *= mix(1.0, 0.04 + 0.96 * lit, night_shadow);
 
 		// soft edge fade
 		float edge  = smoothstep(0.85, 1.0, shape_d);

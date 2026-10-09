@@ -1,6 +1,10 @@
 shader_type canvas_item;
 
 uniform float rotation_offset : hint_range(0.0, 6.2832) = 0.0;
+// Camera tilt around the screen X axis (radians). + shows the north pole.
+uniform float tilt = 0.0;
+// 0 = night side fully lit, 1 = full day/night shadow (player setting).
+uniform float night_shadow : hint_range(0.0, 1.0) = 1.0;
 uniform float planet_radius   : hint_range(0.1, 0.5)    = 0.32;
 uniform float pixel_count     : hint_range(32.0, 512.0) = 140.0;
 uniform float aspect_ratio    : hint_range(0.1, 4.0)    = 1.0;
@@ -37,6 +41,9 @@ float fbm3(vec3 p, int oct) {
 	return v;
 }
 vec3 rot_y(vec3 p, float a) { float c=cos(a),s=sin(a); return vec3(p.x*c+p.z*s,p.y,-p.x*s+p.z*c); }
+vec3 rot_x(vec3 p, float a) { float c=cos(a),s=sin(a); return vec3(p.x, p.y*c-p.z*s, p.y*s+p.z*c); }
+
+#include "res://shaders/district_territory.gdshaderinc"
 
 // crater SDF: returns (depth, rim_brightness)
 vec2 crater(vec3 p, float scale, float seed_off) {
@@ -49,7 +56,9 @@ vec2 crater(vec3 p, float scale, float seed_off) {
 }
 
 void fragment() {
-	vec2 uv = floor(UV * pixel_count) / pixel_count;
+	// Square pixels: same cell size on both axes regardless of the rect aspect.
+	vec2 grid = vec2(pixel_count * aspect_ratio, pixel_count);
+	vec2 uv = floor(UV * grid) / grid;
 	vec2 c  = uv - vec2(0.5);
 	c.x    *= aspect_ratio;
 	float dist = length(c);
@@ -61,7 +70,7 @@ void fragment() {
 		float ny = c.y / planet_radius;
 		float nz = sqrt(max(0.0, 1.0 - nx*nx - ny*ny));
 		vec3  n  = normalize(vec3(nx, ny, nz));
-		vec3  rn = rot_y(n, rotation_offset);
+		vec3  rn = rot_y(rot_x(n, tilt), rotation_offset);
 		vec3  rp = rn * terrain_roughness;
 
 		// mare regions (dark basalt plains)
@@ -92,11 +101,25 @@ void fragment() {
 		surf = mix(surf, color_floor, clamp(-total_depth, 0.0, 1.0));
 		surf = mix(surf, color_rim,   clamp(total_rim, 0.0, 1.0) * (1.0 - mare_mask * 0.8));
 
+		// district territory tint
+		vec3 d_rn;
+		float d_score = 2.0;
+		int d_owner = territory_uv_to_world(uv, d_rn) ? district_owner(d_rn, d_score) : -1;
+		vec3 d_col = d_owner >= 0 ? district_col[d_owner].rgb : vec3(0.0);
+		if (d_owner >= 0)
+			surf = mix(surf, vec3(0.55, 0.53, 0.50), 0.18 * smoothstep(1.0, 0.3, d_score));
+
 		// lighting — no atmosphere, sharp terminator
 		vec3  ld   = normalize(light_direction);
 		float diff = max(dot(n, ld), 0.0);
 		float lit  = smoothstep(0.0, 0.25, diff);
-		surf *= 0.04 + 0.96 * lit;
+		surf *= mix(1.0, 0.04 + 0.96 * lit, night_shadow);
+
+		// territory border — after lighting so it stays readable at night
+		if (d_owner >= 0 && (d_owner == district_hover || d_owner == district_selected)
+				&& territory_is_border(uv, 1.0 / grid, d_owner))
+			surf = mix(surf, d_col * 1.2 + vec3(0.12), territory_border_strength(d_owner));
+
 
 		COLOR = vec4(clamp(surf, vec3(0.0), vec3(1.0)), 1.0);
 	}

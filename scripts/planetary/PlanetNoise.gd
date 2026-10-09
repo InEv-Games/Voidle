@@ -41,6 +41,10 @@ static func rot_y(p: Vector3, angle: float) -> Vector3:
 
 static func terrain_height(lon_rad: float, lat_rad: float, seed: int,
 		roughness: float = 1.0, continent_scale: float = 1.0) -> float:
+	# Prefer the GPU-baked map: this GDScript noise is 64-bit and does NOT
+	# reproduce the shader's 32-bit sin-hash (see TerrainMap.gd).
+	if TerrainMap.has_map(seed, TerrainMap.Mode.ROCKY):
+		return TerrainMap.value(seed, lon_rad, lat_rad)
 	var nx: float = sin(lon_rad) * cos(lat_rad)
 	var ny: float = -sin(lat_rad)
 	var nz: float = cos(lon_rad) * cos(lat_rad)
