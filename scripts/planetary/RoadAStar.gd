@@ -8,6 +8,11 @@ extends AStar3D
 const BRIDGE_COST: float = 3.0
 
 var _bridges: Dictionary = {}   # edge key -> true
+## Land-only routing: ports / sea cells become (practically) impassable. Set by
+## RoadNetwork when both ends share a landmass, so a land road always wins.
+var land_only := false
+var cell_count := 0              # ids >= this are ports
+var kind: PackedByteArray        # RoadNetwork._kind (1 = sea)
 
 static func _key(a: int, b: int) -> int:
 	return mini(a, b) * 4294967296 + maxi(a, b)
@@ -18,6 +23,8 @@ func add_bridge(a: int, b: int) -> void:
 
 func _compute_cost(from_id: int, to_id: int) -> float:
 	var d := get_point_position(from_id).distance_to(get_point_position(to_id))
+	if land_only and (to_id >= cell_count or kind[to_id] == 1):
+		return d * 1.0e6
 	return d * BRIDGE_COST if _bridges.has(_key(from_id, to_id)) else d
 
 func _estimate_cost(from_id: int, end_id: int) -> float:

@@ -86,6 +86,19 @@ var _last_click_label: String = ""
 ## Zoom a double-clicked City opens at: district icons fully shown, below the
 ## closest "city view" where markers fade out.
 const CITY_FOCUS_ZOOM: float = 2.6
+## Empty-map click: one step up the hierarchy — District → City → Planet.
+func _go_up_one_level() -> void:
+	if _active_district_poi != null and _active_district_poi in current_data.custom_pois \
+			and not _active_district_poi.is_orbital():
+		var city := _city_of(_active_district_poi)
+		if city != null:
+			_build_city_panel(city, current_data)
+			return
+	_city_panel_poi = null
+	_build_planet_overview(current_data)   # (shows the City while the planet view is locked)
+
+## City panel being shown (the City as a whole), or null.
+var _city_panel_poi: POIData = null
 ## The first City must be founded (placement can't be cancelled meanwhile).
 var _mandatory_city: bool = false
 ## "Name your city" box is open — planet clicks are ignored.
@@ -176,7 +189,7 @@ func _ready() -> void:
 		if current_data != null:
 			_update_panel(current_data)
 			if _active_district_poi == null:
-				_build_planet_overview(current_data)
+				_refresh_active_panel()
 			else:
 				_build_district_panel(_active_district_poi, current_data))
 
@@ -392,7 +405,7 @@ func _update_tutorial_highlight() -> void:
 			if is_instance_valid(_tut_highlight_node):
 				allowed.append(_tut_highlight_node.get_global_rect())
 			allowed.append(planet_area)
-		"district_upgrade_btn":
+		"district_upgrade_btn", "city_level_up_btn":
 			if is_instance_valid(_tut_highlight_node):
 				allowed.append(_tut_highlight_node.get_global_rect())
 			allowed.append(planet_area)
@@ -497,9 +510,8 @@ func _input(event: InputEvent) -> void:
 			var click := mb.position
 			var vp_w: float = get_viewport().get_visible_rect().size.x
 			if click.x < vp_w * 0.57:
-				_active_district_poi = null
 				_tut_highlight_node = null
-				_build_planet_overview(current_data)
+				_go_up_one_level()
 				get_viewport().set_input_as_handled()
 				return
 		# Close slot dropdown on any click outside it
@@ -522,7 +534,7 @@ func _input(event: InputEvent) -> void:
 			# Right-click on planet → planet command menu (or go back)
 			if poi_layer._selected_index >= 0:
 				poi_layer.deselect_all()
-				_build_planet_overview(current_data)
+				_go_up_one_level()
 				get_viewport().set_input_as_handled()
 			else:
 				if _orbital_layer != null and _orbital_layer._selected_ship != null:
@@ -710,6 +722,8 @@ func _refresh_pois(data: PlanetData) -> void:
 				"lon_deg": rad_to_deg(lon), "lat_deg": rad_to_deg(lat),
 				"label": pd.label,
 				"data": {
+					"poi": pd,   # live state (e.g. construction progress) for the map
+					"pp": GameState.get_planet(data.seed),   # live level-up progress
 					"name": pd.shown_name(),
 					"type": pd.type_tag,
 					"is_city": pd.is_city(),
@@ -721,7 +735,13 @@ func _refresh_pois(data: PlanetData) -> void:
 	var pp_poi := GameState.get_planet(data.seed)
 	for poi in pois:
 		var d: Dictionary = poi["data"].duplicate()
-		d["district_level"] = pp_poi.district_levels.get(poi["label"], 1) if pp_poi != null else 1
+		d["district_level"] = 1
+		if pp_poi != null:
+			var dp: POIData = d.get("poi")
+			d["district_level"] = Leveling.city_level(pp_poi, dp) if dp != null and dp.is_city() \
+				else pp_poi.district_levels.get(poi["label"], 1)
+			if dp != null and dp.is_city():
+				d["capital_level"] = pp_poi.district_levels.get(poi["label"], 1)
 		poi_layer.add_poi(poi["lon_deg"], poi["lat_deg"], poi["label"], d)
 
 	_upload_territories(data)
@@ -734,7 +754,9 @@ func _refresh_pois(data: PlanetData) -> void:
 func _refresh_active_panel() -> void:
 	if current_data == null:
 		return
-	if _active_district_poi != null and _active_district_poi in current_data.custom_pois:
+	if _city_panel_poi != null and _city_panel_poi in current_data.custom_pois:
+		_build_city_panel(_city_panel_poi, current_data)
+	elif _active_district_poi != null and _active_district_poi in current_data.custom_pois:
 		_build_district_panel(_active_district_poi, current_data)
 		if not _active_district_poi.is_orbital():
 			_select_district_on_planet(_active_district_poi.label)   # keep its map highlight
@@ -813,7 +835,7 @@ func _setup_material(data: PlanetData) -> void:
 # Each surface district owns a pixel region on the globe (district_territory.gdshaderinc).
 # It grows with district level and active buildings, and hosts the night lights.
 
-const MAX_TERRITORIES:     int   = 16     # must match MAX_DISTRICTS in the shader include
+const MAX_TERRITORIES:     int   = 64     # must match MAX_DISTRICTS in the shader include
 # Settlement radius = BASE + SIZE·√(Σ building weights).
 # A fresh district is a hamlet of a few pixels; housing grows it fastest.
 const SETTLE_BASE_DEG:     float = 0.9
@@ -823,9 +845,8 @@ const TERRITORY_WARP:      float = 0.18   # edge raggedness — same as the shad
 ## Non-city districts (markers, labels, arcs) fade in between these zoom levels.
 const ZOOM_DETAIL_START:   float = 1.3
 const ZOOM_DETAIL_FULL:    float = 1.8
-## Closest zoom shows only the cities themselves: markers + labels fade out here.
-const ZOOM_MARKERS_HIDE_START: float = 4.3
-const ZOOM_MARKERS_HIDE_FULL:  float = 4.9
+## Markers + labels visibility (fades to 0 while H is held).
+var _marker_vis_t: float = 1.0
 ## Roads / sea lanes / ports / ships fade in between these zoom levels.
 const ZOOM_ROADS_START:    float = 1.5
 const ZOOM_ROADS_FULL:     float = 2.2
@@ -842,22 +863,21 @@ const SPOKE_GROWTH:  float = 2.0
 ## Per territory: Array of Vector4(unit tangent xyz in shader-world space, growth w 0..1).
 var _spokes: Array = []
 
-const CITY_CHILD_BASE:  float = 0.6
-const CITY_CHILD_SHARE: float = 0.35
-## Σ settlement weights of the finished buildings in a district (a City also
-## grows with its districts).
+## Settlement growth per Capital District / City level.
+const CAPITAL_SIZE_PER_LEVEL: float = 1.2
+## Σ settlement weights of the finished buildings in a district (the Capital
+## District also grows with its levels).
 func _district_settlement_size(data: PlanetData, district_label: String) -> float:
 	var pp := GameState.get_planet(data.seed)
 	if pp == null:
 		return 0.0
 	var total := 0.0
-	# A City grows with the districts built under it, so the centre keeps up
-	# with its suburbs: CITY_CHILD_BASE each + a share of their own size.
+	# The Capital District grows from its own buildings and from levelling up
+	# (district + City levels) — not from the districts around it.
 	var me := _find_poi(data, district_label)
 	if me != null and me.is_city():
-		for child: POIData in data.custom_pois:
-			if child.parent_city == district_label and not child.is_orbital() and not child.constructing:
-				total += CITY_CHILD_BASE + CITY_CHILD_SHARE * _district_settlement_size(data, child.label)
+		total += CAPITAL_SIZE_PER_LEVEL * float(int(pp.district_levels.get(district_label, 1)) - 1 \
+			+ Leveling.city_level(pp, me) - 1)
 	for b: Dictionary in pp.buildings_in_district(district_label):
 		if b.get("constructing", false):
 			continue
@@ -998,6 +1018,53 @@ func _rebuild_roads() -> void:
 			routed.append({"a": pr.x, "b": pr.y, "route": r})
 	poi_layer.roads = out
 	_set_spokes_from_routes(routed)
+	_store_road_relations(routed)
+
+## Neighbour income runs along roads: two districts are income partners when a
+## road links them directly (a road merely passing through a third district
+## gives that one nothing). Each partner pays × road weight: the thicker the
+## shared road (how many routes run along it), the more — up to ROAD_BONUS_MAX.
+const ROAD_BONUS_PER_SHARE := 0.3
+const ROAD_BONUS_MAX := 2.0
+
+func _store_road_relations(routed: Array) -> void:
+	# land cells (½° grid) → how many routes use them
+	var cell_routes := {}
+	var route_cells: Array = []
+	for rk in routed.size():
+		var cells := {}
+		var r: Dictionary = routed[rk]["route"]
+		for seg: Dictionary in r.get("segments", []):
+			if seg.get("sea", false):
+				continue
+			for pt: Vector2 in seg["points"]:
+				cells[Vector2i(roundi(rad_to_deg(pt.x) * 2.0), roundi(rad_to_deg(pt.y) * 2.0))] = true
+		route_cells.append(cells)
+		for c in cells:
+			cell_routes[c] = int(cell_routes.get(c, 0)) + 1
+	for t: Dictionary in _territories:
+		(t["poi"] as POIData).neighbors = []
+		(t["poi"] as POIData).neighbor_weight = {}
+	var pairs: Array[Vector2i] = []
+	for rk in routed.size():
+		var a: POIData = _territories[routed[rk]["a"]]["poi"]
+		var b: POIData = _territories[routed[rk]["b"]]["poi"]
+		var cells: Dictionary = route_cells[rk]
+		var thick := 1.0
+		if not cells.is_empty():
+			var sum := 0.0
+			for c in cells:
+				sum += float(cell_routes[c])
+			thick = sum / float(cells.size())
+		var w := clampf(1.0 + ROAD_BONUS_PER_SHARE * (thick - 1.0), 1.0, ROAD_BONUS_MAX)
+		for pr: Array in [[a, b], [b, a]]:
+			var me: POIData = pr[0]
+			var other: POIData = pr[1]
+			if not me.neighbors.has(other.label):
+				me.neighbors.append(other.label)
+			me.neighbor_weight[other.label] = snappedf(w, 0.01)
+		pairs.append(Vector2i(mini(routed[rk]["a"], routed[rk]["b"]), maxi(routed[rk]["a"], routed[rk]["b"])))
+	poi_layer.income_pairs = pairs
 
 ## Each port is named after the nearest district ("Port Capital").
 func _port_names(ports: PackedVector2Array) -> PackedStringArray:
@@ -1016,8 +1083,8 @@ func _port_names(ports: PackedVector2Array) -> PackedStringArray:
 
 ## Road network: every pair of neighbouring districts, plus — so everything
 ## stays connected — inside each City a minimum spanning tree over the City and
-## its districts; between cities, a minimum spanning tree over the cities (long
-## roads / sea lanes). Returns territory index pairs.
+## its districts; between cities, a direct road / sea lane for every pair.
+## Returns territory index pairs.
 func _road_links() -> Array[Vector2i]:
 	var links: Array[Vector2i] = []
 	var groups := {}   # city territory index -> Array[int]
@@ -1030,7 +1097,12 @@ func _road_links() -> Array[Vector2i]:
 		groups[c].append(i)
 	for c in groups:
 		links.append_array(_mst(groups[c]))
-	links.append_array(_mst(groups.keys()))
+	# every pair of cities gets its own road / sea lane — port to port, not
+	# hopping through a third city
+	var cities: Array = groups.keys()
+	for i in cities.size():
+		for j in range(i + 1, cities.size()):
+			links.append(Vector2i(int(cities[i]), int(cities[j])))
 	# every pair of neighbouring districts gets its own road as well
 	var seen := {}
 	for l: Vector2i in links:
@@ -1070,7 +1142,10 @@ func _sync_level_labels(data: PlanetData) -> void:
 		return
 	for i in mini(_territories.size(), poi_layer._pois.size()):
 		var pd: POIData = _territories[i]["poi"]
-		poi_layer._pois[i]["data"]["district_level"] = pp.district_levels.get(pd.label, 1)
+		poi_layer._pois[i]["data"]["district_level"] = Leveling.city_level(pp, pd) if pd.is_city() \
+			else pp.district_levels.get(pd.label, 1)
+		if pd.is_city():
+			poi_layer._pois[i]["data"]["capital_level"] = pp.district_levels.get(pd.label, 1)
 
 ## Writes each district's neighbours (ids) onto its POIData — neighbour income
 ## (ProductionManager.income_sources) reads them — and gives POILayer the
@@ -1083,14 +1158,13 @@ func _store_neighbors(pairs: Array[Vector2i]) -> void:
 	for pr: Vector2i in pairs:
 		lists[pr.x].append((_territories[pr.y]["poi"] as POIData).label)
 		lists[pr.y].append((_territories[pr.x]["poi"] as POIData).label)
-	for i in _territories.size():
-		(_territories[i]["poi"] as POIData).neighbors = lists[i]
 	var links: Array[Vector2i] = pairs.duplicate()
 	for i in _territories.size():
 		var c := _city_index_of(i)
 		if c >= 0 and c != i and not pairs.has(Vector2i(mini(i, c), maxi(i, c))):
 			links.append(Vector2i(mini(i, c), maxi(i, c)))
-	poi_layer.income_pairs = links
+	if poi_layer.income_pairs.is_empty():
+		poi_layer.income_pairs = links   # until the roads are routed
 	poi_layer.income_tint = _income_tint
 
 ## Colour of the income `receiver` gets from `giver` (indices into the territory
@@ -1180,13 +1254,15 @@ func _set_spokes_from_routes(routed: Array) -> void:
 	for i in _territories.size():
 		_spokes.append([])
 	for item: Dictionary in routed:
-		var pts := PackedVector2Array()
-		for seg: Dictionary in item["route"].get("segments", []):
-			pts.append_array(seg["points"])
-		if pts.size() < 2:
+		# Settlements only stretch along the land road leaving them — never out
+		# over a sea lane (a city can't grow onto the water toward its port).
+		var segs: Array = item["route"].get("segments", [])
+		if segs.is_empty():
 			continue
-		_add_spoke(item["a"], pts, false, item["b"])
-		_add_spoke(item["b"], pts, true, item["a"])
+		if not segs[0].get("sea", false):
+			_add_spoke(item["a"], segs[0]["points"], false, item["b"])
+		if not segs[segs.size() - 1].get("sea", false):
+			_add_spoke(item["b"], segs[segs.size() - 1]["points"], true, item["a"])
 	var buf := PackedVector4Array()
 	buf.resize(MAX_TERRITORIES * MAX_SPOKES)
 	for i in mini(_spokes.size(), MAX_TERRITORIES):
@@ -1207,12 +1283,18 @@ func _add_spoke(i: int, pts: PackedVector2Array, from_end: bool, other: int) -> 
 	var reach := maxf(float(_territories[i]["r"]) * 1.5, 0.02)
 	var target := Vector3.ZERO
 	var count := pts.size()
+	if count < 2:
+		return
+	var leaves := false
 	for k in count:
 		var pt := pts[count - 1 - k] if from_end else pts[k]
 		var w := _lonlat_to_world(pt.x, pt.y)
 		target = w
 		if acos(clampf(w.dot(c), -1.0, 1.0)) >= reach:
+			leaves = true
 			break
+	if not leaves:
+		return   # the land road ends (at a port) before leaving the settlement
 	var t := target - c * target.dot(c)
 	if t.length() <= 0.00001:
 		return
@@ -1795,6 +1877,15 @@ func _district_night_size(data: PlanetData, district_label: String) -> int:
 		if ProductionManager.is_user_paused(pm_key):
 			continue
 		total += b.get("amount", 1)
+	# A finished district is lived in even before it has buildings; a City
+	# also glows with every district built under it.
+	var me := _find_poi(data, district_label)
+	if me != null and not me.constructing:
+		total += 2 if me.is_city() else 1
+		if me.is_city():
+			for child: POIData in data.custom_pois:
+				if child.parent_city == district_label and not child.constructing and not child.is_orbital():
+					total += 1
 	return total
 
 func _update_poi_night_sizes(data: PlanetData) -> void:
@@ -1992,7 +2083,7 @@ func _setup_orbital_layer(planet_seed: int) -> void:
 			for res_id: String in landed_ship.cargo:
 				GameState.add_resource(res_id, float(landed_ship.cargo[res_id]))
 			GameState.planet_progress_changed.emit(landed_ship.orbit_seed)
-		if current_data != null: _build_planet_overview(current_data))
+		if current_data != null: _refresh_active_panel())
 	ShipManager.ship_arrived.connect(_on_ship_roster_changed)
 	ShipManager.ship_added.connect(_on_ship_roster_changed)
 	layer.station_poi_clicked.connect(func(poi_label: String) -> void:
@@ -2011,7 +2102,7 @@ func _setup_orbital_layer(planet_seed: int) -> void:
 
 func _on_ship_roster_changed(ship: ShipData) -> void:
 	if current_data != null and ship.orbit_seed == current_data.seed:
-		_build_planet_overview(current_data)
+		_refresh_active_panel()
 
 func _register_ship_commands(layer: OrbitalLayer) -> void:
 	ShipCommandRegistry.register_callable("deselect",
@@ -2495,9 +2586,11 @@ func _process(delta: float) -> void:
 			pmat.set_shader_parameter("border_alpha", 1.0)
 	# zoomed out only cities show; their districts fade in as you zoom
 	poi_layer.detail = 1.0 if overview else smoothstep(ZOOM_DETAIL_START, ZOOM_DETAIL_FULL, _zoom)
-	# fully zoomed in, markers step aside so only the city sprawl is visible
-	poi_layer.marker_vis = 1.0 if overview \
-		else 1.0 - smoothstep(ZOOM_MARKERS_HIDE_START, ZOOM_MARKERS_HIDE_FULL, _zoom)
+	# hold H to hide markers + labels and see just the planet and its cities
+	var typing := get_viewport().gui_get_focus_owner() is LineEdit
+	var hide_markers := Input.is_key_pressed(KEY_H) and not typing and not overview
+	_marker_vis_t = lerpf(_marker_vis_t, 0.0 if hide_markers else 1.0, 1.0 - exp(-delta * 16.0))
+	poi_layer.marker_vis = _marker_vis_t
 	# roads, sea lanes, ports and ships only once you're close
 	poi_layer.road_vis = smoothstep(ZOOM_ROADS_START, ZOOM_ROADS_FULL, _zoom)
 	if pmat != null:
@@ -2816,7 +2909,25 @@ func _build_panel_toggle() -> void:
 		_set_panel_open(not _panel_open))
 	add_child(btn)
 	_panel_toggle_btn = btn
+	# If content ever widens the panel past its anchors, keep the tab on its edge
+	($RightPanel as Control).resized.connect(_place_panel_toggle)
+	($RightPanel as Control).item_rect_changed.connect(_place_panel_toggle)
 	_apply_panel_t(_panel_t)
+
+## Puts the open/close tab on the side panel's actual left edge.
+func _place_panel_toggle() -> void:
+	if _panel_toggle_btn == null:
+		return
+	var panel := $RightPanel as Control
+	var x := panel.position.x
+	_panel_toggle_btn.anchor_left   = 0.0
+	_panel_toggle_btn.anchor_right  = 0.0
+	_panel_toggle_btn.anchor_top    = 0.5
+	_panel_toggle_btn.anchor_bottom = 0.5
+	_panel_toggle_btn.offset_left   = x - 26.0
+	_panel_toggle_btn.offset_right  = x
+	_panel_toggle_btn.offset_top    = -28.0
+	_panel_toggle_btn.offset_bottom = 28.0
 
 ## Slides the side panel in if it's hidden (used when the player selects something).
 func _reveal_panel() -> void:
@@ -2843,14 +2954,7 @@ func _apply_panel_t(t: float) -> void:
 	HUDManager.set_view_area_fraction(view_frac)
 	if _panel_toggle_btn != null:
 		_panel_toggle_btn.text = "›" if _panel_open else "‹"
-		_panel_toggle_btn.anchor_left   = view_frac
-		_panel_toggle_btn.anchor_right  = view_frac
-		_panel_toggle_btn.anchor_top    = 0.5
-		_panel_toggle_btn.anchor_bottom = 0.5
-		_panel_toggle_btn.offset_left   = -26.0
-		_panel_toggle_btn.offset_right  = 0.0
-		_panel_toggle_btn.offset_top    = -28.0
-		_panel_toggle_btn.offset_bottom = 28.0
+		_place_panel_toggle()
 
 # ── Zoom / pan ────────────────────────────────────────────────────────────────
 
@@ -2926,8 +3030,15 @@ func _screen_to_lonlat(global_pos: Vector2) -> Dictionary:
 # ── Manual district placement ─────────────────────────────────────────────────
 
 ## `parent` = the City a district is built under; null when founding a City.
+## The side panel slides away while placing (more map to aim at) and comes
+## back afterwards if it was open.
+var _reopen_panel_after_place := false
+
 func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void:
 	_end_district_placement()
+	if _panel_open:
+		_reopen_panel_after_place = true
+		_set_panel_open(false)
 	_placing_def = def
 	_placing_parent = parent
 	poi_layer.placement_mode = true
@@ -2938,6 +3049,12 @@ func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void
 	_show_place_hint(def)
 
 func _end_district_placement() -> void:
+	if _reopen_panel_after_place:
+		_reopen_panel_after_place = false
+		_set_panel_open(true)
+	_ghost_road_key = ""
+	if poi_layer:
+		poi_layer.ghost_roads = []
 	_placing_def = null
 	_placing_parent = null
 	if poi_layer:
@@ -2960,8 +3077,9 @@ func _show_place_hint(def: DistrictDef) -> void:
 	var title := Label.new()
 	title.text = "PLACE  %s  %s   ·   ◈ %s" % [def.icon, def.display_name.to_upper(),
 		HUDManager.fmt_credits(DistrictDef.placement_cost(def, current_data, _parent_label()))]
-	if Economy.founding_pop(def) > 0:
-		title.text += "   ·   ☺ %s pop" % Economy.fmt(Economy.founding_pop(def))
+	var found_pop := Economy.founding_pop(def, current_data, _parent_label())
+	if found_pop > 0:
+		title.text += "   ·   ☺ %s pop" % Economy.fmt(found_pop)
 	_apply_orbitron(title, 10)
 	title.add_theme_color_override("font_color", Color(0.90, 0.82, 0.45))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -2985,6 +3103,42 @@ func _show_place_hint(def: DistrictDef) -> void:
 	hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_place_hint = hint
 
+## Faint preview of the roads a district placed here would get: to every
+## would-be neighbour and to the nearest settlement of its City. Routed without
+## committing them, recomputed only when the cursor moves to a new cell.
+var _ghost_road_key := ""
+func _update_ghost_roads(lon: float, lat: float, neighbors: Array) -> void:
+	var key := "%d,%d" % [roundi(rad_to_deg(lon) * 2.0), roundi(rad_to_deg(lat) * 2.0)]
+	if key == _ghost_road_key:
+		return
+	_ghost_road_key = key
+	var out: Array = []
+	var net := RoadNetwork.for_planet(current_data)
+	if net.is_ready():
+		var targets := {}
+		for i in neighbors:
+			targets[int(i)] = true
+		if _placing_parent != null:
+			var best := -1
+			var best_d := INF
+			var n := _lonlat_to_world(lon, lat)
+			for i in _city_group(_placing_parent.label):
+				var d := acos(clampf(n.dot(_territories[i]["n"]), -1.0, 1.0))
+				if d < best_d:
+					best_d = d
+					best = i
+			if best >= 0:
+				targets[best] = true
+		for i in targets:
+			if i >= _territories.size():
+				continue
+			var pd: POIData = _territories[i]["poi"]
+			var r := net.route(lon, lat, deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg),
+				false, _is_sea_site(pd), false)
+			if not r.is_empty():
+				out.append(r)
+	poi_layer.ghost_roads = out
+
 func _update_placement_hover() -> void:
 	if _placing_def == null or current_data == null:
 		return
@@ -3001,7 +3155,9 @@ func _update_placement_hover() -> void:
 	var sys := _placement_system_check(_placing_def, hit["lon"], hit["lat"])
 	var lines := _placement_detail_lines(_placing_def, chk, sys)
 	lines.append_array(_site_resource_lines(_placing_def,
-		ResourceMap.sample(current_data.seed, hit["lon"], hit["lat"]), t["coastal"], int(t["terrain"])))
+		ResourceMap.sample(current_data.seed, hit["lon"], hit["lat"]), t["coastal"], int(t["terrain"]),
+		hit["lon"], hit["lat"]))
+	_update_ghost_roads(hit["lon"], hit["lat"], sys["neighbors"])
 	poi_layer.set_ghost(hit["lon"], hit["lat"], chk["ok"] and sys["ok"], site_name, lines,
 		_placing_def.type_key(), sys["neighbors"])
 
@@ -3039,9 +3195,29 @@ func _city_group(city_label: String) -> Array[int]:
 ## anywhere outside other cities' territory (TerrainSampler.check_site); any
 ## other district must neighbour its City or one of that City's districts.
 ## Returns { ok, reason, neighbors: Array[int] (territory indices), anchor: String }.
+## Surface cities on a planet.
+static func _city_count(data: PlanetData) -> int:
+	var n := 0
+	for p: POIData in data.custom_pois:
+		if p.is_city() and not p.is_orbital():
+			n += 1
+	return n
+
+## How far beyond its settlements a City's districts may be placed: grows by
+## CITY_REACH_PER_LV_DEG for every level the City has.
+const CITY_REACH_PER_LV_DEG: float = 3.0
+func _city_reach_rad(city_label: String) -> float:
+	var lv := 1
+	if current_data != null:
+		var pp := GameState.get_planet(current_data.seed)
+		if pp != null:
+			lv = pp.district_levels.get(city_label, 1)
+	return deg_to_rad(SETTLE_BASE_DEG + TerrainSampler.NEIGHBOR_GAP_DEG * 1.3
+		+ CITY_REACH_PER_LV_DEG * float(lv - 1))
+
 func _placement_system_check(def: DistrictDef, lon: float, lat: float) -> Dictionary:
 	var n := _lonlat_to_world(lon, lat)
-	var reach := deg_to_rad(SETTLE_BASE_DEG + TerrainSampler.NEIGHBOR_GAP_DEG)
+	var reach := deg_to_rad(SETTLE_BASE_DEG + TerrainSampler.NEIGHBOR_GAP_DEG)   # neighbour test
 	var neighbors: Array[int] = []
 	for i in _territories.size():
 		var t: Dictionary = _territories[i]
@@ -3050,11 +3226,15 @@ func _placement_system_check(def: DistrictDef, lon: float, lat: float) -> Dictio
 	if def.is_system_anchor() or _placing_parent == null:
 		return {"ok": true, "reason": "", "neighbors": neighbors, "anchor": ""}
 	var group := _city_group(_placing_parent.label)
+	# within the City's reach (grows with the City's level) of any of its settlements
+	var city_reach := _city_reach_rad(_placing_parent.label)
 	var ok := false
-	for i in neighbors:
-		if i in group:
+	for i in group:
+		var tg: Dictionary = _territories[i]
+		if acos(clampf(n.dot(tg["n"]), -1.0, 1.0)) <= city_reach + float(tg["r"]):
 			ok = true
 			break
+	reach = city_reach
 	var reason := ""
 	if not ok:
 		# how far outside the City's reach this spot is
@@ -3079,7 +3259,7 @@ func _placement_rings(def: DistrictDef, parent: POIData) -> Array:
 				rings.append({"lon": deg_to_rad(pd.lon_deg), "lat": deg_to_rad(pd.lat_deg),
 					"r": city_r, "color": Color(1.0, 0.65, 0.30, 0.45)})
 	elif parent != null:
-		var reach := deg_to_rad(SETTLE_BASE_DEG + TerrainSampler.NEIGHBOR_GAP_DEG)
+		var reach := _city_reach_rad(parent.label)
 		for i in _city_group(parent.label):
 			var pd: POIData = _territories[i]["poi"]
 			rings.append({"lon": deg_to_rad(pd.lon_deg), "lat": deg_to_rad(pd.lat_deg),
@@ -3136,7 +3316,8 @@ func _placement_detail_lines(def: DistrictDef, chk: Dictionary, sys: Dictionary)
 
 ## Resource lines for the placement preview: tag values at the site and which
 ## site-dependent buildings this district type could build there.
-func _site_resource_lines(def: DistrictDef, tags: Dictionary, coastal: bool, terrain: int = -1) -> Array:
+func _site_resource_lines(def: DistrictDef, tags: Dictionary, coastal: bool, terrain: int = -1,
+		lon: float = 0.0, lat: float = 0.0) -> Array:
 	var lines: Array = []
 	if tags.is_empty():
 		return lines
@@ -3151,11 +3332,16 @@ func _site_resource_lines(def: DistrictDef, tags: Dictionary, coastal: bool, ter
 	probe.resource_tags = tags
 	probe.terrain = terrain
 	probe.type_tag = def.type_key()
+	probe.lon_deg = rad_to_deg(lon)
+	probe.lat_deg = rad_to_deg(lat)
 	if not def.base_outputs.is_empty() and current_data != null:
 		var ppv := GameState.get_planet(current_data.seed)
 		var sm := def.site_mult(probe)
 		lines.append(["Base: %s%s" % [_district_base_text(ppv, probe), "   site ×%.2f" % sm if sm > 1.005 else ""],
 			Color(0.55, 0.95, 0.60)])
+		var iso := ProductionManager.isolation_mult(current_data, probe)
+		lines.append(["Space: +%d%% base income  (further from others = more; nearer = neighbour income)" %
+			int(round((iso - 1.0) * 100.0)), Color(0.65, 0.85, 1.0) if iso > 1.005 else Color(0.60, 0.64, 0.75)])
 	var enabled: Array[String] = []
 	var missing: Array[String] = []
 	for b: BuildingDef in BuildingDef.for_poi_and_planet(def.to_poi_type(), current_data.planet_type):
@@ -3205,10 +3391,6 @@ func _try_place_district(global_pos: Vector2) -> void:
 		AudioManager.play("error")
 		return
 	var parent_label := _parent_label()
-	var pp_place := GameState.get_planet(current_data.seed)
-	if Economy.free_population(current_data, pp_place) < Economy.founding_pop(def):
-		AudioManager.play("error")
-		return
 	var cost := DistrictDef.placement_cost(def, current_data, parent_label)
 	if GameState.credits < cost:
 		AudioManager.play("error")
@@ -3313,7 +3495,7 @@ func _on_planet_clicked(_screen_pos: Vector2) -> void:
 	if _orbital_layer != null and is_instance_valid(_orbital_layer):
 		_orbital_layer.deselect()
 	if current_data != null:
-		_build_planet_overview(current_data)
+		_go_up_one_level()
 
 	var hit := _screen_to_lonlat(_screen_pos)
 	if hit["hit"]:
@@ -3512,8 +3694,21 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 	if res_flow.get_child_count() > 0:
 		vbox.add_child(res_flow)
 	
+	# Planet level follows the cities: needs enough total city levels
+	var pd_lv: PlanetData = GameState.get_planet_data(pp.planet_seed)
+	var lv_block := Leveling.planet_level_block(pd_lv, pp) if pd_lv != null else ""
+	var req_lbl := Label.new()
+	req_lbl.text = "Requires %d total city levels  (have %d)" % [
+		Leveling.planet_level_req(pp.level + 1), Leveling.planet_city_levels(pd_lv, pp) if pd_lv != null else 0]
+	req_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_apply_orbitron(req_lbl, 9)
+	req_lbl.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4) if lv_block != "" else Color(0.4, 0.9, 0.4))
+	vbox.add_child(req_lbl)
+	if lv_block != "":
+		can_afford = false
+
 	var rew_lbl := Label.new()
-	rew_lbl.text = "Upon Level Up:\n+2 Max Districts\n+1 Max District Level"
+	rew_lbl.text = "Upon Level Up:\n+1 City allowed (%d → %d)" % [Leveling.max_cities(pp), Leveling.max_cities(pp) + 1]
 	rew_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_apply_orbitron(rew_lbl, 9)
 	rew_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.3))
@@ -3674,6 +3869,13 @@ func _on_colonize_progress_changed(planet_seed: int, key: String, progress: floa
 func _build_planet_overview(data: PlanetData) -> void:
 	if data == null:
 		return
+	# The planet view opens once a City reaches Lv 2; until then show the City.
+	if not GameState.planet_view_unlocked:
+		for p: POIData in data.custom_pois:
+			if p.is_city() and not p.is_orbital():
+				_build_city_panel(p, data)
+				return
+	_city_panel_poi = null
 	var panel_content := $RightPanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
@@ -4095,8 +4297,10 @@ func _build_resources_section(parent: VBoxContainer, data: PlanetData, pp: Plane
 		grid.add_child(_mineral_grid_card(rd, stored, true, "", pp))
 	parent.add_child(grid)
 
+## `as_capital`: a City shown as its Capital District (inside the City panel);
+## otherwise a City card opens the City panel.
 func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetProgress,
-		_panel_content: VBoxContainer, _root: VBoxContainer) -> PanelContainer:
+		_panel_content: VBoxContainer, _root: VBoxContainer, as_capital: bool = false) -> PanelContainer:
 	var card := PanelContainer.new()
 	card.set_meta("poi_label", poi.label)
 	_poi_overview_cards[poi.label] = card
@@ -4120,7 +4324,8 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	margin.add_child(hbox)
 
 	# Big level number on the left
-	var dist_lv_ov: int = pp.district_levels.get(poi.label, 1)
+	var as_city := poi.is_city() and not as_capital
+	var dist_lv_ov: int = Leveling.city_level(pp, poi) if as_city else pp.district_levels.get(poi.label, 1)
 	var lv_lbl := Label.new()
 	lv_lbl.text = str(dist_lv_ov)
 	lv_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -4135,7 +4340,7 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	info.add_theme_constant_override("separation", 1)
 
 	var n_lbl := Label.new()
-	n_lbl.text = poi.shown_name()
+	n_lbl.text = "Capital District" if as_capital else poi.shown_name()
 	n_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_apply_orbitron(n_lbl, 10)
 	n_lbl.add_theme_color_override("font_color", Color(0.82, 0.88, 1.0))
@@ -4145,8 +4350,8 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	var total_size: int = 0
 	for eb: Dictionary in district_buildings:
 		total_size += eb.get("amount", 1)
-	t_lbl.text = poi.type_label() + "  ·  Size %d" % total_size
-	if poi.is_city():
+	t_lbl.text = ("Capital" if as_capital else poi.type_label()) + "  ·  Size %d" % total_size
+	if as_city:
 		var n_children := 0
 		for child: POIData in planet.custom_pois:
 			if child.parent_city == poi.label:
@@ -4233,7 +4438,10 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 			if cap_poi.constructing:
 				TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\nBuild time: %.0fs" % cap_poi.construct_duration)
 				return
-			_build_district_panel(cap_poi, cap_planet))
+			if as_city:
+				_build_city_panel(cap_poi, cap_planet)
+			else:
+				_build_district_panel(cap_poi, cap_planet))
 	return card
 
 func _style_scroll(sc: ScrollContainer) -> void:
@@ -4335,6 +4543,12 @@ func _build_add_district_card(data: PlanetData, enabled: bool, orbital_only: boo
 			# Only one choice (founding a City until other city kinds exist): start placing at once
 			var opts := _district_options(cap_data, orbital_only, parent)
 			if opts.size() == 1 and not orbital_only:
+				var cpp := GameState.get_planet(cap_data.seed)
+				if opts[0].is_system_anchor() and cpp != null and _city_count(cap_data) >= cpp.max_cities():
+					AudioManager.play("error")
+					TooltipManager.show_tip("City limit", "Planet Lv %d supports %d cit%s.\nLevel the planet up to found another." % [
+						cpp.level, cpp.max_cities(), "y" if cpp.max_cities() == 1 else "ies"])
+					return
 				_begin_district_placement(opts[0], parent)
 				return
 			var layer := CanvasLayer.new()
@@ -4400,10 +4614,10 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 	_apply_orbitron(btn, 9)
 	var parent_label := parent.label if parent != null else ""
 	var cost: float = DistrictDef.placement_cost(def, data, parent_label)
-	var pop_need := Economy.founding_pop(def)
+	var pop_need := Economy.founding_pop(def, data, parent_label)
 	var pop_free := Economy.free_population(data, GameState.get_planet(data.seed))
 	var has_pop: bool = pop_free >= pop_need
-	var can_afford: bool = GameState.credits >= cost and has_pop
+	var can_afford: bool = GameState.credits >= cost   # population may go negative (slows work)
 	if pop_need > 0:
 		btn.text += "   ☺%s" % Economy.fmt(pop_need)
 	var at_limit: bool
@@ -4413,6 +4627,8 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 		at_limit = pp2 == null or orbital_count >= pp2.max_orbital_districts
 	else:
 		at_limit = def.max_per_planet > 0 and DistrictDef.count_on_planet(def, data) >= def.max_per_planet
+		if def.is_system_anchor():
+			at_limit = at_limit or _city_count(data) >= GameState.get_planet(data.seed).max_cities()
 
 	btn.disabled = not can_afford or at_limit
 	if at_limit:
@@ -4444,13 +4660,18 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 		if at_limit:
 			var _pp_lim := GameState.get_planet(data.seed)
 			var _lim: int = (_pp_lim.max_orbital_districts if _pp_lim != null else 1) if def.is_orbital else def.max_per_planet
-			t_desc += "\n\n[color=gray]Already built (limit: %d)[/color]" % _lim
-		elif not has_pop:
-			t_desc += "\n\n[color=red]Needs %s free population (have %s) — build housing in a Residential District[/color]" % [Economy.fmt(pop_need), Economy.fmt(pop_free)]
+			if def.is_system_anchor():
+				t_desc += "\n\n[color=orange]Planet Lv %d supports %d cit%s — level the planet up to found more.[/color]" % [
+					_pp_lim.level, _pp_lim.max_cities(), "y" if _pp_lim.max_cities() == 1 else "ies"]
+			else:
+				t_desc += "\n\n[color=gray]Already built (limit: %d)[/color]" % _lim
 		elif not can_afford:
 			t_desc += "\n\n[color=red]Insufficient Credits[/color]"
-		if pop_need > 0 and has_pop:
-			t_desc += "\n\nUses %s population (%s free)" % [Economy.fmt(pop_need), Economy.fmt(pop_free)]
+		t_desc += "\n\nCost  " + _cost_bb(cost, pop_need, data, GameState.get_planet(data.seed))
+		if pop_need > 0:
+			t_desc += _bb("  (%s free)" % Economy.fmt(pop_free), BB_DIM)
+			if not has_pop:
+				t_desc += "\n[color=orange]Population will exceed housing — production slows until you build more homes.[/color]"
 		TooltipManager.show_tip(t_title, t_desc, cost_str))
 	btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
@@ -4499,10 +4720,26 @@ func _on_district_clicked(index: int, _data: Dictionary) -> void:
 	if is_double and not poi.is_orbital():
 		_focus_city(_city_of(poi))
 	if poi.constructing:
-		TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\nBuild time: %.0fs" % poi.construct_duration)
+		TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\n%d%% built · %.0fs total" % [
+			int(poi.construct_progress * 100.0), poi.construct_duration])
+		_hide_tip_when_mouse_leaves(get_viewport().get_mouse_position())
 		return
 	_reveal_panel()   # selecting a district brings the side panel back
-	_build_district_panel(poi, current_data)
+	# zoomed out a City icon is the whole City; zoomed in it's its Capital District
+	if poi.is_city() and _zoom < ZOOM_DETAIL_FULL:
+		_build_city_panel(poi, current_data)
+	else:
+		_build_district_panel(poi, current_data)
+
+## Hides a click tooltip once the mouse moves away from where it was shown
+## (or after a few seconds) — map clicks have no mouse_exited to do it.
+func _hide_tip_when_mouse_leaves(at: Vector2) -> void:
+	var t0 := Time.get_ticks_msec()
+	while is_inside_tree():
+		await get_tree().process_frame
+		if get_viewport().get_mouse_position().distance_to(at) > 24.0 or Time.get_ticks_msec() - t0 > 3000:
+			TooltipManager.hide_tip()
+			return
 
 ## The City a district belongs to (itself for a City).
 func _city_of(poi: POIData) -> POIData:
@@ -4552,8 +4789,6 @@ func _on_resource_produced(planet_seed: int, _poi_label: String, text: String, c
 	poi_layer.spawn_floating_text_at_screen(p_center + Vector2(randf_range(-r_px * 0.5, r_px * 0.5), randf_range(-r_px * 0.3, r_px * 0.3)), text, color, 14, icon)
 	if _active_district_poi != null:
 		_refresh_district_energy_lbl()
-	else:
-		_build_planet_overview(current_data)
 
 func _on_production_update(_planet_seed: int, key: String, progress: float) -> void:
 	if _district_pbars.has(key):
@@ -5603,6 +5838,9 @@ func _entry_output_text(pp: PlanetProgress, entry: Dictionary, def: BuildingDef)
 			_: parts.append("+%s %s" % [BuildingDef._num(snappedf(v, 0.1)),
 				Economy.INFO.get(id, {}).get("short", id)])
 	var n := float(entry.get("amount", 1))
+	for id: String in def.storage:
+		parts.append("+%s %s storage" % [Economy.fmt(float(def.storage[id]) * n),
+			Economy.INFO.get(id, {}).get("short", id)])
 	for id: String in def.planet_bonus:
 		parts.append("+%d%% %s" % [int(round(float(def.planet_bonus[id]) * n * 100.0)),
 			Economy.INFO.get(id, {}).get("short", id)])
@@ -5619,6 +5857,39 @@ func _entry_input_text(entry: Dictionary, def: BuildingDef) -> String:
 			name = Economy.display_name(burn) if burn != "" else "raw"
 		parts.append("−%s %s" % [BuildingDef._num(float(def.inputs[id]) * n), name])
 	return " · ".join(parts)
+
+# ── Coloured tooltip text (BBCode) ──────────────────────────────────────────
+const BB_BAD  := "#ff6a5c"
+const BB_WARN := "#ffb04a"
+const BB_DIM  := "#8a93b0"
+
+static func _bb(text: String, col: Variant) -> String:
+	var hex: String = col if col is String else (col as Color).to_html(false)
+	return "[color=#%s]%s[/color]" % [hex.trim_prefix("#"), text]
+
+## "+4.2 cr" in the resource's colour (energy per second, population compact).
+static func _res_bb(id: String, v: float, sign := "+") -> String:
+	var num := Economy.fmt(absf(v)) if absf(v) >= 1000.0 else BuildingDef._num(snappedf(absf(v), 0.1))
+	var unit: String
+	match id:
+		Economy.ENERGY:     unit = "⚡/s"
+		Economy.POPULATION: unit = "pop"
+		Economy.RAW:        unit = "raw"
+		_:                  unit = Economy.INFO.get(id, {}).get("short", id)
+	var col := Economy.color_of(id) if id != Economy.RAW else Color(0.85, 0.78, 0.70)
+	return _bb("%s%s %s" % [sign, num, unit], col)
+
+## Cost line: credits (red when short) and workers (orange when housing runs out).
+func _cost_bb(credits: float, pop: int, pd: PlanetData, pp: PlanetProgress) -> String:
+	var parts: Array[String] = []
+	if credits > 0.0:
+		parts.append(_bb("%s" % HUDManager.fmt_credits(credits),
+			Economy.color_of(Economy.CREDITS) if GameState.credits >= credits else Color.html(BB_BAD)))
+	if pop > 0 and pd != null and pp != null:
+		var ok := Economy.free_population(pd, pp) >= pop
+		parts.append(_bb("☺ %s workers" % Economy.fmt(pop),
+			Economy.color_of(Economy.POPULATION) if ok else Color.html(BB_WARN)))
+	return "  ·  ".join(parts)
 
 ## "+4 cr · +0.5 ⚡" for an income dictionary (neighbour gains).
 func _income_text(inc: Dictionary) -> String:
@@ -5677,20 +5948,25 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	var k := Label.new()
 	k.text = "Base Income"
-	k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_apply_orbitron(k, 8)
 	k.add_theme_color_override("font_color", Color(0.45, 0.50, 0.65))
 	k.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var v := Label.new()
 	var sm := ddef.site_mult(poi)
 	v.text = _district_base_text(pp, poi) + ("   site ×%.2f" % sm if sm > 1.005 else "")
+	# wraps instead of widening the side panel
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	v.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.custom_minimum_size = Vector2(60, 0)
 	_apply_orbitron(v, 8)
 	v.add_theme_color_override("font_color", Color(0.55, 0.95, 0.60))
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(k); row.add_child(v)
 	box.add_child(row)
 	var lv: int = pp.district_levels.get(poi.label, 1)
-	var tip_lines: Array[String] = ["What this district makes before any buildings."]
+	var tip_lines: Array[String] = ["What this district makes before any buildings.",
+		"Neighbour income flows along roads — thicker roads pay more."]
 	tip_lines.append("")
 	for pair: Array in ddef.site_breakdown(poi):
 		tip_lines.append("+%d%%  %s" % [int(round(float(pair[1]) * 100.0)), pair[0]])
@@ -5706,7 +5982,16 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 			tip_lines.append("")
 			tip_lines.append("From neighbours:" if not poi.is_city() else "From neighbours & city districts:")
 			got_any = true
-		tip_lines.append("%s  %s" % [_income_text(gets), src.shown_name()])
+		var w: float = float(poi.neighbor_weight.get(src.label, 1.0))
+		var scaled := {}
+		for gid: String in gets:
+			scaled[gid] = float(gets[gid]) * w
+		tip_lines.append("%s  %s%s" % [_income_text(scaled), src.shown_name(),
+			"  (road ×%.1f)" % w if w > 1.005 else ""])
+	var iso := ProductionManager.isolation_mult(planet, poi)
+	if iso > 1.005:
+		tip_lines.append("")
+		tip_lines.append("+%d%%  Space (far from other districts)" % int(round((iso - 1.0) * 100.0)))
 	if lv > 1:
 		tip_lines.append("")
 		tip_lines.append("×%.1f  District Lv %d" % [DistrictDef.level_mult(lv), lv])
@@ -5739,23 +6024,37 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_apply_orbitron(btn, 9)
-	var need := Economy.level_up_pop(lv)
+	var need := Economy.level_up_pop_for(poi, lv)
+	var credits := Leveling.district_level_credits(lv)
 	var free := Economy.free_population(planet, pp)
 	var slots_now := pp.district_slots(poi)
+	var block := Leveling.district_level_block(planet, pp, poi)
 	var tip := ""
 	if pp.is_district_upgrading(poi.label):
 		btn.text = "Lv %d  →  Lv %d  ·  UPGRADING…" % [lv, lv + 1]
 		btn.disabled = true
+		btn.add_child(_hazard_fill(func() -> float: return float(pp.district_upgrading.get(poi.label, 1.0))))
+		btn.add_theme_color_override("font_disabled_color", Color(1.0, 0.92, 0.60))
+		btn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+		btn.add_theme_constant_override("outline_size", 5)
 	elif lv >= Economy.MAX_DISTRICT_LEVEL:
 		btn.text = "Lv %d  ·  MAX LEVEL" % lv
 		btn.disabled = true
 	else:
-		btn.text = "Lv %d  ·  LEVEL UP  ☺ %s pop" % [lv, Economy.fmt(need)]
-		btn.disabled = free < need
-		tip = "Raise to Lv %d: %d → %d building slots.\nUses %s population (%s free)." % [
-			lv + 1, slots_now, slots_now + 2, Economy.fmt(need), Economy.fmt(free)]
-		if free < need:
-			tip += "\n\nBuild housing in a Residential District to grow your population."
+		btn.text = "Lv %d  ·  LEVEL UP  ◈ %s" % [lv, HUDManager.fmt_credits(credits)] \
+			+ ("  ☺ %s" % Economy.fmt(need) if need > 0 else "")
+		btn.disabled = block != "" or GameState.credits < credits
+		var add_slots := PlanetProgress.slots_per_level(poi)
+		tip = "Raise to Lv %d:\n%s  ·  +%d building slot%s (%d → %d)\n\nCost  %s" % [
+			lv + 1, _bb("more base income", Economy.color_of(Economy.CREDITS)), add_slots,
+			"" if add_slots == 1 else "s", slots_now, slots_now + add_slots,
+			_cost_bb(credits, need, planet, pp)]
+		if not poi.is_city():
+			tip += "\n" + _bb("Needs a road-linked neighbour already at Lv %d — levels spread out from the Capital District." % (lv + 1), BB_DIM)
+		if block != "":
+			tip += "\n\n" + _bb("➡ " + block, BB_BAD)
+		elif free < need:
+			tip += "\n\n" + _bb("Population will exceed housing — production slows until you build more homes.", BB_WARN)
 	var norm := StyleBoxFlat.new()
 	norm.bg_color = Color(0.10, 0.16, 0.30, 0.85)
 	norm.border_color = Color(0.35, 0.55, 0.95, 0.6)
@@ -5767,20 +6066,24 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 	var dis := norm.duplicate() as StyleBoxFlat
 	dis.bg_color = Color(0.08, 0.09, 0.14, 0.7)
 	dis.border_color = Color(0.25, 0.28, 0.40, 0.5)
+	if pp.is_district_upgrading(poi.label):
+		dis.bg_color = Color(0, 0, 0, 0)   # let the hazard fill behind it show
+		dis.border_color = Color(1.0, 0.82, 0.15, 0.6)
 	btn.add_theme_stylebox_override("normal", norm)
 	btn.add_theme_stylebox_override("hover", hov)
 	btn.add_theme_stylebox_override("pressed", hov)
 	btn.add_theme_stylebox_override("disabled", dis)
 	btn.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
-	btn.add_theme_color_override("font_disabled_color", Color(0.45, 0.48, 0.60))
+	if not pp.is_district_upgrading(poi.label):
+		btn.add_theme_color_override("font_disabled_color", Color(0.45, 0.48, 0.60))
 	if tip != "":
 		btn.mouse_entered.connect(func() -> void:
 			TooltipManager.show_tip("Level up %s" % poi.shown_name(), tip))
 		btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	btn.pressed.connect(func() -> void:
 		TooltipManager.hide_tip()
-		if Economy.free_population(planet, pp) < Economy.level_up_pop(lv) \
-				or not pp.can_upgrade_district(poi.label):
+		if not pp.can_upgrade_district(poi.label) or Leveling.district_level_block(planet, pp, poi) != "" \
+				or not GameState.spend_credits(Leveling.district_level_credits(lv)):
 			AudioManager.play("error")
 			return
 		AudioManager.play("construct")
@@ -5926,13 +6229,21 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 
 	var tip_str := def.description + "\n\n"
 	if not paused:
-		if out_text != "":
-			tip_str += "Output: " + out_text + "\n"
-		if def.energy_per_tick < 0.0:
-			tip_str += "Energy: %.0f ⚡\n" % (def.energy_per_tick * float(count)
-				* float(get_node("/root/SkillTree").get_energy_consume_mult()))
-	if not def.inputs.is_empty():
-		tip_str += "Upkeep: " + _entry_input_text(entry, def) + " per cycle\n"
+		var made: Array[String] = []
+		for oid: String in def.outputs:
+			made.append(_res_bb(oid, ProductionManager.output_per_cycle(pp, entry, def, oid)))
+		if not made.is_empty():
+			tip_str += "Makes     " + "  ".join(made) + _bb("  /%.0fs" % def.tick_duration, BB_DIM) + "\n"
+	var upk: Array[String] = []
+	if def.energy_per_tick < 0.0:
+		upk.append(_res_bb(Economy.ENERGY, def.energy_per_tick * float(count)
+			* float(get_node("/root/SkillTree").get_energy_consume_mult()), "−"))
+	for iid: String in def.inputs:
+		upk.append(_res_bb(iid, float(def.inputs[iid]) * float(count), "−"))
+	if not upk.is_empty():
+		tip_str += "Upkeep    " + "  ".join(upk) + "\n"
+	if def.pop_use() > 0:
+		tip_str += "Workers   " + _bb("☺ %s" % Economy.fmt(def.pop_use() * count), Economy.color_of(Economy.POPULATION)) + "\n"
 
 	card.mouse_entered.connect(func() -> void:
 		AudioManager.play("poi_hover")
@@ -5952,9 +6263,6 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		vbox.add_child(slowed_lbl)
 
 	# Right: "+" stacking and "−" demolish buttons
-	var slots_free: int  = pp.district_slots(poi) - pp.slots_used_in_district(poi.label)
-	var pop_ok: bool     = Economy.free_population(planet, pp) >= def.pop_use()
-	var can_add: bool    = slots_free >= def.slot_cost and GameState.credits >= def.base_cost and pop_ok
 	var cap_poi    := poi
 	var cap_def    := def
 	var cap_planet := planet
@@ -5967,47 +6275,62 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	var add_btn := Button.new()
 	add_btn.text     = "+"
 	add_btn.flat     = false
-	add_btn.disabled = not can_add
 	_apply_orbitron(add_btn, 10)
 	add_btn.custom_minimum_size = Vector2(30, 22)
-	var add_s := StyleBoxFlat.new()
-	add_s.bg_color    = Color(0.12, 0.30, 0.15, 1.0) if can_add else Color(0.10, 0.10, 0.16, 1.0)
-	add_s.border_color = Color(0.35, 0.75, 0.40, 1.0) if can_add else Color(0.22, 0.25, 0.38, 1.0)
-	add_s.border_width_left = 1; add_s.border_width_right  = 1
-	add_s.border_width_top  = 1; add_s.border_width_bottom = 1
-	add_s.corner_radius_top_left     = 3; add_s.corner_radius_top_right    = 3
-	add_s.corner_radius_bottom_left  = 3; add_s.corner_radius_bottom_right = 3
-	add_s.content_margin_left = 3; add_s.content_margin_right = 3
-	add_btn.add_theme_stylebox_override("normal",   add_s)
-	add_btn.add_theme_stylebox_override("disabled", add_s)
-	add_btn.add_theme_stylebox_override("focus",    StyleBoxEmpty.new())
-	add_btn.add_theme_color_override("font_color",
-		Color(0.60, 0.95, 0.65) if can_add else Color(0.30, 0.33, 0.45))
-	var tip_add: String
-	if not can_add and slots_free < def.slot_cost:
-		tip_add = "No slots · Upgrade district"
-	elif not pop_ok:
-		tip_add = "Needs %s free population — build housing" % Economy.fmt(def.pop_use())
-	elif not can_add:
-		tip_add = "Need %.0f cr" % def.base_cost
-	else:
-		tip_add = "Stack one more %s\n%.0f cr · %d slot%s" % [def.display_name, def.base_cost, def.slot_cost,
-			" · ☺%s pop" % Economy.fmt(def.pop_use()) if def.pop_use() > 0 else ""]
+	add_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# Re-checked live: credits / slots / workers change while the panel is open
+	var stack_state := func() -> Dictionary:
+		var free_slots: int = pp.district_slots(cap_poi) - pp.slots_used_in_district(cap_poi.label)
+		var cost := Economy.building_cost(pp, cap_def, cap_poi.label)
+		return {"slots": free_slots >= cap_def.slot_cost, "credits": GameState.credits >= cost, "cost": cost,
+			"pop": Economy.free_population(cap_planet, pp) >= cap_def.pop_use()}
+	var restyle := func() -> void:
+		var st: Dictionary = stack_state.call()
+		var ok: bool = st["slots"] and st["credits"]
+		if add_btn.has_meta("ok") and bool(add_btn.get_meta("ok")) == ok:
+			return
+		add_btn.set_meta("ok", ok)
+		add_btn.disabled = not ok
+		var sb := StyleBoxFlat.new()
+		sb.bg_color     = Color(0.12, 0.30, 0.15, 1.0) if ok else Color(0.10, 0.10, 0.16, 1.0)
+		sb.border_color = Color(0.35, 0.75, 0.40, 1.0) if ok else Color(0.22, 0.25, 0.38, 1.0)
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(3)
+		sb.content_margin_left = 3; sb.content_margin_right = 3
+		add_btn.add_theme_stylebox_override("normal",   sb)
+		add_btn.add_theme_stylebox_override("disabled", sb)
+		add_btn.add_theme_color_override("font_color", Color(0.60, 0.95, 0.65) if ok else Color(0.30, 0.33, 0.45))
+	restyle.call()
+	var poll := Timer.new()
+	poll.wait_time = 0.25
+	poll.autostart = true
+	poll.timeout.connect(restyle)
+	add_btn.add_child(poll)
 	add_btn.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("+ " + def.display_name, tip_add))
+		var st: Dictionary = stack_state.call()
+		var stack_tip := "Stack one more %s\n\nCost  %s" % [cap_def.display_name,
+			_cost_bb(float(st["cost"]), cap_def.pop_use(), cap_planet, pp)]
+		stack_tip += "  ·  " + _bb("%d slot" % cap_def.slot_cost, Color(0.75, 0.82, 1.0) if st["slots"] else Color.html(BB_BAD))
+		if not st["slots"]:
+			stack_tip += "\n\n" + _bb("➡ No free slots — level the district up", BB_BAD)
+		elif not st["credits"]:
+			stack_tip += "\n\n" + _bb("➡ Not enough credits", BB_BAD)
+		elif not st["pop"]:
+			stack_tip += "\n\n" + _bb("Population will exceed housing — production slows until you build more homes.", BB_WARN)
+		TooltipManager.show_tip("+ " + cap_def.display_name, stack_tip))
 	add_btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
 	add_btn.pressed.connect(func() -> void:
-		if Economy.free_population(cap_planet, pp) < cap_def.pop_use():
+		var st: Dictionary = stack_state.call()
+		if not st["slots"] or not GameState.spend_credits(float(st["cost"])):
 			AudioManager.play("error")
 			return
-		if GameState.spend_credits(cap_def.base_cost):
-			pp.stack_building_unchecked(cap_poi.label, cap_def.building_id)
-			GameState.planet_progress_changed.emit(cap_planet.seed)
-			_refresh_overview_energy()
-			_build_district_panel(cap_poi, cap_planet))
+		pp.stack_building_unchecked(cap_poi.label, cap_def.building_id)
+		GameState.planet_progress_changed.emit(cap_planet.seed)
+		_refresh_overview_energy()
+		_build_district_panel(cap_poi, cap_planet))
 
 	var rem_btn := Button.new()
 	rem_btn.text = "-"
@@ -7558,7 +7881,7 @@ func _slot_dd_signature() -> String:
 	var free_pop := Economy.free_population(planet, pp)
 	var sig := ""
 	for def: BuildingDef in BuildingDef.for_poi_and_planet(poi.poi_type, planet.planet_type):
-		sig += "1" if GameState.credits >= def.base_cost and free_pop >= def.pop_use() else "0"
+		sig += "1" if GameState.credits >= Economy.building_cost(pp, def, poi.label) and free_pop >= def.pop_use() else "0"
 	return sig
 
 ## Called from _process: rebuilds an open picker when a row's state changed.
@@ -7622,7 +7945,7 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 	for def: BuildingDef in buildable:
 		if def.min_planet_lv > pp.level:
 			continue
-		var can_afford: bool = GameState.credits >= def.base_cost
+		var can_afford: bool = GameState.credits >= Economy.building_cost(pp, def, poi.label)
 		var has_slots:  bool = slots_free >= def.slot_cost
 		
 		var at_limit: bool = false
@@ -7635,9 +7958,11 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 				at_limit = true
 				
 		var site_reason := def.site_block_reason(poi)
+		if site_reason != "":
+			continue   # site-only buildings show up only where the site allows them
 		var pop_need := def.pop_use()
 		var has_pop: bool = Economy.free_population(planet, pp) >= pop_need
-		var enabled: bool    = can_afford and has_slots and not at_limit and site_reason == "" and has_pop
+		var enabled: bool    = can_afford and has_slots and not at_limit and site_reason == ""
 
 		var row_panel := PanelContainer.new()
 		var norm_s := StyleBoxFlat.new()
@@ -7664,12 +7989,11 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		if site_reason != "": reason = site_reason
 		elif at_limit: reason = "Limit reached"
 		elif not has_slots: reason = "No free slots"
-		elif not can_afford: reason = "Need %.0f cr" % def.base_cost
-		elif not has_pop: reason = "Needs %s free population — build housing" % Economy.fmt(pop_need)
+		elif not can_afford: reason = "Need %.0f cr" % Economy.building_cost(pp, def, poi.label)
+		elif not has_pop: reason = "Population will exceed housing — production slows until you build more homes."
 
 		# Compact sub-line: RichTextLabel so we can embed inline mineral icon
-		var row_color := Color(0.45, 0.72, 0.40) if (can_afford and has_slots) \
-			else Color(0.60, 0.30, 0.28)
+		var row_color := Color(0.45, 0.72, 0.40) if enabled else Color(0.60, 0.30, 0.28)
 
 		var c_lbl := RichTextLabel.new()
 		c_lbl.bbcode_enabled  = true
@@ -7685,7 +8009,7 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		var preview_entry := {"amount": 1, "district_id": poi.label, "building_id": def.building_id}
 		var out_preview := _entry_output_text(pp, preview_entry, def)
 		var in_preview := def.input_label()
-		c_lbl.append_text("%.0f cr" % def.base_cost)
+		c_lbl.append_text("%.0f cr" % Economy.building_cost(pp, def, poi.label))
 		if pop_need > 0:
 			c_lbl.append_text(" · ☺%s" % Economy.fmt(pop_need))
 		if out_preview != "":
@@ -7720,23 +8044,33 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		# ── Body: description + stat rows ───────────────────────────
 		# Order: Cycle, then production (+), then upkeep (−).
 		var tip_body_parts: Array = [def.description, "\n\n"]
-		if def.slot_cost > 1:
-			tip_body_parts.append("Slots    %d\n" % def.slot_cost)
-		var b_time: float = def.construct_duration if def.construct_duration > 0.0 else def.tick_duration
-		tip_body_parts.append("Build    %.0fs\n" % b_time)
-		tip_body_parts.append("Cycle    %.0fs" % cycle_s)
-		if out_preview != "":
-			tip_body_parts.append("\n" + out_preview)
+		tip_body_parts.append("Cost      " + _cost_bb(Economy.building_cost(pp, def, poi.label), pop_need, planet, pp) + "\n")
+		var gains: Array[String] = []
+		for oid: String in def.outputs:
+			gains.append(_res_bb(oid, ProductionManager.output_per_cycle(pp, preview_entry, def, oid)))
+		for bid_: String in def.planet_bonus:
+			gains.append(_bb("+%d%% %s %s" % [int(round(float(def.planet_bonus[bid_]) * 100.0)),
+				Economy.INFO.get(bid_, {}).get("short", bid_), "planet-wide" if def.planet_wide else "in this city"],
+				Economy.color_of(bid_)))
+		for sid: String in def.storage:
+			gains.append(_bb("+%s %s storage" % [Economy.fmt(float(def.storage[sid])),
+				Economy.INFO.get(sid, {}).get("short", sid)], Economy.color_of(sid) if sid != Economy.RAW else Color(0.85, 0.78, 0.70)))
+		if not gains.is_empty():
+			tip_body_parts.append("Makes     " + "  ".join(gains) + _bb("  /%.0fs" % cycle_s, BB_DIM) + "\n")
+		var costs: Array[String] = []
 		if def.energy_per_tick < 0.0:
-			tip_body_parts.append("\nUpkeep   %.0f ⚡" % (def.energy_per_tick * float(sk.get_energy_consume_mult())))
-		if in_preview != "":
-			tip_body_parts.append("\nUses     " + in_preview)
+			costs.append(_res_bb(Economy.ENERGY, def.energy_per_tick * float(sk.get_energy_consume_mult()), "−"))
+		for iid: String in def.inputs:
+			costs.append(_res_bb(iid, float(def.inputs[iid]), "−"))
+		if not costs.is_empty():
+			tip_body_parts.append("Upkeep    " + "  ".join(costs) + "\n")
+		var b_time: float = def.construct_duration if def.construct_duration > 0.0 else def.tick_duration
+		tip_body_parts.append(_bb("Build %.0fs%s" % [b_time, "  ·  %d slots" % def.slot_cost if def.slot_cost > 1 else ""], BB_DIM))
 		if def.inputs.has(Economy.RAW):
-			tip_body_parts.append("\nBurns the rarest raw in stock (rarer = more output)")
-
+			tip_body_parts.append("\n" + _bb("Burns the rarest raw in stock (rarer = more output)", BB_DIM))
 		if reason != "":
-			tip_body_parts.append("\n\n➡ " + reason)
-		var tip_cost := "%.0f cr" % def.base_cost
+			tip_body_parts.append("\n\n" + _bb("➡ " + reason, BB_BAD if not enabled else BB_WARN))
+		var tip_cost := "%.0f cr" % Economy.building_cost(pp, def, poi.label)
 
 		row_panel.mouse_entered.connect(func() -> void:
 			AudioManager.play("poi_hover")
@@ -7754,10 +8088,7 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 			row_panel.gui_input.connect(func(e: InputEvent) -> void:
 				if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
 						and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-					if Economy.free_population(cap_planet, pp) < cap_def.pop_use():
-						AudioManager.play("error")
-						return
-					if GameState.spend_credits(cap_def.base_cost):
+					if GameState.spend_credits(Economy.building_cost(pp, cap_def, cap_poi.label)):
 						AudioManager.play("construct")
 						AchievementManager.notify_trigger(AchievementDef.Trigger.FIRST_BUILDING)
 						pp.build_in_district(cap_poi, cap_def.building_id)
@@ -7919,6 +8250,247 @@ func _toggle_mineral_dropdown(btn: Control, raw_list: Array, target_key: String,
 	outer.position = Vector2(btn_rect.position.x, btn_rect.end.y)
 	_active_slot_dropdown = outer
 
+## The City as a whole: its Capital District + districts, founding new ones and
+## the City level. Opened from a City icon zoomed out or a City card.
+var _city_scroll: ScrollContainer = null
+var _city_scroll_label := ""
+
+func _build_city_panel(city: POIData, planet: PlanetData) -> void:
+	var keep_scroll := 0
+	if _city_scroll != null and is_instance_valid(_city_scroll) and _city_scroll_label == city.label:
+		keep_scroll = _city_scroll.scroll_vertical
+	_active_district_poi = null
+	_city_panel_poi = city
+	var panel_content := $RightPanel/PanelContent
+	var old := panel_content.get_node_or_null("DistrictBuildPanel")
+	if old:
+		old.name = "__freeing_district__"
+		old.queue_free()
+		_bar_meta.clear()
+	var pp := GameState.get_planet(planet.seed)
+	var lv := Leveling.city_level(pp, city)
+	var root := VBoxContainer.new()
+	root.name = "DistrictBuildPanel"
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 8)
+	root.add_child(HSeparator.new())
+
+	if GameState.planet_view_unlocked:
+		var back := Button.new()
+		back.text = "‹  " + planet.planet_name
+		back.flat = true
+		back.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		back.focus_mode = Control.FOCUS_NONE
+		_apply_orbitron(back, 9)
+		back.add_theme_color_override("font_color", Color(0.55, 0.70, 1.0))
+		back.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
+		back.pressed.connect(func() -> void:
+			AudioManager.play("click")
+			_city_panel_poi = null
+			_build_planet_overview(planet))
+		root.add_child(back)
+
+	var header := HBoxContainer.new()
+	var title := Label.new()
+	title.text = city.shown_name() + "  ·  City"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_apply_orbitron(title, 12)
+	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+	header.add_child(title)
+	var lv_lbl := Label.new()
+	lv_lbl.text = "Lv %d" % lv
+	_apply_orbitron(lv_lbl, 11)
+	lv_lbl.add_theme_color_override("font_color", Color(0.55, 0.70, 1.0))
+	header.add_child(lv_lbl)
+	root.add_child(header)
+
+	# City stats
+	var count := Leveling.city_district_count(planet, city)
+	var max_d := Leveling.city_max_districts(lv)
+	var have := Leveling.city_district_levels(planet, pp, city)
+	var need := Leveling.city_level_req(lv + 1)
+	for row: Array in [
+		["Districts", "%d / %d" % [count, max_d], Color(1.0, 0.45, 0.35) if count >= max_d else Color(0.80, 0.85, 1.0)],
+		["District levels", "%d / %d for Lv %d" % [have, need, lv + 1], Color(0.55, 0.95, 0.60) if have >= need else Color(0.80, 0.85, 1.0)],
+	]:
+		var r := HBoxContainer.new()
+		var k := Label.new()
+		k.text = row[0]
+		k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_apply_orbitron(k, 8)
+		k.add_theme_color_override("font_color", Color(0.45, 0.50, 0.65))
+		var v := Label.new()
+		v.text = row[1]
+		_apply_orbitron(v, 8)
+		v.add_theme_color_override("font_color", row[2])
+		r.add_child(k); r.add_child(v)
+		root.add_child(r)
+
+	# Districts
+	var body_scroll := ScrollContainer.new()
+	body_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	body_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_style_scroll(body_scroll)
+	root.add_child(body_scroll)
+	_city_scroll = body_scroll
+	_city_scroll_label = city.label
+	body_scroll.call_deferred("set", "scroll_vertical", keep_scroll)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 8)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_scroll.add_child(body)
+	var d_hdr := Label.new()
+	d_hdr.text = "DISTRICTS"
+	_apply_orbitron(d_hdr, 9)
+	d_hdr.add_theme_color_override("font_color", Color(0.50, 0.58, 0.80))
+	body.add_child(d_hdr)
+	var add_card := _build_add_district_card(planet, count < max_d, false, city)
+	if count >= max_d and add_card.get_child_count() > 0:
+		var full_lbl := add_card.find_children("*", "Label", true, false)
+		for l in full_lbl:
+			if (l as Label).text == "SLOTS FULL":
+				(l as Label).text = "CITY FULL — LEVEL UP THE CITY"
+	body.add_child(add_card)
+	_poi_overview_cards.clear()
+	body.add_child(_build_district_overview_card(city, planet, pp, panel_content, body, true))
+	for child: POIData in planet.custom_pois:
+		if child.parent_city == city.label and not child.is_orbital():
+			body.add_child(_build_district_overview_card(child, planet, pp, panel_content, body))
+	if TutorialManager.get_action_step_type() == "district" and add_card.get_child_count() > 0:
+		_tut_highlight_node = add_card.get_child(0) as Control
+		_start_tut_node_pulse(_tut_highlight_node)
+
+	# City level up
+	var sep := HSeparator.new()
+	var sep_s := StyleBoxFlat.new(); sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
+	sep.add_theme_stylebox_override("separator", sep_s)
+	root.add_child(sep)
+	root.add_child(_build_city_level_row(city, planet, pp))
+	panel_content.add_child(root)
+
+## Construction-style fill (black/yellow hazard stripes, crawling) drawn behind
+## its parent control; `progress` returns 0..1 and is polled while visible.
+func _hazard_fill(progress: Callable) -> Control:
+	var c := Control.new()
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.show_behind_parent = true
+	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	c.draw.connect(func() -> void:
+		var r := Rect2(Vector2.ZERO, c.size)
+		c.draw_rect(r, Color(0.10, 0.09, 0.05, 0.9))
+		var w := c.size.x * clampf(float(progress.call()), 0.0, 1.0)
+		const STRIPE := 8.0
+		var shift := fmod(float(Time.get_ticks_msec()) / 40.0, STRIPE * 2.0)
+		var y := 0.0
+		while y < c.size.y:   # diagonal stripes, built row by row from rects
+			var x := -STRIPE * 2.0 + fmod(shift + y, STRIPE * 2.0)
+			while x < w:
+				var x0 := maxf(x, 0.0)
+				var x1 := minf(x + STRIPE, w)
+				if x1 > x0:
+					c.draw_rect(Rect2(x0, y, x1 - x0, 2.0), Color(1.0, 0.82, 0.15, 0.32))
+				x += STRIPE * 2.0
+			y += 2.0)
+	var t := Timer.new()
+	t.wait_time = 0.05
+	t.autostart = true
+	t.timeout.connect(c.queue_redraw)
+	c.add_child(t)
+	return c
+
+## "CITY LEVEL UP" — needs enough district levels in the City; costs credits +
+## population; each level lets the City hold more districts.
+func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress) -> Button:
+	var lv := Leveling.city_level(pp, city)
+	var next := lv + 1
+	var credits := Leveling.city_level_credits(next)
+	var pop := Leveling.city_level_pop(next)
+	var block := Leveling.city_level_block(planet, pp, city)
+	var btn := Button.new()
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_apply_orbitron(btn, 9)
+	btn.text = "CITY  Lv %d → Lv %d  ◈ %s  ☺ %s" % [lv, next, HUDManager.fmt_credits(credits), Economy.fmt(pop)]
+	btn.disabled = block != "" or GameState.credits < credits
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.08, 0.20, 0.12, 0.85)
+	st.border_color = Color(0.35, 0.80, 0.45, 0.6)
+	st.set_border_width_all(1)
+	st.set_corner_radius_all(4)
+	st.content_margin_top = 6; st.content_margin_bottom = 6
+	var hov := st.duplicate() as StyleBoxFlat
+	hov.bg_color = Color(0.12, 0.30, 0.18, 0.95)
+	var dis := st.duplicate() as StyleBoxFlat
+	dis.bg_color = Color(0.08, 0.09, 0.14, 0.7)
+	dis.border_color = Color(0.25, 0.28, 0.40, 0.5)
+	btn.add_theme_stylebox_override("normal", st)
+	btn.add_theme_stylebox_override("hover", hov)
+	btn.add_theme_stylebox_override("pressed", hov)
+	btn.add_theme_stylebox_override("disabled", dis)
+	btn.add_theme_color_override("font_color", Color(0.70, 1.0, 0.75))
+	btn.add_theme_color_override("font_disabled_color", Color(0.45, 0.48, 0.60))
+	var tip := "Raise %s to Lv %d:\n%s\n\nCost  %s\n%s" % [city.shown_name(), next,
+		_bb("+%d districts allowed (%d → %d)" % [Leveling.city_max_districts(next) - Leveling.city_max_districts(lv),
+			Leveling.city_max_districts(lv), Leveling.city_max_districts(next)], Economy.color_of(Economy.POPULATION)),
+		_cost_bb(credits, pop, planet, pp),
+		_bb("Needs %d total district levels in the City." % Leveling.city_level_req(next), BB_DIM)]
+	if block != "":
+		tip += "\n\n" + _bb("➡ " + block, BB_BAD)
+	btn.mouse_entered.connect(func() -> void: TooltipManager.show_tip("City level up", tip))
+	btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	btn.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		if Leveling.city_level_block(planet, pp, city) != "" or not GameState.spend_credits(credits):
+			AudioManager.play("error")
+			return
+		AudioManager.play("construct")
+		pp.city_levels[city.label] = next
+		if not GameState.planet_view_unlocked and next >= 2:
+			GameState.planet_view_unlocked = true
+			_show_unlock_toast("PLANET VIEW UNLOCKED", "Found more cities and level up the planet.")
+		GameState.planet_progress_changed.emit(planet.seed)
+		_build_city_panel(city, planet))
+	_notify_tutorial_city_level_btn(btn)
+	return btn
+
+func _notify_tutorial_city_level_btn(btn: Button) -> void:
+	if TutorialManager.get_action_step_type() != "city_level_up":
+		return
+	_tut_highlight_node = btn
+	_start_tut_node_pulse(btn)
+
+## Short banner in the middle of the view (milestones like a new view opening).
+func _show_unlock_toast(title_txt: String, body_txt: String) -> void:
+	var cont := planet_renderer.get_parent() as Control
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", _make_hud_style(Color(0.06, 0.10, 0.08, 0.95), 8))
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.z_index = 60
+	var v := VBoxContainer.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(v)
+	var t := Label.new()
+	t.text = title_txt
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_apply_orbitron(t, 13)
+	t.add_theme_color_override("font_color", Color(0.65, 1.0, 0.70))
+	v.add_child(t)
+	var b := Label.new()
+	b.text = body_txt
+	b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_apply_orbitron(b, 8)
+	b.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+	v.add_child(b)
+	cont.add_child(box)
+	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 140)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(box, "modulate:a", 1.0, 0.3)
+	tw.tween_interval(3.0)
+	tw.tween_property(box, "modulate:a", 0.0, 0.6)
+	tw.tween_callback(box.queue_free)
+
 func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	# keep the body's scroll position when the same district is rebuilt in place
 	var saved_scroll := 0
@@ -7926,6 +8498,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 			and _district_scroll_label == poi.label:
 		saved_scroll = _district_body_scroll.scroll_vertical
 	_active_district_poi = poi   # remember for _on_building_constructed
+	_city_panel_poi = null
 	var panel_content := $RightPanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
@@ -7948,8 +8521,8 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	root.add_theme_constant_override("separation", 8)
 	root.add_child(HSeparator.new())
 
-	# Districts live under a City: offer the way back up.
-	var parent_city := _find_poi(planet, poi.parent_city) if not poi.is_city() else null
+	# Districts (and the Capital District) live in a City: offer the way back up.
+	var parent_city := _find_poi(planet, poi.parent_city) if not poi.is_city() else poi
 	if parent_city != null:
 		var back := Button.new()
 		back.text = "‹  " + parent_city.shown_name()
@@ -7966,7 +8539,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 			AudioManager.play("click")
 			_select_district_on_planet(cap_parent.label)
 			_focus_on_site(cap_parent.lon_deg, cap_parent.lat_deg)
-			_build_district_panel(cap_parent, planet))
+			_build_city_panel(cap_parent, planet))
 		root.add_child(back)
 
 	var header := HBoxContainer.new()
@@ -7978,7 +8551,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	header.add_child(title_stack)
 
 	var poi_title := Label.new()
-	poi_title.text = poi.shown_name() + "  ·  " + poi.type_label()
+	poi_title.text = poi.shown_name() + ("  ·  Capital District" if poi.is_city() else "  ·  " + poi.type_label())
 	_apply_orbitron(poi_title, 11)
 	poi_title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
 	poi_title.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -8006,7 +8579,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 				if not trimmed.is_empty():
 					cap_poi_rename.display_name = trimmed   # names may repeat; the id stays
 				edit.queue_free()
-				poi_title.text = cap_poi_rename.shown_name() + "  ·  " + cap_poi_rename.type_label()
+				poi_title.text = cap_poi_rename.shown_name() + ("  ·  Capital District" if cap_poi_rename.is_city() else "  ·  " + cap_poi_rename.type_label())
 				poi_title.visible = true
 				GameState.planet_progress_changed.emit(cap_planet_ren.seed)
 			edit.text_submitted.connect(_commit)
@@ -8051,6 +8624,33 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	de_row.add_child(de_lbl); de_row.add_child(de_val)
 	root.add_child(de_row)
 
+	# Population: workers allocated here, and housing provided
+	var pop_row := HBoxContainer.new()
+	var pk := Label.new()
+	pk.text = "Population"
+	pk.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_apply_orbitron(pk, 8)
+	pk.add_theme_color_override("font_color", Color(0.45, 0.50, 0.65))
+	var pv_lbl := RichTextLabel.new()
+	pv_lbl.bbcode_enabled = true
+	pv_lbl.fit_content = true
+	pv_lbl.scroll_active = false
+	pv_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
+	pv_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pv_lbl.add_theme_font_size_override("normal_font_size", 8)
+	if _orbitron: pv_lbl.add_theme_font_override("normal_font", _orbitron)
+	var pop_parts: Array[String] = []
+	var used_here := Economy.district_pop_used(pp, poi)
+	var housed_here := Economy.district_housing(planet, pp, poi)
+	if used_here > 0:
+		pop_parts.append(_bb("☺ %s working" % Economy.fmt(used_here), Color(0.85, 0.88, 1.0)))
+	if housed_here > 0:
+		pop_parts.append(_bb("+%s housed" % Economy.fmt(housed_here), Economy.color_of(Economy.POPULATION)))
+	pv_lbl.text = "[right]%s[/right]" % ("  ·  ".join(pop_parts) if not pop_parts.is_empty() else _bb("—", BB_DIM))
+	pv_lbl.custom_minimum_size = Vector2(170, 0)
+	pop_row.add_child(pk); pop_row.add_child(pv_lbl)
+	root.add_child(pop_row)
+
 	var base_row := _build_district_base_row(poi, planet, pp)
 	if base_row != null:
 		root.add_child(base_row)
@@ -8084,33 +8684,6 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	_district_scroll_label = poi.label
 	body_scroll.call_deferred("set", "scroll_vertical", saved_scroll)
 
-	# ── A City lists its districts first (they make the city); its own
-	# planet-wide boost buildings come below.
-	if poi.is_city():
-		var d_hdr := Label.new()
-		d_hdr.text = "DISTRICTS"
-		_apply_orbitron(d_hdr, 9)
-		d_hdr.add_theme_color_override("font_color", Color(0.50, 0.58, 0.80))
-		d_hdr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		body.add_child(d_hdr)
-		# "add" first, so it's reachable however long the district list gets
-		var add_card := _build_add_district_card(planet, true, false, poi)
-		body.add_child(add_card)
-		for child: POIData in planet.custom_pois:
-			if child.parent_city == poi.label and not child.is_orbital():
-				body.add_child(_build_district_overview_card(child, planet, pp, panel_content, body))
-		# Tutorial: the district objective continues here
-		if TutorialManager.get_action_step_type() == "district" and add_card.get_child_count() > 0:
-			_tut_highlight_node = add_card.get_child(0) as Control
-			_start_tut_node_pulse(_tut_highlight_node)
-
-		var cb_hdr := Label.new()
-		cb_hdr.text = "CITY BUILDINGS   %d/%d" % [pp.slots_used_in_district(poi.label), pp.district_slots(poi)]
-		_apply_orbitron(cb_hdr, 9)
-		cb_hdr.add_theme_color_override("font_color", Color(0.50, 0.58, 0.80))
-		cb_hdr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		body.add_child(cb_hdr)
-
 	# ── Installed buildings as full-bleed production cards ────────────────────
 	# One card per building entry; amount field drives ×N display and output scaling
 	var installed := pp.buildings_in_district(poi.label)
@@ -8130,10 +8703,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	# ── Empty slot "+" cards ──────────────────────────────────────────────────
 	var total_slots := pp.district_slots(poi)
 	var used_slots  := pp.slots_used_in_district(poi.label)
-	# A City shows one "+" card (its slot count is in the header) to stay compact.
 	var free_slots := total_slots - used_slots
-	if poi.is_city():
-		free_slots = mini(free_slots, 1)
 	for si in free_slots:
 		body.add_child(_build_slot_card(poi, planet, pp, body, si))
 

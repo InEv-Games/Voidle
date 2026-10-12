@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_bazaar_new"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "bazaar"
+display_name = "Bazaar"
+description = "Sells Consumer Goods to the people — far more credits than a plain Market."
+allowed_poi_types = Array[int]([8])
+allowed_planet_types = Array[int]([])
+base_cost = 400.0
+slot_cost = 1
+min_planet_lv = 1
+construct_duration = 5.0
+tick_duration = 20.0
+energy_per_tick = -1.0
+outputs = {"credits": 55.0}
+inputs = {"goods": 1.0}
+planet_bonus = {}
+tier = 1
+unlocked_by_default = true
+

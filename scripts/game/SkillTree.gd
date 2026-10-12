@@ -5,7 +5,7 @@ extends Node
 signal skill_unlocked(id: String)
 
 # Global set of purchased/unlocked skill IDs
-var unlocked_skills: Array[String] = ["root", "unlock_solar_panel", "unlock_residential", "unlock_lab"]
+var unlocked_skills: Array[String] = ["root", "unlock_solar_panel", "unlock_residential", "unlock_lab", "unlock_commercial"]
 
 # Dictionary for upgrade levels (for multi-level upgrades)
 # format: { skill_id: current_level_int }
@@ -13,7 +13,8 @@ var skill_levels: Dictionary = {
 	"unlock_solar_panel": 1,
 
 	"unlock_residential": 1,
-	"unlock_lab": 1
+	"unlock_lab": 1,
+	"unlock_commercial": 1
 }
 
 enum NodeShape { HEXAGON, DIAMOND, CIRCLE }
@@ -168,9 +169,9 @@ func _init() -> void:
 	_add_node("housing_maintenance", "Self-Sustaining Architecture", "Reduces energy consumption in cities.", 5000.0, Vector2(400, 760), ["unlock_luxury_complex"], 5, "-10% Energy consumption for City buildings", 5, NodeShape.DIAMOND)
 
 	# --- BRANCH 5: TRADE/LOGISTICS (Mid-Down) ---
-	_add_node("unlock_market_square", "Market Square", "Unlocks the Market Square, providing basic passive credit generation.", 30.0, Vector2(0, 240), ["root"], 2, "Unlocks Market Square", 10, NodeShape.HEXAGON)
+	_add_node("unlock_commercial", "Commerce Operations", "Markets and trade: Commercial Districts, Markets and Bazaars. The root of the trade branch.", 50.0, Vector2(0, 240), ["root"], 1, "Unlocks Commercial Districts & Markets", 1, NodeShape.HEXAGON)
 	
-	_add_node("trade_income_1", "Free Trade Agreement", "Stimulates local economies.", 300.0, Vector2(-120, 360), ["unlock_market_square"], 2, "+15% Global credit output from Trade", 5, NodeShape.DIAMOND)
+	_add_node("trade_income_1", "Free Trade Agreement", "Stimulates local economies.", 300.0, Vector2(-120, 360), ["unlock_commercial"], 2, "+15% Global credit output from Trade", 5, NodeShape.DIAMOND)
 	
 	_add_node("unlock_trading_post", "Trading Post", "Unlocks the Trading Post, which consumes Tier 1 Refined Minerals for high profit.", 500.0, Vector2(0, 480), ["trade_income_1"], 3, "Unlocks Trading Post", 10)
 	_add_node("unlock_customs_office", "Customs Authority", "Unlocks the Customs Office to boost district trade output.", 800.0, Vector2(120, 600), ["unlock_trading_post"], 3, "Unlocks Customs Office", 10)
@@ -236,7 +237,7 @@ func _init() -> void:
 
 # ── Pruning ──────────────────────────────────────────────────────────────────
 ## "unlock_*" nodes that unlock a feature rather than a building.
-const FEATURE_UNLOCKS := ["unlock_mining", "unlock_space_station", "unlock_moon", "unlock_asteroids",
+const FEATURE_UNLOCKS := ["unlock_commercial", "unlock_mining", "unlock_space_station", "unlock_moon", "unlock_asteroids",
 	"unlock_planetary_colonization", "unlock_interstellar"]
 ## Upgrades whose only target was a building that no longer exists.
 const OBSOLETE_UPGRADES := ["gas_siphon_speed", "gas_siphon_yield", "gas_refinery_speed",

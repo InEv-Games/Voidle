@@ -40,8 +40,11 @@ enum OutputType { NONE, ENERGY, CREDITS, RAW_MINERAL, REFINED_MINERAL, SCIENCE, 
 ##            multiplies every non-flow output (Economy.yield_mult).
 @export var outputs: Dictionary = {}
 @export var inputs:  Dictionary = {}
-## Planet-wide boost per building: { resource_id: +fraction } (Capital buildings).
+## Boost per building: { resource_id: +fraction } (City buildings). Applies to
+## its own City (the City and its districts) unless planet_wide.
 @export var planet_bonus: Dictionary = {}
+## The boost covers the whole planet (rare, expensive, usually 1 per City).
+@export var planet_wide: bool = false
 ## Storage limit raised per building: { resource_id: +amount }. "raw" raises
 ## every raw resource's cap. See Economy.cap.
 @export var storage: Dictionary = {}
@@ -90,8 +93,9 @@ func output_label() -> String:
 		parts.append("+%s %s storage" % [Economy.fmt(float(storage[id])),
 			Economy.INFO.get(id, {}).get("short", id)])
 	for id: String in planet_bonus:
-		parts.append("+%d%% %s planet-wide" % [int(round(float(planet_bonus[id]) * 100.0)),
-			Economy.INFO.get(id, {}).get("short", id)])
+		parts.append("+%d%% %s %s" % [int(round(float(planet_bonus[id]) * 100.0)),
+			Economy.INFO.get(id, {}).get("short", id),
+			"planet-wide" if planet_wide else "in this city"])
 	return " · ".join(parts)
 
 ## Upkeep line, e.g. "−2 goods" ("" when the building consumes nothing).

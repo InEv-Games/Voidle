@@ -19,6 +19,8 @@ var _orbitron: Font
 ## Top resource bar cells (Stellaris-style): id -> Label
 var _res_lbls: Dictionary = {}
 var _res_poll: float = 0.0
+## id -> the separator+cell box, hidden until GameState reveals the resource
+var _res_slots: Dictionary = {}
 ## Small superscript income/upkeep labels next to each value: id -> Label
 var _rate_lbls: Dictionary = {}
 ## Raw resources dropdown under the "Raw ▾" cell (null when closed)
@@ -848,6 +850,8 @@ func _track_stock(id: String) -> void:
 		var tw2: Tween = _gain_tw.get(id)
 		if tw2 != null and tw2.is_valid():
 			tw2.kill()
+		if target - actual >= 0.05:
+			_spawn_loss(id, target - actual, lbl)
 		_target[id] = actual
 		_shown[id] = actual
 	_set_value(lbl, _stock_text(id, _shown[id]))
@@ -875,6 +879,26 @@ func _spawn_gain(id: String, amount: float, lbl: Label) -> void:
 	tw.tween_property(chip, "position:y", lbl.global_position.y + 2.0, 0.3) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.parallel().tween_property(chip, "modulate:a", 0.0, 0.3).set_delay(0.1)
+	tw.tween_callback(chip.queue_free)
+
+## A spend shows as a red "−x" that drops out of the value and fades.
+func _spawn_loss(id: String, amount: float, lbl: Label) -> void:
+	if not is_instance_valid(_top_layer):
+		return
+	var chip := Label.new()
+	chip.text = "−" + (fmt_credits(amount) if id == Economy.CREDITS else Economy.fmt(amount))
+	if _orbitron: chip.add_theme_font_override("font", _orbitron)
+	chip.add_theme_font_size_override("font_size", 10)
+	chip.add_theme_color_override("font_color", Color(1.0, 0.42, 0.36))
+	chip.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	chip.add_theme_constant_override("outline_size", 3)
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_top_layer.add_child(chip)
+	var start := lbl.global_position + Vector2(2.0, lbl.size.y * 0.5)
+	chip.position = start
+	var tw := create_tween()
+	tw.tween_property(chip, "position:y", start.y + 26.0, 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(chip, "modulate:a", 0.0, 0.7).set_delay(0.25)
 	tw.tween_callback(chip.queue_free)
 
 ## Superscript-style income label ("+3.2" green, "−1.5" red) sitting top-right of a value.
@@ -911,8 +935,15 @@ func _add_res_sep(hbox: HBoxContainer) -> void:
 	hbox.add_child(sep)
 
 func _add_res_cell(hbox: HBoxContainer, id: String, glyph: String, tip: String, sep: bool = true) -> void:
+	# slot = separator + cell, hidden together until the resource is revealed
+	var slot := HBoxContainer.new()
+	slot.add_theme_constant_override("separation", 6)
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(slot)
+	_res_slots[id] = slot
 	if sep:
-		_add_res_sep(hbox)
+		_add_res_sep(slot)
+	hbox = slot
 	var cell := HBoxContainer.new()
 	cell.add_theme_constant_override("separation", 4)
 	cell.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -998,10 +1029,38 @@ func _cell_tip(id: String, base: String) -> String:
 	return "%s\n\nStored  %s  (max %s)\nPer second  %s%s" % [base, Economy.fmt(Economy.amount(id)),
 		Economy.fmt(Economy.cap(id)), "+" if r >= 0.0 else "", Economy.fmt(r)]
 
+## Resources show up in the bar as the player meets them (credits and
+## population always). Revealed ids persist in GameState.revealed_resources.
+const ALWAYS_SHOWN := ["credits", "population"]
+
+func _update_reveals(rates: Dictionary) -> void:
+	for id: String in _res_slots:
+		var slot: Control = _res_slots[id]
+		var shown := id in ALWAYS_SHOWN or GameState.revealed_resources.has(id)
+		if not shown and _should_reveal(id, rates):
+			GameState.revealed_resources.append(id)
+			shown = true
+			slot.modulate = Color(2.0, 2.0, 1.4, 0.0)
+			var tw := create_tween()
+			tw.tween_property(slot, "modulate", Color.WHITE, 0.8).set_trans(Tween.TRANS_QUAD)
+		slot.visible = shown
+
+func _should_reveal(id: String, rates: Dictionary) -> bool:
+	match id:
+		Economy.ENERGY:
+			var sp: Vector2 = ProductionManager.get_global_energy_split()
+			return sp.x > 0.0 or sp.y > 0.0
+		Economy.SCIENCE:
+			return GameState.science_points > 0.0 or float(rates.get(id, 0.0)) > 0.0
+		Economy.RAW:
+			return Economy.raw_total() > 0.0 or float(rates.get(id, 0.0)) != 0.0
+	return Economy.amount(id) > 0.0 or float(rates.get(id, 0.0)) != 0.0
+
 func _refresh_resource_cells() -> void:
 	if _res_lbls.is_empty():
 		return
 	var rates: Dictionary = ProductionManager.resource_rates()
+	_update_reveals(rates)
 	_set_rate(Economy.CREDITS, rates.get(Economy.CREDITS, 0.0))
 	_set_rate(Economy.SCIENCE, rates.get(Economy.SCIENCE, 0.0))
 	_track_stock(Economy.CREDITS)

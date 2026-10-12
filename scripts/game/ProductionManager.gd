@@ -26,6 +26,8 @@ var _global_energy_ratio: float = 1.0
 const MAX_ENERGY_SLOWDOWN := 0.5
 ## { pm_key -> true } building waiting because every output's storage is full
 var _storage_full: Dictionary = {}
+## { planet_seed -> work speed from population } (Economy.pop_speed), per frame
+var _pop_speed: Dictionary = {}
 ## { "seed:district_label" -> float 0.0-1.0 } district base-income cycles
 var _base_progress: Dictionary = {}
 ## { "construct:pm_key" -> float 0.0-1.0 }
@@ -126,6 +128,8 @@ func _tick_all(delta: float) -> void:
 				GameState.planet_progress_changed.emit(planet_seed)
 
 		var energy_ratio: float = _global_energy_ratio
+		var pop_speed: float = Economy.pop_speed(pd, pp) if pd != null else 1.0
+		_pop_speed[planet_seed] = pop_speed
 		var st := get_node("/root/SkillTree")
 
 		# Collect entries to merge/remove after iteration (avoid modifying array mid-loop)
@@ -199,7 +203,7 @@ func _tick_all(delta: float) -> void:
 				energy_speed = energy_ratio
 
 			# ── Tick production bar ───────────────────────────────────────────
-			var speed_mult: float = energy_speed * st.get_global_speed_mult()
+			var speed_mult: float = energy_speed * pop_speed * st.get_global_speed_mult()
 			if def.outputs.has(Economy.RAW):
 				speed_mult *= st.get_mine_speed_mult()
 			var rate: float = delta / (def.tick_duration / maxf(speed_mult, 0.0001))
@@ -234,7 +238,7 @@ func _tick_all(delta: float) -> void:
 ## on its own cycle. Energy and population are flows / capacity, handled in
 ## _planet_energy and Economy.max_population instead.
 func _tick_district_base(pp: PlanetProgress, pd: PlanetData, delta: float) -> void:
-	var speed: float = get_node("/root/SkillTree").get_global_speed_mult()
+	var speed: float = get_node("/root/SkillTree").get_global_speed_mult() * planet_pop_speed(pp.planet_seed)
 	for poi: POIData in pd.custom_pois:
 		if poi.constructing or poi.is_orbital():
 			continue
@@ -262,6 +266,10 @@ func _tick_district_base(pp: PlanetProgress, pd: PlanetData, delta: float) -> vo
 				var short: String = Economy.INFO.get(id, {}).get("short", id)
 				resource_produced.emit(pp.planet_seed, poi.label,
 					("+%.1f %s" if v < 10.0 else "+%.0f %s") % [v, short], Economy.color_of(id), null)
+
+## Work speed from population on a planet (1 = housed; < 1 = overpopulated).
+func planet_pop_speed(planet_seed: int) -> float:
+	return float(_pop_speed.get(planet_seed, 1.0))
 
 ## 0..1 progress of a district's base-income cycle.
 func base_progress(planet_seed: int, district_label: String) -> float:
@@ -291,20 +299,41 @@ static func income_sources(pd: PlanetData, poi: POIData) -> Array[POIData]:
 			out.append(p)
 	return out
 
-## Unscaled base income: { id: base × site + Σ neighbour income } (before level,
-## planet bonus and skills).
+## Space bonus: a district far from every other one makes more on its own —
+## the trade-off against neighbour income. +ISOLATION_MAX at ISOLATION_RANGE_DEG
+## beyond the minimum spacing.
+const ISOLATION_MAX := 0.6
+const ISOLATION_RANGE_DEG := 10.0
+
+static func isolation_mult(pd: PlanetData, poi: POIData) -> float:
+	if pd == null or poi == null:
+		return 1.0
+	var best := INF
+	for p: POIData in pd.custom_pois:
+		if p == poi or p.is_orbital() or (p.label == poi.label and poi.label != ""):
+			continue
+		best = minf(best, rad_to_deg(TerrainSampler.angular_distance(deg_to_rad(poi.lon_deg), deg_to_rad(poi.lat_deg),
+			deg_to_rad(p.lon_deg), deg_to_rad(p.lat_deg))))
+	if best == INF:
+		return 1.0
+	var t := clampf((best - TerrainSampler.MIN_SPACING_DEG) / ISOLATION_RANGE_DEG, 0.0, 1.0)
+	return 1.0 + ISOLATION_MAX * t
+
+## Unscaled base income: { id: base × site × space + Σ neighbour income × road
+## weight } (before level, City bonuses and skills).
 static func district_income_raw(pd: PlanetData, poi: POIData) -> Dictionary:
 	var out := {}
 	var ddef := district_def(poi)
 	if ddef == null:
 		return out
-	var sm := ddef.site_mult(poi)
+	var sm := ddef.site_mult(poi) * isolation_mult(pd, poi)
 	for id: String in ddef.base_outputs:
 		out[id] = float(ddef.base_outputs[id]) * sm
 	for src: POIData in income_sources(pd, poi):
 		var add: Dictionary = ddef.income_from(src.type_tag)
+		var w: float = float(poi.neighbor_weight.get(src.label, 1.0))
 		for id: String in add:
-			out[id] = float(out.get(id, 0.0)) + float(add[id])
+			out[id] = float(out.get(id, 0.0)) + float(add[id]) * w
 	return out
 
 ## A district's base income per its cycle (per second for energy, capacity for
@@ -315,7 +344,7 @@ func district_income(pp: PlanetProgress, poi: POIData) -> Dictionary:
 	var raw := district_income_raw(GameState.get_planet_data(pp.planet_seed), poi)
 	var lv_m := DistrictDef.level_mult(pp.district_levels.get(poi.label, 1))
 	for id: String in raw:
-		raw[id] = _skill_mods(pp, id, float(raw[id]) * lv_m * Economy.planet_bonus(pp, id), "")
+		raw[id] = _skill_mods(pp, id, float(raw[id]) * lv_m * Economy.scope_bonus(pp, poi.label, id), "")
 	return raw
 
 func district_base(pp: PlanetProgress, poi: POIData, id: String) -> float:
@@ -359,7 +388,7 @@ func resource_rates() -> Dictionary:
 					if id == Economy.ENERGY or id == Economy.POPULATION:
 						continue
 					rates[id] = float(rates.get(id, 0.0)) \
-						+ float(inc[id]) * st.get_global_speed_mult() / ddef.base_tick
+						+ float(inc[id]) * st.get_global_speed_mult() * planet_pop_speed(pp.planet_seed) / ddef.base_tick
 		for entry: Dictionary in pp.buildings:
 			if entry.get("constructing", false):
 				continue
@@ -369,7 +398,7 @@ func resource_rates() -> Dictionary:
 			var def := BuildingDef.find(entry.get("building_id", ""))
 			if def == null or def.tick_duration <= 0.0:
 				continue
-			var speed: float = st.get_global_speed_mult()
+			var speed: float = st.get_global_speed_mult() * planet_pop_speed(pp.planet_seed)
 			if def.outputs.has(Economy.RAW):
 				speed *= st.get_mine_speed_mult()
 			if def.energy_per_tick < 0.0:
@@ -480,7 +509,7 @@ func output_per_cycle(pp: PlanetProgress, entry: Dictionary, def: BuildingDef, i
 	if not def.outputs.has(id):
 		return 0.0
 	var v: float = float(def.outputs[id]) * float(entry.get("amount", 1))
-	v *= get_site_mult(pp, entry, def) * Economy.planet_bonus(pp, id)
+	v *= get_site_mult(pp, entry, def) * Economy.scope_bonus(pp, entry.get("district_id", ""), id)
 	return _skill_mods(pp, id, v, def.output_tag)
 
 ## Skill / planet-modifier multipliers shared by buildings and district base income.

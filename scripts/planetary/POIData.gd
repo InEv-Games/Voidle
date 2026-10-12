@@ -60,6 +60,8 @@ static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⚗", "�
 ## Ids (labels) of the surface districts this one neighbours — written by the
 ## planet view from the settlement map; drives neighbour income.
 @export var neighbors: Array = []
+## Road-weight per income partner (label -> ×): thicker shared roads pay more.
+@export var neighbor_weight: Dictionary = {}
 
 func shown_name() -> String:
 	return display_name if display_name != "" else label

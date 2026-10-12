@@ -34,19 +34,12 @@ const GUIDED_STEPS: Array = [
 		"type":  "narr",
 		"pages": [
 			[
-				"Year 2387. Earth is a memory.",
-				"Humanity fractured into thousands of arks. Generation ships hurled into the dark.",
-				"Yours made it. Barely.",
+				"Year 2387. Your ark made it — barely.",
+				"You are the Governor of a fragile new colony.",
 			],
 			[
-				"You are the Governor of a single, fragile colony.",
-				"Your people need shelter, power, and knowledge to survive.",
-				"The galaxy does not care whether you succeed.",
-			],
-			[
-				"But you do.",
-				"Your first task: choose where your Capital will stand.",
-				"Coasts and lowlands make a richer city — then give it a name.",
+				"First: choose where your Capital will stand.",
+				"Coasts and lowlands make a richer city.",
 			],
 		],
 	},
@@ -63,8 +56,7 @@ const GUIDED_STEPS: Array = [
 		"pages": [
 			[
 				"The Capital rises.",
-				"Now give your people somewhere to live —",
-				"a Residential District with housing, built under the Capital.",
+				"Give your people homes: a Residential District.",
 			],
 		],
 	},
@@ -83,14 +75,8 @@ const GUIDED_STEPS: Array = [
 		"type":  "narr",
 		"pages": [
 			[
-				"Your first residents move in.",
-				"Cramped quarters, recycled air. But they're alive.",
-				"Now they need work — and the colony needs credits.",
-			],
-			[
-				"Markets are the only steady source of credits.",
-				"Place a Commercial District under your Capital,",
-				"then open a Market inside it.",
+				"They need work, and you need credits.",
+				"Open a Market in a Commercial District.",
 			],
 		],
 	},
@@ -109,14 +95,8 @@ const GUIDED_STEPS: Array = [
 		"type":  "narr",
 		"pages": [
 			[
-				"Coin changes hands. The colony has an economy.",
-				"Trade runs on power, and so does everything else.",
-				"Power is next. Without it, everything stops.",
-			],
-			[
-				"You need an Energy District and a Solar Array inside it.",
-				"Place the district anywhere on the surface,",
-				"then build the Solar Array from within it.",
+				"Trade runs on power.",
+				"Build a Solar Array in an Energy District.",
 			],
 		],
 	},
@@ -135,14 +115,42 @@ const GUIDED_STEPS: Array = [
 		"type":  "narr",
 		"pages": [
 			[
-				"The solar arrays hum to life.",
-				"A fragile grid, but it's yours.",
-				"Knowledge will determine whether this colony survives or merely exists.",
+				"Districts grow by level: more income, +2 building slots.",
+				"The Capital District leads — level it up first.",
 			],
+		],
+	},
+	{
+		"type":        "action",
+		"instruction": "Open the Capital District  →  Press  LEVEL UP",
+		"targets":     [{"type": "district_upgrade"}],
+		"reward_credits": 400.0,
+		"reward_science": 10.0,
+		"reward_text":   "+400 cr  +10 sci",
+	},
+	{
+		"type":  "narr",
+		"pages": [
 			[
-				"A Research Lab lets your colonists develop new technologies.",
-				"Labs belong in a Science District.",
-				"Every new district needs a few free people — housing makes room for them.",
+				"Enough district levels let the whole City grow.",
+				"Open the City and press CITY LEVEL UP — room for more districts.",
+			],
+		],
+	},
+	{
+		"type":        "action",
+		"instruction": "Open the City  →  Press  CITY LEVEL UP",
+		"targets":     [{"type": "city_level_up"}],
+		"reward_credits": 500.0,
+		"reward_science": 0.0,
+		"reward_text":   "+500 cr",
+	},
+	{
+		"type":  "narr",
+		"pages": [
+			[
+				"Knowledge keeps a colony alive.",
+				"Build a Research Lab in a Science District.",
 			],
 		],
 	},
@@ -161,14 +169,8 @@ const GUIDED_STEPS: Array = [
 		"type":  "narr",
 		"pages": [
 			[
-				"Minds at work. The university lights burn late into the night.",
-				"Knowledge compounds. Every discovery unlocks the next.",
-				"But knowledge without resources is just theory.",
-			],
-			[
-				"Beneath the surface lie veins of raw minerals.",
-				"The foundation of every structure, every ship, every future.",
-				"Research Mining Operations in the Upgrade Tree to begin extraction.",
+				"Raw resources lie beneath the surface.",
+				"Research Mining Operations in the Upgrade Tree.",
 			],
 		],
 	},
@@ -179,52 +181,6 @@ const GUIDED_STEPS: Array = [
 		"reward_credits": 500.0,
 		"reward_science": 0.0,
 		"reward_text":   "+500 cr",
-	},
-	{
-		"type":  "narr",
-		"pages": [
-			[
-				"Your colony grows stronger.",
-				"But a frontier world cannot remain at the mercy of its circumstances.",
-				"It is time to expand — to level up your planet itself.",
-			],
-			[
-				"Planet upgrades unlock new district slots and raise your technology ceiling.",
-				"Open the Planet panel and press the Level Up button.",
-				"The first upgrade is fast. Future ones will demand more.",
-			],
-		],
-	},
-	{
-		"type":        "action",
-		"instruction": "Open Planet Panel  →  Press  LEVEL UP",
-		"targets":     [{"type": "planet_level_up"}],
-		"reward_credits": 300.0,
-		"reward_science": 0.0,
-		"reward_text":   "+300 cr",
-	},
-	{
-		"type":  "narr",
-		"pages": [
-			[
-				"Your planet just got bigger.",
-				"More room. More potential. More pressure.",
-				"Now let's put that to use.",
-			],
-			[
-				"Districts grow by level: each level adds building slots.",
-				"Levelling up costs population, so keep building housing.",
-				"Open any district and press LEVEL UP.",
-			],
-		],
-	},
-	{
-		"type":        "action",
-		"instruction": "Open a district  →  Press  LEVEL UP",
-		"targets":     [{"type": "district_upgrade"}],
-		"reward_credits": 400.0,
-		"reward_science": 10.0,
-		"reward_text":   "+400 cr  +10 sci",
 		"finale":        true,
 	},
 ]
@@ -273,6 +229,24 @@ const QUESTS := [
 		"reward_text":  "+300 cr",
 	},
 	{
+		"id":           "district_upgrade",
+		"title":        "Expand the Grid",
+		"desc":         "Raise the Capital District to Lv 2.",
+		"sub_steps":    [{"type": "district_upgrade"}],
+		"reward_credits": 400.0,
+		"reward_science": 10.0,
+		"reward_text":  "+400 cr  +10 sci",
+	},
+	{
+		"id":           "city_level_up",
+		"title":        "Growing City",
+		"desc":         "Raise your City to Level 2.",
+		"sub_steps":    [{"type": "city_level_up"}],
+		"reward_credits": 300.0,
+		"reward_science": 0.0,
+		"reward_text":  "+300 cr",
+	},
+	{
 		"id":           "research_wing",
 		"title":        "Research Wing",
 		"desc":         "Place a Science District and build a Research Lab.",
@@ -292,24 +266,6 @@ const QUESTS := [
 		"reward_credits": 500.0,
 		"reward_science": 0.0,
 		"reward_text":  "+500 cr",
-	},
-	{
-		"id":           "planet_level_up",
-		"title":        "Level Up",
-		"desc":         "Upgrade your planet to Level 2.",
-		"sub_steps":    [{"type": "planet_level_up"}],
-		"reward_credits": 300.0,
-		"reward_science": 0.0,
-		"reward_text":  "+300 cr",
-	},
-	{
-		"id":           "district_upgrade",
-		"title":        "Expand the Grid",
-		"desc":         "Raise a district to Lv 2 with its LEVEL UP button.",
-		"sub_steps":    [{"type": "district_upgrade"}],
-		"reward_credits": 400.0,
-		"reward_science": 10.0,
-		"reward_text":  "+400 cr  +10 sci",
 	},
 	# ── Post-tutorial quests ────────────────────────────────────────────────────
 	{
@@ -502,7 +458,7 @@ func _on_planet_progress_changed(planet_seed: int) -> void:
 		var step: Dictionary = GUIDED_STEPS[_guided_step]
 		if step["type"] == "action":
 			var tgt: Dictionary = step["targets"][_action_sub]
-			if tgt["type"] == "planet_level_up" and not pp.is_upgrading and pp.level >= 2:
+			if tgt["type"] == "city_level_up" and _city_any_leveled(pp):
 				_advance_action()
 			elif tgt["type"] == "district_upgrade" and _district_any_upgraded(pp):
 				_advance_action()
@@ -510,7 +466,7 @@ func _on_planet_progress_changed(planet_seed: int) -> void:
 	if not _quest_done and _quest_step < QUESTS.size() and is_instance_valid(_quest_panel):
 		var q: Dictionary = QUESTS[_quest_step]
 		var ss: Dictionary = q["sub_steps"][_quest_sub]
-		if ss["type"] == "planet_level_up" and not pp.is_upgrading and pp.level >= 2:
+		if ss["type"] == "city_level_up" and _city_any_leveled(pp):
 			_advance_quest_sub()
 		elif ss["type"] == "district_upgrade" and _district_any_upgraded(pp):
 			_advance_quest_sub()
@@ -520,14 +476,20 @@ func _check_freeform_action_step(step: Dictionary) -> void:
 	var targets: Array = step["targets"]
 	if _action_sub >= targets.size(): return
 	var tgt: Dictionary = targets[_action_sub]
-	if tgt["type"] not in ["planet_level_up", "district_upgrade"]: return
+	if tgt["type"] not in ["city_level_up", "district_upgrade"]: return
 	# Check against all colonized planets
 	for pp: PlanetProgress in GameState._planet_progress.values():
 		if not pp.is_colonized: continue
-		if tgt["type"] == "planet_level_up" and not pp.is_upgrading and pp.level >= 2:
+		if tgt["type"] == "city_level_up" and _city_any_leveled(pp):
 			_advance_action(); return
 		if tgt["type"] == "district_upgrade" and _district_any_upgraded(pp):
 			_advance_action(); return
+
+func _city_any_leveled(pp: PlanetProgress) -> bool:
+	for c in pp.city_levels:
+		if int(pp.city_levels[c]) >= 2:
+			return true
+	return false
 
 func _district_any_upgraded(pp: PlanetProgress) -> bool:
 	for dlabel in pp.district_levels:
@@ -559,7 +521,7 @@ func _run_guided_step() -> void:
 		_show_action_bar(step)
 		# Unblock input for steps that need free navigation
 		var first_tgt: Dictionary = step["targets"][0]
-		if first_tgt["type"] in ["skill", "planet_level_up", "district_upgrade"] \
+		if first_tgt["type"] in ["skill", "city_level_up", "district_upgrade"] \
 				or (first_tgt["type"] == "district" and int(first_tgt["id"]) == DISTRICT_CITY):
 			_action_block_on = false
 		_grant_step_needs(step["targets"], "id")
@@ -581,12 +543,17 @@ func _step_needs(targets: Array, id_key: String) -> Dictionary:
 			"building":
 				var bdef := BuildingDef.find(String(tgt[id_key]))
 				if bdef != null:
-					need["credits"] += bdef.base_cost
+					need["credits"] += bdef.base_cost   # first building of a fresh district
 			"skill":
 				need["science"] += float(get_node("/root/SkillTree").get_next_cost(String(tgt[id_key])))
-			"planet_level_up":
-				if pp != null:
-					need["credits"] += float(pp.get_upgrade_cost().get("credits", 0.0))
+			"district_upgrade":
+				if home != null and pp != null:
+					var ck := _first_city_key(home)
+					need["credits"] += Leveling.district_level_credits(int(pp.district_levels.get(ck, 1)))
+			"city_level_up":
+				if home != null and pp != null:
+					var ck2 := _first_city_key(home)
+					need["credits"] += Leveling.city_level_credits(int(pp.city_levels.get(ck2, 1)) + 1)
 	return need
 
 ## Internal id of a planet's first City ("" before one is founded).
@@ -701,7 +668,7 @@ func _highlight_id_for(tgt: Dictionary) -> String:
 	match tgt["type"]:
 		"district":        return "add_district"
 		"skill":           return "skill_tree_btn"
-		"planet_level_up": return "planet_level_up_btn"
+		"city_level_up":   return "city_level_up_btn"
 		"district_upgrade": return "district_upgrade_btn"
 	if tgt["type"] == "building":
 		return "generator_district"   # the district the player just placed
@@ -734,8 +701,8 @@ func _target_hint(tgt: Dictionary) -> String:
 			var ddef: DistrictDef = DistrictDef.find(int(tgt["id"]) as DistrictDef.Type)
 			return "Place a%s %s" % ["n" if ddef != null and ddef.display_name.substr(0, 1) in ["A", "E", "I", "O", "U"] else "",
 				ddef.display_name if ddef != null else "district"]
-		"planet_level_up":  return "Open Planet Panel  →  Press  LEVEL UP"
-		"district_upgrade": return "Open a district  →  Press  LEVEL UP"
+		"city_level_up":    return "Open the City  →  Press  CITY LEVEL UP"
+		"district_upgrade": return "Open the Capital District  →  Press  LEVEL UP"
 	var bdef := BuildingDef.find(tgt.get("id", ""))
 	if bdef != null:
 		return "Build  →  %s inside the district" % bdef.display_name
@@ -1270,9 +1237,9 @@ func _check_quest_sub_already_done() -> void:
 				if satisfied: break
 		"skill":
 			satisfied = get_node("/root/SkillTree").unlocked_skills.has(ss["target"])
-		"planet_level_up":
+		"city_level_up":
 			for pp: PlanetProgress in GameState._planet_progress.values():
-				if pp.is_colonized and not pp.is_upgrading and pp.level >= 2:
+				if _city_any_leveled(pp):
 					satisfied = true; break
 		"district_upgrade":
 			for pp: PlanetProgress in GameState._planet_progress.values():

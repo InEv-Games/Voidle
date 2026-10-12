@@ -15,7 +15,7 @@ extends RefCounted
 ##
 ## Land roads only run over green land (h ≥ GREEN_H). The sand band and water
 ## are impassable on land, except for short *bridges*: two green cells up to
-## BRIDGE_MAX_CELLS apart across non-green ground are linked directly.
+## BRIDGE_MAX_CELLS apart across sand (never water) are linked directly.
 ##
 ## The graph is built on a worker thread (start(), then poll is_ready()).
 
@@ -33,6 +33,24 @@ const PORT_REUSE_WEIGHT: float = 0.1
 const ROAD_REUSE_FACTOR: float = 0.4
 
 var _road_cells: Dictionary = {}   # land cell id -> true once a road uses it
+## Land connectivity (union-find over green cells + bridges): same root = a
+## land road is possible.
+var _land_parent := PackedInt32Array()
+
+func _land_root(i: int) -> int:
+	while _land_parent[i] != i:
+		_land_parent[i] = _land_parent[_land_parent[i]]
+		i = _land_parent[i]
+	return i
+
+func _land_union(a: int, b: int) -> void:
+	var ra := _land_root(a)
+	var rb := _land_root(b)
+	if ra != rb:
+		_land_parent[ra] = rb
+## Sea lanes are cheap — but only used between landmasses: when both ends share
+## one (see _land_root), routes are land-only. So a crossing sails from the
+## first good harbour near the city instead of driving to the far shore.
 const COST_SEA:      float = 0.55
 const COST_DEEP_SEA: float = 0.50
 const COST_LAND:     float = 1.0
@@ -55,6 +73,11 @@ static var _nets: Dictionary = {}   # seed -> RoadNetwork
 static func for_planet(data: PlanetData) -> RoadNetwork:
 	if _nets.has(data.seed):
 		return _nets[data.seed]
+	# A rocky world's roads must see its baked terrain: built before the bake the
+	# whole planet reads as land (straight "roads" across the sea). Until then
+	# hand back an empty, never-ready network and don't cache it.
+	if TerrainMap.mode_for(data) == TerrainMap.Mode.ROCKY and not TerrainMap.has_map(data.seed, TerrainMap.Mode.ROCKY):
+		return RoadNetwork.new()
 	var net := RoadNetwork.new()
 	net.planet_seed = data.seed
 	net._sea_level = data.sea_level
@@ -88,6 +111,9 @@ func _build() -> void:
 	var n := WIDTH * HEIGHT
 	_kind.resize(n)
 	_kind.fill(255)
+	_land_parent.resize(n)
+	for k in n:
+		_land_parent[k] = k
 	_astar.reserve_space(n + n / 4)
 	# nodes
 	for y in HEIGHT:
@@ -123,6 +149,8 @@ func _build() -> void:
 				var j := ny * WIDTH + posmod(x + d.x, WIDTH)
 				if _kind[i] == _kind[j]:
 					_astar.connect_points(i, j)
+					if _kind[i] == 0:
+						_land_union(i, j)
 				elif _kind[i] == 0:
 					_try_bridge(x, y, d)
 	# ports: a land cell with the sea next to it (or just past a strip of sand)
@@ -163,27 +191,38 @@ func _try_bridge(x: int, y: int, d: Vector2i) -> void:
 		var j := ny * WIDTH + posmod(x + d.x * step, WIDTH)
 		if _kind[j] == 0:
 			_astar.add_bridge(y * WIDTH + x, j)   # costs extra: green detours win unless much longer
+			_land_union(y * WIDTH + x, j)
 			return
-		if _kind[j] == 255:
-			return
+		if _kind[j] == 255 or _kind[j] == 1:
+			return   # no bridges over water: roads follow the shore, the sea gets ships
 
 ## Route between two surface points (radians). Returns
 ## { segments: [{ sea: bool, points: PackedVector2Array (lon, lat) }],
 ##   ports: PackedVector2Array } — empty when no route exists.
 ## `sea_a` / `sea_b`: the endpoint district sits on water (joins via a sea node).
+## `commit` = false: a preview — the path isn't remembered, so later roads
+## don't merge into it.
 func route(lon_a: float, lat_a: float, lon_b: float, lat_b: float,
-		sea_a: bool = false, sea_b: bool = false) -> Dictionary:
+		sea_a: bool = false, sea_b: bool = false, commit: bool = true) -> Dictionary:
 	if not is_ready():
 		return {}
 	var a := _endpoint(lon_a, lat_a, sea_a)
 	var b := _endpoint(lon_b, lat_b, sea_b)
 	if a < 0 or b < 0 or a == b:
 		return {}
+	# same landmass → land road only; otherwise sail (from a port near the start)
+	_astar.cell_count = WIDTH * HEIGHT
+	_astar.kind = _kind
+	_astar.land_only = a < WIDTH * HEIGHT and b < WIDTH * HEIGHT and _kind[a] == 0 and _kind[b] == 0 \
+		and _land_root(a) == _land_root(b)
 	var ids := _astar.get_id_path(a, b)
+	_astar.land_only = false
 	if ids.is_empty():
 		return {}
 	var n := WIDTH * HEIGHT
 	for id: int in ids:
+		if not commit:
+			break
 		if id >= n:
 			_astar.set_point_weight_scale(id, PORT_REUSE_WEIGHT)
 		elif _kind[id] == 0 and not _road_cells.has(id):

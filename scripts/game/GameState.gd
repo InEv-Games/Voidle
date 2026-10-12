@@ -25,6 +25,11 @@ signal district_placed(planet_seed: int, district_type_id: int)
 # ── Economy ──────────────────────────────────────────────────────────────────
 ## Global mineral/resource pool shared across all planets and facilities.
 var global_resources: Dictionary = {}
+## Resources the top bar has revealed so far (it shows them as they're met).
+var revealed_resources: Array = []
+## The planet-wide view (planet overview, more cities, planet level) opens once
+## the first City reaches Lv 2 — until then the side panel stays on the City.
+var planet_view_unlocked: bool = false
 
 ## Adds to the stock, up to the resource's storage cap (Economy.cap); the
 ## overflow is lost.
@@ -147,6 +152,7 @@ func _apply_pending_pois() -> void:
 			poi.label              = pd_entry.get("label",              "District")
 			poi.display_name       = pd_entry.get("display_name",       "")
 			poi.neighbors          = pd_entry.get("neighbors",          [])
+			poi.neighbor_weight    = pd_entry.get("neighbor_weight",    {})
 			poi.poi_type           = pd_entry.get("poi_type",           0) as POIData.POIType
 			poi.type_tag           = pd_entry.get("type_tag",           "")
 			poi.light_intensity    = pd_entry.get("light_intensity",    1.0)
@@ -447,6 +453,7 @@ func save() -> void:
 					"label":              poi.label,
 					"display_name":       poi.display_name,
 					"neighbors":          poi.neighbors,
+					"neighbor_weight":    poi.neighbor_weight,
 					"poi_type":           int(poi.poi_type),
 					"type_tag":           poi.type_tag,
 					"light_intensity":    poi.light_intensity,
@@ -480,6 +487,7 @@ func save() -> void:
 			"is_colonized":      pp.is_colonized,
 			"districts_used":    pp.districts_used,
 			"district_levels":   pp.district_levels,
+			"city_levels":       pp.city_levels,
 			"district_upgrading": pp.district_upgrading,
 			"buildings":         pp.buildings,
 			"stored_resources":  pp.stored_resources,
@@ -489,6 +497,8 @@ func save() -> void:
 		}
 	data["global_resources"]    = global_resources
 	data["unlocked_buildings"]  = unlocked_buildings
+	data["revealed_resources"]  = revealed_resources
+	data["planet_view_unlocked"] = planet_view_unlocked
 	data["light_angle"]         = light_angle
 	data["achievements"]        = AchievementManager.get_save_data()
 	data["tutorial_done"]        = TutorialManager._tutorial_done
@@ -524,7 +534,7 @@ func load_save() -> bool:
 	var st := get_node("/root/SkillTree")
 	st.unlocked_skills.clear()
 	st.unlocked_skills.append("root")
-	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab"]:
+	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab", "unlock_commercial"]:
 		if not def_node in st.unlocked_skills:
 			st.unlocked_skills.append(def_node)
 
@@ -534,7 +544,7 @@ func load_save() -> bool:
 				st.unlocked_skills.append(s)
 		
 	st.skill_levels.clear()
-	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab"]:
+	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab", "unlock_commercial"]:
 		st.skill_levels[def_node] = 1
 	if data.has("skill_levels"):
 		for k in data["skill_levels"]:
@@ -543,6 +553,8 @@ func load_save() -> bool:
 	global_resources    = data.get("global_resources",   {})
 	global_resources.erase(Economy.ENERGY)   # energy is a flow; older saves stored it
 	unlocked_buildings  = data.get("unlocked_buildings", {})
+	revealed_resources  = data.get("revealed_resources", [])
+	planet_view_unlocked = data.get("planet_view_unlocked", false)
 	light_angle         = data.get("light_angle",        0.8)
 
 	if data.has("achievements"):
@@ -574,6 +586,7 @@ func load_save() -> bool:
 		pp.is_colonized      = d.get("is_colonized",     false)
 		pp.districts_used    = d.get("districts_used",   0)
 		pp.district_levels   = d.get("district_levels",  {})
+		pp.city_levels       = d.get("city_levels",      {})
 		pp.buildings          = d.get("buildings",          [])
 		pp.district_upgrading = d.get("district_upgrading", {})
 		pp.has_spaceport      = d.get("has_spaceport",      false)
@@ -604,12 +617,14 @@ func delete_save() -> void:
 	var st := get_node("/root/SkillTree")
 	st.unlocked_skills.clear()
 	st.unlocked_skills.append("root")
-	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab"]:
+	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab", "unlock_commercial"]:
 		st.unlocked_skills.append(def_node)
 	st.skill_levels.clear()
-	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab"]:
+	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab", "unlock_commercial"]:
 		st.skill_levels[def_node] = 1
 	unlocked_buildings.clear()
+	revealed_resources.clear()
+	planet_view_unlocked = false
 	global_resources.clear()
 	_planet_progress.clear()
 	_bootstrap_world()

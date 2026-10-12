@@ -167,7 +167,7 @@ static func angular_distance(lon_a: float, lat_a: float, lon_b: float, lat_b: fl
 ## placement band this fits (simulated, random play) ~2 cities on a moon,
 ## 2-4 on terran worlds (size 0.85-1.15) and 5-8 on gas giants.
 static func city_spacing_deg(data: PlanetData) -> float:
-	return clampf(100.0 * pow(maxf(data.planet_size, 0.1), -0.73), 55.0, 170.0)
+	return clampf(28.0 * pow(maxf(data.planet_size, 0.1), -0.73), 16.0, 45.0)
 
 ## Full placement check for a surface district at (lon, lat).
 ## Returns { ok: bool, reason: String, terrain: Dictionary }.
@@ -190,11 +190,11 @@ static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: floa
 		var d := angular_distance(lon, lat, deg_to_rad(p.lon_deg), deg_to_rad(p.lat_deg))
 		if d < min_d:
 			result.ok = false
-			result.reason = "Too close to %s" % p.label
+			result.reason = "Too close to %s" % p.shown_name()
 			return result
 		# a city claims a wide area no other city may be founded in
 		if def.is_system_anchor() and p.is_city() and d < city_d:
 			result.ok = false
-			result.reason = "Inside %s's territory" % p.label
+			result.reason = "Too close to %s — cities need room to grow" % p.shown_name()
 			return result
 	return result

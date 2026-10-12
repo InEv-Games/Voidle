@@ -190,6 +190,18 @@ static func best_raw_in_stock(need: float) -> String:
 			best_r = int(r["rarity"])
 	return best
 
+# ── Costs ────────────────────────────────────────────────────────────────────
+## Every building already in a district makes the next one there dearer,
+## whatever its type — districts (and their types) don't affect each other.
+const BUILD_COST_GROWTH := 1.35
+
+static func building_cost(pp: PlanetProgress, def: BuildingDef, district_label: String) -> float:
+	var in_district := 0
+	if pp != null:
+		for b: Dictionary in pp.buildings_in_district(district_label):
+			in_district += int(b.get("amount", 1))
+	return roundf(def.base_cost * pow(BUILD_COST_GROWTH, float(in_district)))
+
 # ── Population ────────────────────────────────────────────────────────────────
 ## Every City houses this many people before any Population buildings.
 const CITY_BASE_POP:    int = 15_000
@@ -201,19 +213,67 @@ const LEVEL_POP_BASE:   int = 2_000
 ## Highest level a district can be raised to.
 const MAX_DISTRICT_LEVEL: int = 10
 
-## Population a district occupies at `level` (founding + every level it has gained).
-static func district_pop_cost(poi: POIData, level: int) -> int:
-	var cost := 0 if poi.is_city() else DISTRICT_POP
+## Population the k-th district of a City (0-based, Residential ones not
+## counted) takes to found: DISTRICT_POP, then +50% of it for each one before.
+static func district_found_pop(k: int) -> int:
+	return int(round(DISTRICT_POP * (1.0 + 0.5 * float(k))))
+
+## Founding order of a district among its City's non-Residential districts.
+static func district_index(pd: PlanetData, poi: POIData) -> int:
+	var k := 0
+	for p: POIData in pd.custom_pois:
+		if p == poi:
+			return k
+		if p.parent_city == poi.parent_city and not p.is_orbital() \
+				and p.poi_type != POIData.POIType.RESIDENTIAL:
+			k += 1
+	return k
+
+## Population a district occupies at `level` (founding + every level it has
+## gained). Residential districts are housing: they never cost population.
+static func district_pop_cost(poi: POIData, level: int, pd: PlanetData = null) -> int:
+	if poi.poi_type == POIData.POIType.RESIDENTIAL:
+		return 0
+	var cost := 0
+	if not poi.is_city():
+		cost = district_found_pop(district_index(pd, poi)) if pd != null else DISTRICT_POP
 	for l in range(1, level):
 		cost += level_up_pop(l)
 	return cost
 
-## Population needed to found a district of this kind (Cities and orbital
-## stations need none — a City brings its own housing).
-static func founding_pop(def: DistrictDef) -> int:
-	if def == null or def.is_orbital or def.id == DistrictDef.Type.CITY:
+## Population a specific district's next level costs (0 for Residential).
+static func level_up_pop_for(poi: POIData, level: int) -> int:
+	return 0 if poi.poi_type == POIData.POIType.RESIDENTIAL else level_up_pop(level)
+
+## Largest slowdown overpopulation causes (0.5 = 50% speed at worst).
+const MAX_POP_SLOWDOWN := 0.5
+
+## Work speed of a planet: 1 while population fits its housing; past that,
+## production slows (like an energy deficit) down to 1 − MAX_POP_SLOWDOWN.
+## Population may go negative — nothing is ever locked by it.
+static func pop_speed(pd: PlanetData, pp: PlanetProgress) -> float:
+	var used := used_population(pd, pp)
+	if used <= 0:
+		return 1.0
+	var mx := max_population(pd, pp)
+	if used <= mx:
+		return 1.0
+	return 1.0 - MAX_POP_SLOWDOWN * (1.0 - clampf(float(mx) / float(used), 0.0, 1.0))
+
+## Population needed to found a district of this kind. Cities, orbital stations
+## and Residential districts need none — housing must always be buildable, or a
+## full planet could never grow again.
+static func founding_pop(def: DistrictDef, pd: PlanetData = null, parent_city: String = "") -> int:
+	if def == null or def.is_orbital or def.id == DistrictDef.Type.CITY \
+			or def.id == DistrictDef.Type.RESIDENTIAL:
 		return 0
-	return DISTRICT_POP
+	if pd == null:
+		return DISTRICT_POP
+	var k := 0
+	for p: POIData in pd.custom_pois:
+		if p.parent_city == parent_city and not p.is_orbital() and p.poi_type != POIData.POIType.RESIDENTIAL:
+			k += 1
+	return district_found_pop(k)
 
 ## Population needed to raise a district from `level` to `level + 1`.
 static func level_up_pop(level: int) -> int:
@@ -228,8 +288,8 @@ static func max_population(pd: PlanetData, pp: PlanetProgress) -> int:
 		if poi.is_orbital():
 			continue
 		if poi.is_city():
-			total += CITY_BASE_POP
-		total += ProductionManager.district_base(pp, poi, POPULATION) / maxf(planet_bonus(pp, POPULATION), 0.001)
+			total += CITY_BASE_POP * scope_bonus(pp, poi.label, POPULATION, pd)
+		total += ProductionManager.district_base(pp, poi, POPULATION)   # bonus included
 	for b: Dictionary in pp.buildings:
 		if b.get("constructing", false):
 			continue
@@ -239,8 +299,9 @@ static func max_population(pd: PlanetData, pp: PlanetProgress) -> int:
 		var key := "%d:%s:%s" % [pp.planet_seed, b.get("district_id", ""), b.get("uid", "-1")]
 		if ProductionManager.is_paused(key):
 			continue   # starved of its upkeep (e.g. Goods) — houses nobody
-		total += float(def.outputs[POPULATION]) * float(b.get("amount", 1))
-	return int(round(total * planet_bonus(pp, POPULATION)))
+		total += float(def.outputs[POPULATION]) * float(b.get("amount", 1)) \
+			* scope_bonus(pp, b.get("district_id", ""), POPULATION, pd)
+	return int(round(total))
 
 ## Population used on a planet: every district's founding + level costs
 ## (levels in progress count already) + the workers of every building
@@ -255,25 +316,82 @@ static func used_population(pd: PlanetData, pp: PlanetProgress) -> int:
 		var lv: int = pp.district_levels.get(poi.label, 1)
 		if pp.district_upgrading.has(poi.label):
 			lv += 1
-		used += district_pop_cost(poi, lv)
+		used += district_pop_cost(poi, lv, pd)
+		if poi.is_city():
+			used += Leveling.city_pop_cost(int(pp.city_levels.get(poi.label, 1)))
 	for b: Dictionary in pp.buildings:
 		var def := BuildingDef.find(b.get("building_id", ""))
 		if def != null:
 			used += def.pop_use() * int(b.get("amount", 1))
 	return used
 
+## Population allocated to one district: its founding + levels + building workers.
+static func district_pop_used(pp: PlanetProgress, poi: POIData) -> int:
+	var lv: int = pp.district_levels.get(poi.label, 1)
+	var used := district_pop_cost(poi, lv, GameState.get_planet_data(pp.planet_seed))
+	for b: Dictionary in pp.buildings_in_district(poi.label):
+		var def := BuildingDef.find(b.get("building_id", ""))
+		if def != null:
+			used += def.pop_use() * int(b.get("amount", 1))
+	return used
+
+## Housing one district provides: its base + its housing buildings (City base included).
+static func district_housing(pd: PlanetData, pp: PlanetProgress, poi: POIData) -> int:
+	var total := ProductionManager.district_base(pp, poi, POPULATION)
+	if poi.is_city():
+		total += CITY_BASE_POP * scope_bonus(pp, poi.label, POPULATION, pd)
+	for b: Dictionary in pp.buildings_in_district(poi.label):
+		if b.get("constructing", false):
+			continue
+		var def := BuildingDef.find(b.get("building_id", ""))
+		if def != null and def.outputs.has(POPULATION):
+			total += float(def.outputs[POPULATION]) * float(b.get("amount", 1)) \
+				* scope_bonus(pp, poi.label, POPULATION, pd)
+	return int(round(total))
+
 static func free_population(pd: PlanetData, pp: PlanetProgress) -> int:
 	return max_population(pd, pp) - used_population(pd, pp)
 
-# ── Planet-wide bonuses ───────────────────────────────────────────────────────
-## Capital (and orbital) buildings boost a resource across their planet:
-## BuildingDef.planet_bonus = { resource_id: +fraction per building }.
+# ── City & planet-wide bonuses ──────────────────────────────────────────────
+## Capital/City buildings boost a resource: BuildingDef.planet_bonus =
+## { resource_id: +fraction per building }. Most boost only their own City (the
+## City and every district built under it); rare BuildingDef.planet_wide ones
+## (and orbital stations) boost the whole planet.
+
+## The City a district belongs to (its own id for a City), or "".
+static func city_key(pd: PlanetData, district_label: String) -> String:
+	if pd == null:
+		return ""
+	for p: POIData in pd.custom_pois:
+		if p.label == district_label:
+			return p.label if p.is_city() or p.parent_city == "" else p.parent_city
+	return ""
+
+## Multiplier for `id` produced in `district_label`: 1 + its City's bonuses +
+## planet-wide bonuses.
+static func scope_bonus(pp: PlanetProgress, district_label: String, id: String, pd: PlanetData = null) -> float:
+	if pd == null:
+		pd = GameState.get_planet_data(pp.planet_seed)
+	var city := city_key(pd, district_label)
+	var mult := 1.0
+	for b: Dictionary in pp.buildings:
+		if b.get("constructing", false):
+			continue
+		var def := BuildingDef.find(b.get("building_id", ""))
+		if def == null or not def.planet_bonus.has(id):
+			continue
+		var bd: String = b.get("district_id", "")
+		if def.planet_wide or (city != "" and city_key(pd, bd) == city):
+			mult += float(def.planet_bonus[id]) * float(b.get("amount", 1))
+	return mult
+
+## Planet-wide bonuses only (kept for callers without a district).
 static func planet_bonus(pp: PlanetProgress, id: String) -> float:
 	var mult := 1.0
 	for b: Dictionary in pp.buildings:
 		if b.get("constructing", false):
 			continue
 		var def := BuildingDef.find(b.get("building_id", ""))
-		if def != null and def.planet_bonus.has(id):
+		if def != null and def.planet_wide and def.planet_bonus.has(id):
 			mult += float(def.planet_bonus[id]) * float(b.get("amount", 1))
 	return mult

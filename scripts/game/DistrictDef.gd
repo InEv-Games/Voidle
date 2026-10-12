@@ -129,19 +129,33 @@ static func find(district_type: Type) -> DistrictDef:
 
 # ── Factory ───────────────────────────────────────────────────────────────────
 
-## Compute actual placement cost. Cost doubles for each district of the same type
-## already built under the same City (`parent_city`), so a new City starts with
-## fresh prices. Cities themselves double per City on the planet.
+## Credits to place a district. The type doesn't matter — the price grows with
+## how many districts its City already has (×DISTRICT_COST_GROWTH each), so a
+## City of five Commercial districts costs the same as a mixed one. Cities grow
+## in price per City on the planet; a planet's first City is free.
+const DISTRICT_BASE_COST := 300.0
+const DISTRICT_COST_GROWTH := 1.6
+const CITY_BASE_COST := 2500.0
+const CITY_COST_GROWTH := 2.5
+
 static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: String = "") -> float:
-	var same_count: int = 0
+	if def.is_orbital:
+		return def.base_cost
+	if def.is_system_anchor():
+		var cities := 0
+		for poi: POIData in data.custom_pois:
+			if poi.is_city() and not poi.is_orbital():
+				cities += 1
+		return 0.0 if cities == 0 else roundf(CITY_BASE_COST * pow(CITY_COST_GROWTH, float(cities - 1)))
+	return roundf(DISTRICT_BASE_COST * pow(DISTRICT_COST_GROWTH, float(districts_in_city(data, parent_city))))
+
+## Districts already built under a City (orbital ones not counted).
+static func districts_in_city(data: PlanetData, parent_city: String) -> int:
+	var n := 0
 	for poi: POIData in data.custom_pois:
-		if poi.poi_type != def.to_poi_type():
-			continue
-		if def.is_system_anchor() or poi.parent_city == parent_city:
-			same_count += 1
-	if def.is_system_anchor() and same_count == 0:
-		return 0.0   # a planet's first City is free (the player's starting capital)
-	return def.base_cost * pow(2.0, float(same_count))
+		if poi.parent_city == parent_city and parent_city != "" and not poi.is_orbital():
+			n += 1
+	return n
 
 ## Suggests a display name. Cities (and stations) draw from name_pool,
 ## preferring one not used on the planet yet; a district built under a City

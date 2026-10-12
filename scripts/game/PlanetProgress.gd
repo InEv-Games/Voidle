@@ -49,6 +49,8 @@ func has_building(bid: String) -> bool:
 @export var district_levels: Dictionary = {}
 ## { district_label -> progress: float 0..1 } — districts currently upgrading
 @export var district_upgrading: Dictionary = {}
+## { city_label -> city level }, default 1 (see Leveling)
+@export var city_levels: Dictionary = {}
 
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -61,12 +63,12 @@ func get_upgrade_cost() -> Dictionary:
 	var next_lv := level + 1
 	match next_lv:
 		2:
-			cost["credits"] = 250
+			cost["credits"] = 4000
 		3:
-			cost["credits"] = 1000
-			cost["ANY_T1"]  = 5
+			cost["credits"] = 12000
+			cost["ANY_T1"]  = 200
 		_:
-			cost["credits"] = 500 * next_lv
+			cost["credits"] = 8000 * next_lv
 			cost["ANY_T1"]  = 250 * next_lv          # any raw resources
 			if next_lv > 4:
 				cost[Economy.GOODS] = 50 * (next_lv - 4)  # later levels need Consumer Goods
@@ -101,9 +103,22 @@ func buildings_in_district(district_label: String) -> Array[Dictionary]:
 			result.append(b)
 	return result
 
+## Building slots: 3 + 2 per level; the Capital District (a City) holds only a
+## few hand-picked buildings — 1 + 1 per level.
 func district_slots(poi: POIData) -> int:
 	var lv: int = district_levels.get(poi.label, 1)
+	if poi.is_city():
+		return lv
 	return 3 + (lv - 1) * 2
+
+## Slots one more level adds to this district.
+static func slots_per_level(poi: POIData) -> int:
+	return 1 if poi.is_city() else 2
+
+## Cities a planet may hold: one per planet level (a soft cap the player lifts
+## by levelling the planet, instead of a hard distance rule).
+func max_cities() -> int:
+	return Leveling.max_cities(self)
 
 func can_upgrade_district(district_label: String) -> bool:
 	var lv: int = district_levels.get(district_label, 1)

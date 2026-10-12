@@ -41,6 +41,8 @@ var neighbor_pairs: Array[Vector2i] = []
 ## when the selected district is hovered, tinted by income_tint(receiver, giver).
 var income_pairs: Array[Vector2i] = []
 var income_tint: Callable
+## Preview roads of the district being placed (RoadNetwork.route results), drawn faint.
+var ghost_roads: Array = []
 ## Alt held: network overview (arcs to each district's City, every district visible).
 var show_overlay: bool = false
 ## Routed roads (RoadNetwork.route results):
@@ -62,6 +64,9 @@ func set_ghost(lon: float, lat: float, ok: bool, title: String, lines: Array = [
 
 func clear_ghost() -> void:
 	_ghost = {}
+	_ghost_info_at = Vector2.INF
+	if _ghost_info_ctrl != null and is_instance_valid(_ghost_info_ctrl):
+		_ghost_info_ctrl.queue_redraw()
 
 func setup(renderer: ColorRect) -> void:
 	_planet = renderer
@@ -137,13 +142,75 @@ func _draw_surface_circle(lon: float, lat: float, radius_rad: float, col: Color,
 			var lp := (Vector2(pt.x, pt.y) - global_position) / block
 			draw_rect(Rect2(lp.floor() * block, Vector2(block, block)), col)
 
+## Dotted outline of a set of surface circles ([lon, lat, r]), leaving out the
+## parts inside another circle of the set — one clean border instead of a tangle.
+func _draw_circle_union(circles: Array, col: Color) -> void:
+	var centres: Array[Vector3] = []
+	for c: Array in circles:
+		centres.append(Vector3(sin(c[0]) * cos(c[1]), sin(c[1]), cos(c[0]) * cos(c[1])))
+	var clip := _clip_rect()
+	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
+	var r_px: float = _get_planet_params().get("r_px", 200.0)
+	for k in circles.size():
+		var c: Vector3 = centres[k]
+		var radius: float = circles[k][2]
+		var up := Vector3.UP if absf(c.y) < 0.95 else Vector3.RIGHT
+		var u := c.cross(up).normalized()
+		var v := c.cross(u).normalized()
+		var segs := clampi(int(TAU * sin(radius) * r_px / (block * 3.0)), 24, 220)
+		for i in segs:
+			var a := TAU * float(i) / float(segs)
+			var d := (c * cos(radius) + (u * cos(a) + v * sin(a)) * sin(radius)).normalized()
+			var inside := false
+			for j in circles.size():
+				if j != k and acos(clampf(d.dot(centres[j]), -1.0, 1.0)) < float(circles[j][2]) - 0.0005:
+					inside = true
+					break
+			if inside:
+				continue
+			var pt := project(atan2(d.x, d.z), asin(clampf(d.y, -1.0, 1.0)))
+			if pt.z > 0.0 and clip.has_point(Vector2(pt.x, pt.y)):
+				var lp := (Vector2(pt.x, pt.y) - global_position) / block
+				draw_rect(Rect2(lp.floor() * block, Vector2(block, block)), col)
+
+## The placement preview's would-be roads: faint dotted pixels.
+func _draw_ghost_roads() -> void:
+	if ghost_roads.is_empty():
+		return
+	var clip := _clip_rect()
+	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
+	var seen := {}
+	for r: Dictionary in ghost_roads:
+		for seg: Dictionary in r.get("segments", []):
+			var pts: PackedVector2Array = seg["points"]
+			var col := Color(0.55, 0.80, 1.0, 0.45) if seg.get("sea", false) else Color(0.95, 0.85, 0.60, 0.55)
+			for i in range(0, pts.size(), 2):
+				var pt := project(pts[i].x, pts[i].y)
+				if pt.z <= 0.0 or not clip.has_point(Vector2(pt.x, pt.y)):
+					continue
+				var cell := ((Vector2(pt.x, pt.y) - global_position) / block).floor()
+				if seen.has(cell):
+					continue
+				seen[cell] = true
+				draw_rect(Rect2(cell * block, Vector2(block, block)), col)
+
 func _draw_placement_overlay(font: Font) -> void:
 	var spacing := deg_to_rad(spacing_deg)
+	# rings of one kind merge: only the outer edge of their union is drawn
+	var groups := {}
 	for ring: Dictionary in placement_rings:
-		_draw_surface_circle(ring["lon"], ring["lat"], ring["r"], ring["color"], 1.0)
+		var key: String = (ring["color"] as Color).to_html()
+		if not groups.has(key):
+			groups[key] = {"color": ring["color"], "circles": []}
+		groups[key]["circles"].append([ring["lon"], ring["lat"], ring["r"]])
+	for key in groups:
+		_draw_circle_union(groups[key]["circles"], groups[key]["color"])
+	# no-build spacing around every district
+	var spacing_circles: Array = []
 	for poi in _pois:
-		# no-build spacing around every district
-		_draw_surface_circle(poi["lon"], poi["lat"], spacing, Color(1.0, 0.45, 0.35, 0.45), 1.0)
+		spacing_circles.append([poi["lon"], poi["lat"], spacing])
+	_draw_circle_union(spacing_circles, Color(1.0, 0.45, 0.35, 0.45))
+	_draw_ghost_roads()
 	if _ghost.is_empty():
 		return
 	var pt := project(_ghost["lon"], _ghost["lat"])
@@ -164,10 +231,37 @@ func _draw_placement_overlay(font: Font) -> void:
 			var other: Dictionary = _pois[int(ni)]
 			_draw_arc(_ghost["lon"], _ghost["lat"], other["lon"], other["lat"],
 				0.85, Color(0.55, 1.0, 0.65) if ok else Color(1.0, 0.55, 0.45))
-	_draw_ghost_info(font, sp, ok)
+	# the info box lives on a top canvas layer, above every panel (tutorial, HUD…)
+	_ghost_info_at = sp + global_position
+	_ghost_info_ok = ok
+	_ghost_overlay()
 
 ## Title + detail lines in a dark box beside the cursor.
-func _draw_ghost_info(font: Font, sp: Vector2, ok: bool) -> void:
+## Top-layer canvas for the placement info box (created on first use).
+var _ghost_info_layer: CanvasLayer = null
+var _ghost_info_ctrl: Control = null
+var _ghost_info_at := Vector2.INF
+var _ghost_info_ok := true
+
+func _ghost_overlay() -> Control:
+	if _ghost_info_ctrl != null and is_instance_valid(_ghost_info_ctrl):
+		return _ghost_info_ctrl
+	_ghost_info_layer = CanvasLayer.new()
+	_ghost_info_layer.layer = 240
+	add_child(_ghost_info_layer)
+	_ghost_info_ctrl = Control.new()
+	_ghost_info_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ghost_info_ctrl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_ghost_info_layer.add_child(_ghost_info_ctrl)
+	_ghost_info_ctrl.draw.connect(func() -> void:
+		if not placement_mode or _ghost.is_empty() or not _ghost_info_at.is_finite():
+			return
+		var f: Font = _orbitron if _orbitron else ThemeDB.fallback_font
+		_draw_ghost_info(f, _ghost_info_at, _ghost_info_ok, _ghost_info_ctrl))
+	return _ghost_info_ctrl
+
+## `sp` in screen (global) coordinates; drawn onto `target` (the top layer).
+func _draw_ghost_info(font: Font, sp: Vector2, ok: bool, target: CanvasItem) -> void:
 	const TITLE_SIZE := 12
 	const LINE_SIZE  := 9
 	const PAD        := 6.0
@@ -180,15 +274,33 @@ func _draw_ghost_info(font: Font, sp: Vector2, ok: bool) -> void:
 	var box := Rect2(sp + Vector2(16, -14), Vector2(w + PAD * 2.0, h + PAD))
 	# keep the box on screen: flip left of the cursor near the right edge
 	var clip := _clip_rect()
-	if box.end.x + global_position.x > clip.end.x:
+	if box.end.x > clip.end.x:
 		box.position.x = sp.x - 16 - box.size.x
-	draw_rect(box, Color(0.04, 0.06, 0.12, 0.88))
-	draw_rect(box, Color(0.45, 1.0, 0.55, 0.5) if ok else Color(1.0, 0.45, 0.4, 0.5), false, 1.0)
+	var vp := get_viewport_rect().size
+	box.position.y = clampf(box.position.y, 4.0, maxf(4.0, vp.y - box.size.y - 4.0))
+	target.draw_rect(box, Color(0.04, 0.06, 0.12, 0.94))
+	target.draw_rect(box, Color(0.45, 1.0, 0.55, 0.5) if ok else Color(1.0, 0.45, 0.4, 0.5), false, 1.0)
 	var pos := box.position + Vector2(PAD, PAD + 10.0)
-	draw_string(font, pos, title, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_SIZE, Color.WHITE)
+	target.draw_string(font, pos, title, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_SIZE, Color.WHITE)
 	for ln: Array in lines:
 		pos.y += 13.0
-		draw_string(font, pos, ln[0], HORIZONTAL_ALIGNMENT_LEFT, -1, LINE_SIZE, ln[1])
+		target.draw_string(font, pos, ln[0], HORIZONTAL_ALIGNMENT_LEFT, -1, LINE_SIZE, ln[1])
+
+## Little construction bar over a district being built: black/yellow hazard
+## stripes that fill left to right and crawl while work goes on.
+func _draw_construct_bar(sp: Vector2, px: float, progress: float, alpha: float) -> void:
+	const W := 11   # in pixel blocks
+	const H := 2
+	var origin := (sp + Vector2(-W * px * 0.5, -px * 8.0)).floor()
+	draw_rect(Rect2(origin - Vector2(px, px), Vector2((W + 2) * px, (H + 2) * px)), Color(0, 0, 0, 0.85 * alpha))
+	draw_rect(Rect2(origin, Vector2(W * px, H * px)), Color(0.18, 0.16, 0.08, 0.9 * alpha))
+	var filled := int(round(clampf(progress, 0.0, 1.0) * W))
+	var shift := int(Time.get_ticks_msec() / 160) % 4
+	for x in filled:
+		for y in H:
+			var yellow := (x + y + shift) % 4 < 2
+			draw_rect(Rect2(origin + Vector2(x, y) * px, Vector2(px, px)),
+				Color(1.0, 0.82, 0.15, alpha) if yellow else Color(0.08, 0.07, 0.05, alpha))
 
 # ── Pixel-art helpers ─────────────────────────────────────────────────────────
 # Markers snap to the planet shader's pixel grid so they read as part of the art.
@@ -803,8 +915,15 @@ func _label_merges() -> Dictionary:
 
 func _draw() -> void:
 	var font: Font = _orbitron if _orbitron else ThemeDB.fallback_font
+	_draw_scene(font)
+	# the placement ghost goes last, above roads, markers and labels
+	_ghost_info_at = Vector2.INF
 	if placement_mode:
 		_draw_placement_overlay(font)
+	if _ghost_info_ctrl != null and is_instance_valid(_ghost_info_ctrl):
+		_ghost_info_ctrl.queue_redraw()   # its info box (top layer) follows / clears
+
+func _draw_scene(font: Font) -> void:
 	if _pois.is_empty() and _floating_texts.is_empty():
 		return
 	var merges := _label_merges()
@@ -905,6 +1024,14 @@ func _draw() -> void:
 
 		# marker — pixel icon per district type, bracket frame when hovered/selected
 		_draw_pixel_icon(sp, _marker_icon(tag, is_city), line_px, dot_col, alpha)
+		var cpoi = poi["data"].get("poi")
+		var cpp = poi["data"].get("pp")
+		if cpoi is POIData and (cpoi as POIData).constructing:
+			_draw_construct_bar(sp, line_px, (cpoi as POIData).construct_progress, alpha)
+		elif cpoi is POIData and cpp is PlanetProgress \
+				and (cpp as PlanetProgress).district_upgrading.has((cpoi as POIData).label):
+			_draw_construct_bar(sp, line_px,
+				float((cpp as PlanetProgress).district_upgrading[(cpoi as POIData).label]), alpha)
 		if active:
 			var frame_col := Color(1.0, 0.95, 0.5, alpha * (0.9 if selected else 0.6))
 			_draw_pixel_brackets(sp, line_px * (6.0 if is_city else 4.5), line_px, frame_col)
@@ -937,6 +1064,10 @@ func _draw() -> void:
 		if dist_lv > 0:
 			const LV_SIZE := 10
 			var lv_str := "Lv %d" % dist_lv
+			# a City: its City level from afar; close up also its Capital District's
+			var cap_lv: int = poi["data"].get("capital_level", 0)
+			if cap_lv > 0 and detail >= 0.5:
+				lv_str = "City Lv %d  ·  Capital Lv %d" % [dist_lv, cap_lv]
 			var lv_pos := label_pos + Vector2(0, text_size.y * 0.9)
 			if horiz_dir < 0.0:
 				var lv_w := font.get_string_size(lv_str, HORIZONTAL_ALIGNMENT_LEFT, -1, LV_SIZE).x

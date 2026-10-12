@@ -19,4 +19,4 @@ outputs = {"fuel": 2.0}
 inputs = {"raw": 4.0}
 planet_bonus = {}
 tier = 2
-unlocked_by_default = false
+unlocked_by_default = true

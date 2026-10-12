@@ -6,7 +6,7 @@
 script = ExtResource("1_def")
 building_id = "cryo_vault"
 display_name = "Housing Authority"
-description = "+15% max population on the planet."
+description = "+15% housing in this city (the City and its districts)."
 allowed_poi_types = Array[int]([0])
 allowed_planet_types = Array[int]([])
 base_cost = 2000.0
@@ -19,4 +19,4 @@ outputs = {}
 inputs = {}
 planet_bonus = {"population": 0.15}
 tier = 3
-unlocked_by_default = false
+unlocked_by_default = true
