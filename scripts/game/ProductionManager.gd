@@ -17,8 +17,17 @@ var _paused:      Dictionary = {}
 var _user_paused: Dictionary = {}
 ## global energy balance (sum across all colonies, updated each frame)
 var _global_energy:       float = 0.0
+## global energy made / used (⚡), updated each frame
+var _global_energy_prod:   float = 0.0
+var _global_energy_demand: float = 0.0
 ## global energy throttle ratio (0.0-1.0)
 var _global_energy_ratio: float = 1.0
+## Largest slowdown an energy deficit causes (0.5 = consumers at 50% speed at worst).
+const MAX_ENERGY_SLOWDOWN := 0.5
+## { pm_key -> true } building waiting because every output's storage is full
+var _storage_full: Dictionary = {}
+## { "seed:district_label" -> float 0.0-1.0 } district base-income cycles
+var _base_progress: Dictionary = {}
 ## { "construct:pm_key" -> float 0.0-1.0 }
 var _construct:     Dictionary = {}
 
@@ -31,6 +40,10 @@ func get_progress(key: String) -> float:
 
 func is_paused(key: String) -> bool:
 	return _paused.get(key, false)
+
+## True while a building waits because its outputs' storage is full.
+func is_storage_full(key: String) -> bool:
+	return _storage_full.get(key, false)
 
 func get_construct_progress(key: String) -> float:
 	return _construct.get("construct:" + key, 0.0)
@@ -53,6 +66,10 @@ func get_energy_ratio(_planet_seed: int = 0) -> float:
 ## Returns the global net energy balance (positive = surplus, negative = deficit).
 func get_global_energy() -> float:
 	return _global_energy
+
+## (made, used) energy across all colonies — the parts of get_global_energy.
+func get_global_energy_split() -> Vector2:
+	return Vector2(_global_energy_prod, _global_energy_demand)
 
 ## Called by PlanetaryView after building is placed so UI can refresh immediately.
 func invalidate(planet_seed: int) -> void:
@@ -109,8 +126,7 @@ func _tick_all(delta: float) -> void:
 				GameState.planet_progress_changed.emit(planet_seed)
 
 		var energy_ratio: float = _global_energy_ratio
-
-		var mods := PlanetModifier.for_planet(_planet_type(planet_seed))
+		var st := get_node("/root/SkillTree")
 
 		# Collect entries to merge/remove after iteration (avoid modifying array mid-loop)
 		var pending_merges: Array[Dictionary] = []
@@ -154,87 +170,43 @@ func _tick_all(delta: float) -> void:
 			if _user_paused.get(key, false):
 				continue
 
-			# ── Start of cycle resource consumption ───────────────────────────
+			# ── Start of cycle: room to store the output, then pay the upkeep ──
 			var prev: float = _progress.get(key, 0.0)
 			if prev <= 0.0:
-				if def.input_type != BuildingDef.OutputType.NONE:
-					# Find what the user selected to burn
-					var intended_input: String = entry.get("input_mineral", "")
-					if intended_input == "":
-						intended_input = _resource_key(def.input_type, pp.planet_seed, entry)
-
-					var required_amt := def.input_amount * amount * get_building_consume_mult(entry.get("level", 1))
-					if GameState.global_resources.get(intended_input, 0.0) < required_amt:
-						if not _paused.get(key, false):
-							_paused[key] = true
-							building_ticked.emit(planet_seed, key)
-						_emit_progress(planet_seed, key)
-						continue   # can't start — wait for resource
-
-					# Resource available: consume it immediately from global pool
-					GameState.global_resources[intended_input] = \
-						GameState.global_resources.get(intended_input, 0.0) - required_amt
-					# Lock this resource as the one currently burning for this cycle
-					var old_burning: String = entry.get("burning_mineral", "")
-					entry["burning_mineral"] = intended_input
-					if old_burning != intended_input:
+				var full := _outputs_full(pp, def)
+				if full != _storage_full.get(key, false):
+					_storage_full[key] = full
+					building_ticked.emit(planet_seed, key)
+				if full:
+					_emit_progress(planet_seed, key)
+					continue   # storage full — wait instead of wasting inputs
+				if not _pay_inputs(def, amount, entry):
+					if not _paused.get(key, false):
+						_paused[key] = true
 						building_ticked.emit(planet_seed, key)
-
-				# Clear pause if we successfully started the cycle
+					_emit_progress(planet_seed, key)
+					continue   # can't start — wait for resources
 				if _paused.get(key, false):
 					_paused[key] = false
 					building_ticked.emit(planet_seed, key)
 
 			# ── Energy throttle ───────────────────────────────────────────────
-			var needs_energy: bool = def.energy_per_tick < 0.0
 			var energy_speed: float = 1.0
-			if needs_energy:
+			if def.energy_per_tick < 0.0:
 				if energy_ratio <= 0.0:
-					# Don't pause physical input failure, just stall progress due to power outage
-					# Note: the input is already consumed, it just sits in the machine!
-					_emit_progress(planet_seed, key)
+					_emit_progress(planet_seed, key)   # inputs already paid; waits for power
 					continue
 				energy_speed = energy_ratio
 
-			# Planet-wide passive buffs
-			var planet_speed_mult := 1.0
-			var planet_energy_mult := 1.0
-			if pp.has_building("logistics_center"):
-				planet_speed_mult *= 1.20
-			if pp.has_building("command_center"):
-				planet_energy_mult *= 0.85
-
 			# ── Tick production bar ───────────────────────────────────────────
-			var speed_mult: float = _deposit_speed(def, planet_seed, mods) * energy_speed * get_node("/root/SkillTree").get_global_speed_mult() * planet_speed_mult
-			var d_buffs := get_district_buffs(pp, poi_label)
-			if def.output_type == BuildingDef.OutputType.RAW_MINERAL:
-				speed_mult *= get_node("/root/SkillTree").get_mine_speed_mult() * d_buffs.mine_speed_mult
-				if def.building_id == "atmospheric_siphon":
-					speed_mult *= d_buffs.gas_mining_speed_mult
-			elif def.output_type == BuildingDef.OutputType.REFINED_MINERAL:
-				speed_mult *= d_buffs.refinery_speed_mult * get_node("/root/SkillTree").get_refinery_speed_mult()
-				if def.building_id == "aerosol_refinery":
-					speed_mult *= d_buffs.gas_mining_speed_mult
-			elif def.output_type == BuildingDef.OutputType.SCIENCE:
-				speed_mult *= d_buffs.science_speed_mult
-			elif def.output_type == BuildingDef.OutputType.CREDITS:
-				if get_node("/root/SkillTree").has_method("get_trade_speed_mult"):
-					speed_mult *= get_node("/root/SkillTree").get_trade_speed_mult()
-				speed_mult *= d_buffs.trade_speed_mult
-					
-			var eff_dur: float = entry.get("effective_duration", def.tick_duration)
-			if def.input_type != BuildingDef.OutputType.NONE and def.output_type == BuildingDef.OutputType.ENERGY:
-				eff_dur *= d_buffs.generator_duration_mult
-				var in_min: String = entry.get("burning_mineral", "")
-				if in_min != "":
-					var rd: ResourceData = GameState.known_resources.get(in_min)
-					if rd: eff_dur *= float(rd.rarity)
-			var rate: float = delta / (eff_dur / speed_mult)
+			var speed_mult: float = energy_speed * st.get_global_speed_mult()
+			if def.outputs.has(Economy.RAW):
+				speed_mult *= st.get_mine_speed_mult()
+			var rate: float = delta / (def.tick_duration / maxf(speed_mult, 0.0001))
 			var next: float = prev + rate
 
 			if next >= 1.0:
-				# ── End-of-cycle production ───────────────────────────────────
-				_on_tick_complete(pp, def, key, 0.0, amount, entry)
+				_on_tick_complete(pp, def, key, amount, entry)
 				_progress[key] = 0.0
 				# Spaceport: re-pause after each launch cycle so player must trigger manually
 				if def.building_id == "spaceport":
@@ -255,107 +227,296 @@ func _tick_all(delta: float) -> void:
 		for c in completed_buildings:
 			building_constructed.emit(planet_seed, c.key, c.bid)
 
-func _on_tick_complete(pp: PlanetProgress, def: BuildingDef,
-		_key_str: String, _energy: float, amount: int,
-		entry: Dictionary) -> void:
-	# Skip if building was scrapped before tick completed
-	if not pp.buildings.has(entry):
-		return
-	# Produce output (scaled by amount)
-	var mods := PlanetModifier.for_planet(_planet_type(pp.planet_seed))
-	var st := get_node("/root/SkillTree")
-	if def.logic != null:
-		def.logic.produce(pp, def, amount, mods, entry, st)
+		if pd:
+			_tick_district_base(pp, pd, delta)
 
-	var poi_lbl: String = entry.get("district_id", "")
+## Every finished surface district makes its base income (DistrictDef.base_outputs)
+## on its own cycle. Energy and population are flows / capacity, handled in
+## _planet_energy and Economy.max_population instead.
+func _tick_district_base(pp: PlanetProgress, pd: PlanetData, delta: float) -> void:
+	var speed: float = get_node("/root/SkillTree").get_global_speed_mult()
+	for poi: POIData in pd.custom_pois:
+		if poi.constructing or poi.is_orbital():
+			continue
+		var ddef := district_def(poi)
+		if ddef == null or ddef.base_tick <= 0.0:
+			continue
+		var income := district_income(pp, poi)
+		if not _has_stock_income(income):
+			continue
+		var k := "%d:%s" % [pp.planet_seed, poi.label]
+		var p: float = _base_progress.get(k, 0.0) + delta * speed / ddef.base_tick
+		if p < 1.0:
+			_base_progress[k] = p
+			continue
+		_base_progress[k] = 0.0
+		for id: String in income:
+			if id == Economy.ENERGY or id == Economy.POPULATION:
+				continue
+			var v: float = income[id]
+			if id == Economy.RAW:
+				_produce_raw(pp, poi.label, v)
+				continue
+			Economy.add(id, v)
+			if v > 0.0:
+				var short: String = Economy.INFO.get(id, {}).get("short", id)
+				resource_produced.emit(pp.planet_seed, poi.label,
+					("+%.1f %s" if v < 10.0 else "+%.0f %s") % [v, short], Economy.color_of(id), null)
 
-	# For mines: emit one notification per resource with its actual color/icon
-	if def.output_type == BuildingDef.OutputType.RAW_MINERAL or def.output_type == BuildingDef.OutputType.REFINED_MINERAL:
-		if poi_lbl != "":
+## 0..1 progress of a district's base-income cycle.
+func base_progress(planet_seed: int, district_label: String) -> float:
+	return _base_progress.get("%d:%s" % [planet_seed, district_label], 0.0)
+
+static func _has_stock_income(income: Dictionary) -> bool:
+	for id: String in income:
+		if id != Economy.ENERGY and id != Economy.POPULATION and float(income[id]) > 0.0:
+			return true
+	return false
+
+## The district type a POI was founded as.
+static func district_def(poi: POIData) -> DistrictDef:
+	return DistrictDef.find_by_key(poi.type_tag) if poi != null else null
+
+## Districts that pay neighbour income to `poi`: its map neighbours (poi.neighbors)
+## and, for a City, every district built under it — each counted once.
+## Unfinished districts give nothing.
+static func income_sources(pd: PlanetData, poi: POIData) -> Array[POIData]:
+	var out: Array[POIData] = []
+	if pd == null or poi == null:
+		return out
+	for p: POIData in pd.custom_pois:
+		if p == poi or p.constructing or p.is_orbital():
+			continue
+		if poi.neighbors.has(p.label) or (poi.is_city() and p.parent_city == poi.label):
+			out.append(p)
+	return out
+
+## Unscaled base income: { id: base × site + Σ neighbour income } (before level,
+## planet bonus and skills).
+static func district_income_raw(pd: PlanetData, poi: POIData) -> Dictionary:
+	var out := {}
+	var ddef := district_def(poi)
+	if ddef == null:
+		return out
+	var sm := ddef.site_mult(poi)
+	for id: String in ddef.base_outputs:
+		out[id] = float(ddef.base_outputs[id]) * sm
+	for src: POIData in income_sources(pd, poi):
+		var add: Dictionary = ddef.income_from(src.type_tag)
+		for id: String in add:
+			out[id] = float(out.get(id, 0.0)) + float(add[id])
+	return out
+
+## A district's base income per its cycle (per second for energy, capacity for
+## population): (base × site + neighbours) × level × planet bonus × skills.
+func district_income(pp: PlanetProgress, poi: POIData) -> Dictionary:
+	if poi == null or poi.constructing or poi.is_orbital():
+		return {}
+	var raw := district_income_raw(GameState.get_planet_data(pp.planet_seed), poi)
+	var lv_m := DistrictDef.level_mult(pp.district_levels.get(poi.label, 1))
+	for id: String in raw:
+		raw[id] = _skill_mods(pp, id, float(raw[id]) * lv_m * Economy.planet_bonus(pp, id), "")
+	return raw
+
+func district_base(pp: PlanetProgress, poi: POIData, id: String) -> float:
+	return float(district_income(pp, poi).get(id, 0.0))
+
+## True when the building makes stored resources and every one of them is at
+## its cap (mines: every raw resource of the planet). Flow / capacity outputs
+## (energy, population) never fill up here.
+func _outputs_full(pp: PlanetProgress, def: BuildingDef) -> bool:
+	var any := false
+	for id: String in def.outputs:
+		if id == Economy.ENERGY or id == Economy.POPULATION:
+			continue
+		any = true
+		if id == Economy.RAW:
 			var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
-			var tag := ResourceData.Tag.RAW_MINERAL if def.output_type == BuildingDef.OutputType.RAW_MINERAL else ResourceData.Tag.REFINED_MINERAL
-			var res_list := GameState.get_body_resources_for(pd).get_by_tag(tag)
-			var dbuffs := get_district_buffs(pp, poi_lbl)
-			var mult: float = get_building_level_mult(entry.get("level", 1)) * st.get_mine_output_mult() * dbuffs.mine_output_mult
-			if def.building_id == "magma_dredge":
-				mult *= dbuffs.magma_dredge_output_mult
-			var total_density: float = 0.0
-			var densities: Array[float] = []
-			var rng := RandomNumberGenerator.new()
-			for rd in res_list:
-				var r_id := (rd as ResourceData).resource_id()
-				var d: float
-				if pd.mineral_densities.has(r_id):
-					d = float(pd.mineral_densities[r_id])
-				else:
-					rng.seed = pd.seed ^ ((rd as ResourceData).rarity * 0x4E3D)
-					d = pd.deposit_density * rng.randf_range(0.75, 1.25)
-				d *= local_mineral_factor(pp, poi_lbl, r_id)
-				densities.append(d)
-				total_density += d
-			var total_out := def.output_amount * amount * mult
-			if total_density > 0.0:
-				for i in res_list.size():
-					var share := total_out * (densities[i] / total_density)
-					if share < 0.05:
-						continue
-					var rd := res_list[i] as ResourceData
-					var icon_tex := MineralIcon.make(rd.tier, rd.display_color)
-					var txt := "+%.1f" % share if share < 1.0 else "+%.0f" % share
-					resource_produced.emit(pp.planet_seed, poi_lbl, txt, rd.display_color, icon_tex)
-		return
+			if pd == null:
+				return false
+			for r: Dictionary in Economy.raw_for_body(pd):
+				if not Economy.is_full(r["id"]):
+					return false
+		elif not Economy.is_full(id):
+			return false
+	return any
 
-	var display_val := def.output_amount * amount * get_building_level_mult(entry.get("level", 1))
-	var suffix := ""
-	var icon_tex: Texture2D = null
-	match def.output_type:
-		BuildingDef.OutputType.CREDITS:
-			display_val *= st.get_credits_mult()
-			suffix = " cr"
-		BuildingDef.OutputType.SCIENCE:
-			suffix = " sci"
-		BuildingDef.OutputType.ENERGY:
-			display_val = 0.0
-
-	if display_val > 0.0 and poi_lbl != "":
-		var txt := "+%.0f%s" % [display_val, suffix]
-		resource_produced.emit(pp.planet_seed, poi_lbl, txt, def.output_color(), icon_tex)
-
-
-# ── Building Level & Buffs ────────────────────────────────────────────────────
-
-func get_building_level_mult(level: int) -> float:
-	return 1.0 + 0.5 * (log(max(1, level)) / log(2.0))
-
-func get_building_consume_mult(level: int) -> float:
-	return 1.0 + 0.25 * (log(max(1, level)) / log(2.0))
-
-func get_building_output(pp: PlanetProgress, entry: Dictionary, def: BuildingDef) -> float:
-	var amt: int = entry.get("amount", 1)
-	var lv: int = entry.get("level", 1)
-	var lv_mult := get_building_level_mult(lv)
-	var dbuffs := get_district_buffs(pp, entry.get("district_id", ""))
+## Steady income / upkeep per second of every stored resource across all
+## colonies: { resource_id: net per second }. "raw" is all raw kinds together;
+## energy is the grid's net. Waiting, paused and constructing buildings count 0.
+func resource_rates() -> Dictionary:
+	var rates := {Economy.ENERGY: _global_energy}
 	var st := get_node("/root/SkillTree")
-	var out_val := def.output_amount * amt * lv_mult * get_site_mult(pp, entry, def)
-	
-	if def.output_type == BuildingDef.OutputType.CREDITS:
-		out_val *= st.get_credits_mult()
-	elif def.output_type == BuildingDef.OutputType.ENERGY:
-		if def.building_id == "solar_panel" or def.building_id == "solar_matrix":
-			out_val *= st.get_solar_mult() * dbuffs.clean_energy_mult * dbuffs.solar_mult
-		elif def.building_id == "geothermal_plant":
-			out_val *= st.get_generator_output_mult() * dbuffs.clean_energy_mult * dbuffs.geothermal_mult
-		elif def.input_type != BuildingDef.OutputType.NONE:
-			out_val *= st.get_generator_output_mult()
-			var in_min: String = entry.get("burning_mineral", "")
-			if in_min == "":
-				out_val = 0.0 # No fuel
-	elif def.output_type == BuildingDef.OutputType.RAW_MINERAL or def.output_type == BuildingDef.OutputType.REFINED_MINERAL:
-		out_val *= st.get_mine_output_mult() * dbuffs.mine_output_mult
-		if def.building_id == "magma_dredge":
-			out_val *= dbuffs.magma_dredge_output_mult
-	return out_val
+	for pp: PlanetProgress in _all_colonies():
+		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+		if pd != null:
+			for poi: POIData in pd.custom_pois:
+				var ddef := district_def(poi)
+				if ddef == null or poi.is_orbital() or ddef.base_tick <= 0.0:
+					continue
+				var inc := district_income(pp, poi)
+				for id: String in inc:
+					if id == Economy.ENERGY or id == Economy.POPULATION:
+						continue
+					rates[id] = float(rates.get(id, 0.0)) \
+						+ float(inc[id]) * st.get_global_speed_mult() / ddef.base_tick
+		for entry: Dictionary in pp.buildings:
+			if entry.get("constructing", false):
+				continue
+			var key := _key(pp.planet_seed, entry.get("district_id", ""), entry.get("uid", "-1"))
+			if _user_paused.get(key, false) or _paused.get(key, false) or _storage_full.get(key, false):
+				continue
+			var def := BuildingDef.find(entry.get("building_id", ""))
+			if def == null or def.tick_duration <= 0.0:
+				continue
+			var speed: float = st.get_global_speed_mult()
+			if def.outputs.has(Economy.RAW):
+				speed *= st.get_mine_speed_mult()
+			if def.energy_per_tick < 0.0:
+				speed *= _global_energy_ratio
+			if speed <= 0.0:
+				continue
+			var per_s := speed / def.tick_duration
+			var yield_m := 1.0
+			if def.inputs.has(Economy.RAW):
+				var rinfo := Economy.raw_info(entry.get("burning_mineral", ""))
+				yield_m = Economy.yield_mult(int(rinfo.get("rarity", 1)))
+			for id: String in def.outputs:
+				if id == Economy.ENERGY or id == Economy.POPULATION:
+					continue
+				rates[id] = float(rates.get(id, 0.0)) + output_per_cycle(pp, entry, def, id) * yield_m * per_s
+			for id: String in def.inputs:
+				rates[id] = float(rates.get(id, 0.0)) - float(def.inputs[id]) * float(entry.get("amount", 1)) * per_s
+	return rates
 
+## Pays a building's per-cycle inputs from the global stock. Returns false (and
+## takes nothing) if anything is short. A "raw" input takes the highest-rarity
+## raw resource in stock, remembered in entry.burning_mineral for the yield.
+func _pay_inputs(def: BuildingDef, amount: int, entry: Dictionary) -> bool:
+	if def.inputs.is_empty():
+		return true
+	var plan := {}   # resource id -> amount to take
+	for id: String in def.inputs:
+		var need: float = float(def.inputs[id]) * float(amount)
+		if id == Economy.RAW:
+			var rid := Economy.best_raw_in_stock(need)
+			if rid == "":
+				return false
+			plan[rid] = float(plan.get(rid, 0.0)) + need
+			entry["burning_mineral"] = rid
+		else:
+			if Economy.amount(id) < need:
+				return false
+			plan[id] = float(plan.get(id, 0.0)) + need
+	for id: String in plan:
+		if id == Economy.CREDITS:
+			GameState.spend_credits(plan[id])
+		elif id == Economy.SCIENCE:
+			GameState.spend_science(plan[id])
+		else:
+			GameState.consume_resource(id, plan[id])
+	return true
+
+## End of a production cycle: add every (non-flow) output, scaled by count,
+## raw-input yield, planet bonuses and skills, and show the popups.
+func _on_tick_complete(pp: PlanetProgress, def: BuildingDef,
+		_key_str: String, amount: int, entry: Dictionary) -> void:
+	if not pp.buildings.has(entry):
+		return   # scrapped before the cycle finished
+	if def.logic != null:   # legacy hook (spaceport launches)
+		def.logic.produce(pp, def, amount, PlanetModifier.for_planet(_planet_type(pp.planet_seed)),
+			entry, get_node("/root/SkillTree"))
+	var poi_lbl: String = entry.get("district_id", "")
+	var yield_mult := 1.0
+	if def.inputs.has(Economy.RAW):
+		var rinfo := Economy.raw_info(entry.get("burning_mineral", ""))
+		yield_mult = Economy.yield_mult(int(rinfo.get("rarity", 1)))
+	for id: String in def.outputs:
+		if id == Economy.ENERGY or id == Economy.POPULATION:
+			continue   # flows / capacity, not per-cycle stock
+		var value: float = output_per_cycle(pp, entry, def, id) * yield_mult
+		if id == Economy.RAW:
+			_produce_raw(pp, poi_lbl, value)
+			continue
+		Economy.add(id, value)
+		if poi_lbl != "" and value > 0.0:
+			var short: String = Economy.INFO.get(id, {}).get("short", id)
+			var txt := "+%.1f %s" % [value, short] if value < 10.0 else "+%.0f %s" % [value, short]
+			resource_produced.emit(pp.planet_seed, poi_lbl, txt, Economy.color_of(id), null)
+
+## Splits a mine's raw output over the planet's raw resources, by deposit
+## density × what lies under the district.
+func _produce_raw(pp: PlanetProgress, poi_lbl: String, total: float) -> void:
+	var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+	if pd == null or total <= 0.0:
+		return
+	var raws := Economy.raw_for_body(pd)
+	if raws.is_empty():
+		return
+	var weights: Array[float] = []
+	var sum := 0.0
+	for r: Dictionary in raws:
+		var rid: String = r["id"]
+		var w: float = float(pd.mineral_densities.get(rid, 1.0 / pow(2.5, float(r["rarity"]) - 1.0)))
+		w *= local_mineral_factor(pp, poi_lbl, rid)
+		weights.append(w)
+		sum += w
+	if sum <= 0.0:
+		return
+	for k in raws.size():
+		var share: float = total * weights[k] / sum
+		if share <= 0.0:
+			continue
+		var rid: String = raws[k]["id"]
+		GameState.add_resource(rid, share)
+		if share >= 0.05 and poi_lbl != "":
+			var col: Color = raws[k]["color"]
+			var txt := "+%.1f" % share if share < 1.0 else "+%.0f" % share
+			resource_produced.emit(pp.planet_seed, poi_lbl, txt, col, MineralIcon.make(1, col))
+
+## One cycle's worth of `id` from a building entry (count, site, planet bonus,
+## skills) — before any raw-input yield. Energy is per second of flow.
+func output_per_cycle(pp: PlanetProgress, entry: Dictionary, def: BuildingDef, id: String) -> float:
+	if not def.outputs.has(id):
+		return 0.0
+	var v: float = float(def.outputs[id]) * float(entry.get("amount", 1))
+	v *= get_site_mult(pp, entry, def) * Economy.planet_bonus(pp, id)
+	return _skill_mods(pp, id, v, def.output_tag)
+
+## Skill / planet-modifier multipliers shared by buildings and district base income.
+func _skill_mods(pp: PlanetProgress, id: String, v: float, output_tag: String) -> float:
+	var st := get_node("/root/SkillTree")
+	match id:
+		Economy.CREDITS:
+			v *= st.get_credits_mult()
+		Economy.RAW:
+			v *= st.get_mine_output_mult() * PlanetModifier.combined(
+				PlanetModifier.for_planet(_planet_type(pp.planet_seed)), PlanetModifier.Effect.MINE_OUTPUT_MULT)
+		Economy.ENERGY:
+			if output_tag == "solar":
+				v *= st.get_solar_mult()
+	return v
+
+# ── Building helpers (UI) ─────────────────────────────────────────────────────
+
+## Buildings have no levels any more (count only); kept at 1× for older UI code.
+func get_building_level_mult(_level: int) -> float:
+	return 1.0
+
+func get_building_consume_mult(_level: int) -> float:
+	return 1.0
+
+## The building's main output per cycle (what its card shows).
+func get_building_output(pp: PlanetProgress, entry: Dictionary, def: BuildingDef) -> float:
+	for id: String in def.outputs:
+		if id == Economy.POPULATION or id == Economy.ENERGY:
+			continue
+		return output_per_cycle(pp, entry, def, id)
+	if def.outputs.has(Economy.ENERGY):
+		return output_per_cycle(pp, entry, def, Economy.ENERGY)
+	if def.outputs.has(Economy.POPULATION):
+		return output_per_cycle(pp, entry, def, Economy.POPULATION)
+	return 0.0
 
 ## The district POI an entry belongs to, or null.
 func _district_poi(pp: PlanetProgress, district_id: String) -> POIData:
@@ -373,7 +534,7 @@ func get_site_mult(pp: PlanetProgress, entry: Dictionary, def: BuildingDef) -> f
 		return 1.0
 	return def.site_mult(_district_poi(pp, entry.get("district_id", "")))
 
-## Mines draw the planet's minerals in proportion to what lies under the
+## Mines draw the planet's raw resources in proportion to what lies under the
 ## district: planet density × this factor (≈1 for an average deposit).
 func local_mineral_factor(pp: PlanetProgress, district_id: String, resource_id: String) -> float:
 	var poi := _district_poi(pp, district_id)
@@ -384,230 +545,95 @@ func local_mineral_factor(pp: PlanetProgress, district_id: String, resource_id: 
 		return 1.0
 	return 0.15 + 1.7 * float(mins[resource_id])
 
-func get_district_buffs(pp: PlanetProgress, district_id: String) -> Dictionary:
-	var buffs := {
-		"solar_mult": 1.0,
-		"geothermal_mult": 1.0,
-		"clean_energy_mult": 1.0,
-		"generator_duration_mult": 1.0,
-		"mine_output_mult": 1.0,
-		"mine_speed_mult": 1.0,
-		"refinery_speed_mult": 1.0,
-		"mining_energy_cost_mult": 1.0,
-		"magma_dredge_output_mult": 1.0,
-		"gas_mining_speed_mult": 1.0,
-		"residential_mult": 1.0,
-		"apartments_mult": 1.0,
-		"luxury_complex_mult": 1.0,
-		"science_speed_mult": 1.0,
-		"science_output_mult": 1.0,
-		"trade_speed_mult": 1.0,
-		"trade_output_mult": 1.0
-	}
-	for b in pp.buildings_in_district(district_id):
-		if b.get("constructing", false): continue
-		var bid = b.get("building_id", "")
-		var amt: int = b.get("amount", 1)
-		var lv: int = b.get("level", 1)
-		var lv_mult := get_building_level_mult(lv)
-		
-		if bid == "circuit_overloader":
-			buffs.solar_mult += 0.03 * amt * lv_mult
-		elif bid == "magma_resonator":
-			buffs.geothermal_mult += 0.02 * amt * lv_mult
-		elif bid == "grid_optimizer":
-			buffs.clean_energy_mult += 0.01 * amt * lv_mult
-		elif bid == "combustion_stabilizer":
-			buffs.generator_duration_mult += 0.05 * amt * lv_mult
-		elif bid == "extraction_optimizer":
-			buffs.mine_output_mult += 0.05 * amt * lv_mult
-		elif bid == "sonic_resonator":
-			buffs.mine_speed_mult += 0.05 * amt * lv_mult
-		elif bid == "thermal_crusher":
-			buffs.refinery_speed_mult += 0.05 * amt * lv_mult
-		elif bid == "logistics_hub":
-			buffs.mining_energy_cost_mult -= 0.05 * amt * lv_mult
-		elif bid == "tectonic_stabilizer":
-			buffs.magma_dredge_output_mult += 0.50 * amt * lv_mult
-		elif bid == "pressure_funnel":
-			buffs.gas_mining_speed_mult += 0.50 * amt * lv_mult
-		elif bid == "zero_g_sorter":
-			buffs.mine_speed_mult += 0.20 * amt * lv_mult
-		elif bid == "culture_center":
-			buffs.residential_mult += 0.20 * amt * lv_mult
-		elif bid == "recreation_center":
-			buffs.apartments_mult += 0.25 * amt * lv_mult
-		elif bid == "opera_house":
-			buffs.luxury_complex_mult += 0.30 * amt * lv_mult
-		elif bid == "library":
-			buffs.science_output_mult += 0.15 * amt * lv_mult
-		elif bid == "observatory":
-			buffs.science_speed_mult += 0.10 * amt * lv_mult
-		elif bid == "research_nexus":
-			buffs.science_output_mult += 0.30 * amt * lv_mult
-		elif bid == "customs_office":
-			buffs.trade_output_mult += 0.15 * amt * lv_mult
-		elif bid == "logistics_center":
-			buffs.trade_speed_mult += 0.10 * amt * lv_mult
-		elif bid == "central_bank":
-			buffs.trade_output_mult += 0.30 * amt * lv_mult
-			
-	# Apply Planet-Wide Orbital Support Buffs
-	for b in pp.buildings:
-		if b.get("constructing", false): continue
-		var bid = b.get("building_id", "")
-		var amt: int = b.get("amount", 1)
-		var lv: int = b.get("level", 1)
-		var lv_mult := get_building_level_mult(lv)
-		
-		if bid == "orbital_mirrors":
-			buffs.solar_mult += 0.15 * amt * lv_mult
-		elif bid == "orbital_logistics":
-			buffs.trade_speed_mult += 0.25 * amt * lv_mult
-			buffs.trade_output_mult += 0.25 * amt * lv_mult
-		elif bid == "zero_g_nexus":
-			buffs.science_output_mult += 0.30 * amt * lv_mult
-			
-	return buffs
+# ── Energy grid ───────────────────────────────────────────────────────────────
 
-## Computes global energy balance and ratio across ALL colonized planets.
-## Called once per frame before _tick_all.
-func _calc_global_energy() -> void:
-	var total_prod: float = 0.0
-	var total_demand: float = 0.0
-	var net: float = 0.0
-	var st := get_node("/root/SkillTree")
-	for pp: PlanetProgress in _all_colonies():
-		for i in pp.buildings.size():
-			var entry: Dictionary = pp.buildings[i]
-			if entry.get("constructing", false):
-				continue
-			var def := BuildingDef.find(entry.get("building_id", ""))
-			if def == null:
-				continue
-			var amt: int     = entry.get("amount", 1)
-			if not entry.has("uid"):
-				entry["uid"] = str(randi())
-			var ekey: String = _key(pp.planet_seed, entry.get("district_id", ""), entry["uid"])
-			if _paused.get(ekey, false) or _user_paused.get(ekey, false):
-				continue
-			var planet_energy_mult := 1.0
-			if pp.has_building("command_center"):
-				planet_energy_mult *= 0.85
-				
-			var lv: int = entry.get("level", 1)
-			var lv_mult := get_building_level_mult(lv)
-			var consume_mult := get_building_consume_mult(lv)
-			var dbuffs := get_district_buffs(pp, entry.get("district_id", ""))
-			
-			if def.energy_per_tick > 0.0:
-				var mult: float = lv_mult * get_site_mult(pp, entry, def)
-				if def.building_id == "solar_panel" or def.building_id == "solar_matrix":
-					mult *= st.get_solar_mult() * dbuffs.clean_energy_mult * dbuffs.solar_mult
-				elif def.building_id == "geothermal_plant":
-					mult *= dbuffs.clean_energy_mult * dbuffs.geothermal_mult
-				var contrib := def.energy_per_tick * amt * mult
-				total_prod += contrib
-				net += contrib
-			elif def.energy_per_tick < 0.0:
-				var building_consume: float = consume_mult
-				if def.output_type == BuildingDef.OutputType.RAW_MINERAL or def.output_type == BuildingDef.OutputType.REFINED_MINERAL:
-					building_consume *= max(0.1, dbuffs.mining_energy_cost_mult as float) * st.get_mining_energy_mult()
-				
-				var st_energy_mult: float = st.get_energy_consume_mult()
-				if POIData.POIType.CITY in def.allowed_poi_types and st.is_unlocked("housing_maintenance"):
-					st_energy_mult -= 0.10
-				if def.output_type == BuildingDef.OutputType.SCIENCE and st.is_unlocked("science_maintenance"):
-					st_energy_mult -= 0.10
-				if def.output_type == BuildingDef.OutputType.CREDITS and not (POIData.POIType.CITY in def.allowed_poi_types) and st.is_unlocked("trade_maintenance"):
-					st_energy_mult -= 0.10
-					
-				var contrib := def.energy_per_tick * amt * building_consume * st_energy_mult * planet_energy_mult
-				total_demand += abs(contrib)
-				net += contrib
-				
-			if def.output_type == BuildingDef.OutputType.ENERGY:
-				var mult: float = lv_mult * get_site_mult(pp, entry, def)
-				if def.building_id == "solar_panel" or def.building_id == "solar_matrix":
-					mult *= st.get_solar_mult() * dbuffs.clean_energy_mult * dbuffs.solar_mult
-				elif def.building_id == "geothermal_plant":
-					mult *= st.get_generator_output_mult() * dbuffs.clean_energy_mult * dbuffs.geothermal_mult
-				elif def.input_type != BuildingDef.OutputType.NONE:
-					# Burners
-					mult *= st.get_generator_output_mult()
-					var in_min: String = entry.get("burning_mineral", "")
-					if in_min == "":
-						mult = 0.0
-				total_prod += def.output_amount * amt * mult
-				net        += def.output_amount * amt * mult
-	_global_energy = net
-	_global_energy_ratio = 1.0 if total_demand <= 0.0 else clampf(total_prod / total_demand, 0.0, 1.0)
-
-## Per-planet energy contribution (used by PlanetaryView for breakdown display).
-func planet_energy_net(pp: PlanetProgress) -> float:
-	var st := get_node("/root/SkillTree")
-	var total: float = 0.0
-	for i in pp.buildings.size():
-		var entry: Dictionary = pp.buildings[i]
+## Built, not-paused entries of a planet.
+func _running_entries(pp: PlanetProgress) -> Array:
+	var out: Array = []
+	for entry: Dictionary in pp.buildings:
 		if entry.get("constructing", false):
 			continue
-		var def := BuildingDef.find(entry.get("building_id", ""))
-		if def == null:
-			continue
-		var amt: int     = entry.get("amount", 1)
 		if not entry.has("uid"):
 			entry["uid"] = str(randi())
 		var ekey: String = _key(pp.planet_seed, entry.get("district_id", ""), entry["uid"])
 		if _paused.get(ekey, false) or _user_paused.get(ekey, false):
 			continue
-		var lv: int = entry.get("level", 1)
-		var lv_mult := get_building_level_mult(lv)
-		var consume_mult := get_building_consume_mult(lv)
-		var dbuffs := get_district_buffs(pp, entry.get("district_id", ""))
-		
-		if def.energy_per_tick > 0.0:
-			var mult: float = lv_mult * get_site_mult(pp, entry, def)
-			if def.building_id == "solar_panel" or def.building_id == "solar_matrix":
-				mult *= st.get_solar_mult() * dbuffs.clean_energy_mult * dbuffs.solar_mult
-			elif def.building_id == "geothermal_plant":
-				mult *= dbuffs.clean_energy_mult * dbuffs.geothermal_mult
-			total += def.energy_per_tick * amt * mult
-		elif def.energy_per_tick < 0.0:
-			var building_consume: float = consume_mult
-			if def.output_type == BuildingDef.OutputType.RAW_MINERAL or def.output_type == BuildingDef.OutputType.REFINED_MINERAL:
-				building_consume *= max(0.1, dbuffs.mining_energy_cost_mult as float) * st.get_mining_energy_mult()
-			total += def.energy_per_tick * amt * building_consume * (st.get_energy_consume_mult() as float)
-			
-		if def.output_type == BuildingDef.OutputType.ENERGY:
-			var mult: float = lv_mult * get_site_mult(pp, entry, def)
-			if def.building_id == "solar_panel" or def.building_id == "solar_matrix":
-				mult *= st.get_solar_mult() * dbuffs.clean_energy_mult * dbuffs.solar_mult
-			elif def.building_id == "geothermal_plant":
-				mult *= st.get_generator_output_mult() * dbuffs.clean_energy_mult * dbuffs.geothermal_mult
-			elif def.input_type != BuildingDef.OutputType.NONE:
-				mult *= st.get_generator_output_mult()
-				var in_min: String = entry.get("burning_mineral", "")
-				if in_min == "":
-					mult = 0.0
-			total += def.output_amount * amt * mult
-	return total
+		out.append(entry)
+	return out
+
+## Net energy flow of one building entry (production − upkeep), as the grid
+## counts it. 0 while it is constructing or paused.
+func entry_energy(pp: PlanetProgress, entry: Dictionary) -> float:
+	if entry.get("constructing", false):
+		return 0.0
+	var ekey: String = _key(pp.planet_seed, entry.get("district_id", ""), entry.get("uid", "-1"))
+	if _paused.get(ekey, false) or _user_paused.get(ekey, false):
+		return 0.0
+	var def := BuildingDef.find(entry.get("building_id", ""))
+	if def == null:
+		return 0.0
+	var e := output_per_cycle(pp, entry, def, Economy.ENERGY)
+	if def.energy_per_tick < 0.0:
+		e += def.energy_per_tick * float(entry.get("amount", 1)) \
+			* float(get_node("/root/SkillTree").get_energy_consume_mult())
+	return e
+
+## (production, demand) of one planet's energy grid.
+func _planet_energy(pp: PlanetProgress) -> Vector2:
+	var st := get_node("/root/SkillTree")
+	var prod := 0.0
+	var demand := 0.0
+	for entry: Dictionary in _running_entries(pp):
+		var def := BuildingDef.find(entry.get("building_id", ""))
+		if def == null:
+			continue
+		if def.outputs.has(Economy.ENERGY):
+			prod += output_per_cycle(pp, entry, def, Economy.ENERGY)
+		if def.energy_per_tick < 0.0:
+			demand += -def.energy_per_tick * float(entry.get("amount", 1)) * float(st.get_energy_consume_mult())
+	prod += districts_energy(pp)
+	return Vector2(prod, demand)
+
+## Base energy (⚡/s) of a planet's finished districts.
+func districts_energy(pp: PlanetProgress) -> float:
+	var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+	if pd == null:
+		return 0.0
+	var e := 0.0
+	for poi: POIData in pd.custom_pois:
+		if not poi.is_orbital():
+			e += district_base(pp, poi, Economy.ENERGY)
+	return e
+
+## Computes global energy balance and ratio across ALL colonized planets.
+## Called once per frame before _tick_all.
+func _calc_global_energy() -> void:
+	var total_prod := 0.0
+	var total_demand := 0.0
+	for pp: PlanetProgress in _all_colonies():
+		var e := _planet_energy(pp)
+		total_prod += e.x
+		total_demand += e.y
+	_global_energy = total_prod - total_demand
+	_global_energy_prod = total_prod
+	_global_energy_demand = total_demand
+	# A deficit slows energy consumers a little: down to 50% speed when the
+	# grid makes nothing, e.g. 75% when it covers half the demand.
+	if total_demand <= 0.0 or _global_energy >= 0.0:
+		_global_energy_ratio = 1.0
+	else:
+		_global_energy_ratio = 1.0 - MAX_ENERGY_SLOWDOWN * (1.0 - clampf(total_prod / total_demand, 0.0, 1.0))
+
+## Per-planet energy contribution (used by PlanetaryView for breakdown display).
+func planet_energy_net(pp: PlanetProgress) -> float:
+	var e := _planet_energy(pp)
+	return e.x - e.y
 
 func _planet_type(planet_seed: int) -> PlanetData.Type:
 	var pd := GameState.get_planet_data(planet_seed)
 	if pd != null:
 		return pd.planet_type
 	return PlanetData.Type.TERRAN
-
-func _deposit_speed(def: BuildingDef, planet_seed: int,
-		mods: Array[PlanetModifier]) -> float:
-	if def.output_type != BuildingDef.OutputType.RAW_MINERAL:
-		return 1.0
-	var pd := GameState.get_planet_data(planet_seed)
-	var br := GameState.get_body_resources_for(pd) if pd != null \
-		else GameState.get_body_resources(planet_seed)
-	var base: float = clampf(br.avg_power() * 0.4, 0.5, 3.0)
-	var planet_mult: float = PlanetModifier.combined(mods, PlanetModifier.Effect.MINE_SPEED_MULT)
-	return base * planet_mult
 
 func _all_colonies() -> Array[PlanetProgress]:
 	var result: Array[PlanetProgress] = []
@@ -616,39 +642,8 @@ func _all_colonies() -> Array[PlanetProgress]:
 			result.append(pp)
 	return result
 
-func _entry_index(pp: PlanetProgress, entry: Dictionary) -> int:
-	for i in pp.buildings.size():
-		if pp.buildings[i] == entry:
-			return i
-	return 0
-
 func _key(planet_seed: int, poi_label: String, uid: String) -> String:
 	return "%d:%s:%s" % [planet_seed, poi_label, uid]
-
-func _resource_key(out_type: BuildingDef.OutputType, planet_seed: int,
-		entry: Dictionary = {}) -> String:
-	match out_type:
-		BuildingDef.OutputType.RAW_MINERAL:
-			# If this is an input checking situation, check input_mineral first, else target_mineral
-			var tgt: String = entry.get("input_mineral", "")
-			if tgt == "":
-				tgt = entry.get("target_mineral", "")
-			if tgt != "":
-				return tgt
-			# Auto-assign: pick the first raw mineral on this planet and persist it
-			var _pd := GameState.get_planet_data(planet_seed)
-			var br := GameState.get_body_resources_for(_pd) if _pd != null \
-				else GameState.get_body_resources(planet_seed)
-			var raw := br.get_by_tag(ResourceData.Tag.RAW_MINERAL)
-			if not raw.is_empty():
-				var rid: String = (raw[0] as ResourceData).resource_id()
-				if not entry.is_empty():
-					entry["target_mineral"] = rid   # persist default for outputs
-				return rid
-			return "raw_%d" % planet_seed   # last-resort generic fallback
-		BuildingDef.OutputType.REFINED_MINERAL:
-			return "ref_%d" % planet_seed
-	return ""
 
 func _emit_progress(planet_seed: int, key: String) -> void:
 	building_progress_changed.emit(planet_seed, key, _progress.get(key, 0.0))

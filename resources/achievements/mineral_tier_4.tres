@@ -6,7 +6,7 @@
 script = ExtResource("1_def")
 achievement_id = "mineral_tier_4"
 title = "Mantle Breaker"
-description = "Collect 5 Million minerals."
+description = "Stockpile 5 Million raw resources."
 icon = "🪨"
 trigger = 11
 int_value = 0

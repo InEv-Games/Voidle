@@ -1,68 +1,46 @@
-## DebugResourceGen — @tool script for testing resource generation in editor.
+## DebugResourceGen — @tool helper: lists which named raw resources each body
+## type carries at a given distance from home (Economy.RAW_TABLE).
 ## Add as a child node anywhere in a scene, then use the Inspector buttons.
 @tool
 extends Node
 
 @export_group("Body Settings")
-@export var body_seed:   int = 12345
-@export var rarity_min:  int = 1
-@export var rarity_max:  int = 3
+@export var planet_type: PlanetData.Type = PlanetData.Type.TERRAN
+@export var system_hop:  int = 0
 
 @export_group("Actions")
 @export var generate: bool = false : set = _do_generate
-@export var generate_multiple_bodies: bool = false : set = _do_multi
+@export var list_all_bodies: bool = false : set = _do_all
 
 @export_group("Output (read-only)")
 @export var last_result: String = ""
 
+func _lines_for(pt: PlanetData.Type, hop: int) -> Array[String]:
+	var pd := PlanetData.new()
+	pd.planet_type = pt
+	pd.system_hop = hop
+	var lines: Array[String] = []
+	for info: Dictionary in Economy.raw_for_body(pd):
+		lines.append("  [R%d] %-12s ×%.2f yield  (%s)" % [info["rarity"], info["name"],
+			Economy.yield_mult(int(info["rarity"])), info["id"]])
+	if lines.is_empty():
+		lines.append("  (no raw resources)")
+	return lines
+
 func _do_generate(v: bool) -> void:
 	generate = false
 	if not v: return
-
-	var br := BodyResources.generate(body_seed, rarity_min, rarity_max)
-	var lines: Array[String] = []
-	lines.append("=== Body seed %d | R%d–R%d ===" % [body_seed, rarity_min, rarity_max])
-	lines.append("Resources found: %d" % br.resources.size())
-	lines.append("")
-
-	for rd: ResourceData in br.as_array():
-		var tag_name := ResourceData.TAG_NAMES[rd.tag]
-		lines.append("  [R%d T%d] %s" % [rd.rarity, rd.tier, rd.unique_name])
-		lines.append("          Tag:    %s" % tag_name)
-		lines.append("          Power:  %.2f" % rd.power)
-		lines.append("          Value:  %.2f cr/unit" % rd.base_value)
-		lines.append("          Stack:  %.0f units" % rd.stack_size)
-		lines.append("          ID:     %s" % rd.resource_id())
-		lines.append("")
-
+	var lines: Array[String] = ["=== %s at hop %d ===" % [PlanetData.Type.keys()[planet_type], system_hop]]
+	lines.append_array(_lines_for(planet_type, system_hop))
 	last_result = "\n".join(lines)
 	print(last_result)
 
-func _do_multi(v: bool) -> void:
-	generate_multiple_bodies = false
+func _do_all(v: bool) -> void:
+	list_all_bodies = false
 	if not v: return
-
-	# Simulate 5 bodies with escalating tiers — shows discovery tracking
-	var seeds    := [body_seed, body_seed + 1, body_seed + 2, body_seed + 3, body_seed + 4]
-	var rarities := [[1,1], [1,2], [2,3], [3,4], [4,5]]
-
-	var all_known: Dictionary = {}
-	var lines: Array[String] = []
-	lines.append("=== Multi-body discovery simulation ===")
-
-	for i in seeds.size():
-		var br := BodyResources.generate(seeds[i], rarities[i][0], rarities[i][1])
-		lines.append("\nBody %d (seed %d, R%d–R%d):" % [i + 1, seeds[i], rarities[i][0], rarities[i][1]])
-		for rd: ResourceData in br.as_array():
-			var key := rd.resource_id()
-			var is_new := not all_known.has(key)
-			if is_new:
-				all_known[key] = 1
-			else:
-				all_known[key] += 1
-			var marker := "★ NEW" if is_new else ("⊕ x%d deposit" % all_known[key])
-			lines.append("  [R%d T%d] %-28s %s" % [rd.rarity, rd.tier, rd.unique_name, marker])
-
-	lines.append("\n--- Total unique resource types discovered: %d ---" % all_known.size())
+	var lines: Array[String] = ["=== Raw resources by body type (hop %d) ===" % system_hop]
+	for i in PlanetData.Type.size():
+		lines.append("%s:" % PlanetData.Type.keys()[i])
+		lines.append_array(_lines_for(i as PlanetData.Type, system_hop))
 	last_result = "\n".join(lines)
 	print(last_result)

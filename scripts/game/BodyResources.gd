@@ -13,42 +13,21 @@ var resources: Dictionary = {}
 
 # ── Generation ────────────────────────────────────────────────────────────────
 
-## Base rarity range by body type (before hop-distance scaling).
-## Actual range at a given system is widened by system_hop in GameState.get_body_resources_for.
-static func rarity_range_for(planet_type: PlanetData.Type) -> Vector2i:
-	match planet_type:
-		PlanetData.Type.TERRAN:    return Vector2i(1, 2)  # colonizable worlds stay R1-R2 at home
-		PlanetData.Type.MOON:      return Vector2i(1, 2)
-		PlanetData.Type.ASTEROID:  return Vector2i(2, 4)
-		PlanetData.Type.GAS_GIANT: return Vector2i(1, 2)
-		_:                         return Vector2i(1, 3)  # ARID/ICE/VOLCANIC/BARREN
-
-## Generate the resource pool for a body.
-## Each distinct rarity in [rarity_min, rarity_max] produces exactly one mineral —
-## consistent universe-wide (R1 is always the same mineral regardless of body).
-static func generate(b_seed: int, r_min: int, r_max: int) -> BodyResources:
-	var br        := BodyResources.new()
-	br.body_seed   = b_seed
-	br.rarity_min  = r_min
-	br.rarity_max  = r_max
-
-	var rng := RandomNumberGenerator.new()
-	rng.seed = b_seed ^ 0xC0FFEE
-
-	# Bodies don't always expose every rarity in their range — add some variety
-	for r in range(r_min, r_max + 1):
-		# Higher rarities have a chance of not appearing (rarer = harder to find)
-		var chance: float = 1.0 if r == r_min else 0.65
-		if rng.randf() > chance:
-			continue
-		var rd := ResourceData.generate(b_seed, ResourceData.Tag.RAW_MINERAL, r, 1)
+## The named raw resources a body carries (Economy.raw_for_body): fixed by
+## body type, with rarer ones appearing further from home.
+static func generate_for(pd: PlanetData) -> BodyResources:
+	var br := BodyResources.new()
+	br.body_seed = pd.seed
+	br.rarity_min = 99
+	br.rarity_max = 0
+	for info: Dictionary in Economy.raw_for_body(pd):
+		var rd := ResourceData.from_raw(info)
 		br.resources[rd.resource_id()] = rd
-
-	# Guarantee at least one resource
+		br.rarity_min = mini(br.rarity_min, rd.rarity)
+		br.rarity_max = maxi(br.rarity_max, rd.rarity)
 	if br.resources.is_empty():
-		var rd := ResourceData.generate(b_seed, ResourceData.Tag.RAW_MINERAL, r_min, 1)
-		br.resources[rd.resource_id()] = rd
-
+		br.rarity_min = 1
+		br.rarity_max = 1
 	return br
 
 ## Convenience: returns all resources as an array, sorted by rarity then tier.

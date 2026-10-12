@@ -60,7 +60,43 @@ const TIER_SUFFIXES: Array[String] = ["Ore", "Ingot", "Alloy", "Component", "Cor
 ## Stable key for stored_resources dict: tag + rarity + tier.
 ## Origin-independent — same R/T mineral is the same resource regardless of body.
 func resource_id() -> String:
+	if fixed_id != "":
+		return fixed_id
 	return "R%d_T%d_%s" % [rarity, tier, Tag.keys()[tag]]
+
+## Named economy resources (Economy.gd) use a fixed id ("ferrite", "goods", …).
+@export var fixed_id: String = ""
+
+## A named raw resource from Economy.RAW_TABLE.
+static func from_raw(info: Dictionary) -> ResourceData:
+	var rd := ResourceData.new()
+	rd.fixed_id      = info["id"]
+	rd.tag           = Tag.RAW_MINERAL
+	rd.rarity        = int(info["rarity"])
+	rd.tier          = 1
+	rd.mineral_name  = info["name"]
+	rd.unique_name   = info["name"]
+	rd.power         = _calc_power(rd.rarity, 1)
+	rd.base_value    = _calc_base_value(rd.tag, rd.rarity, 1)
+	rd.stack_size    = _calc_stack_size(rd.rarity, 1)
+	rd.display_color = info["color"]
+	return rd
+
+## A processed resource (goods / fuel / rare_elements) — tracked like a mineral
+## so cargo, icons and costs can use it.
+static func from_processed(id: String) -> ResourceData:
+	var rd := ResourceData.new()
+	rd.fixed_id      = id
+	rd.tag           = Tag.REFINED_MINERAL
+	rd.rarity        = 1
+	rd.tier          = 2
+	rd.mineral_name  = Economy.display_name(id)
+	rd.unique_name   = rd.mineral_name
+	rd.power         = _calc_power(1, 2)
+	rd.base_value    = _calc_base_value(rd.tag, 1, 2)
+	rd.stack_size    = _calc_stack_size(1, 2)
+	rd.display_color = Economy.color_of(id)
+	return rd
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Procedural generation

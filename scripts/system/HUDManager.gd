@@ -5,12 +5,6 @@ var _credits_lbl: Label
 var _science_lbl: Label
 var _skill_btn: Button = null
 var _skill_btn_tween: Tween = null
-var _energy_hud_lbl: Label = null
-var _energy_bar_left: ProgressBar = null
-var _energy_bar_right: ProgressBar = null
-var _energy_hud_poll: float = 0.0
-var _energy_hud_node: Control = null
-var _energy_hbox: Control = null
 ## Fraction of the screen width the game view occupies (left of the side panel).
 ## The energy readout stays centred on it; PlanetaryView animates it when the
 ## side panel slides in or out.
@@ -20,11 +14,17 @@ var _credits_display: float = 0.0
 var _credits_tween: Tween = null
 var _science_display: float = 0.0
 var _science_tween: Tween = null
-var _energy_display: float = 0.0
-var _energy_tween: Tween = null
-var _energy_bar_tween: Tween = null
 var _orbitron: Font
 ## The credits panel node — exposed so PlanetaryView can read its screen height for toast offset.
+## Top resource bar cells (Stellaris-style): id -> Label
+var _res_lbls: Dictionary = {}
+var _res_poll: float = 0.0
+## Small superscript income/upkeep labels next to each value: id -> Label
+var _rate_lbls: Dictionary = {}
+## Raw resources dropdown under the "Raw ▾" cell (null when closed)
+var _raw_dd: PanelContainer = null
+var _raw_dd_list: VBoxContainer = null
+var _raw_cell: Control = null
 var credits_panel: PanelContainer = null
 var science_panel: PanelContainer = null
 var _top_layer: CanvasLayer = null
@@ -82,22 +82,8 @@ func _ready() -> void:
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(hbox)
 
-	# Credit icon
-	var icon := Label.new()
-	icon.text = "◈"
-	if _orbitron: icon.add_theme_font_override("font", _orbitron)
-	icon.add_theme_font_size_override("font_size", 12)
-	icon.add_theme_color_override("font_color", Color(0.95, 0.82, 0.35))
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(icon)
-
-	_credits_lbl = Label.new()
-	_credits_lbl.text = fmt_credits(GameState.credits)
-	if _orbitron: _credits_lbl.add_theme_font_override("font", _orbitron)
-	_credits_lbl.add_theme_font_size_override("font_size", 12)
-	_credits_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-	_credits_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(_credits_lbl)
+	_add_res_cell(hbox, Economy.CREDITS, "◈", "Earned by Commercial districts. Spent on districts and buildings.", false)
+	_credits_lbl = _res_lbls[Economy.CREDITS]
 
 	# Skill Tree Button
 	var skill_btn := Button.new()
@@ -158,14 +144,11 @@ func _ready() -> void:
 					break
 					
 			existing_layer.queue_free()
-			_energy_hud_node.visible = true
 		else:
 			var st_layer := CanvasLayer.new()
 			st_layer.layer = 220
 			var st_view = load("res://scripts/ui/SkillTreeView.gd").new()
 			st_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-			st_view.tree_opened.connect(func() -> void: _energy_hud_node.visible = false)
-			st_view.tree_closed.connect(func() -> void: _energy_hud_node.visible = true)
 			st_layer.add_child(st_view)
 			root.add_child(st_layer))
 
@@ -257,29 +240,11 @@ func _ready() -> void:
 	sci_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	sci_panel.add_child(sci_vbox)
 
-	var sci_hbox := HBoxContainer.new()
-	sci_hbox.add_theme_constant_override("separation", 6)
-	sci_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	sci_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sci_vbox.add_child(sci_hbox)
-
-	var sci_icon := Label.new()
-	sci_icon.text = "⬡"
-	if _orbitron: sci_icon.add_theme_font_override("font", _orbitron)
-	sci_icon.add_theme_font_size_override("font_size", 12)
-	sci_icon.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
-	sci_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sci_hbox.add_child(sci_icon)
-
-	_science_lbl = Label.new()
-	_science_lbl.text = "%s Science" % fmt_science(GameState.science_points)
-	if _orbitron: _science_lbl.add_theme_font_override("font", _orbitron)
-	_science_lbl.add_theme_font_size_override("font_size", 12)
-	_science_lbl.add_theme_color_override("font_color", Color(0.65, 0.90, 1.0))
-	_science_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sci_hbox.add_child(_science_lbl)
+	_add_res_cell(hbox, Economy.SCIENCE, "⬡", "Produced by Science districts. Spent in the Upgrade Tree.")
+	_science_lbl = _res_lbls[Economy.SCIENCE]
 
 	sci_vbox.add_child(skill_btn)
+	_build_resource_cells(hbox)
 
 	sci_panel.anchor_left   = 0.0
 	sci_panel.anchor_right  = 0.0
@@ -297,7 +262,6 @@ func _ready() -> void:
 
 	GameState.credits_changed.connect(_on_credits_changed)
 	GameState.science_changed.connect(_on_science_changed)
-	_setup_energy_hud()
 	AchievementManager.achievement_unlocked.connect(_on_achievement_unlocked)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -333,7 +297,6 @@ func _try_close_skill_tree() -> bool:
 				if gc.has_signal("tree_closed"):
 					gc.emit_signal("tree_closed")
 				child.queue_free()
-				_energy_hud_node.visible = true
 				return true
 	return false
 
@@ -639,102 +602,19 @@ func show_settings_popup() -> void:
 	overlay.add_child(panel)
 	get_tree().root.add_child(overlay)
 
-func _on_credits_changed(new_val: float) -> void:
-	if not is_instance_valid(_credits_lbl):
-		return
+## Credits / science changes show through the top bar's gain animation
+## (_track_stock), polled from _process.
+func _on_credits_changed(_new_val: float) -> void:
+	pass
 
-	var old_val := _credits_display
-	var gained  := new_val > old_val
-
-	# Kill any running tween so we start fresh from the current displayed value
-	if _credits_tween and _credits_tween.is_valid():
-		_credits_tween.kill()
-
-	_credits_tween = create_tween()
-
-	# Briefly flash the label colour to signal gain / loss
-	var flash_col := Color(0.55, 1.0, 0.35) if gained else Color(1.0, 0.55, 0.25)
-	_credits_tween.tween_property(_credits_lbl, "theme_override_colors/font_color",
-		flash_col, 0.12).set_ease(Tween.EASE_OUT)
-	_credits_tween.parallel().tween_method(
-		func(v: float) -> void:
-			_credits_display = v
-			if is_instance_valid(_credits_lbl):
-				_credits_lbl.text = fmt_credits(v),
-		old_val, new_val, 0.55).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	_credits_tween.tween_property(_credits_lbl, "theme_override_colors/font_color",
-		Color(1.0, 0.92, 0.55), 0.3).set_ease(Tween.EASE_IN)
-	if gained and new_val - old_val > 0.5:
-		_spawn_hud_chip("+%s" % fmt_credits(new_val - old_val), Color(0.65, 1.0, 0.45), credits_panel)
-
-func _on_science_changed(new_val: float) -> void:
-	if not is_instance_valid(_science_lbl):
-		return
-	var old_val := _science_display
-	var gained  := new_val > old_val
-	if _science_tween and _science_tween.is_valid(): _science_tween.kill()
-	_science_tween = create_tween()
-	var flash_col := Color(0.55, 1.0, 0.90) if gained else Color(1.0, 0.55, 0.25)
-	_science_tween.tween_property(_science_lbl, "theme_override_colors/font_color", flash_col, 0.12).set_ease(Tween.EASE_OUT)
-	_science_tween.parallel().tween_method(func(v: float) -> void:
-		_science_display = v
-		if is_instance_valid(_science_lbl):
-			_science_lbl.text = "%s Science" % fmt_science(v),
-		old_val, new_val, 0.55).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
-	_science_tween.tween_property(_science_lbl, "theme_override_colors/font_color", Color(0.65, 0.90, 1.0), 0.3).set_ease(Tween.EASE_IN)
-	if gained and new_val - old_val > 0.5:
-		_spawn_hud_chip("+%s sci" % fmt_science(new_val - old_val), Color(0.55, 0.95, 1.0), science_panel)
+func _on_science_changed(_new_val: float) -> void:
+	pass
 
 func _process(delta: float) -> void:
-	_energy_hud_poll += delta
-	if _energy_hud_poll < 0.25 or not is_instance_valid(_energy_hud_lbl):
-		return
-	_energy_hud_poll = 0.0
-	var pm: Node = get_node_or_null("/root/ProductionManager")
-	if pm == null:
-		return
-	var bal: float   = pm.get_global_energy()
-	var ratio: float = pm.get_energy_ratio()
-	var ecol: Color
-	if ratio >= 0.95:
-		ecol = Color(0.90, 0.82, 0.25)
-	elif ratio >= 0.5:
-		ecol = Color(0.80, 0.65, 0.20)
-	else:
-		ecol = Color(0.90, 0.38, 0.25)
-	var pct := ratio * 100.0
-
-	# Tween energy number
-	var old_bal := _energy_display
-	if absf(bal - old_bal) > 0.01:
-		if _energy_tween and _energy_tween.is_valid(): _energy_tween.kill()
-		_energy_tween = create_tween()
-		_energy_tween.tween_method(func(v: float) -> void:
-			_energy_display = v
-			if is_instance_valid(_energy_hud_lbl):
-				var s := "+" if v > 0.0 else ""
-				var frac := absf(v - floorf(v)) > 0.01
-				_energy_hud_lbl.text = s + ("%.1f ⚡" if frac else "%.0f ⚡") % v,
-			old_bal, bal, 0.40).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-	_energy_hud_lbl.add_theme_color_override("font_color", ecol)
-	
-	if is_instance_valid(_energy_bar_left):
-		_energy_bar_left.queue_redraw()
-		_energy_bar_right.queue_redraw()
-
-	# Tween bars
-	if is_instance_valid(_energy_bar_left) and absf(pct - _energy_bar_left.value) > 0.1:
-		var bl_fill := StyleBoxFlat.new()
-		bl_fill.bg_color = ecol; bl_fill.corner_radius_bottom_left = 3
-		var br_fill := StyleBoxFlat.new()
-		br_fill.bg_color = ecol; br_fill.corner_radius_bottom_right = 3
-		_energy_bar_left.add_theme_stylebox_override("fill", bl_fill)
-		_energy_bar_right.add_theme_stylebox_override("fill", br_fill)
-		if _energy_bar_tween and _energy_bar_tween.is_valid(): _energy_bar_tween.kill()
-		_energy_bar_tween = create_tween().set_parallel(true)
-		_energy_bar_tween.tween_property(_energy_bar_left,  "value", pct, 0.40).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		_energy_bar_tween.tween_property(_energy_bar_right, "value", pct, 0.40).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_res_poll += delta
+	if _res_poll >= 0.25:
+		_res_poll = 0.0
+		_refresh_resource_cells()
 
 ## Spawn a small "+X" chip that floats upward from the given HUD panel then fades.
 func _spawn_hud_chip(text: String, color: Color, panel: PanelContainer) -> void:
@@ -757,142 +637,10 @@ func _spawn_hud_chip(text: String, color: Color, panel: PanelContainer) -> void:
 	await get_tree().create_timer(1.0).timeout
 	if is_instance_valid(chip): chip.queue_free()
 
-func _setup_energy_hud() -> void:
-	var anchor := Control.new()
-	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	anchor.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	anchor.offset_top    = 0
-	anchor.offset_bottom = 48
-	add_child(anchor)
-	_energy_hud_node = anchor
-
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 0)
-	hbox.alignment    = BoxContainer.ALIGNMENT_BEGIN
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	anchor.add_child(hbox)
-
-	var bg_col       := Color(0.04, 0.06, 0.14, 0.84)
-	var border_col   := Color(0.28, 0.36, 0.62, 0.45)
-	var bar_bg_col   := Color(0.07, 0.09, 0.18, 0.90)
-	var bar_fill_col := Color(0.92, 0.80, 0.22)
-
-	# Left bar
-	var left_pc := PanelContainer.new()
-	var ls := StyleBoxFlat.new()
-	ls.bg_color = bg_col; ls.border_color = border_col
-	ls.border_width_left = 1; ls.border_width_top = 1; ls.border_width_bottom = 1; ls.border_width_right = 0
-	ls.corner_radius_bottom_left = 6
-	ls.content_margin_left = 10; ls.content_margin_right = 10; ls.content_margin_top = 5; ls.content_margin_bottom = 5
-	left_pc.add_theme_stylebox_override("panel", ls)
-	left_pc.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	left_pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	_energy_bar_left = ProgressBar.new()
-	_energy_bar_left.custom_minimum_size = Vector2(90, 7)
-	_energy_bar_left.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_energy_bar_left.max_value = 100.0; _energy_bar_left.value = 100.0
-	_energy_bar_left.show_percentage = false
-	_energy_bar_left.fill_mode = ProgressBar.FILL_END_TO_BEGIN
-	_energy_bar_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bl_bg := StyleBoxFlat.new(); bl_bg.bg_color = bar_bg_col; bl_bg.corner_radius_bottom_left = 3
-	var bl_fill := StyleBoxFlat.new(); bl_fill.bg_color = bar_fill_col; bl_fill.corner_radius_bottom_left = 3
-	_energy_bar_left.add_theme_stylebox_override("background", bl_bg)
-	_energy_bar_left.add_theme_stylebox_override("fill", bl_fill)
-	_energy_bar_left.draw.connect(func() -> void:
-		if ProductionManager.get_energy_ratio() <= 0.001:
-			_energy_bar_left.draw_rect(Rect2(0, 0, _energy_bar_left.size.x, _energy_bar_left.size.y), Color(0.25, 0.0, 0.0, 0.8))
-			for xi: int in range(0, int(_energy_bar_left.size.x) + int(_energy_bar_left.size.y), 6):
-				var x0: float = float(xi)
-				_energy_bar_left.draw_line(Vector2(x0, 0), Vector2(x0 - _energy_bar_left.size.y, _energy_bar_left.size.y), Color(0.0, 0.0, 0.0, 0.6), 1.0)
-	)
-	left_pc.add_child(_energy_bar_left)
-	hbox.add_child(left_pc)
-
-	# Center
-	var center_pc := PanelContainer.new()
-	var cs := StyleBoxFlat.new()
-	cs.bg_color = Color(0.05, 0.07, 0.16, 0.95); cs.border_color = border_col
-	cs.border_width_left = 1; cs.border_width_top = 1; cs.border_width_right = 1; cs.border_width_bottom = 1
-	cs.corner_radius_bottom_left = 8; cs.corner_radius_bottom_right = 8
-	cs.content_margin_left = 16; cs.content_margin_right = 16; cs.content_margin_top = 7; cs.content_margin_bottom = 10
-	center_pc.add_theme_stylebox_override("panel", cs)
-	center_pc.mouse_filter = Control.MOUSE_FILTER_STOP
-	center_pc.mouse_entered.connect(func() -> void:
-		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("⚡ Energy Breakdown", _energy_breakdown_text()))
-	center_pc.mouse_exited.connect(func() -> void:
-		CursorManager.set_state(CursorManager.State.NORMAL)
-		TooltipManager.hide_tip())
-
-	_energy_hud_lbl = Label.new()
-	_energy_hud_lbl.text = "0 ⚡"
-	if _orbitron: _energy_hud_lbl.add_theme_font_override("font", _orbitron)
-	_energy_hud_lbl.add_theme_font_size_override("font_size", 12)
-	_energy_hud_lbl.add_theme_color_override("font_color", Color(0.92, 0.82, 0.22))
-	_energy_hud_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
-	_energy_hud_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_energy_hud_lbl.custom_minimum_size   = Vector2(92, 0)
-	_energy_hud_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	center_pc.add_child(_energy_hud_lbl)
-	hbox.add_child(center_pc)
-
-	# Right bar
-	var right_pc := PanelContainer.new()
-	var rs := StyleBoxFlat.new()
-	rs.bg_color = bg_col; rs.border_color = border_col
-	rs.border_width_left = 0; rs.border_width_top = 1; rs.border_width_bottom = 1; rs.border_width_right = 1
-	rs.corner_radius_bottom_right = 6
-	rs.content_margin_left = 10; rs.content_margin_right = 10; rs.content_margin_top = 5; rs.content_margin_bottom = 5
-	right_pc.add_theme_stylebox_override("panel", rs)
-	right_pc.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	right_pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	_energy_bar_right = ProgressBar.new()
-	_energy_bar_right.custom_minimum_size = Vector2(90, 7)
-	_energy_bar_right.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_energy_bar_right.max_value = 100.0; _energy_bar_right.value = 100.0
-	_energy_bar_right.show_percentage = false
-	_energy_bar_right.fill_mode = ProgressBar.FILL_BEGIN_TO_END
-	_energy_bar_right.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var br_bg := StyleBoxFlat.new(); br_bg.bg_color = bar_bg_col; br_bg.corner_radius_bottom_right = 3
-	var br_fill := StyleBoxFlat.new(); br_fill.bg_color = bar_fill_col; br_fill.corner_radius_bottom_right = 3
-	_energy_bar_right.add_theme_stylebox_override("background", br_bg)
-	_energy_bar_right.add_theme_stylebox_override("fill", br_fill)
-	_energy_bar_right.draw.connect(func() -> void:
-		if ProductionManager.get_energy_ratio() <= 0.001:
-			_energy_bar_right.draw_rect(Rect2(0, 0, _energy_bar_right.size.x, _energy_bar_right.size.y), Color(0.25, 0.0, 0.0, 0.8))
-			for xi: int in range(0, int(_energy_bar_right.size.x) + int(_energy_bar_right.size.y), 6):
-				var x0: float = float(xi)
-				_energy_bar_right.draw_line(Vector2(x0, 0), Vector2(x0 - _energy_bar_right.size.y, _energy_bar_right.size.y), Color(0.0, 0.0, 0.0, 0.6), 1.0)
-	)
-	right_pc.add_child(_energy_bar_right)
-	hbox.add_child(right_pc)
-
-	_energy_hbox = hbox
-	call_deferred("_center_energy_hud", hbox)
-
-func _center_energy_hud(hbox: Control) -> void:
-	await get_tree().process_frame
-	if not is_instance_valid(hbox):
-		return
-	_place_energy_hud(hbox)
-
+## The planet view's panel width — kept for callers; the top bar no longer
+## centres anything in the view area.
 func set_view_area_fraction(f: float) -> void:
 	view_area_fraction = f
-	if is_instance_valid(_energy_hbox):
-		_place_energy_hud(_energy_hbox)
-
-func _place_energy_hud(hbox: Control) -> void:
-	var area_w := get_viewport().get_visible_rect().size.x * view_area_fraction
-	var pw := hbox.size.x
-	if pw <= 0.0:
-		return
-	hbox.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	hbox.offset_left   = (area_w - pw) * 0.5
-	hbox.offset_top    = 0.0
-	hbox.offset_right  = hbox.offset_left + pw
-	hbox.offset_bottom = hbox.size.y
 
 func _on_achievement_unlocked(def) -> void:
 	AudioManager.play("achievement", 2.0)
@@ -1021,3 +769,388 @@ func _energy_breakdown_text() -> String:
 	lines.append("─────────────────")
 	lines.append("Net  %s%s" % [sign_t, tot_fmt])
 	return "\n".join(lines)
+
+# ── Top resource bar ─────────────────────────────────────────────────────────
+## Credits │ Science │ Energy │ Population │ Raw ▾ │ Goods │ Fuel │ Rare.
+## Values show the stock only (red at the cap, see Economy.cap) with the
+## steady income per second as a small superscript; refreshed from _process.
+
+func _build_resource_cells(hbox: HBoxContainer) -> void:
+	_add_res_cell(hbox, Economy.ENERGY, "⚡", "")
+	_add_res_cell(hbox, Economy.POPULATION, "☺", "")
+	_add_res_cell(hbox, Economy.RAW, "⛏", "")
+	_add_res_cell(hbox, Economy.GOODS, "▣", "Consumer Goods — made from raw resources in Industrial districts.\nUsed by luxury housing and trade.")
+	_add_res_cell(hbox, Economy.FUEL, "◆", "Fuel Rods — made from raw resources in Industrial districts.\nUsed by advanced power plants.")
+	_add_res_cell(hbox, Economy.RARE, "✧", "Rare Elements — made from raw resources in Industrial districts.\nUsed by advanced science.")
+	_refresh_resource_cells()
+
+## Fixed text width per top-bar cell, so the bar never changes width; the
+## value's font shrinks to fit instead (_fit_label).
+const CELL_TEXT_W := {
+	"credits": 50, "science": 30, "energy": 28, "population": 56,
+	"raw": 36, "goods": 24, "fuel": 24, "rare_elements": 24,
+}
+const VALUE_FONT_MAX := 12
+const VALUE_FONT_MIN := 7
+
+## Sets a value label's text, shrinking its font until it fits its fixed width.
+func _set_value(lbl: Label, text: String) -> void:
+	if lbl.text == text:
+		return
+	lbl.text = text
+	var font: Font = _orbitron if _orbitron else lbl.get_theme_default_font()
+	var w := lbl.custom_minimum_size.x
+	var size := VALUE_FONT_MAX
+	while size > VALUE_FONT_MIN and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > w:
+		size -= 1
+	lbl.add_theme_font_size_override("font_size", size)
+
+## ── Incoming resources ──────────────────────────────────────────────────────
+## A gain shows as "+x" under its cell, floats up into the bar, and the value
+## then ticks up to the new amount. Spending updates at once.
+var _shown: Dictionary = {}     # id -> value currently displayed
+var _target: Dictionary = {}    # id -> value the display is heading to
+var _gain_tw: Dictionary = {}   # id -> Tween
+
+func _stock_amount(id: String) -> float:
+	return Economy.raw_total() if id == Economy.RAW else Economy.amount(id)
+
+func _stock_text(id: String, v: float) -> String:
+	match id:
+		Economy.CREDITS: return fmt_credits(v)
+		Economy.RAW:     return "%s %s" % [Economy.fmt(v), "▴" if _raw_dd != null else "▾"]
+	return Economy.fmt(v)
+
+func _track_stock(id: String) -> void:
+	var lbl: Label = _res_lbls.get(id)
+	if not is_instance_valid(lbl):
+		return
+	var actual := _stock_amount(id)
+	if not _shown.has(id):
+		_shown[id] = actual
+		_target[id] = actual
+	var target: float = _target[id]
+	if actual > target + 0.05:
+		_target[id] = actual
+		_spawn_gain(id, actual - target, lbl)
+		var tw: Tween = _gain_tw.get(id)
+		if tw != null and tw.is_valid():
+			tw.kill()
+		tw = create_tween()
+		_gain_tw[id] = tw
+		tw.tween_interval(0.55)   # let the "+x" reach the bar first
+		tw.tween_method(func(v: float) -> void:
+			_shown[id] = v
+			if is_instance_valid(lbl):
+				_set_value(lbl, _stock_text(id, v)),
+			float(_shown[id]), actual, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	elif actual < target - 0.0001:
+		var tw2: Tween = _gain_tw.get(id)
+		if tw2 != null and tw2.is_valid():
+			tw2.kill()
+		_target[id] = actual
+		_shown[id] = actual
+	_set_value(lbl, _stock_text(id, _shown[id]))
+
+func _spawn_gain(id: String, amount: float, lbl: Label) -> void:
+	if not is_instance_valid(_top_layer) or amount < 0.05:
+		return
+	var chip := Label.new()
+	chip.text = "+" + (fmt_credits(amount) if id == Economy.CREDITS else Economy.fmt(amount))
+	if _orbitron: chip.add_theme_font_override("font", _orbitron)
+	chip.add_theme_font_size_override("font_size", 10)
+	var col := Economy.color_of(id) if id != Economy.RAW else Color(0.85, 0.78, 0.70)
+	chip.add_theme_color_override("font_color", col.lerp(Color.WHITE, 0.25))
+	chip.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	chip.add_theme_constant_override("outline_size", 3)
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_top_layer.add_child(chip)
+	var start := lbl.global_position + Vector2(2.0, lbl.size.y + 14.0)
+	chip.position = start
+	chip.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(chip, "modulate:a", 1.0, 0.12)
+	tw.parallel().tween_property(chip, "position:y", start.y - 4.0, 0.12)
+	tw.tween_interval(0.2)
+	tw.tween_property(chip, "position:y", lbl.global_position.y + 2.0, 0.3) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(chip, "modulate:a", 0.0, 0.3).set_delay(0.1)
+	tw.tween_callback(chip.queue_free)
+
+## Superscript-style income label ("+3.2" green, "−1.5" red) sitting top-right of a value.
+func _make_rate_lbl(id: String) -> Label:
+	var l := Label.new()
+	if _orbitron: l.add_theme_font_override("font", _orbitron)
+	l.add_theme_font_size_override("font_size", 8)
+	l.custom_minimum_size = Vector2(18, 0)
+	l.clip_text = true
+	l.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_rate_lbls[id] = l
+	return l
+
+func _set_rate(id: String, per_s: float) -> void:
+	var l: Label = _rate_lbls.get(id)
+	if not is_instance_valid(l):
+		return
+	var v := snappedf(per_s, 0.1)
+	l.text = ("+" if v >= 0.0 else "−") + Economy.fmt(absf(v))
+	l.add_theme_color_override("font_color",
+		Color(0.45, 0.95, 0.50) if v >= 0.0 else Color(1.0, 0.40, 0.35))
+
+## Value colour: red once the stock reaches its cap.
+func _stock_color(id: String, base: Color) -> Color:
+	return Color(1.0, 0.38, 0.32) if Economy.is_full(id) else base
+
+func _add_res_sep(hbox: HBoxContainer) -> void:
+	var sep := Label.new()
+	sep.text = "│"
+	sep.add_theme_font_size_override("font_size", 12)
+	sep.add_theme_color_override("font_color", Color(0.30, 0.36, 0.55, 0.6))
+	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(sep)
+
+func _add_res_cell(hbox: HBoxContainer, id: String, glyph: String, tip: String, sep: bool = true) -> void:
+	if sep:
+		_add_res_sep(hbox)
+	var cell := HBoxContainer.new()
+	cell.add_theme_constant_override("separation", 4)
+	cell.mouse_filter = Control.MOUSE_FILTER_STOP
+	var col := Economy.color_of(id) if id != Economy.RAW else Color(0.72, 0.66, 0.60)
+	var ic := Label.new()
+	ic.text = glyph
+	ic.add_theme_font_size_override("font_size", 12)
+	ic.add_theme_color_override("font_color", col)
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.add_child(ic)
+	var lbl := Label.new()
+	if _orbitron: lbl.add_theme_font_override("font", _orbitron)
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_color_override("font_color", col.lerp(Color.WHITE, 0.35))
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.clip_text = true
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT   # value hugs its rate
+	lbl.custom_minimum_size = Vector2(float(CELL_TEXT_W.get(id, 40)), 0)
+	cell.add_child(lbl)
+	if id == Economy.ENERGY:
+		pass   # net only; made / used are in the tooltip
+	elif id == Economy.POPULATION:
+		pass   # available / max says it all; used is in the tooltip
+	else:
+		cell.add_child(_make_rate_lbl(id))
+	hbox.add_child(cell)
+	_res_lbls[id] = lbl
+	var title := ("%s %s" % [glyph, Economy.display_name(id)]) if id != Economy.RAW else "⛏ Raw Resources"
+	cell.mouse_entered.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.POINTER)
+		if id == Economy.RAW:
+			if _raw_dd == null:
+				TooltipManager.show_tip(title, "Click to show every raw resource.")
+			return
+		TooltipManager.show_tip(title, _cell_tip(id, tip)))
+	cell.mouse_exited.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		TooltipManager.hide_tip())
+	if id == Economy.RAW:
+		_raw_cell = cell
+		cell.gui_input.connect(func(e: InputEvent) -> void:
+			if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
+					and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+				AudioManager.play("click")
+				TooltipManager.hide_tip()
+				_toggle_raw_dropdown()
+				cell.accept_event())
+
+func _hover_tip(ctrl: Control, title: String, body: String) -> void:
+	ctrl.mouse_filter = Control.MOUSE_FILTER_STOP
+	ctrl.mouse_entered.connect(func() -> void: TooltipManager.show_tip(title, body))
+	ctrl.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+
+## Tooltip body of a top-bar cell, with live numbers.
+func _cell_tip(id: String, base: String) -> String:
+	match id:
+		Economy.ENERGY:
+			var pm: Node = get_node_or_null("/root/ProductionManager")
+			var net: float = pm.get_global_energy() if pm != null else 0.0
+			var sp: Vector2 = pm.get_global_energy_split() if pm != null else Vector2.ZERO
+			var lines: Array[String] = [
+				"Produced   +%s ⚡" % Economy.fmt(sp.x),
+				"Consumed   −%s ⚡" % Economy.fmt(sp.y),
+				"Balance    %s%s ⚡" % ["+" if net >= 0.0 else "", Economy.fmt(net)],
+				"",
+				"A deficit slows energy-using buildings (down to 50% at worst)."]
+			if net < 0.0:
+				lines.append("Now running at %d%% speed." % int(round(pm.get_energy_ratio() * 100.0)))
+			lines.append("")
+			lines.append(_energy_breakdown_text())
+			return "\n".join(lines)
+		Economy.POPULATION:
+			var pd: PlanetData = GameState.get_planet_data(GameState.active_planet_seed) \
+				if GameState.active_planet_seed != -1 else null
+			var pp: PlanetProgress = GameState.get_planet(pd.seed) if pd != null else null
+			var head := ""
+			if pd != null and pp != null and pp.is_colonized:
+				head = "Available  %s\nUsed       %s\nMax        %s\n\n" % [Economy.fmt(Economy.free_population(pd, pp)),
+					Economy.fmt(Economy.used_population(pd, pp)), Economy.fmt(Economy.max_population(pd, pp))]
+			return head + "Shown as available / max.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population." % [
+				Economy.fmt(Economy.CITY_BASE_POP), Economy.fmt(Economy.DISTRICT_POP)]
+	var r: float = ProductionManager.resource_rates().get(id, 0.0)
+	return "%s\n\nStored  %s  (max %s)\nPer second  %s%s" % [base, Economy.fmt(Economy.amount(id)),
+		Economy.fmt(Economy.cap(id)), "+" if r >= 0.0 else "", Economy.fmt(r)]
+
+func _refresh_resource_cells() -> void:
+	if _res_lbls.is_empty():
+		return
+	var rates: Dictionary = ProductionManager.resource_rates()
+	_set_rate(Economy.CREDITS, rates.get(Economy.CREDITS, 0.0))
+	_set_rate(Economy.SCIENCE, rates.get(Economy.SCIENCE, 0.0))
+	_track_stock(Economy.CREDITS)
+	_track_stock(Economy.SCIENCE)
+	var e_lbl: Label = _res_lbls.get(Economy.ENERGY)
+	if is_instance_valid(e_lbl):
+		var net: float = rates.get(Economy.ENERGY, 0.0)
+		_set_value(e_lbl, ("+" if snappedf(net, 0.1) >= 0.0 else "−") + Economy.fmt(absf(snappedf(net, 0.1))))
+		e_lbl.add_theme_color_override("font_color",
+			Color(0.45, 0.95, 0.50) if net >= 0.0 else Color(1.0, 0.40, 0.35))
+
+	var pop_lbl: Label = _res_lbls.get(Economy.POPULATION)
+	if is_instance_valid(pop_lbl):
+		var pd: PlanetData = GameState.get_planet_data(GameState.active_planet_seed) \
+			if GameState.active_planet_seed != -1 else null
+		var pp: PlanetProgress = GameState.get_planet(pd.seed) if pd != null else null
+		if pd != null and pp != null and pp.is_colonized:
+			var used := Economy.used_population(pd, pp)
+			var mx := Economy.max_population(pd, pp)
+			# available / max (used is in the tooltip)
+			_set_value(pop_lbl, "%s/%s" % [Economy.fmt(mx - used), Economy.fmt(mx)])
+			pop_lbl.add_theme_color_override("font_color", Color(1.0, 0.38, 0.32) if used >= mx
+				else Economy.color_of(Economy.POPULATION).lerp(Color.WHITE, 0.35))
+		else:
+			_set_value(pop_lbl, "—")
+	for id: String in Economy.PROCESSED:
+		var l: Label = _res_lbls.get(id)
+		if is_instance_valid(l):
+			_track_stock(id)
+			l.add_theme_color_override("font_color", _stock_color(id, Economy.color_of(id).lerp(Color.WHITE, 0.35)))
+			_set_rate(id, rates.get(id, 0.0))
+	var raw_lbl: Label = _res_lbls.get(Economy.RAW)
+	if is_instance_valid(raw_lbl):
+		_track_stock(Economy.RAW)
+		var any_full := false
+		for r: Dictionary in _listed_raws():
+			if Economy.is_full(r["id"]): any_full = true
+		raw_lbl.add_theme_color_override("font_color", Color(1.0, 0.38, 0.32) if any_full
+			else Color(0.72, 0.66, 0.60).lerp(Color.WHITE, 0.35))
+		_set_rate(Economy.RAW, rates.get(Economy.RAW, 0.0))
+	if _raw_dd != null:
+		_fill_raw_dropdown()
+
+## Raw resources worth listing: anything in stock or found on a colonized body.
+func _listed_raws() -> Array:
+	var ids := {}
+	for pp: PlanetProgress in GameState._planet_progress.values():
+		if not pp.is_colonized:
+			continue
+		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+		if pd != null:
+			for r: Dictionary in Economy.raw_for_body(pd):
+				ids[r["id"]] = true
+	var out: Array = []
+	for r: Dictionary in Economy.RAW_TABLE:
+		if ids.has(r["id"]) or Economy.amount(r["id"]) > 0.0:
+			out.append(r)
+	return out
+
+func _toggle_raw_dropdown() -> void:
+	if _raw_dd != null:
+		_close_raw_dropdown()
+		return
+	if not is_instance_valid(_raw_cell) or not is_instance_valid(_top_layer):
+		return
+	var dd := PanelContainer.new()
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.05, 0.06, 0.11, 0.96)
+	st.border_color = Color(0.28, 0.36, 0.62, 0.6)
+	st.set_border_width_all(1)
+	st.corner_radius_bottom_left = 6; st.corner_radius_bottom_right = 6
+	st.content_margin_left = 12; st.content_margin_right = 12
+	st.content_margin_top = 8;   st.content_margin_bottom = 8
+	dd.add_theme_stylebox_override("panel", st)
+	dd.mouse_filter = Control.MOUSE_FILTER_STOP
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 5)
+	dd.add_child(list)
+	_top_layer.add_child(dd)
+	dd.global_position = Vector2(_raw_cell.global_position.x - 12.0,
+		credits_panel.global_position.y + credits_panel.size.y)
+	_raw_dd = dd
+	_raw_dd_list = list
+	_fill_raw_dropdown()
+	_refresh_resource_cells()
+
+func _close_raw_dropdown() -> void:
+	if is_instance_valid(_raw_dd):
+		_raw_dd.queue_free()
+	_raw_dd = null
+	_raw_dd_list = null
+	_refresh_resource_cells()
+
+## One row per raw resource: icon, name and stock (red at the cap).
+func _fill_raw_dropdown() -> void:
+	if not is_instance_valid(_raw_dd_list):
+		return
+	var raws := _listed_raws()
+	var rows := _raw_dd_list.get_children()
+	if rows.size() != maxi(raws.size(), 1):
+		for c in rows:
+			c.queue_free()
+		rows = []
+		for i in maxi(raws.size(), 1):
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 8)
+			row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var ic := TextureRect.new()
+			ic.custom_minimum_size = Vector2(12, 12)
+			ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			row.add_child(ic)
+			for j in 2:
+				var l := Label.new()
+				if _orbitron: l.add_theme_font_override("font", _orbitron)
+				l.add_theme_font_size_override("font_size", 10)
+				l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				l.custom_minimum_size = Vector2(110 if j == 0 else 44, 0)
+				if j == 1: l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				row.add_child(l)
+			_raw_dd_list.add_child(row)
+			rows.append(row)
+	if raws.is_empty():
+		var ls := (rows[0] as HBoxContainer).get_children()
+		(ls[1] as Label).text = "No raw resources yet"
+		(ls[2] as Label).text = ""
+		return
+	for i in raws.size():
+		var r: Dictionary = raws[i]
+		var ls := (rows[i] as HBoxContainer).get_children()
+		var col: Color = r["color"]
+		var ic := ls[0] as TextureRect
+		if ic.texture == null or not ic.has_meta("rid") or ic.get_meta("rid") != r["id"]:
+			ic.texture = MineralIcon.make(1, col)
+			ic.set_meta("rid", r["id"])
+		(ls[1] as Label).text = r["name"]
+		(ls[1] as Label).add_theme_color_override("font_color", col.lerp(Color.WHITE, 0.3))
+		(ls[2] as Label).text = Economy.fmt(Economy.amount(r["id"]))
+		(ls[2] as Label).add_theme_color_override("font_color", _stock_color(r["id"], Color(0.80, 0.84, 0.95)))
+
+## Closes the raw dropdown on any click outside it (and outside its cell).
+func _input(event: InputEvent) -> void:
+	if _raw_dd == null or not (event is InputEventMouseButton) or not (event as InputEventMouseButton).pressed:
+		return
+	var pos := (event as InputEventMouseButton).global_position
+	if is_instance_valid(_raw_dd) and _raw_dd.get_global_rect().has_point(pos):
+		return
+	if is_instance_valid(_raw_cell) and _raw_cell.get_global_rect().has_point(pos):
+		return
+	_close_raw_dropdown()

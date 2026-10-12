@@ -6,7 +6,7 @@
 script = ExtResource("1_def")
 id = 4
 display_name = "Residential District"
-description = "Housing for the City's people. Grows the settlement fastest and lights up at night."
+description = "Housing: raises the planet's max population — needed to found districts and level them up."
 icon = "⌂"
 placement = 0
 base_cost = 300.0
@@ -14,3 +14,7 @@ allowed_planet_types = Array[int]([0, 1, 2, 3, 4, 5, 6])
 building_ids = Array[String](["residential", "apartments", "luxury_complex", "arid_housing", "recreation_center", "culture_center"])
 name_pool = Array[String]([])
 name_suffixes = Array[String](["Residences", "Housing Quarter", "Suburbs", "Heights"])
+base_outputs = {"population": 1500.0}
+base_tick = 30.0
+site_bonus = {"coastal": 0.3, "lowlands": 0.2, "solar": 0.1}
+neighbor_income = {"commercial": {"population": 500.0}, "science": {"population": 300.0}, "city": {"population": 500.0}, "residential": {"population": 200.0}}

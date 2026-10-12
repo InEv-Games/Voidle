@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_def")
 id = 2
-display_name = "Mining Facility"
-description = "Extracts raw minerals from local deposits."
+display_name = "Industrial District"
+description = "Mines raw resources and refines them into Consumer Goods, Fuel Rods and Rare Elements."
 icon = "⛏"
 placement = 0
 base_cost = 250.0
@@ -15,3 +15,7 @@ building_ids = Array[String](["mine", "deep_drill", "precision_extractor", "mant
 name_pool = Array[String](["Deepvein Complex", "Stratum Site Alpha", "Iron Reach", "Core Station", "Bedrock Post", "Shaft Prime", "Mineral Yard", "Excavation Base", "Ironfall", "Quarry One", "Veindepth"])
 unlock_skill = "unlock_mining"
 name_suffixes = Array[String](["Quarry", "Mines", "Deep Shafts", "Ore Fields"])
+base_outputs = {"raw": 2.0}
+base_tick = 20.0
+site_bonus = {"minerals": 1.0, "mountains": 0.3, "highlands": 0.15}
+neighbor_income = {"generator": {"raw": 1.0}, "mining": {"raw": 0.5}, "city": {"raw": 0.5}}

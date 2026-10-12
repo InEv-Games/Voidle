@@ -1,28 +1,22 @@
-[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3 uid="uid://b_mantle_cracker_4370f063"]
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_mantle_cracker_4370f063"]
 
-[ext_resource type="Script" path="res://scripts/game/logic/MineLogic.gd" id="1_logic"]
-[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="2_def"]
-
-[sub_resource type="Resource" id="Resource_logic"]
-script = ExtResource("1_logic")
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
 
 [resource]
-script = ExtResource("2_def")
+script = ExtResource("1_def")
 building_id = "mantle_cracker"
 display_name = "Mantle Cracker"
-description = "Cracks the mantle for massive mixed raw minerals."
+description = "Cracks the mantle open. Burns Fuel Rods."
 allowed_poi_types = Array[int]([1])
 allowed_planet_types = Array[int]([])
-base_cost = 4000.0
+base_cost = 2400.0
 slot_cost = 1
-min_planet_lv = 4
-construct_duration = 0.0
-tick_duration = 12.0
-energy_per_tick = -40.0
-output_type = 3
-output_amount = 250.0
-input_type = 0
-input_amount = 0.0
-input_tier = 1
-logic = SubResource("Resource_logic")
+min_planet_lv = 1
+construct_duration = 4.0
+tick_duration = 20.0
+energy_per_tick = -5.0
+outputs = {"raw": 20.0}
+inputs = {"fuel": 1.0}
+planet_bonus = {}
+tier = 3
 unlocked_by_default = false

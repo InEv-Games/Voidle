@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_harbor_market_site"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "harbor_market"
+display_name = "Harbor Market"
+description = "Sea trade on the waterfront. Only on coastal sites."
+allowed_poi_types = Array[int]([8])
+allowed_planet_types = Array[int]([])
+base_cost = 700.0
+slot_cost = 1
+min_planet_lv = 1
+construct_duration = 6.0
+tick_duration = 20.0
+energy_per_tick = -2.0
+outputs = {"credits": 70.0}
+inputs = {}
+planet_bonus = {}
+tier = 2
+unlocked_by_default = true
+requires_coastal = true

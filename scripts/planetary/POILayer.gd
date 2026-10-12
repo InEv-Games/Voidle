@@ -37,6 +37,10 @@ var marker_vis: float = 1.0
 ## Neighbouring district pairs (indices into _pois). Hovering the selected
 ## district draws arcs to its neighbours.
 var neighbor_pairs: Array[Vector2i] = []
+## Pairs that pay each other income (neighbours + City ↔ its districts); drawn
+## when the selected district is hovered, tinted by income_tint(receiver, giver).
+var income_pairs: Array[Vector2i] = []
+var income_tint: Callable
 ## Alt held: network overview (arcs to each district's City, every district visible).
 var show_overlay: bool = false
 ## Routed roads (RoadNetwork.route results):
@@ -234,6 +238,20 @@ const _ICONS := {
 		".#.#.",
 		".###.",
 	],
+	"commercial": [
+		"..#..",
+		".####",
+		"..#..",
+		"####.",
+		"..#..",
+	],
+	"science": [
+		".#.#.",
+		"#.#.#",
+		".###.",
+		"#.#.#",
+		".#.#.",
+	],
 	"default": [
 		".###.",
 		"#####",
@@ -253,6 +271,8 @@ func _marker_color(tag: String) -> Color:
 		"generator": return Color(0.45, 0.85, 1.0)
 		"mining":    return Color(1.0, 0.58, 0.28)
 		"residential": return Color(0.60, 0.95, 0.60)
+		"commercial":  return Color(0.88, 0.95, 0.40)
+		"science":     return Color(0.40, 0.68, 1.0)
 		_:           return Color(1.0, 0.82, 0.25)
 
 ## Size of one shader pixel on screen.
@@ -545,14 +565,17 @@ func _draw_links() -> void:
 	# hovering the selected district: arcs to everything it neighbours
 	if _selected_index >= 0 and _hovered_index == _selected_index and _selected_index < _pois.size():
 		var me: Dictionary = _pois[_selected_index]
-		for pr: Vector2i in neighbor_pairs:
+		for pr: Vector2i in (income_pairs if not income_pairs.is_empty() else neighbor_pairs):
 			var other := -1
 			if pr.x == _selected_index: other = pr.y
 			elif pr.y == _selected_index: other = pr.x
 			if other < 0 or other >= _pois.size():
 				continue
-			_draw_arc(me["lon"], me["lat"], _pois[other]["lon"], _pois[other]["lat"],
-				0.85, Color(0.55, 1.0, 0.65))
+			var tint := Color(0.55, 1.0, 0.65)
+			if income_tint.is_valid():
+				tint = income_tint.call(_selected_index, other)
+			# dashes flow from the giver into the hovered district
+			_draw_arc(_pois[other]["lon"], _pois[other]["lat"], me["lon"], me["lat"], 0.85, tint)
 	if not show_overlay:
 		return
 	# arcs: every district flows to the City it belongs to
@@ -889,7 +912,7 @@ func _draw() -> void:
 			continue
 
 		# label (+N when crowded neighbours are folded into it)
-		var label: String = poi["label"]
+		var label: String = poi["data"].get("name", poi["label"])
 		if merges["extra"].has(i):
 			label += "  +%d" % int(merges["extra"][i])
 		var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE)

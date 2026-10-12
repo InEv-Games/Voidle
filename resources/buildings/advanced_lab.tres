@@ -1,25 +1,22 @@
-[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3 uid="uid://b_lab_9e68c4c9"]
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_lab_9e68c4c9"]
 
-[ext_resource type="Script" path="res://scripts/game/logic/ScienceLogic.gd" id="1_logic"]
-[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="2_def"]
-
-[sub_resource type="Resource" id="Resource_logic"]
-script = ExtResource("1_logic")
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
 
 [resource]
-script = ExtResource("2_def")
+script = ExtResource("1_def")
 building_id = "advanced_lab"
-display_name = "Institute of Technology"
-description = "Advanced science facility. Generates massive science points."
-allowed_poi_types = Array[int]([0, 4])
-base_cost = 1500.0
+display_name = "Research Institute"
+description = "Larger research programmes."
+allowed_poi_types = Array[int]([4])
+allowed_planet_types = Array[int]([])
+base_cost = 650.0
 slot_cost = 1
-min_planet_lv = 2
-tick_duration = 75.0
-energy_per_tick = -100.0
-output_type = 5
-output_amount = 25.0
-input_type = 0
-input_amount = 0.0
-logic = SubResource("Resource_logic")
+min_planet_lv = 1
+construct_duration = 4.0
+tick_duration = 30.0
+energy_per_tick = -2.0
+outputs = {"science": 5.0}
+inputs = {}
+planet_bonus = {}
+tier = 2
 unlocked_by_default = false

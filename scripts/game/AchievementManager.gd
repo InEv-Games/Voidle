@@ -31,6 +31,8 @@ func _connect_signals() -> void:
 	GameState.planet_progress_changed.connect(_on_planet_progress_changed)
 	GameState.credits_changed.connect(func(_v: float) -> void: _check_float_triggers())
 	GameState.science_changed.connect(func(_v: float) -> void: _check_float_triggers())
+	GameState.global_resources_changed.connect(func() -> void:
+		notify_trigger(AchievementDef.Trigger.MINERAL_COLLECTED))
 	GameState.asteroid_discovered.connect(func(_s: int, _c: int) -> void:
 		_try_unlock_trigger(AchievementDef.Trigger.FIRST_ASTEROID_SCAN))
 
@@ -82,10 +84,7 @@ func notify_trigger(trigger: AchievementDef.Trigger, context: Variant = null) ->
 				if GameState.science_points >= def.float_value:
 					earned = true
 			AchievementDef.Trigger.MINERAL_COLLECTED:
-				var total: float = 0.0
-				for k: String in GameState.global_resources:
-					total += GameState.global_resources[k]
-				if total >= def.float_value:
+				if Economy.raw_total() >= def.float_value:
 					earned = true
 		if earned:
 			_grant(def)

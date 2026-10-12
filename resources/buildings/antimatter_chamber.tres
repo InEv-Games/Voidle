@@ -1,28 +1,22 @@
-[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3 uid="uid://bid_antimatter_chamber"]
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://bid_antimatter_chamber"]
 
-[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_1"]
-[ext_resource type="Script" path="res://scripts/game/logic/GeneratorLogic.gd" id="1_logic"]
-
-[sub_resource type="Resource" id="Resource_logic"]
-script = ExtResource("1_logic")
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
 
 [resource]
-script = ExtResource("1_1")
+script = ExtResource("1_def")
 building_id = "antimatter_chamber"
-display_name = "Antimatter Chamber"
-description = "Burns T4 (Component) refined minerals for extreme energy."
+display_name = "Antimatter Plant"
+description = "Enormous output for a heavy Fuel Rod appetite."
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([])
-base_cost = 2000.0
+base_cost = 5500.0
 slot_cost = 1
-min_planet_lv = 4
-construct_duration = 0.0
+min_planet_lv = 1
+construct_duration = 4.0
 tick_duration = 30.0
 energy_per_tick = 0.0
-output_type = 1
-output_amount = 120.0
-input_type = 4
-input_amount = 1.0
-input_tier = 4
+outputs = {"energy": 50.0}
+inputs = {"fuel": 3.0}
+planet_bonus = {}
+tier = 4
 unlocked_by_default = false
-logic = SubResource("Resource_logic")

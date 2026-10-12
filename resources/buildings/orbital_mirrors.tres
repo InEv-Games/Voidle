@@ -1,25 +1,22 @@
-[gd_resource type="Resource" script_class="BuildingDef" format=3 uid="uid://cxqj2b0k2"]
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://cxqj2b0k2"]
 
-[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_abcd1"]
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
 
 [resource]
-script = ExtResource("1_abcd1")
+script = ExtResource("1_def")
 building_id = "orbital_mirrors"
 display_name = "Orbital Mirrors"
-description = "Focuses sunlight onto the planet below, increasing Solar Panel output by +15% planet-wide."
+description = "+15% energy across the planet below."
 allowed_poi_types = Array[int]([6])
 allowed_planet_types = Array[int]([])
-base_cost = 500.0
-slot_cost = 2
-min_planet_lv = 2
-max_per_district = 1
-unlock_skill = "unlock_orbital_mirrors"
-construct_duration = 30.0
-tick_duration = 0.0
+base_cost = 1500.0
+slot_cost = 1
+min_planet_lv = 1
+construct_duration = 4.0
+tick_duration = 30.0
 energy_per_tick = 0.0
-output_type = 0
-output_amount = 0.0
-input_type = 0
-input_amount = 0.0
-input_tier = 1
+outputs = {}
+inputs = {}
+planet_bonus = {"energy": 0.15}
+tier = 2
 unlocked_by_default = false

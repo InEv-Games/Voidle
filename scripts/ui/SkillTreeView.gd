@@ -493,26 +493,11 @@ func _build_tree_graph() -> void:
 					if def.description != "":
 						sub_body.append("[color=#c0c0c0]" + def.description + "[/color]\n\n")
 					
-					if def.input_type != BuildingDef.OutputType.NONE:
-						sub_body.append("[color=#99aab5]Consumes -%.0f [/color]" % def.input_amount)
-						sub_body.append(MineralIcon.make(def.input_tier, Color.WHITE))
-						sub_body.append("[color=#99aab5]%s\n[/color]" % cycle)
-					
-					if def.output_type != BuildingDef.OutputType.NONE:
-						var disp_o := absf(def.output_amount - floorf(def.output_amount)) > 0.01
-						var o_fmt := "Produces +%.1f " if disp_o else "Produces +%.0f "
-						
-						if def.output_type == BuildingDef.OutputType.ENERGY:
-							sub_body.append("[color=#99aab5]%s[/color][color=#fce205]⚡[/color][color=#99aab5]%s[/color]\n" % [o_fmt % def.output_amount, cycle])
-						elif def.output_type == BuildingDef.OutputType.CREDITS:
-							sub_body.append("[color=#99aab5]%s[/color][color=#55f58c]cr[/color][color=#99aab5]%s[/color]\n" % [o_fmt % def.output_amount, cycle])
-						elif def.output_type == BuildingDef.OutputType.SCIENCE:
-							sub_body.append("[color=#99aab5]%s[/color][color=#55aaff]sci[/color][color=#99aab5]%s[/color]\n" % [o_fmt % def.output_amount, cycle])
-						else:
-							sub_body.append("[color=#99aab5]%s[/color]" % (o_fmt % def.output_amount))
-							var out_tier: int = def.input_tier + 1 if def.output_type == BuildingDef.OutputType.REFINED_MINERAL else def.input_tier
-							sub_body.append(MineralIcon.make(out_tier, Color.WHITE))
-							sub_body.append("[color=#99aab5]%s[/color]\n" % cycle)
+					if def.output_label() != "":
+						sub_body.append("[color=#99aab5]Produces %s%s[/color]\n" % [def.output_label(),
+							"" if def.planet_bonus.size() > 0 and def.outputs.is_empty() else cycle])
+					if def.input_label() != "":
+						sub_body.append("[color=#99aab5]Consumes %s%s[/color]\n" % [def.input_label(), cycle])
 
 			if max_lv > 1:
 				# Leveled Upgrades

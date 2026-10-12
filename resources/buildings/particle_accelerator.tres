@@ -1,25 +1,22 @@
-[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3 uid="uid://b_lab_9e68c4c9"]
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_lab_9e68c4c9"]
 
-[ext_resource type="Script" path="res://scripts/game/logic/ScienceLogic.gd" id="1_logic"]
-[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="2_def"]
-
-[sub_resource type="Resource" id="Resource_logic"]
-script = ExtResource("1_logic")
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
 
 [resource]
-script = ExtResource("2_def")
+script = ExtResource("1_def")
 building_id = "particle_accelerator"
 display_name = "Particle Accelerator"
-description = "Consumes minerals to perform high-energy collisions for science points."
-allowed_poi_types = Array[int]([0, 4])
-base_cost = 3000.0
+description = "Cutting-edge physics. Consumes Rare Elements."
+allowed_poi_types = Array[int]([4])
+allowed_planet_types = Array[int]([])
+base_cost = 2000.0
 slot_cost = 1
-min_planet_lv = 1
-tick_duration = 90.0
-energy_per_tick = -250.0
-output_type = 5
-output_amount = 100.0
-input_type = 2
-input_amount = 20.0
-logic = SubResource("Resource_logic")
-unlocked_by_default = false
+min_planet_lv = 3
+construct_duration = 4.0
+tick_duration = 30.0
+energy_per_tick = -4.0
+outputs = {"science": 14.0}
+inputs = {"rare_elements": 1.0}
+planet_bonus = {}
+tier = 3
+unlocked_by_default = true

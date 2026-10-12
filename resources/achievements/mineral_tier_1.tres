@@ -6,7 +6,7 @@
 script = ExtResource("1_def")
 achievement_id = "mineral_tier_1"
 title = "Excavator"
-description = "Collect 50,000 minerals."
+description = "Stockpile 50,000 raw resources."
 icon = "🪨"
 trigger = 11
 int_value = 0

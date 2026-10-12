@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://bid_logistics_center"]
 
 [ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
 
@@ -6,18 +6,18 @@
 script = ExtResource("1_def")
 building_id = "logistics_center"
 display_name = "Logistics Center"
-description = "Provides a passive +10% credit generation speed to all trade buildings in this district."
+description = "+15% raw extraction and +10% processed output across the planet. Adds warehouse space."
 allowed_poi_types = Array[int]([0])
-base_cost = 4000.0
+allowed_planet_types = Array[int]([])
+base_cost = 1400.0
 slot_cost = 1
-min_planet_lv = 2
-max_per_district = 1
-unlock_skill = "unlock_logistics_center"
-construct_duration = 0.0
-tick_duration = 0.0
-energy_per_tick = -50.0
-output_type = 0
-output_amount = 0.0
-input_type = 0
-input_amount = 0.0
+min_planet_lv = 1
+construct_duration = 4.0
+tick_duration = 30.0
+energy_per_tick = -2.0
+outputs = {}
+inputs = {}
+planet_bonus = {"raw": 0.15, "goods": 0.1, "fuel": 0.1, "rare_elements": 0.1}
+storage = {"raw": 500.0, "goods": 200.0, "fuel": 200.0, "rare_elements": 100.0}
+tier = 2
 unlocked_by_default = false

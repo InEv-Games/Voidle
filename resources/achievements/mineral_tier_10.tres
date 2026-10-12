@@ -6,7 +6,7 @@
 script = ExtResource("1_def")
 achievement_id = "mineral_tier_10"
 title = "System Sweeper"
-description = "Collect 50 Billion minerals."
+description = "Stockpile 50 Billion raw resources."
 icon = "🪨"
 trigger = 11
 int_value = 0

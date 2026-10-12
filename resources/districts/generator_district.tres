@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_def")
 id = 1
-display_name = "Generator Facility"
-description = "Power plant complex. Produces energy for the colony grid."
+display_name = "Energy District"
+description = "Power for the planet: solar, wind, tidal, geothermal — and fuel-fired reactors at higher tiers."
 icon = "⚡"
 placement = 0
 base_cost = 300.0
@@ -14,3 +14,7 @@ allowed_planet_types = Array[int]([])
 building_ids = Array[String](["solar_panel", "generator", "power_plant", "geothermal_plant", "wind_turbine", "tidal_generator"])
 name_pool = Array[String](["Prometheus Array", "Grid Station Alpha", "Helios Platform", "Solara Base", "Arc Station", "Photon Plant", "Voltex Hub", "Enerion Core", "Tesla Relay", "Surge Complex", "Dawn Array"])
 name_suffixes = Array[String](["Power Grid", "Energy Works", "Dynamo Quarter", "Generator Yards"])
+base_outputs = {"energy": 2.0}
+base_tick = 30.0
+site_bonus = {"solar": 0.5, "wind": 0.5, "geothermal": 0.6, "tidal": 0.5}
+neighbor_income = {"mining": {"energy": 0.5}, "science": {"energy": 0.5}, "city": {"energy": 0.5}, "generator": {"energy": 0.3}}

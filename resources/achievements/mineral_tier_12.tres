@@ -6,7 +6,7 @@
 script = ExtResource("1_def")
 achievement_id = "mineral_tier_12"
 title = "Trillion-Ton Haul"
-description = "Collect 1 Trillion minerals."
+description = "Stockpile 1 Trillion raw resources."
 icon = "🪨"
 trigger = 11
 int_value = 0

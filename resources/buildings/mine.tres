@@ -1,28 +1,22 @@
-[gd_resource type="Resource" script_class="BuildingDef" load_steps=3 format=3 uid="uid://b_mine_d6ffcfdb"]
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_mine_d6ffcfdb"]
 
-[ext_resource type="Script" path="res://scripts/game/logic/MineLogic.gd" id="1_logic"]
-[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="2_def"]
-
-[sub_resource type="Resource" id="Resource_logic"]
-script = ExtResource("1_logic")
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
 
 [resource]
-script = ExtResource("2_def")
+script = ExtResource("1_def")
 building_id = "mine"
 display_name = "Mine"
-description = "Extracts all raw minerals proportionately."
+description = "Extracts the raw resources under the district."
 allowed_poi_types = Array[int]([1])
 allowed_planet_types = Array[int]([])
-base_cost = 150.0
+base_cost = 200.0
 slot_cost = 1
 min_planet_lv = 1
-construct_duration = 0.0
-tick_duration = 18.0
-energy_per_tick = -2.0
-output_type = 3
-output_amount = 10.0
-input_type = 0
-input_amount = 0.0
-input_tier = 1
-logic = SubResource("Resource_logic")
+construct_duration = 4.0
+tick_duration = 20.0
+energy_per_tick = -1.0
+outputs = {"raw": 3.0}
+inputs = {}
+planet_bonus = {}
+tier = 1
 unlocked_by_default = true

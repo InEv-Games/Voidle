@@ -67,17 +67,14 @@ func get_upgrade_cost() -> Dictionary:
 			cost["ANY_T1"]  = 5
 		_:
 			cost["credits"] = 500 * next_lv
-			cost["ANY_T1"]  = 250 * next_lv
+			cost["ANY_T1"]  = 250 * next_lv          # any raw resources
 			if next_lv > 4:
-				cost["ANY_T2"] = 50 * (next_lv - 4)
+				cost[Economy.GOODS] = 50 * (next_lv - 4)  # later levels need Consumer Goods
 	return cost
 
 func recalculate_limits() -> void:
 	max_districts         = BASE_DISTRICTS + (level - 1)
 	max_orbital_districts = ceili(level / 5.0)
-
-	if has_building("cryo_vault"):
-		max_districts += 2
 
 	var st = null
 	if Engine.has_singleton("SceneTree") and Engine.get_main_loop():
@@ -110,7 +107,7 @@ func district_slots(poi: POIData) -> int:
 
 func can_upgrade_district(district_label: String) -> bool:
 	var lv: int = district_levels.get(district_label, 1)
-	return lv < level and not district_upgrading.has(district_label)
+	return lv < Economy.MAX_DISTRICT_LEVEL and not district_upgrading.has(district_label)
 
 func is_district_upgrading(district_label: String) -> bool:
 	return district_upgrading.has(district_label)

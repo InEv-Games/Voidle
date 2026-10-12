@@ -6,7 +6,7 @@
 script = ExtResource("1_def")
 achievement_id = "mineral_tier_14"
 title = "Entropy Engine"
-description = "Collect 1 Quintillion minerals."
+description = "Stockpile 1 Quintillion raw resources."
 icon = "🪨"
 trigger = 11
 int_value = 0

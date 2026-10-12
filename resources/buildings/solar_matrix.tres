@@ -1,24 +1,23 @@
 [gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://bid_solar_matrix"]
 
-[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_1"]
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
 
 [resource]
-script = ExtResource("1_1")
+script = ExtResource("1_def")
 building_id = "solar_matrix"
 display_name = "Solar Matrix"
-description = "Massive concentrated solar array. Only works on Arid planets."
+description = "High-efficiency solar field. Output scales with the site's solar rating."
 allowed_poi_types = Array[int]([2])
-allowed_planet_types = Array[int]([2])
-base_cost = 600.0
+allowed_planet_types = Array[int]([])
+base_cost = 700.0
 slot_cost = 1
-min_planet_lv = 2
-construct_duration = 0.0
+min_planet_lv = 1
+construct_duration = 4.0
 tick_duration = 30.0
 energy_per_tick = 0.0
-output_type = 1
-output_amount = 4.0
-input_type = 0
-input_amount = 0.0
-input_tier = 1
+outputs = {"energy": 7.0}
+inputs = {}
+planet_bonus = {}
+tier = 2
 unlocked_by_default = false
 output_tag = "solar"

@@ -19,7 +19,11 @@ class _PulseRing extends Control:
 		draw_arc(Vector2.ZERO, r1, 0.0, TAU, 52, Color(0.25, 0.80, 1.0, alpha), 2.5)
 		draw_arc(Vector2.ZERO, r2, 0.0, TAU, 52, Color(0.25, 0.80, 1.0, alpha * 0.30), 1.5)
 
-const DISTRICT_GENERATOR := 1
+const DISTRICT_CITY        := 0   # DistrictDef.Type.CITY
+const DISTRICT_GENERATOR   := 1   # DistrictDef.Type.GENERATOR   (Energy District)
+const DISTRICT_RESIDENTIAL := 4   # DistrictDef.Type.RESIDENTIAL (Residential District)
+const DISTRICT_COMMERCIAL  := 5   # DistrictDef.Type.COMMERCIAL  (Commercial District)
+const DISTRICT_SCIENCE     := 6   # DistrictDef.Type.SCIENCE     (Science District)
 
 # ── Guided tutorial steps ──────────────────────────────────────────────────────
 # Each step is {type, ...}:
@@ -41,15 +45,36 @@ const GUIDED_STEPS: Array = [
 			],
 			[
 				"But you do.",
-				"Your Capital district is already established. Your first task:",
-				"Give your people somewhere to live.",
+				"Your first task: choose where your Capital will stand.",
+				"Coasts and lowlands make a richer city — then give it a name.",
 			],
 		],
 	},
 	{
 		"type":        "action",
-		"instruction": "Click your Capital district  →  Build  →  Residential House",
-		"targets":     [{"type": "building", "id": "residential"}],
+		"instruction": "Pick a site on the planet  →  Name your Capital",
+		"targets":     [{"type": "district", "id": DISTRICT_CITY}],
+		"reward_credits": 0.0,
+		"reward_science": 0.0,
+		"reward_text":   "Capital founded",
+	},
+	{
+		"type":  "narr",
+		"pages": [
+			[
+				"The Capital rises.",
+				"Now give your people somewhere to live —",
+				"a Residential District with housing, built under the Capital.",
+			],
+		],
+	},
+	{
+		"type":        "action",
+		"instruction": "Place a Residential District  →  Build  →  Habitat Block",
+		"targets": [
+			{"type": "district", "id": DISTRICT_RESIDENTIAL},
+			{"type": "building", "id": "residential"},
+		],
 		"reward_credits": 250.0,
 		"reward_science": 0.0,
 		"reward_text":   "+250 cr",
@@ -60,10 +85,36 @@ const GUIDED_STEPS: Array = [
 			[
 				"Your first residents move in.",
 				"Cramped quarters, recycled air. But they're alive.",
+				"Now they need work — and the colony needs credits.",
+			],
+			[
+				"Markets are the only steady source of credits.",
+				"Place a Commercial District under your Capital,",
+				"then open a Market inside it.",
+			],
+		],
+	},
+	{
+		"type":        "action",
+		"instruction": "Place a Commercial District  →  Build  →  Market",
+		"targets": [
+			{"type": "district", "id": DISTRICT_COMMERCIAL},
+			{"type": "building", "id": "commercial"},
+		],
+		"reward_credits": 250.0,
+		"reward_science": 0.0,
+		"reward_text":   "+250 cr",
+	},
+	{
+		"type":  "narr",
+		"pages": [
+			[
+				"Coin changes hands. The colony has an economy.",
+				"Trade runs on power, and so does everything else.",
 				"Power is next. Without it, everything stops.",
 			],
 			[
-				"You need a Generator Facility district and a Solar Array inside it.",
+				"You need an Energy District and a Solar Array inside it.",
 				"Place the district anywhere on the surface,",
 				"then build the Solar Array from within it.",
 			],
@@ -71,7 +122,7 @@ const GUIDED_STEPS: Array = [
 	},
 	{
 		"type":        "action",
-		"instruction": "Place a Generator Facility district  →  Build  →  Solar Array",
+		"instruction": "Place an Energy District  →  Build  →  Solar Array",
 		"targets": [
 			{"type": "district", "id": DISTRICT_GENERATOR},
 			{"type": "building", "id": "solar_panel"},
@@ -89,16 +140,19 @@ const GUIDED_STEPS: Array = [
 				"Knowledge will determine whether this colony survives or merely exists.",
 			],
 			[
-				"A University lets your colonists research and develop new technologies.",
-				"You can build one inside any City district.",
-				"Your Capital counts as a City district.",
+				"A Research Lab lets your colonists develop new technologies.",
+				"Labs belong in a Science District.",
+				"Every new district needs a few free people — housing makes room for them.",
 			],
 		],
 	},
 	{
 		"type":        "action",
-		"instruction": "Click your Capital district  →  Build  →  University",
-		"targets":     [{"type": "building", "id": "lab"}],
+		"instruction": "Place a Science District  →  Build  →  Research Lab",
+		"targets": [
+			{"type": "district", "id": DISTRICT_SCIENCE},
+			{"type": "building", "id": "lab"},
+		],
 		"reward_credits": 0.0,
 		"reward_science": 25.0,
 		"reward_text":   "+25 sci",
@@ -158,15 +212,15 @@ const GUIDED_STEPS: Array = [
 				"Now let's put that to use.",
 			],
 			[
-				"Districts level up on their own: a City gains a level per district under it,",
-				"and every other district a level per neighbour. Higher levels hold more buildings.",
-				"A stronger energy grid means a stronger colony.",
+				"Districts grow by level: each level adds building slots.",
+				"Levelling up costs population, so keep building housing.",
+				"Open any district and press LEVEL UP.",
 			],
 		],
 	},
 	{
 		"type":        "action",
-		"instruction": "Add another district to your City to reach Lv 2",
+		"instruction": "Open a district  →  Press  LEVEL UP",
 		"targets":     [{"type": "district_upgrade"}],
 		"reward_credits": 400.0,
 		"reward_science": 10.0,
@@ -178,15 +232,30 @@ const GUIDED_STEPS: Array = [
 # ── Optional quest panel (shown after guided tutorial OR if already done) ───────
 # First TUTORIAL_QUEST_COUNT entries mirror the guided tutorial steps.
 # They are shown only when the tutorial was skipped / not played.
-const TUTORIAL_QUEST_COUNT := 6
+const TUTORIAL_QUEST_COUNT := 7
 
 const QUESTS := [
 	# ── Tutorial-equivalent quests ──────────────────────────────────────────────
 	{
 		"id":           "first_residents",
 		"title":        "First Residents",
-		"desc":         "Build a Residential House for your colonists.",
-		"sub_steps":    [{"type": "building", "target": "residential"}],
+		"desc":         "Place a Residential District and build a Habitat Block.",
+		"sub_steps":    [
+			{"type": "district", "target": DISTRICT_RESIDENTIAL},
+			{"type": "building", "target": "residential"},
+		],
+		"reward_credits": 250.0,
+		"reward_science": 0.0,
+		"reward_text":  "+250 cr",
+	},
+	{
+		"id":           "open_for_business",
+		"title":        "Open for Business",
+		"desc":         "Place a Commercial District and build a Market.",
+		"sub_steps":    [
+			{"type": "district", "target": DISTRICT_COMMERCIAL},
+			{"type": "building", "target": "commercial"},
+		],
 		"reward_credits": 250.0,
 		"reward_science": 0.0,
 		"reward_text":  "+250 cr",
@@ -194,7 +263,7 @@ const QUESTS := [
 	{
 		"id":           "power_grid",
 		"title":        "Power Grid",
-		"desc":         "Place a Generator Facility and build a Solar Array.",
+		"desc":         "Place an Energy District and build a Solar Array.",
 		"sub_steps":    [
 			{"type": "district", "target": DISTRICT_GENERATOR},
 			{"type": "building", "target": "solar_panel"},
@@ -206,8 +275,11 @@ const QUESTS := [
 	{
 		"id":           "research_wing",
 		"title":        "Research Wing",
-		"desc":         "Build a University to advance your colony's knowledge.",
-		"sub_steps":    [{"type": "building", "target": "lab"}],
+		"desc":         "Place a Science District and build a Research Lab.",
+		"sub_steps":    [
+			{"type": "district", "target": DISTRICT_SCIENCE},
+			{"type": "building", "target": "lab"},
+		],
 		"reward_credits": 0.0,
 		"reward_science": 25.0,
 		"reward_text":  "+25 sci",
@@ -233,7 +305,7 @@ const QUESTS := [
 	{
 		"id":           "district_upgrade",
 		"title":        "Expand the Grid",
-		"desc":         "Grow a district to Lv 2 by adding districts to your City.",
+		"desc":         "Raise a district to Lv 2 with its LEVEL UP button.",
 		"sub_steps":    [{"type": "district_upgrade"}],
 		"reward_credits": 400.0,
 		"reward_science": 10.0,
@@ -252,7 +324,7 @@ const QUESTS := [
 	{
 		"id":           "build_mine",
 		"title":        "Into the Earth",
-		"desc":         "Build a Mine to harvest raw minerals.",
+		"desc":         "Build a Mine in an Industrial District to dig up raw resources.",
 		"sub_steps":    [{"type": "building", "target": "mine"}],
 		"reward_credits": 400.0,
 		"reward_science": 0.0,
@@ -487,10 +559,57 @@ func _run_guided_step() -> void:
 		_show_action_bar(step)
 		# Unblock input for steps that need free navigation
 		var first_tgt: Dictionary = step["targets"][0]
-		if first_tgt["type"] in ["skill", "planet_level_up", "district_upgrade"]:
+		if first_tgt["type"] in ["skill", "planet_level_up", "district_upgrade"] \
+				or (first_tgt["type"] == "district" and int(first_tgt["id"]) == DISTRICT_CITY):
 			_action_block_on = false
+		_grant_step_needs(step["targets"], "id")
 		# Immediately advance if condition already met (e.g. player acted during narration)
 		_check_freeform_action_step(step)
+
+## Credits / science the remaining targets of a tutorial step cost, so the
+## player can never get stuck on one: { "credits": x, "science": y }.
+func _step_needs(targets: Array, id_key: String) -> Dictionary:
+	var need := {"credits": 0.0, "science": 0.0}
+	var home: PlanetData = GameState.get_home_planet()
+	var pp: PlanetProgress = GameState.get_planet(home.seed) if home != null else null
+	for tgt: Dictionary in targets:
+		match tgt["type"]:
+			"district":
+				var ddef: DistrictDef = DistrictDef.find(int(tgt[id_key]) as DistrictDef.Type)
+				if ddef != null and home != null:
+					need["credits"] += DistrictDef.placement_cost(ddef, home, _first_city_key(home))
+			"building":
+				var bdef := BuildingDef.find(String(tgt[id_key]))
+				if bdef != null:
+					need["credits"] += bdef.base_cost
+			"skill":
+				need["science"] += float(get_node("/root/SkillTree").get_next_cost(String(tgt[id_key])))
+			"planet_level_up":
+				if pp != null:
+					need["credits"] += float(pp.get_upgrade_cost().get("credits", 0.0))
+	return need
+
+## Internal id of a planet's first City ("" before one is founded).
+static func _first_city_key(pd: PlanetData) -> String:
+	for p: POIData in pd.custom_pois:
+		if p.is_city() and not p.is_orbital():
+			return p.label
+	return ""
+
+## Tops credits / science up to what the step needs, shown as a small reward.
+func _grant_step_needs(targets: Array, id_key: String) -> void:
+	var need := _step_needs(targets, id_key)
+	var cr: float = maxf(0.0, ceilf(need["credits"] - GameState.credits))
+	var sci: float = maxf(0.0, ceilf(need["science"] - GameState.science_points))
+	if cr > 0.0:
+		GameState.earn_credits(cr)
+	if sci > 0.0:
+		GameState.add_science(sci)
+	if cr > 0.0 or sci > 0.0:
+		var parts: Array[String] = []
+		if cr > 0.0: parts.append("+%.0f cr" % cr)
+		if sci > 0.0: parts.append("+%.0f sci" % sci)
+		_flash_reward("Tutorial grant  " + "  ".join(parts))
 
 func _advance_action() -> void:
 	if _guided_step >= GUIDED_STEPS.size(): return
@@ -584,9 +703,8 @@ func _highlight_id_for(tgt: Dictionary) -> String:
 		"skill":           return "skill_tree_btn"
 		"planet_level_up": return "planet_level_up_btn"
 		"district_upgrade": return "district_upgrade_btn"
-	match tgt.get("id", ""):
-		"residential", "lab": return "capital"
-		"solar_panel":        return "generator_district"
+	if tgt["type"] == "building":
+		return "generator_district"   # the district the player just placed
 	return ""
 
 func _spawn_pulse_ring() -> void:
@@ -612,14 +730,16 @@ func set_highlight_pos(screen_pos: Vector2) -> void:
 
 func _target_hint(tgt: Dictionary) -> String:
 	match tgt["type"]:
-		"district":         return "Place a Generator Facility district"
+		"district":
+			var ddef: DistrictDef = DistrictDef.find(int(tgt["id"]) as DistrictDef.Type)
+			return "Place a%s %s" % ["n" if ddef != null and ddef.display_name.substr(0, 1) in ["A", "E", "I", "O", "U"] else "",
+				ddef.display_name if ddef != null else "district"]
 		"planet_level_up":  return "Open Planet Panel  →  Press  LEVEL UP"
-		"district_upgrade": return "Add another district to your City to reach Lv 2"
-	match tgt.get("id", ""):
-		"residential": return "Build  →  Residential House"
-		"solar_panel":  return "Build  →  Solar Array inside the district"
-		"lab":          return "Build  →  University"
-		_:              return "Build: " + tgt.get("id", "")
+		"district_upgrade": return "Open a district  →  Press  LEVEL UP"
+	var bdef := BuildingDef.find(tgt.get("id", ""))
+	if bdef != null:
+		return "Build  →  %s inside the district" % bdef.display_name
+	return "Build: " + tgt.get("id", "")
 
 func _close_skill_tree() -> void:
 	var root := get_tree().root
@@ -1043,7 +1163,7 @@ func _build_quest_ui() -> void:
 		_flash_skip_reward(get_viewport().get_mouse_position())
 		_dismiss_quest_panel())
 	skip_btn.mouse_entered.connect(func() -> void:
-		var _skip_rd := ResourceData.generate(GameState.home_planet_seed, ResourceData.Tag.RAW_MINERAL, 3, 1)
+		var _skip_rd := ResourceData.from_raw(Economy.raw_info(SKIP_REWARD_RAW))
 		var ore_icon := MineralIcon.make(_skip_rd.tier, _skip_rd.display_color)
 		TooltipManager.show_tip("Scrap the tutorial Bot", ["Skip the optional objectives.", "\n+%.0f " % SKIP_MINERAL_AMOUNT, ore_icon], ""))
 	skip_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
@@ -1119,6 +1239,8 @@ func _show_quest_step(idx: int) -> void:
 	_tw_label(_title_lbl, q["title"].to_upper(), 0.022)
 	await get_tree().create_timer(0.022 * q["title"].length() + 0.1).timeout
 	_tw_label(_desc_lbl, q["desc"], 0.022)
+	if idx < TUTORIAL_QUEST_COUNT:
+		_grant_step_needs(q["sub_steps"], "target")
 	# Immediately check if current sub-step is already satisfied
 	_check_quest_sub_already_done()
 
@@ -1192,14 +1314,17 @@ func _dismiss_quest_panel() -> void:
 		await tw.finished
 		if is_instance_valid(_quest_panel): _quest_panel.queue_free(); _quest_panel = null
 
+## Skipping the optional objectives pays out the home world's raw resource.
+const SKIP_REWARD_RAW := "ferrite"
+
 func _give_skip_minerals() -> void:
-	var rd := ResourceData.generate(GameState.home_planet_seed, ResourceData.Tag.RAW_MINERAL, 3, 1)
+	var rd := ResourceData.from_raw(Economy.raw_info(SKIP_REWARD_RAW))
 	var rid := rd.resource_id()
 	if not GameState.known_resources.has(rid): GameState.known_resources[rid] = rd
 	GameState.add_resource(rid, SKIP_MINERAL_AMOUNT)
 
 func _flash_skip_reward(pos: Vector2) -> void:
-	var rd := ResourceData.generate(GameState.home_planet_seed, ResourceData.Tag.RAW_MINERAL, 3, 1)
+	var rd := ResourceData.from_raw(Economy.raw_info(SKIP_REWARD_RAW))
 	var ore_icon := MineralIcon.make(rd.tier, rd.display_color)
 
 	var root := HBoxContainer.new()
@@ -1258,7 +1383,7 @@ func _flash_reward(text: String) -> void:
 # ── Inventory hint ─────────────────────────────────────────────────────────────
 func _show_inventory_hint() -> void:
 	var hint := Label.new()
-	hint.text = "◈  Check your Inventory — top right panel"
+	hint.text = "◈  Your stockpile is in the top bar — hover ⛏ Raw for details"
 	if _orbitron: hint.add_theme_font_override("font", _orbitron)
 	hint.add_theme_font_size_override("font_size", 10)
 	hint.add_theme_color_override("font_color", Color(0.75, 0.90, 1.0))

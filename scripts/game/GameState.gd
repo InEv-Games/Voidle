@@ -26,8 +26,14 @@ signal district_placed(planet_seed: int, district_type_id: int)
 ## Global mineral/resource pool shared across all planets and facilities.
 var global_resources: Dictionary = {}
 
+## Adds to the stock, up to the resource's storage cap (Economy.cap); the
+## overflow is lost.
 func add_resource(resource_id: String, amount: float) -> void:
-	global_resources[resource_id] = global_resources.get(resource_id, 0.0) + amount
+	var have: float = global_resources.get(resource_id, 0.0)
+	var v := have + amount
+	if amount > 0.0 and Economy.is_capped(resource_id):
+		v = maxf(have, minf(v, Economy.cap(resource_id)))
+	global_resources[resource_id] = v
 	global_resources_changed.emit()
 
 func consume_resource(resource_id: String, amount: float) -> bool:
@@ -139,6 +145,8 @@ func _apply_pending_pois() -> void:
 		for pd_entry: Dictionary in poi_list:
 			var poi := POIData.new()
 			poi.label              = pd_entry.get("label",              "District")
+			poi.display_name       = pd_entry.get("display_name",       "")
+			poi.neighbors          = pd_entry.get("neighbors",          [])
 			poi.poi_type           = pd_entry.get("poi_type",           0) as POIData.POIType
 			poi.type_tag           = pd_entry.get("type_tag",           "")
 			poi.light_intensity    = pd_entry.get("light_intensity",    1.0)
@@ -167,23 +175,11 @@ func _seed_starting_resources() -> void:
 	var home_pp := get_planet(home_planet_seed)
 	var home_pd := get_home_planet()
 
-	# Register home planet mineral types (no pre-filled inventory)
-	var r1t1 := ResourceData.generate(home_planet_seed, ResourceData.Tag.RAW_MINERAL, 1, 1)
-	var r2t1 := ResourceData.generate(home_planet_seed, ResourceData.Tag.RAW_MINERAL, 2, 1)
-	for rd: ResourceData in [r1t1, r2t1]:
-		var key := rd.resource_id()
-		if not known_resources.has(key):
-			known_resources[key] = rd
-
-	# Force home planet deposits: R1 always present, R2 injected at low density
-	var br := get_body_resources_for(home_pd)
-	if not br.resources.has(r2t1.resource_id()):
-		br.resources[r2t1.resource_id()] = r2t1
-
-	# Per-mineral density overrides for home planet
+	# Home starts with a single raw resource (its body type's, e.g. Ferrite);
+	# more appear as the player reaches moons and other worlds.
 	if home_pd != null:
-		home_pd.mineral_densities[r1t1.resource_id()] = 0.80
-		home_pd.mineral_densities[r2t1.resource_id()] = 0.10
+		get_body_resources_for(home_pd)
+	_register_processed_resources()
 
 	pass  # orbital district added later via SkillTree unlock
 
@@ -233,15 +229,7 @@ func _build_home_solar() -> SolarData:
 	var home_pp := get_planet(home_planet_seed)
 	home_pp.is_colonized = start_colonized
 
-	# Attach starting Capital POI only once (first time world is built)
-	if home_pd.custom_pois.is_empty():
-		var poi       := POIData.new()
-		poi.label      = "Capital"
-		poi.poi_type   = POIData.POIType.CITY
-		poi.type_tag   = "city"
-		poi.placement  = LocationFinder.Placement.LAND
-		poi.light_intensity = 2.0
-		home_pd.custom_pois.append(poi)
+	# No starting City: the player picks the site and names it (PlanetaryView).
 
 	if home_planet_idx < sd.planets.size():
 		sd.planets[home_planet_idx] = home_pd
@@ -281,25 +269,28 @@ func cache_planet_data(pd: PlanetData) -> void:
 func get_planet_data(seed_val: int) -> PlanetData:
 	return _planet_data_cache.get(seed_val, null)
 
-func get_body_resources(body_seed: int,
-		rarity_min: int = 1, rarity_max: int = 1) -> BodyResources:
+## Raw resources of a body by seed (only valid once the body's PlanetData is
+## known — falls back to an empty pool).
+func get_body_resources(body_seed: int, _rarity_min: int = 1, _rarity_max: int = 1) -> BodyResources:
 	if not _body_resources.has(body_seed):
-		var br := BodyResources.generate(body_seed, rarity_min, rarity_max)
-		_body_resources[body_seed] = br
-		_register_resources(br)
+		var pd := get_planet_data(body_seed)
+		if pd != null:
+			return get_body_resources_for(pd)
+		var empty := BodyResources.new()
+		empty.body_seed = body_seed
+		return empty
 	return _body_resources[body_seed] as BodyResources
 
+## The named raw resources on a body (Economy.RAW_TABLE by body type and hop).
 func get_body_resources_for(pd: PlanetData) -> BodyResources:
-	var base := BodyResources.rarity_range_for(pd.planet_type)
-	var hop: int = pd.system_hop
-	# Each hop raises both the floor and ceiling steeply
-	# hop 0: R1-base  |  hop 1: R2-R(base+2)  |  hop 3: R4-R(base+4)
-	var r_min: int = 1 + hop
-	var r_max: int = mini(8, base.y + hop + mini(hop, 1))
-	var br := get_body_resources(pd.seed, r_min, r_max)
+	if not _body_resources.has(pd.seed):
+		var br := BodyResources.generate_for(pd)
+		_body_resources[pd.seed] = br
+		_register_resources(br)
+	var out: BodyResources = _body_resources[pd.seed]
 	if pd.mineral_densities.is_empty():
-		_populate_mineral_densities(pd, br)
-	return br
+		_populate_mineral_densities(pd, out)
+	return out
 
 func _populate_mineral_densities(pd: PlanetData, br: BodyResources) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -320,6 +311,12 @@ func _populate_mineral_densities(pd: PlanetData, br: BodyResources) -> void:
 	for i in raw_list.size():
 		var share := weights[i] / total_weight
 		pd.mineral_densities[raw_list[i].resource_id()] = share * base_density * rng.randf_range(0.9, 1.1)
+
+## Goods / Fuel / Rare Elements are known from the start (cargo, costs, icons).
+func _register_processed_resources() -> void:
+	for id: String in Economy.PROCESSED:
+		if not known_resources.has(id):
+			known_resources[id] = ResourceData.from_processed(id)
 
 func _register_resources(br: BodyResources) -> void:
 	for rd: ResourceData in br.as_array():
@@ -407,10 +404,12 @@ func finish_colonization(planet_seed: int) -> void:
 			poi.placement = 0 # LocationFinder.Placement.LAND
 			if pd.planet_type == PlanetData.Type.MOON:
 				poi.label = "Lunar Outpost"
+				poi.display_name = "Lunar Outpost"
 				poi.poi_type = POIData.POIType.OUTPOST
 				poi.type_tag = "outpost"
 			else:
 				poi.label = "Colony"
+				poi.display_name = "Colony"
 				poi.poi_type = POIData.POIType.CITY
 				poi.type_tag = "city"
 			poi.light_intensity = 2.0
@@ -446,6 +445,8 @@ func save() -> void:
 			for poi: POIData in pd_save.custom_pois:
 				pois_save.append({
 					"label":              poi.label,
+					"display_name":       poi.display_name,
+					"neighbors":          poi.neighbors,
 					"poi_type":           int(poi.poi_type),
 					"type_tag":           poi.type_tag,
 					"light_intensity":    poi.light_intensity,
@@ -540,6 +541,7 @@ func load_save() -> bool:
 			st.skill_levels[k] = data["skill_levels"][k]
 
 	global_resources    = data.get("global_resources",   {})
+	global_resources.erase(Economy.ENERGY)   # energy is a flow; older saves stored it
 	unlocked_buildings  = data.get("unlocked_buildings", {})
 	light_angle         = data.get("light_angle",        0.8)
 

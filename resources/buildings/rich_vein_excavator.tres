@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_rich_vein_excavator_site"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "rich_vein_excavator"
+display_name = "Rich Vein Excavator"
+description = "Strips a rich surface vein. Needs a site with 60%+ of one deposit."
+allowed_poi_types = Array[int]([1])
+allowed_planet_types = Array[int]([])
+base_cost = 1000.0
+slot_cost = 1
+min_planet_lv = 1
+construct_duration = 6.0
+tick_duration = 20.0
+energy_per_tick = -3.0
+outputs = {"raw": 12.0}
+inputs = {}
+planet_bonus = {}
+tier = 2
+unlocked_by_default = true
+required_tag = "minerals"
+required_min = 0.6

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_seaside_villas_site"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "seaside_villas"
+display_name = "Seaside Villas"
+description = "Sought-after homes by the sea. Only on coastal sites."
+allowed_poi_types = Array[int]([7])
+allowed_planet_types = Array[int]([])
+base_cost = 600.0
+slot_cost = 1
+min_planet_lv = 1
+construct_duration = 6.0
+tick_duration = 30.0
+energy_per_tick = -1.0
+outputs = {"population": 8000.0}
+inputs = {}
+planet_bonus = {}
+tier = 2
+unlocked_by_default = true
+requires_coastal = true

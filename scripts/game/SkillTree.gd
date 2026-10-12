@@ -232,6 +232,45 @@ func _init() -> void:
 	_add_node("unlock_solar_panel", "Energy Operations", "Unlocks Energy Districts and Solar Panels.\nUpgrade to increase Solar Panel max level.", 50.0, Vector2(240, 0), ["root"], 1, "Unlocks Solar Panel & +1 Max Level", 10, NodeShape.HEXAGON)
 	_add_node("unlock_residential", "Habitation Operations", "Unlocks Urban Districts and Residential blocks.\nUpgrade to increase Habitation max level.", 50.0, Vector2(160, 160), ["root"], 1, "Unlocks Residential & +1 Max Level", 10, NodeShape.HEXAGON)
 	_add_node("unlock_lab", "Research Operations", "Unlocks University facilities.\nUpgrade to increase University max level.", 100.0, Vector2(-160, 160), ["root"], 1, "Unlocks University & +1 Max Level", 10, NodeShape.HEXAGON)
+	_prune_obsolete()
+
+# ── Pruning ──────────────────────────────────────────────────────────────────
+## "unlock_*" nodes that unlock a feature rather than a building.
+const FEATURE_UNLOCKS := ["unlock_mining", "unlock_space_station", "unlock_moon", "unlock_asteroids",
+	"unlock_planetary_colonization", "unlock_interstellar"]
+## Upgrades whose only target was a building that no longer exists.
+const OBSOLETE_UPGRADES := ["gas_siphon_speed", "gas_siphon_yield", "gas_refinery_speed",
+	"gas_refinery_yield", "gas_funnel_boost", "gas_funnel_range", "volcanic_dredge_speed",
+	"volcanic_dredge_yield", "volcanic_forge_speed", "volcanic_forge_yield", "volcanic_stab_boost",
+	"volcanic_stab_range", "generator_efficiency", "supercharged_generators", "thermic_mastery",
+	"plasma_mastery", "antimatter_mastery", "singularity_mastery"]
+
+## Drops nodes for buildings removed in the economy rework (and upgrades that
+## only served them). Their children inherit the removed node's parents, so
+## every remaining node stays reachable.
+func _prune_obsolete() -> void:
+	var drop: Array[String] = []
+	for id: String in nodes:
+		if id in OBSOLETE_UPGRADES:
+			drop.append(id)
+		elif id.begins_with("unlock_") and not (id in FEATURE_UNLOCKS) \
+				and BuildingDef.find(id.trim_prefix("unlock_")) == null:
+			drop.append(id)
+	for id: String in drop:
+		var gone: SkillNode = nodes[id]
+		nodes.erase(id)
+		for n: SkillNode in nodes.values():
+			if not (id in n.parents):
+				continue
+			n.parents.erase(id)
+			for gp: String in gone.parents:
+				if not (gp in n.parents) and nodes.has(gp):
+					n.parents.append(gp)
+	# A grandparent dropped later in the loop may have been inherited — clean up.
+	for n: SkillNode in nodes.values():
+		for id: String in drop:
+			n.parents.erase(id)
+
 func get_building_max_level(building_id: String) -> int:
 	# Default level is 1. Upgrades increase this.
 	var max_lv = 1

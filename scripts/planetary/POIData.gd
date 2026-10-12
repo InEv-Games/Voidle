@@ -9,11 +9,12 @@ enum POIType {
 	SCIENCE,    # research, anomaly study
 	SPACEPORT,  # launch pads, orbital logistics — one per planet
 	STATION,    # orbital station — ship-based district
-	RESIDENTIAL,# housing — built under a City
+	RESIDENTIAL,# population (housing) — built under a City
+	COMMERCIAL, # markets, trade — built under a City
 }
 
-static var TYPE_LABELS: Array[String] = ["City", "Mining", "Energy", "Outpost", "Science", "Spaceport", "Station", "Residential"]
-static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⬡", "🚀", "◈", "⌂"]
+static var TYPE_LABELS: Array[String] = ["City", "Industrial", "Energy", "Outpost", "Science", "Spaceport", "Station", "Residential", "Commercial"]
+static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⚗", "🚀", "◈", "⌂", "◈"]
 
 @export var label:         String  = "Site"
 @export var poi_type:      POIType = POIType.CITY
@@ -52,6 +53,26 @@ static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⬡", "�
 ## The settlement only stretches toward a road as it grows *after* that, so
 ## new roads never reshape a district instantly.
 @export var spoke_birth: Dictionary = {}
+
+## What the player sees (renameable, may repeat). `label` is the district's
+## internal id: buildings, levels, City membership and neighbours key on it.
+@export var display_name: String = ""
+## Ids (labels) of the surface districts this one neighbours — written by the
+## planet view from the settlement map; drives neighbour income.
+@export var neighbors: Array = []
+
+func shown_name() -> String:
+	return display_name if display_name != "" else label
+
+## A fresh internal id, unique on the planet.
+static func make_key(data: PlanetData) -> String:
+	var taken := {}
+	for p: POIData in data.custom_pois:
+		taken[p.label] = true
+	var k := data.custom_pois.size() + 1
+	while taken.has("d%d" % k):
+		k += 1
+	return "d%d" % k
 
 ## Legacy string tag kept for shader/ring logic only — do not use for type checks.
 @export var type_tag: String = ""

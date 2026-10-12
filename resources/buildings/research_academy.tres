@@ -1,21 +1,22 @@
-[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://bid_research_academy"]
 
 [ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
 
 [resource]
 script = ExtResource("1_def")
 building_id = "research_academy"
-display_name = "Research Academy"
-description = "Intermediate science facility."
+display_name = "Research Directorate"
+description = "+15% science across the planet."
 allowed_poi_types = Array[int]([0])
-base_cost = 800.0
-slot_cost = 2
-min_planet_lv = 2
-construct_duration = 0.0
-tick_duration = 45.0
-energy_per_tick = -30.0
-output_type = 5
-output_amount = 10.0
-input_type = 0
-input_amount = 0.0
+allowed_planet_types = Array[int]([])
+base_cost = 1200.0
+slot_cost = 1
+min_planet_lv = 1
+construct_duration = 4.0
+tick_duration = 30.0
+energy_per_tick = -2.0
+outputs = {}
+inputs = {}
+planet_bonus = {"science": 0.15}
+tier = 2
 unlocked_by_default = false

@@ -3,7 +3,9 @@
 class_name DistrictDef
 extends Resource
 
-enum Type { CITY, GENERATOR, MINING, SPACE_STATION, RESIDENTIAL }
+## Display names: GENERATOR = Energy, MINING = Industrial, RESIDENTIAL = Residential.
+## (Enum names stay so saved district types and type_tags keep working.)
+enum Type { CITY, GENERATOR, MINING, SPACE_STATION, RESIDENTIAL, COMMERCIAL, SCIENCE }
 
 @export var id:           Type
 @export var display_name: String
@@ -31,6 +33,49 @@ enum Type { CITY, GENERATOR, MINING, SPACE_STATION, RESIDENTIAL }
 ## player-facing description, e.g. {"generator": "+10% credits"}.
 ## Shown during placement; gameplay effects are not wired up yet.
 @export var neighbor_bonuses: Dictionary = {}
+
+## ── Base income ────────────────────────────────────────────────────────────
+## What the district makes on its own, before any buildings: per base_tick
+## cycle ("energy" is ⚡ per second of flow, "population" is housing).
+## Scaled by the site (site_mult) and the district's level (level_mult).
+@export var base_outputs: Dictionary = {}
+@export var base_tick: float = 30.0
+## Site factors that raise the base income: { factor: weight }, giving
+## ×(1 + Σ weight × factor). Factors (0..1): "solar", "wind", "geothermal",
+## "tidal", "minerals" (richest local deposit), "coastal", and terrain names
+## ("lowlands", "highlands", "mountains", …) — see BuildingDef.site_value.
+@export var site_bonus: Dictionary = {}
+
+## Base income multiplier from where the district stands.
+func site_mult(poi: POIData) -> float:
+	var m := 1.0
+	for key: String in site_bonus:
+		m += float(site_bonus[key]) * BuildingDef.site_value(poi, key)
+	return m
+
+## [[label, +fraction], …] of the site factors that apply here, largest first.
+func site_breakdown(poi: POIData) -> Array:
+	var out: Array = []
+	for key: String in site_bonus:
+		var v := float(site_bonus[key]) * BuildingDef.site_value(poi, key)
+		if v > 0.005:
+			out.append([BuildingDef.tag_label(key), v])
+	out.sort_custom(func(a, b) -> bool: return a[1] > b[1])
+	return out
+
+## ── Neighbour income ───────────────────────────────────────────────────────
+## Extra base income per neighbouring district, by the neighbour's type key:
+## { "residential": { "credits": 4.0 }, … } — same units as base_outputs.
+## A City also counts every district built under it as a neighbour.
+@export var neighbor_income: Dictionary = {}
+
+## What one neighbour of type `key` adds: { resource_id: amount } (may be empty).
+func income_from(key: String) -> Dictionary:
+	return neighbor_income.get(key, {})
+
+## Base income grows +50% per district level above 1.
+static func level_mult(level: int) -> float:
+	return 1.0 + 0.5 * float(maxi(level, 1) - 1)
 
 ## Lower-case type key used by neighbor_bonuses and POIData.type_tag.
 func type_key() -> String:
@@ -94,43 +139,34 @@ static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: Stri
 			continue
 		if def.is_system_anchor() or poi.parent_city == parent_city:
 			same_count += 1
+	if def.is_system_anchor() and same_count == 0:
+		return 0.0   # a planet's first City is free (the player's starting capital)
 	return def.base_cost * pow(2.0, float(same_count))
 
-## Suggests a name. Cities (and stations) draw from name_pool; a district
-## built under a City is named after it: "<City> <suffix>", cycling through
-## name_suffixes. Always unique on the planet (" II", " III" … when taken).
+## Suggests a display name. Cities (and stations) draw from name_pool,
+## preferring one not used on the planet yet; a district built under a City
+## cycles through name_suffixes ("Residences", "Housing Quarter" …). Names may
+## repeat — districts are keyed by POIData.label, not by name.
 func suggest_name(data: PlanetData, parent_city: String = "") -> String:
-	var base := display_name
 	if parent_city != "" and not name_suffixes.is_empty():
 		var n := 0
 		for poi: POIData in data.custom_pois:
 			if poi.parent_city == parent_city and poi.poi_type == to_poi_type():
 				n += 1
-		base = "%s %s" % [parent_city, name_suffixes[n % name_suffixes.size()]]
-	elif not name_pool.is_empty():
-		var rng := RandomNumberGenerator.new()
-		rng.seed = data.seed ^ (data.custom_pois.size() * 0xA7F3 + id * 0x1234)
-		base = name_pool[rng.randi() % name_pool.size()]
-	return unique_label(data, base)
-
-## `base`, or `base` + " II" / " III" … so no two districts share a label —
-## labels key buildings, levels and City membership.
-static func unique_label(data: PlanetData, base: String, ignore: POIData = null) -> String:
-	var taken := {}
+		return name_suffixes[n % name_suffixes.size()]
+	if name_pool.is_empty():
+		return display_name
+	var used := {}
 	for poi: POIData in data.custom_pois:
-		if poi != ignore:
-			taken[poi.label] = true
-	if not taken.has(base):
-		return base
-	const NUMERALS := ["II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
-	for numeral: String in NUMERALS:
-		var candidate := "%s %s" % [base, numeral]
-		if not taken.has(candidate):
-			return candidate
-	var k := 11
-	while taken.has("%s %d" % [base, k]):
-		k += 1
-	return "%s %d" % [base, k]
+		used[poi.shown_name()] = true
+	var rng := RandomNumberGenerator.new()
+	rng.seed = data.seed ^ (data.custom_pois.size() * 0xA7F3 + id * 0x1234)
+	var start := rng.randi() % name_pool.size()
+	for i in name_pool.size():
+		var cand: String = name_pool[(start + i) % name_pool.size()]
+		if not used.has(cand):
+			return cand
+	return name_pool[start]
 
 ## Convert DistrictDef.Type → POIData.POIType for placement.
 func to_poi_type() -> POIData.POIType:
@@ -140,6 +176,8 @@ func to_poi_type() -> POIData.POIType:
 		Type.MINING:        return POIData.POIType.MINING
 		Type.SPACE_STATION: return POIData.POIType.STATION
 		Type.RESIDENTIAL:   return POIData.POIType.RESIDENTIAL
+		Type.COMMERCIAL:    return POIData.POIType.COMMERCIAL
+		Type.SCIENCE:       return POIData.POIType.SCIENCE
 		_:                  return POIData.POIType.CITY
 
 ## Returns how many of this district type exist on the planet.
