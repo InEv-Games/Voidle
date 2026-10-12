@@ -43,6 +43,11 @@ func has_building(bid: String) -> bool:
 @export var is_colonized:   bool = false
 @export var has_spaceport:  bool = false
 @export var moons_unlocked: bool = false
+## Moon landing: 0 none, 1 lander parked in orbit, 2 landed (GameState).
+@export var lander_state: int = 0
+## The planet's Orbit — a unique City-like hub whose districts are Space
+## Stations. 0 = not founded; each level opens one more station (Leveling).
+@export var orbit_level: int = 0
 
 # ── District upgrade levels ──────────────────────────────────────────────────
 ## { district_label -> upgrade_level: int }, default 1
@@ -76,7 +81,7 @@ func get_upgrade_cost() -> Dictionary:
 
 func recalculate_limits() -> void:
 	max_districts         = BASE_DISTRICTS + (level - 1)
-	max_orbital_districts = ceili(level / 5.0)
+	max_orbital_districts = orbit_level   # one Space Station per Orbit level
 
 	var st = null
 	if Engine.has_singleton("SceneTree") and Engine.get_main_loop():
@@ -107,12 +112,16 @@ func buildings_in_district(district_label: String) -> Array[Dictionary]:
 ## few hand-picked buildings — 1 + 1 per level.
 func district_slots(poi: POIData) -> int:
 	var lv: int = district_levels.get(poi.label, 1)
+	if poi.is_orbital():
+		return 1   # a station holds one module; the Orbit levels instead
 	if poi.is_city():
 		return lv
 	return 3 + (lv - 1) * 2
 
 ## Slots one more level adds to this district.
 static func slots_per_level(poi: POIData) -> int:
+	if poi.is_orbital():
+		return 0
 	return 1 if poi.is_city() else 2
 
 ## Cities a planet may hold: one per planet level (a soft cap the player lifts
@@ -234,6 +243,31 @@ func remove_building_stack(entry: Dictionary) -> void:
 					b.erase("merge_into")
 				elif midx > idx:
 					b["merge_into"] = midx - 1
+
+## Folds a finished entry into an identical finished one in the same district
+## (same building, mine target and level). Returns true when it merged — the
+## entry is then gone from `buildings`.
+func merge_identical(entry: Dictionary) -> bool:
+	if entry.get("constructing", false):
+		return false
+	for b: Dictionary in buildings:
+		if is_same(b, entry) or b.get("constructing", false):
+			continue
+		if b.get("district_id") == entry.get("district_id") \
+				and b.get("building_id") == entry.get("building_id") \
+				and b.get("target_mineral", "") == entry.get("target_mineral", "") \
+				and int(b.get("level", 1)) == int(entry.get("level", 1)):
+			b["amount"] = int(b.get("amount", 1)) + int(entry.get("amount", 1))
+			remove_building_stack(entry)
+			return true
+	return false
+
+## Merges every set of identical finished buildings into one stack.
+func consolidate_buildings() -> void:
+	var i := 0
+	while i < buildings.size():
+		if not merge_identical(buildings[i]):
+			i += 1
 
 func add_resource(resource_id: String, amount: float) -> void:
 	GameState.add_resource(resource_id, amount)

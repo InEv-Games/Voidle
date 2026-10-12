@@ -33,9 +33,58 @@ var _base_progress: Dictionary = {}
 ## { "construct:pm_key" -> float 0.0-1.0 }
 var _construct:     Dictionary = {}
 
+## Set by a load with no saved cycle progress (older saves): the first tick
+## gives every cycle a random head start so the bars don't all fill in step.
+var _randomize_missing := false
+var _randomize_tries := 0
+
 func _process(delta: float) -> void:
 	_calc_global_energy()
+	if _randomize_missing:
+		_randomize_tries += 1
+		_randomize_missing = not _randomize_cycles() and _randomize_tries < 600   # retry until planets load
 	_tick_all(delta)
+
+# ── Save / load ───────────────────────────────────────────────────────────────
+
+## Cycle and construction progress, so bars resume where they were.
+func get_save_data() -> Dictionary:
+	return {
+		"progress":    _progress.duplicate(),
+		"base":        _base_progress.duplicate(),
+		"construct":   _construct.duplicate(),
+		"user_paused": _user_paused.duplicate(),
+	}
+
+func load_save_data(d: Dictionary) -> void:
+	_progress.clear(); _base_progress.clear(); _construct.clear(); _user_paused.clear()
+	if d.is_empty():
+		_randomize_missing = true
+		_randomize_tries = 0
+		return
+	_progress.merge(d.get("progress", {}))
+	_base_progress.merge(d.get("base", {}))
+	_construct.merge(d.get("construct", {}))
+	_user_paused.merge(d.get("user_paused", {}))
+
+func _randomize_cycles() -> bool:
+	var all_ready := true
+	for pp: PlanetProgress in _all_colonies():
+		for entry: Dictionary in pp.buildings:
+			if entry.get("constructing", false) or not entry.has("uid"):
+				continue
+			var key := _key(pp.planet_seed, entry.get("district_id", ""), entry["uid"])
+			if not _progress.has(key):
+				_progress[key] = randf() * 0.9
+		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+		if pd == null or pd.custom_pois.is_empty():
+			all_ready = false
+			continue
+		for poi: POIData in pd.custom_pois:
+			var k := "%d:%s" % [pp.planet_seed, poi.label]
+			if not _base_progress.has(k):
+				_base_progress[k] = randf() * 0.9
+	return all_ready
 
 func get_progress(key: String) -> float:
 	return _progress.get(key, 0.0)
@@ -123,13 +172,20 @@ func _tick_all(delta: float) -> void:
 						poi.constructing = false
 						poi.construct_progress = 1.0
 						district_changed = true
+						# the first City on another world ends Act I (the demo)
+						if poi.is_city() and planet_seed != GameState.home_planet_seed:
+							GameState.complete_act1.call_deferred()
 					building_progress_changed.emit(planet_seed, poi.label, poi.construct_progress)
 			if district_changed:
 				GameState.planet_progress_changed.emit(planet_seed)
 
 		var energy_ratio: float = _global_energy_ratio
-		var pop_speed: float = Economy.pop_speed(pd, pp) if pd != null else 1.0
-		_pop_speed[planet_seed] = pop_speed
+		# population pressure changes slowly — refresh it twice a second
+		var ps_key := "t%d" % planet_seed
+		if pd != null and Time.get_ticks_msec() - int(_pop_speed.get(ps_key, -100000)) > 500:
+			_pop_speed[planet_seed] = Economy.pop_speed(pd, pp)
+			_pop_speed[ps_key] = Time.get_ticks_msec()
+		var pop_speed: float = float(_pop_speed.get(planet_seed, 1.0))
 		var st := get_node("/root/SkillTree")
 
 		# Collect entries to merge/remove after iteration (avoid modifying array mid-loop)
@@ -157,9 +213,7 @@ func _tick_all(delta: float) -> void:
 				if cp >= 1.0:
 					_construct.erase(ck)
 					entry["constructing"] = false
-					var merge_idx: int = entry.get("merge_into", -1)
-					if merge_idx >= 0:
-						pending_merges.append(entry)
+					pending_merges.append(entry)
 					# Spaceport starts paused after construction — player launches manually
 					if def.building_id == "spaceport":
 						_user_paused[key] = true
@@ -222,11 +276,11 @@ func _tick_all(delta: float) -> void:
 			_emit_progress(planet_seed, key)
 
 		# Apply stacked-build merges now that iteration is complete
+		# (by content, not index: a sibling still under construction gets its
+		# own entry, so identical buildings always end up in one stack)
 		for entry: Dictionary in pending_merges:
-			var merge_idx: int = entry.get("merge_into", -1)
-			if merge_idx >= 0 and merge_idx < pp.buildings.size():
-				pp.buildings[merge_idx]["amount"] = pp.buildings[merge_idx].get("amount", 1) + 1
-			pp.remove_building_stack(entry)
+			entry.erase("merge_into")
+			pp.merge_identical(entry)
 
 		for c in completed_buildings:
 			building_constructed.emit(planet_seed, c.key, c.bid)
@@ -288,15 +342,41 @@ static func district_def(poi: POIData) -> DistrictDef:
 ## Districts that pay neighbour income to `poi`: its map neighbours (poi.neighbors)
 ## and, for a City, every district built under it — each counted once.
 ## Unfinished districts give nothing.
+## Per-planet lookups rebuilt when the district list changes: label -> POI and
+## City label -> its districts.
+static var _poi_index: Dictionary = {}   # seed -> { "n": count, "by_label": {}, "children": {} }
+
+static func _index(pd: PlanetData) -> Dictionary:
+	var ix: Dictionary = _poi_index.get(pd.seed, {})
+	if ix.is_empty() or int(ix["n"]) != pd.custom_pois.size():
+		var by_label := {}
+		var children := {}
+		for p: POIData in pd.custom_pois:
+			by_label[p.label] = p
+			if p.parent_city != "":
+				if not children.has(p.parent_city):
+					children[p.parent_city] = []
+				children[p.parent_city].append(p)
+		ix = {"n": pd.custom_pois.size(), "by_label": by_label, "children": children, "iso": {}}
+		_poi_index[pd.seed] = ix
+	return ix
+
 static func income_sources(pd: PlanetData, poi: POIData) -> Array[POIData]:
 	var out: Array[POIData] = []
 	if pd == null or poi == null:
 		return out
-	for p: POIData in pd.custom_pois:
-		if p == poi or p.constructing or p.is_orbital():
-			continue
-		if poi.neighbors.has(p.label) or (poi.is_city() and p.parent_city == poi.label):
+	var ix := _index(pd)
+	var seen := {}
+	for nb: String in poi.neighbors:
+		var p: POIData = ix["by_label"].get(nb)
+		if p != null and p != poi and not p.constructing and not p.is_orbital() and not seen.has(p):
+			seen[p] = true
 			out.append(p)
+	if poi.is_city():
+		for p: POIData in ix["children"].get(poi.label, []):
+			if not p.constructing and not p.is_orbital() and not seen.has(p):
+				seen[p] = true
+				out.append(p)
 	return out
 
 ## Space bonus: a district far from every other one makes more on its own —
@@ -308,16 +388,23 @@ const ISOLATION_RANGE_DEG := 10.0
 static func isolation_mult(pd: PlanetData, poi: POIData) -> float:
 	if pd == null or poi == null:
 		return 1.0
+	# placed districts: cached until the district list changes (previews compute live)
+	var iso_cache: Dictionary = _index(pd)["iso"] if poi.label != "" else {}
+	if iso_cache.has(poi.label):
+		return iso_cache[poi.label]
 	var best := INF
 	for p: POIData in pd.custom_pois:
 		if p == poi or p.is_orbital() or (p.label == poi.label and poi.label != ""):
 			continue
 		best = minf(best, rad_to_deg(TerrainSampler.angular_distance(deg_to_rad(poi.lon_deg), deg_to_rad(poi.lat_deg),
 			deg_to_rad(p.lon_deg), deg_to_rad(p.lat_deg))))
-	if best == INF:
-		return 1.0
-	var t := clampf((best - TerrainSampler.MIN_SPACING_DEG) / ISOLATION_RANGE_DEG, 0.0, 1.0)
-	return 1.0 + ISOLATION_MAX * t
+	var mult := 1.0
+	if best != INF:
+		var t := clampf((best - TerrainSampler.MIN_SPACING_DEG) / ISOLATION_RANGE_DEG, 0.0, 1.0)
+		mult = 1.0 + ISOLATION_MAX * t
+	if poi.label != "":
+		iso_cache[poi.label] = mult
+	return mult
 
 ## Unscaled base income: { id: base × site × space + Σ neighbour income × road
 ## weight } (before level, City bonuses and skills).
@@ -338,9 +425,29 @@ static func district_income_raw(pd: PlanetData, poi: POIData) -> Dictionary:
 
 ## A district's base income per its cycle (per second for energy, capacity for
 ## population): (base × site + neighbours) × level × planet bonus × skills.
+## District incomes change slowly (buildings, levels, neighbours) but are read
+## every frame by the energy grid, population and the HUD: cache them, refreshed
+## every INCOME_CACHE_MS and whenever a planet changes.
+const INCOME_CACHE_MS := 500
+var _income_cache: Dictionary = {}   # "seed:label" -> [time_ms, income]
+
+func _invalidate_income(_seed: int = 0) -> void:
+	_income_cache.clear()
+
 func district_income(pp: PlanetProgress, poi: POIData) -> Dictionary:
 	if poi == null or poi.constructing or poi.is_orbital():
 		return {}
+	var ck := "%d:%s" % [pp.planet_seed, poi.label]
+	var now := Time.get_ticks_msec()
+	if _income_cache.has(ck) and now - int(_income_cache[ck][0]) < INCOME_CACHE_MS:
+		return _income_cache[ck][1]
+	if not GameState.planet_progress_changed.is_connected(_invalidate_income):
+		GameState.planet_progress_changed.connect(_invalidate_income)
+	var inc := _district_income_now(pp, poi)
+	_income_cache[ck] = [now, inc]
+	return inc
+
+func _district_income_now(pp: PlanetProgress, poi: POIData) -> Dictionary:
 	var raw := district_income_raw(GameState.get_planet_data(pp.planet_seed), poi)
 	var lv_m := DistrictDef.level_mult(pp.district_levels.get(poi.label, 1))
 	for id: String in raw:
@@ -521,6 +628,8 @@ func _skill_mods(pp: PlanetProgress, id: String, v: float, output_tag: String) -
 		Economy.RAW:
 			v *= st.get_mine_output_mult() * PlanetModifier.combined(
 				PlanetModifier.for_planet(_planet_type(pp.planet_seed)), PlanetModifier.Effect.MINE_OUTPUT_MULT)
+		Economy.SCIENCE:
+			v *= st.get_science_mult()
 		Economy.ENERGY:
 			if output_tag == "solar":
 				v *= st.get_solar_mult()

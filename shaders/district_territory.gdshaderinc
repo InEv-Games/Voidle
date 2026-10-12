@@ -6,7 +6,7 @@
 // Ownership must stay in sync with PlanetaryView._territory_owner() (GDScript),
 // which hit-tests the same regions for hover and click.
 
-#define MAX_DISTRICTS 64
+#define MAX_DISTRICTS 128
 
 uniform vec4 district_pos[MAX_DISTRICTS];  // xyz = world-space centre normal, w = angular radius (rad)
 uniform vec4 district_col[MAX_DISTRICTS];  // rgb = territory colour, a = night-light intensity 0..1

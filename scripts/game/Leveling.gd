@@ -14,6 +14,12 @@ extends RefCounted
 ##             lets the planet hold one more City.
 ## First-pass balance numbers — tune here.
 
+## Badge colour for a level: cool at Lv1, warming towards gold at Lv5+.
+static func level_color(lv: int) -> Color:
+	const COLS := [Color(0.55, 0.62, 0.78), Color(0.35, 0.85, 0.55), Color(0.30, 0.80, 0.95),
+		Color(0.70, 0.50, 1.00), Color(1.00, 0.78, 0.30)]
+	return COLS[clampi(lv - 1, 0, COLS.size() - 1)]
+
 # ── Districts ────────────────────────────────────────────────────────────────
 
 ## Credits to raise a district from `lv` to `lv + 1`.
@@ -27,6 +33,8 @@ static func district_level_block(pd: PlanetData, pp: PlanetProgress, poi: POIDat
 		return "Already upgrading"
 	if lv >= Economy.MAX_DISTRICT_LEVEL:
 		return "Max level"
+	if poi.is_orbital():
+		return "Stations don't level — level the Orbit for more stations"
 	if poi.is_city():
 		return ""   # the Capital District leads
 	for nb: String in poi.neighbors:
@@ -83,6 +91,41 @@ static func city_level_block(pd: PlanetData, pp: PlanetProgress, city: POIData) 
 		return "Needs %d total district levels in this City (has %d)" % [need, have]
 	return ""
 
+# ── Orbit ────────────────────────────────────────────────────────────────────
+## The Orbit takes one City slot. Lv n holds n Space Stations, each with a
+## single module; it levels once every station is up with its module built.
+const MAX_ORBIT_LEVEL := 5
+
+static func orbit_stations(pd: PlanetData) -> Array[POIData]:
+	var out: Array[POIData] = []
+	for p: POIData in pd.custom_pois:
+		if p.is_orbital():
+			out.append(p)
+	return out
+
+static func orbit_level_credits(next: int) -> float:
+	return city_level_credits(next) * 1.2
+
+static func orbit_level_block(pd: PlanetData, pp: PlanetProgress) -> String:
+	if pp.orbit_level >= MAX_ORBIT_LEVEL:
+		return "Max level"
+	var stations := orbit_stations(pd)
+	if stations.size() < pp.orbit_level:
+		return "Launch all %d station%s first" % [pp.orbit_level, "" if pp.orbit_level == 1 else "s"]
+	for st: POIData in stations:
+		if st.constructing or pp.buildings_in_district(st.label).filter(
+				func(b: Dictionary) -> bool: return not b.get("constructing", false)).is_empty():
+			return "Every station needs its module built"
+	return ""
+
+## Cities plus the Orbit — what counts against max_cities.
+static func cities_used(pd: PlanetData, pp: PlanetProgress) -> int:
+	var n := 0
+	for p: POIData in pd.custom_pois:
+		if p.is_city() and not p.is_orbital():
+			n += 1
+	return n + (1 if pp.orbit_level > 0 else 0)
+
 # ── Planet ───────────────────────────────────────────────────────────────────
 
 ## Cities a planet may hold: two at Lv 1, one more per level.
@@ -90,7 +133,7 @@ static func max_cities(pp: PlanetProgress) -> int:
 	return pp.level + 1
 
 static func planet_city_levels(pd: PlanetData, pp: PlanetProgress) -> int:
-	var total := 0
+	var total := pp.orbit_level   # the Orbit counts as a City
 	for p: POIData in pd.custom_pois:
 		if p.is_city() and not p.is_orbital():
 			total += city_level(pp, p)

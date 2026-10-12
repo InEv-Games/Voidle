@@ -265,6 +265,34 @@ func _draw_pixel_station(pos: Vector2, col: Color) -> void:
 	draw_rect(Rect2(p + Vector2( 6,  2), sz), col)
 
 ## Leader line + name label, like POILayer districts.
+## True when the station `label` has a finished `building_id` module.
+func _has_module(label: String, building_id: String) -> bool:
+	var pp := GameState.get_planet(_planet_seed)
+	for b: Dictionary in pp.buildings_in_district(label):
+		if b.get("building_id", "") == building_id and not b.get("constructing", false):
+			return true
+	return false
+
+## A station carrying an Orbital Shipyard: a long dock — two gantry rails with
+## ribs, a hull under construction between them and blinking work lights.
+func _draw_pixel_shipyard(pos: Vector2, col: Color) -> void:
+	var p := pos.floor()
+	var rail := col
+	var rib := Color(col, col.a * 0.55)
+	draw_rect(Rect2(p + Vector2(-16, -7), Vector2(32, 2)), rail)
+	draw_rect(Rect2(p + Vector2(-16,  5), Vector2(32, 2)), rail)
+	for x in [-16, -8, 0, 8, 14]:
+		draw_rect(Rect2(p + Vector2(x, -5), Vector2(2, 10)), rib)
+	var hull := Color(0.95, 0.85, 0.60, col.a)
+	draw_rect(Rect2(p + Vector2(-10, -2), Vector2(16, 4)), hull)
+	draw_rect(Rect2(p + Vector2(6, -1), Vector2(4, 2)), hull)
+	draw_rect(Rect2(p + Vector2(-12, -1), Vector2(2, 2)), Color(0.55, 0.75, 1.0, col.a))
+	var on := int(Time.get_ticks_msec() / 400) % 2 == 0
+	var lamp := Color(1.0, 0.6, 0.15, col.a) if on else Color(0.5, 0.25, 0.05, col.a * 0.6)
+	draw_rect(Rect2(p + Vector2(-18, -7), Vector2(2, 2)), lamp)
+	draw_rect(Rect2(p + Vector2( 16,  5), Vector2(2, 2)), lamp)
+	draw_rect(Rect2(p + Vector2( 16, -7), Vector2(2, 2)), Color(lamp, lamp.a * 0.5) if on else lamp)
+
 func _draw_ship_label(spos: Vector2, ship: ShipData) -> void:
 	var font: Font = ThemeDB.fallback_font
 	const FONT_SIZE: int = 10
@@ -689,11 +717,14 @@ func _draw_station_pois(center: Vector2) -> void:
 		if _is_occluded_r(sv):
 			continue
 		var spos := center + Vector2(sv.x, sv.y)
-		_draw_pixel_station(spos, col)
+		if _has_module(poi.label, "orbital_shipyard"):
+			_draw_pixel_shipyard(spos, col)
+		else:
+			_draw_pixel_station(spos, col)
 		if is_selected:
-			_draw_station_label(spos, poi.label)
+			_draw_station_label(spos, poi.shown_name())
 		elif is_hovered and not suppress_label:
-			_draw_station_label(spos, poi.label)
+			_draw_station_label(spos, poi.shown_name())
 
 func _draw_station_label(spos: Vector2, label: String) -> void:
 	var font := ThemeDB.fallback_font
@@ -752,7 +783,8 @@ func _station_poi_at(local_pos: Vector2) -> String:
 		var sv := _project_poi(poi, poi.orbit_angle)
 		if _is_occluded_r(sv):
 			continue
-		if local_pos.distance_to(center + Vector2(sv.x, sv.y)) <= 12.0:
+		var hit_r := 20.0 if _has_module(poi.label, "orbital_shipyard") else 12.0
+		if local_pos.distance_to(center + Vector2(sv.x, sv.y)) <= hit_r:
 			return poi.label
 	return ""
 

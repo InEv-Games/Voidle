@@ -1059,15 +1059,16 @@ func _draw_scene(font: Font) -> void:
 		var fc := Color(1.0, 0.95, 0.5, alpha) if hovered else Color(1.0, 1.0, 1.0, alpha)
 		draw_string(font, label_pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, fc)
 
-		# district level sub-label
+		# level badge beside the name (City level for a City)
 		var dist_lv: int = poi["data"].get("district_level", 0)
 		if dist_lv > 0:
+			_draw_level_badge(font, dist_lv, label_pos, text_size, horiz_dir, alpha,
+				poi["data"].get("capital_level", 0) > 0)
+		# Capital District level under a City's name, close up
+		if dist_lv > 0 and poi["data"].get("capital_level", 0) > 0 and detail >= 0.5:
 			const LV_SIZE := 10
-			var lv_str := "Lv %d" % dist_lv
-			# a City: its City level from afar; close up also its Capital District's
 			var cap_lv: int = poi["data"].get("capital_level", 0)
-			if cap_lv > 0 and detail >= 0.5:
-				lv_str = "City Lv %d  ·  Capital Lv %d" % [dist_lv, cap_lv]
+			var lv_str := "Capital District Lv %d" % cap_lv
 			var lv_pos := label_pos + Vector2(0, text_size.y * 0.9)
 			if horiz_dir < 0.0:
 				var lv_w := font.get_string_size(lv_str, HORIZONTAL_ALIGNMENT_LEFT, -1, LV_SIZE).x
@@ -1076,6 +1077,24 @@ func _draw_scene(font: Font) -> void:
 				HORIZONTAL_ALIGNMENT_LEFT, -1, LV_SIZE, Color(0, 0, 0, alpha * 0.7))
 			draw_string(font, lv_pos, lv_str,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, LV_SIZE, Color(0.65, 0.85, 1.0, alpha * 0.85))
+
+## A filled pill with the level, drawn after the name (before it when the
+## label hangs to the left). Cities get a crown-coloured border.
+func _draw_level_badge(font: Font, lv: int, label_pos: Vector2, text_size: Vector2,
+		horiz_dir: float, alpha: float, is_city: bool) -> void:
+	const SIZE := 11
+	var txt := "Lv %d" % lv
+	var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE).x
+	var w := tw + 10.0
+	var h := 15.0
+	var y := label_pos.y - text_size.y * 0.72
+	var x := label_pos.x + text_size.x + 6.0 if horiz_dir >= 0.0 else label_pos.x - w - 6.0
+	var col := Leveling.level_color(lv)
+	var r := Rect2(x, y, w, h)
+	draw_rect(r.grow(1.0), Color(0, 0, 0, 0.75 * alpha))
+	draw_rect(r, Color(col.r * 0.30, col.g * 0.30, col.b * 0.30, 0.92 * alpha))
+	draw_rect(r, Color(1.0, 0.85, 0.35, alpha) if is_city else Color(col, alpha), false, 1.0)
+	draw_string(font, Vector2(x + 5.0, y + h - 3.5), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, Color(col.lightened(0.25), alpha))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _planet:

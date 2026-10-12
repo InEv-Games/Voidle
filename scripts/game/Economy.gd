@@ -300,7 +300,7 @@ static func max_population(pd: PlanetData, pp: PlanetProgress) -> int:
 		if ProductionManager.is_paused(key):
 			continue   # starved of its upkeep (e.g. Goods) — houses nobody
 		total += float(def.outputs[POPULATION]) * float(b.get("amount", 1)) \
-			* scope_bonus(pp, b.get("district_id", ""), POPULATION, pd)
+			* scope_bonus(pp, b.get("district_id", ""), POPULATION, pd) * _housing_mult()
 	return int(round(total))
 
 ## Population used on a planet: every district's founding + level costs
@@ -310,13 +310,23 @@ static func used_population(pd: PlanetData, pp: PlanetProgress) -> int:
 	if pd == null or pp == null:
 		return 0
 	var used := 0
+	var nth := {}   # city label -> non-Residential districts counted so far (founding order)
 	for poi: POIData in pd.custom_pois:
 		if poi.is_orbital():
 			continue
 		var lv: int = pp.district_levels.get(poi.label, 1)
 		if pp.district_upgrading.has(poi.label):
 			lv += 1
-		used += district_pop_cost(poi, lv, pd)
+		if poi.poi_type == POIData.POIType.RESIDENTIAL:
+			pass   # housing never costs population
+		elif poi.is_city():
+			used += district_pop_cost(poi, lv, null)
+		else:
+			var k: int = nth.get(poi.parent_city, 0)
+			nth[poi.parent_city] = k + 1
+			used += district_found_pop(k)
+			for l in range(1, lv):
+				used += level_up_pop(l)
 		if poi.is_city():
 			used += Leveling.city_pop_cost(int(pp.city_levels.get(poi.label, 1)))
 	for b: Dictionary in pp.buildings:
@@ -346,8 +356,13 @@ static func district_housing(pd: PlanetData, pp: PlanetProgress, poi: POIData) -
 		var def := BuildingDef.find(b.get("building_id", ""))
 		if def != null and def.outputs.has(POPULATION):
 			total += float(def.outputs[POPULATION]) * float(b.get("amount", 1)) \
-				* scope_bonus(pp, poi.label, POPULATION, pd)
+				* scope_bonus(pp, poi.label, POPULATION, pd) * _housing_mult()
 	return int(round(total))
+
+## Research bonus to housing built by buildings.
+static func _housing_mult() -> float:
+	var st = Engine.get_main_loop().root.get_node_or_null("SkillTree")
+	return st.get_housing_mult() if st != null else 1.0
 
 static func free_population(pd: PlanetData, pp: PlanetProgress) -> int:
 	return max_population(pd, pp) - used_population(pd, pp)
@@ -359,13 +374,28 @@ static func free_population(pd: PlanetData, pp: PlanetProgress) -> int:
 ## (and orbital stations) boost the whole planet.
 
 ## The City a district belongs to (its own id for a City), or "".
+## Per-frame caches (bonus lookups run for every district, every frame).
+static var _cache_frame: int = -1
+static var _city_maps: Dictionary = {}     # planet seed -> { district label -> city label }
+static var _bonus_cache: Dictionary = {}   # "seed|city|id" -> multiplier
+
+static func _frame_caches() -> void:
+	var f := Engine.get_process_frames()
+	if f != _cache_frame:
+		_cache_frame = f
+		_city_maps.clear()
+		_bonus_cache.clear()
+
 static func city_key(pd: PlanetData, district_label: String) -> String:
 	if pd == null:
 		return ""
-	for p: POIData in pd.custom_pois:
-		if p.label == district_label:
-			return p.label if p.is_city() or p.parent_city == "" else p.parent_city
-	return ""
+	_frame_caches()
+	var m: Dictionary = _city_maps.get(pd.seed, {})
+	if m.is_empty():
+		for p: POIData in pd.custom_pois:
+			m[p.label] = p.label if p.is_city() or p.parent_city == "" else p.parent_city
+		_city_maps[pd.seed] = m
+	return m.get(district_label, "")
 
 ## Multiplier for `id` produced in `district_label`: 1 + its City's bonuses +
 ## planet-wide bonuses.
@@ -373,6 +403,9 @@ static func scope_bonus(pp: PlanetProgress, district_label: String, id: String, 
 	if pd == null:
 		pd = GameState.get_planet_data(pp.planet_seed)
 	var city := city_key(pd, district_label)
+	var ck := "%d|%s|%s" % [pp.planet_seed, city, id]
+	if _bonus_cache.has(ck):
+		return _bonus_cache[ck]
 	var mult := 1.0
 	for b: Dictionary in pp.buildings:
 		if b.get("constructing", false):
@@ -383,6 +416,7 @@ static func scope_bonus(pp: PlanetProgress, district_label: String, id: String, 
 		var bd: String = b.get("district_id", "")
 		if def.planet_wide or (city != "" and city_key(pd, bd) == city):
 			mult += float(def.planet_bonus[id]) * float(b.get("amount", 1))
+	_bonus_cache[ck] = mult
 	return mult
 
 ## Planet-wide bonuses only (kept for callers without a district).

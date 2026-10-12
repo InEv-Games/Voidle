@@ -15,6 +15,10 @@ signal back_pressed
 
 var _survey_btn: Button = null
 var _scan_wrap: VBoxContainer = null
+const LunarTransitRocketScript := preload("res://scripts/solar/LunarTransitRocket.gd")
+var _transit_rockets: Array[Node] = []
+var _moon_panel_sig: String = ""
+var _moon_wrap: VBoxContainer = null
 
 var _current:      SolarData
 var _star:         ColorRect
@@ -79,6 +83,8 @@ func _ready() -> void:
 	_pivot = Node2D.new()
 	_space.add_child(_pivot)
 	GameState.asteroid_discovered.connect(_on_asteroid_discovered)
+	GameState.planet_progress_changed.connect(_on_progress_changed)
+	GameState.credits_changed.connect(_on_credits_changed)
 
 	# wait one frame so Control sizes are computed
 	await get_tree().process_frame
@@ -180,6 +186,128 @@ func _on_planet_selected(pd: PlanetData) -> void:
 		pd.set_meta("__solar_data", _current)
 		SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", pd)
 
+# ── Moon colonization ────────────────────────────────────────────────────────
+
+## Colonization block in the Local System panel: one entry per moon that can
+## still be colonised (the plain moon list stays hidden by design).
+func _build_moon_section() -> void:
+	if _moon_wrap != null and is_instance_valid(_moon_wrap):
+		_moon_wrap.queue_free()
+	_moon_wrap = null
+	_moon_panel_sig = _moon_signature()
+	if _mode != Mode.LOCAL or _current_local == null or not GameState.moon_unlocked:
+		return
+	_moon_wrap = VBoxContainer.new()
+	_moon_wrap.add_theme_constant_override("separation", 6)
+	_panel_content.add_child(_moon_wrap)
+	_panel_content.move_child(_moon_wrap, _planet_list.get_index() + 1)
+	for md: PlanetData in _current_local.moons:
+		_add_moon_colonize_row(md)
+
+func _add_moon_colonize_row(md: PlanetData) -> void:
+	if md.planet_type != PlanetData.Type.MOON:
+		return
+	var pp := GameState.get_planet(md.seed)
+	if pp.is_colonized:
+		return
+	var orbitron := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	var sep := HSeparator.new()
+	var sep_s := StyleBoxFlat.new()
+	sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
+	sep.add_theme_stylebox_override("separator", sep_s)
+	_moon_wrap.add_child(sep)
+	var head := Label.new()
+	head.text = md.planet_name
+	if orbitron: head.add_theme_font_override("font", orbitron)
+	head.add_theme_font_size_override("font_size", 14)
+	head.add_theme_color_override("font_color", Color(0.85, 0.88, 0.95))
+	_moon_wrap.add_child(head)
+	if pp.is_colonizing:
+		var lbl := Label.new()
+		lbl.text = "Lander in transit…"
+		if orbitron: lbl.add_theme_font_override("font", orbitron)
+		lbl.add_theme_font_size_override("font_size", 10)
+		lbl.add_theme_color_override("font_color", Color(0.65, 0.88, 1.0))
+		_moon_wrap.add_child(lbl)
+		return
+	var block := GameState.moon_colonize_block(md.seed)
+	var b := Button.new()
+	b.text = "START COLONIZATION"
+	if orbitron: b.add_theme_font_override("font", orbitron)
+	b.add_theme_font_size_override("font_size", 11)
+	var nb := StyleBoxFlat.new()
+	nb.bg_color = Color(0.10, 0.32, 0.12) if block == "" else Color(0.12, 0.13, 0.17)
+	nb.content_margin_top = 8; nb.content_margin_bottom = 8
+	nb.set_border_width_all(1)
+	nb.border_color = Color(0.25, 0.75, 0.30, 0.8) if block == "" else Color(0.3, 0.32, 0.4, 0.6)
+	nb.set_corner_radius_all(3)
+	b.add_theme_stylebox_override("normal", nb)
+	var hb := nb.duplicate() as StyleBoxFlat
+	hb.bg_color = nb.bg_color.lightened(0.15)
+	b.add_theme_stylebox_override("hover", hb)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_color_override("font_color", Color(0.80, 1.0, 0.82) if block == "" else Color(0.55, 0.58, 0.66))
+	var cost_txt := "◈ %s Credits  ·  %s Fuel Rods\nFlight %ds" % [Economy.fmt(GameState.MOON_COLONIZE_CREDITS),
+		Economy.fmt(GameState.MOON_COLONIZE_FUEL), int(GameState.MOON_TRANSIT_SEC)]
+	b.mouse_entered.connect(func() -> void:
+		AudioManager.play("hover")
+		TooltipManager.show_tip("Colonize " + md.planet_name,
+			"Launch a lander from %s. It parks in lunar orbit; then pick where to found your first lunar City.\n\n%s%s"
+			% [_current_local.planet_name, cost_txt, "" if block == "" else "\n\n[color=#ff7766]" + block + "[/color]"]))
+	b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	b.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		if GameState.start_moon_colonization(md.seed):
+			AudioManager.play("rocket", -4.0)
+			_spawn_transit_rockets(_current_local)
+			_update_panel()
+		else:
+			AudioManager.play("error"))
+	_moon_wrap.add_child(b)
+
+## Rockets for every moon of `data` whose lander is in flight.
+func _spawn_transit_rockets(data: PlanetData) -> void:
+	for r in _transit_rockets:
+		if is_instance_valid(r):
+			r.queue_free()
+	_transit_rockets.clear()
+	if data == null:
+		return
+	for node: PlanetOrbitNode in _orbits:
+		var md := node.planet_data
+		if md == null or not GameState.get_planet(md.seed).is_colonizing:
+			continue
+		var r: Node2D = LunarTransitRocketScript.new()
+		r.setup(md, func() -> Vector2: return _star_center(), 240.0 * 0.40, node)
+		r.arrived.connect(_on_lander_arrived)
+		_space.add_child(r)
+		_transit_rockets.append(r)
+
+## The lander reached lunar orbit — follow it to the Moon.
+func _on_lander_arrived(md: PlanetData) -> void:
+	_update_panel()
+	if _mode != Mode.LOCAL:
+		return
+	await get_tree().create_timer(0.8).timeout
+	if is_inside_tree() and _mode == Mode.LOCAL:
+		planet_selected.emit(md)
+
+func _moon_signature() -> String:
+	if _current_local == null:
+		return ""
+	var sig := ""
+	for md: PlanetData in _current_local.moons:
+		var pp := GameState.get_planet(md.seed)
+		sig += "%d%d%s|" % [int(pp.is_colonizing), int(pp.is_colonized), GameState.moon_colonize_block(md.seed)]
+	return sig
+
+func _on_credits_changed(_c: float) -> void:
+	_on_progress_changed(0)
+
+func _on_progress_changed(_seed: int) -> void:
+	if _mode == Mode.LOCAL and _current_local != null and _moon_signature() != _moon_panel_sig:
+		_update_panel()
+
 func _show_access_denied_text(msg: String = "ACCESS DENIED") -> void:
 	var lbl := Label.new()
 	lbl.text = msg
@@ -233,6 +361,7 @@ func load_local(data: PlanetData) -> void:
 	_clear()
 	_build_local_star(data)
 	_build_local_moons(data)
+	_spawn_transit_rockets(data)
 	_update_panel()
 	_apply_current_angles()
 	queue_redraw()
@@ -570,6 +699,7 @@ func _on_asteroid_discovered(slot: int, count: int) -> void:
 
 func _update_panel() -> void:
 	if _mode == Mode.SOLAR:
+		_build_moon_section()   # clears the Local-only block
 		_system_name.text = _current.system_name
 		_star_type.text   = SolarData.get_star_type_name(_current.star_type)
 		for child in _planet_list.get_children():
@@ -601,6 +731,7 @@ func _update_panel() -> void:
 				btn.modulate.a = 0.5
 			btn.pressed.connect(func() -> void: planet_selected.emit(md))
 			_planet_list.add_child(btn)
+		_build_moon_section()
 
 	# remove old survey / scan buttons
 	if _survey_btn and is_instance_valid(_survey_btn):

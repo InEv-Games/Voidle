@@ -89,6 +89,10 @@ const CITY_FOCUS_ZOOM: float = 2.6
 ## Empty-map click: one step up the hierarchy — District → City → Planet.
 func _go_up_one_level() -> void:
 	if _active_district_poi != null and _active_district_poi in current_data.custom_pois \
+			and _active_district_poi.is_orbital():
+		_build_orbit_panel(current_data)
+		return
+	if _active_district_poi != null and _active_district_poi in current_data.custom_pois \
 			and not _active_district_poi.is_orbital():
 		var city := _city_of(_active_district_poi)
 		if city != null:
@@ -99,8 +103,15 @@ func _go_up_one_level() -> void:
 
 ## City panel being shown (the City as a whole), or null.
 var _city_panel_poi: POIData = null
+## The Orbit panel is showing (see _build_orbit_panel).
+var _orbit_panel_open: bool = false
 ## The first City must be founded (placement can't be cancelled meanwhile).
 var _mandatory_city: bool = false
+## Picking the Moon landing site (Found First Settlement) — see _begin_lunar_landing.
+var _lunar_landing: bool = false
+const LunarLanderScript := preload("res://scripts/planetary/LunarLander.gd")
+var _lander: Control = null   # LunarLander
+static var _lander_arrival_seen: Dictionary = {}   # seed -> true once the fly-in played
 ## "Name your city" box is open — planet clicks are ignored.
 var _naming_open: bool = false
 const DOUBLE_CLICK_MS: int = 350
@@ -607,11 +618,117 @@ func load_planet(data: PlanetData) -> void:
 	# rotate so the first (primary) POI faces the viewer when arriving at a planet
 	if planet_changed and poi_layer._pois.size() > 0:
 		planet_renderer.set_rotation_offset(poi_layer._pois[0]["lon"])
+	_migrate_orbit(data)
 	_refresh_active_panel()   # e.g. stay on the City you just added a district to
 	call_deferred("_maybe_require_first_city")
 
 ## A colonised world with no City yet (a new game's home): the player must pick
 ## the site of the first City — placement can't be cancelled until it's founded.
+# ── Moon landing ─────────────────────────────────────────────────────────────
+
+## START COLONIZATION on an uncolonised Moon: launches the lander, then returns
+## to the Local System view to watch it fly.
+func _setup_moon_colonize_button(btn: Button, data: PlanetData) -> void:
+	btn.text = "START COLONIZATION"
+	var block := GameState.moon_colonize_block(data.seed)
+	if block != "":
+		btn.modulate = Color(0.6, 0.62, 0.7)
+	btn.mouse_entered.connect(func() -> void:
+		TooltipManager.show_tip("Colonize " + data.planet_name,
+			"Launch a lander from your home world. It parks in orbit; then pick where to found your first City here.\n\n"
+			+ _res_bb(Economy.CREDITS, GameState.MOON_COLONIZE_CREDITS, "") + "   " + _res_bb(Economy.FUEL, GameState.MOON_COLONIZE_FUEL, "")
+			+ "   Flight %ds" % int(GameState.MOON_TRANSIT_SEC)
+			+ ("" if block == "" else "\n\n" + _bb(block, BB_BAD))))
+	btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	btn.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		if GameState.start_moon_colonization(data.seed):
+			AudioManager.play("rocket", -4.0)
+			_go_back()   # watch the launch from the Local System view
+		else:
+			AudioManager.play("error"))
+
+func _add_found_settlement_button(page: Control) -> void:
+	var note := Label.new()
+	note.text = "Your lander is in orbit. Pick a site to found the first City."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_apply_orbitron(note, 9)
+	note.add_theme_color_override("font_color", Color(0.65, 0.88, 1.0))
+	page.add_child(note)
+	var btn := Button.new()
+	btn.text = "FOUND FIRST SETTLEMENT"
+	_apply_orbitron(btn, 12)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.10, 0.32, 0.12)
+	sb.content_margin_top = 10; sb.content_margin_bottom = 10
+	sb.set_border_width_all(1)
+	sb.border_color = Color(0.25, 0.75, 0.30, 0.8)
+	sb.set_corner_radius_all(3)
+	btn.add_theme_stylebox_override("normal", sb)
+	var hb := sb.duplicate() as StyleBoxFlat
+	hb.bg_color = Color(0.15, 0.48, 0.18)
+	btn.add_theme_stylebox_override("hover", hb)
+	btn.add_theme_color_override("font_color", Color(0.80, 1.0, 0.82))
+	btn.pressed.connect(_begin_lunar_landing)
+	page.add_child(btn)
+
+func _begin_lunar_landing() -> void:
+	var city_def := DistrictDef.find(DistrictDef.Type.CITY)
+	if city_def == null or current_data == null:
+		return
+	AudioManager.play("click")
+	_lunar_landing = true
+	_begin_district_placement(city_def)
+
+## Keeps the lander above a Moon whose colonists haven't landed yet.
+func _tick_lander(delta: float) -> void:
+	if _lunar_landing and _placing_def == null and not _naming_open \
+			and (_lander == null or _lander.phase != LunarLanderScript.Phase.DESCENT):
+		_lunar_landing = false   # placement was cancelled
+	var want := false
+	if current_data != null and current_data.planet_type == PlanetData.Type.MOON:
+		var pp := GameState.get_planet(current_data.seed)
+		want = pp.lander_state == 1
+	if _lander != null and not is_instance_valid(_lander):
+		_lander = null
+	if not want:
+		if _lander != null and _lander.phase != LunarLanderScript.Phase.DESCENT:
+			_lander.queue_free()
+			_lander = null
+		return
+	var p: Dictionary = poi_layer._get_planet_params()
+	if p.is_empty():
+		return
+	if _lander == null:
+		_lander = LunarLanderScript.new()
+		(planet_renderer.get_parent() as Control).add_child(_lander)
+		if not _lander_arrival_seen.has(current_data.seed):
+			_lander_arrival_seen[current_data.seed] = true
+			var vp := get_viewport().get_visible_rect().size
+			_lander.arrive(Vector2(vp.x * 0.85, -20.0))
+			_refresh_active_panel()
+	_lander.tick(delta, p["center"], p["r_px"])
+
+## Drops the lander onto `site`, then founds the City there.
+func _land_lander(nm: String, def: DistrictDef, site: Vector2) -> void:
+	var data := current_data
+	if _lander == null or not is_instance_valid(_lander):
+		_lander = LunarLanderScript.new()
+		(planet_renderer.get_parent() as Control).add_child(_lander)
+		var p: Dictionary = poi_layer._get_planet_params()
+		_lander.global_position = p.get("center", Vector2.ZERO) + Vector2(0, -p.get("r_px", 100.0) * 1.3)
+	_lander.descend(func() -> Vector3: return poi_layer.project(site.x, site.y))
+	AudioManager.play("rocket", -6.0)
+	_lander.landed.connect(func() -> void:
+		_lander = null
+		_lunar_landing = false
+		if current_data != data:
+			return
+		AudioManager.play("construct")
+		GameState.mark_landed(data.seed)
+		_spawn_district(data, nm, def, site, "")
+		poi_layer.spawn_floating_text(rad_to_deg(site.x), rad_to_deg(site.y), "Touchdown!", Color(0.65, 1.0, 0.7), 14))
+
 func _maybe_require_first_city() -> void:
 	if current_data == null or _placing_def != null or _naming_open:
 		return
@@ -623,6 +740,8 @@ func _maybe_require_first_city() -> void:
 	for p: POIData in current_data.custom_pois:
 		if p.is_city() and not p.is_orbital():
 			return
+	if current_data.seed != GameState.home_planet_seed:
+		return   # other worlds: the lander waits for "Found First Settlement"
 	var city_def := DistrictDef.find(DistrictDef.Type.CITY)
 	if city_def == null:
 		return
@@ -756,6 +875,8 @@ func _refresh_active_panel() -> void:
 		return
 	if _city_panel_poi != null and _city_panel_poi in current_data.custom_pois:
 		_build_city_panel(_city_panel_poi, current_data)
+	elif _orbit_panel_open:
+		_build_orbit_panel(current_data)
 	elif _active_district_poi != null and _active_district_poi in current_data.custom_pois:
 		_build_district_panel(_active_district_poi, current_data)
 		if not _active_district_poi.is_orbital():
@@ -835,7 +956,11 @@ func _setup_material(data: PlanetData) -> void:
 # Each surface district owns a pixel region on the globe (district_territory.gdshaderinc).
 # It grows with district level and active buildings, and hosts the night lights.
 
-const MAX_TERRITORIES:     int   = 64     # must match MAX_DISTRICTS in the shader include
+## How many districts the planet shader draws at once (must match MAX_DISTRICTS
+## in district_territory.gdshaderinc). Gameplay (roads, neighbours, sizes, hit
+## tests) uses every district; only the drawing is capped — to the ones nearest
+## the middle of the view, refreshed as the globe turns (_push_shader_districts).
+const MAX_TERRITORIES:     int   = 128
 # Settlement radius = BASE + SIZE·√(Σ building weights).
 # A fresh district is a hamlet of a few pixels; housing grows it fastest.
 const SETTLE_BASE_DEG:     float = 0.9
@@ -932,38 +1057,48 @@ static func _territory_light(active: int) -> float:
 static func _lonlat_to_world(lon: float, lat: float) -> Vector3:
 	return Vector3(sin(lon) * cos(lat), -sin(lat), cos(lon) * cos(lat))
 
-func _upload_territories(data: PlanetData) -> void:
-	_territories.clear()
+## Shader slot of each territory (-1 = not drawn this frame) and the reverse.
+var _slot_of: PackedInt32Array = PackedInt32Array()
+var _slot_terr: PackedInt32Array = PackedInt32Array()
+var _shader_view_n := Vector3.ZERO
+
+## World normal at the middle of the view.
+func _view_center_n() -> Vector3:
+	var hit := _screen_to_lonlat(planet_renderer.global_position + planet_renderer.size * 0.5)
+	if not hit["hit"]:
+		return Vector3.ZERO
+	return _lonlat_to_world(float(hit["lon"]), float(hit["lat"]))
+
+## Sends the territories the shader draws: all of them when they fit, else the
+## MAX_TERRITORIES nearest the middle of the view.
+func _push_shader_districts() -> void:
+	var order: Array = range(_territories.size())
+	var vc := _view_center_n()
+	_shader_view_n = vc
+	if order.size() > MAX_TERRITORIES and vc != Vector3.ZERO:
+		order.sort_custom(func(a, b) -> bool:
+			return (_territories[a]["n"] as Vector3).dot(vc) > (_territories[b]["n"] as Vector3).dot(vc))
+		order = order.slice(0, MAX_TERRITORIES)
+	_slot_of = PackedInt32Array()
+	_slot_of.resize(_territories.size())
+	_slot_of.fill(-1)
+	_slot_terr = PackedInt32Array()
 	var pos := PackedVector4Array()
 	var col := PackedVector4Array()
 	var sea := PackedFloat32Array()
-	for pd: POIData in data.custom_pois:
-		if pd.is_orbital():
-			continue
-		if _territories.size() >= MAX_TERRITORIES:
-			break
-		var n := _lonlat_to_world(deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg))
-		var r := deg_to_rad(_territory_radius_deg(data, pd))
-		var c: Color = poi_layer._marker_color(pd.type_tag)
-		# Night lights scale with active buildings: none while constructing / empty.
-		var light: float = 0.0 if pd.constructing \
-			else _territory_light(_district_night_size(data, pd.label))
-		pos.append(Vector4(n.x, n.y, n.z, r))
-		col.append(Vector4(c.r, c.g, c.b, light))
-		sea.append(1.0 if _is_sea_site(pd) else 0.0)
-		_territories.append({"n": n, "r": r, "poi": pd})
-	var count := _territories.size()
+	for ti in order:
+		var t: Dictionary = _territories[ti]
+		var n: Vector3 = t["n"]
+		_slot_of[ti] = _slot_terr.size()
+		_slot_terr.append(ti)
+		pos.append(Vector4(n.x, n.y, n.z, float(t["r"])))
+		col.append(t["col"])
+		sea.append(float(t["sea"]))
+	var count := pos.size()
 	while pos.size() < MAX_TERRITORIES:
 		pos.append(Vector4.ZERO)
 		col.append(Vector4.ZERO)
 		sea.append(0.0)
-	# Neighbour pairs drive the arcs and label merging in POILayer; roads are
-	# routed separately (_rebuild_roads).
-	var pairs := _neighbor_pairs()
-	_store_neighbors(pairs)
-	_push_label_clusters(pairs)
-	_sync_level_labels(data)
-	_roads_dirty = true
 	var mat := planet_renderer.material as ShaderMaterial
 	if mat == null:
 		return
@@ -971,6 +1106,50 @@ func _upload_territories(data: PlanetData) -> void:
 	mat.set_shader_parameter("district_col",   col)
 	mat.set_shader_parameter("district_count", count)
 	mat.set_shader_parameter("district_sea",   sea)
+	_push_shader_spokes()
+
+func _push_shader_spokes() -> void:
+	var buf := PackedVector4Array()
+	buf.resize(MAX_TERRITORIES * MAX_SPOKES)
+	for slot in _slot_terr.size():
+		var ti: int = _slot_terr[slot]
+		if ti >= _spokes.size():
+			continue
+		var list: Array = _spokes[ti]
+		for k in mini(list.size(), MAX_SPOKES):
+			buf[slot * MAX_SPOKES + k] = list[k]
+	var mat := planet_renderer.material as ShaderMaterial
+	if mat != null:
+		mat.set_shader_parameter("district_spokes", buf)
+
+## Territory index → shader slot (-1 when not drawn).
+func _shader_slot(ti: int) -> int:
+	return _slot_of[ti] if ti >= 0 and ti < _slot_of.size() else -1
+
+func _upload_territories(data: PlanetData) -> void:
+	_territories.clear()
+	for pd: POIData in data.custom_pois:
+		if pd.is_orbital():
+			continue
+		var n := _lonlat_to_world(deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg))
+		var r := deg_to_rad(_territory_radius_deg(data, pd))
+		var c: Color = poi_layer._marker_color(pd.type_tag)
+		# Night lights scale with active buildings: none while constructing / empty.
+		var light: float = 0.0 if pd.constructing \
+			else _territory_light(_district_night_size(data, pd.label))
+		_territories.append({"n": n, "r": r, "poi": pd,
+			"col": Vector4(c.r, c.g, c.b, light), "sea": 1.0 if _is_sea_site(pd) else 0.0})
+	# Neighbour pairs drive the arcs and label merging in POILayer; roads are
+	# routed separately (_rebuild_roads).
+	var pairs := _neighbor_pairs()
+	_store_neighbors(pairs)
+	_push_label_clusters(pairs)
+	_sync_level_labels(data)
+	_roads_dirty = true
+	_push_shader_districts()
+	var mat := planet_renderer.material as ShaderMaterial
+	if mat == null:
+		return
 	mat.set_shader_parameter("poi_count",      0)
 
 ## Connected-component id per territory: districts linked through neighbour
@@ -1263,15 +1442,7 @@ func _set_spokes_from_routes(routed: Array) -> void:
 			_add_spoke(item["a"], segs[0]["points"], false, item["b"])
 		if not segs[segs.size() - 1].get("sea", false):
 			_add_spoke(item["b"], segs[segs.size() - 1]["points"], true, item["a"])
-	var buf := PackedVector4Array()
-	buf.resize(MAX_TERRITORIES * MAX_SPOKES)
-	for i in mini(_spokes.size(), MAX_TERRITORIES):
-		var list: Array = _spokes[i]
-		for k in mini(list.size(), MAX_SPOKES):
-			buf[i * MAX_SPOKES + k] = list[k]
-	var mat := planet_renderer.material as ShaderMaterial
-	if mat != null:
-		mat.set_shader_parameter("district_spokes", buf)
+	_push_shader_spokes()
 
 ## Direction the route leaves territory i: toward the first route point a bit
 ## beyond the settlement edge. Its strength is how much the district has grown
@@ -2569,10 +2740,16 @@ func _process(delta: float) -> void:
 	_update_aspect()
 	_tick_zoom(delta)
 	_update_placement_hover()
+	_tick_lander(delta)
 	var pmat := planet_renderer.material as ShaderMaterial
 	if pmat != null:
-		pmat.set_shader_parameter("district_hover",    poi_layer._hovered_index)
-		pmat.set_shader_parameter("district_selected", poi_layer._selected_index)
+		pmat.set_shader_parameter("district_hover",    _shader_slot(poi_layer._hovered_index))
+		pmat.set_shader_parameter("district_selected", _shader_slot(poi_layer._selected_index))
+		# More districts than the shader draws: re-pick the visible ones as the globe turns
+		if _territories.size() > MAX_TERRITORIES:
+			var vc := _view_center_n()
+			if vc != Vector3.ZERO and (_shader_view_n == Vector3.ZERO or vc.dot(_shader_view_n) < cos(deg_to_rad(4.0))):
+				_push_shader_districts()
 		pmat.set_shader_parameter("border_alpha", smoothstep(ZOOM_BORDER_START, ZOOM_BORDER_FULL, _zoom))
 	# Holding Alt shows the network overview: every district (any zoom) with an
 	# arc to the City it belongs to. Borders / ranges stay hidden — too busy.
@@ -3036,6 +3213,10 @@ var _reopen_panel_after_place := false
 
 func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void:
 	_end_district_placement()
+	# the first City on a world with a lander in orbit is always a landing
+	if def.is_system_anchor() and current_data != null and _city_count(current_data) == 0 \
+			and GameState.get_planet(current_data.seed).lander_state == 1:
+		_lunar_landing = true
 	if _panel_open:
 		_reopen_panel_after_place = true
 		_set_panel_open(false)
@@ -3088,6 +3269,8 @@ func _show_place_hint(def: DistrictDef) -> void:
 	var help := Label.new()
 	help.text = "Click a site on %s  ·  Drag to rotate  ·  Scroll to zoom  ·  Right-click to cancel" \
 		% TerrainSampler.placement_label(def.placement)
+	if _lunar_landing:
+		title.text = "CHOOSE THE LANDING SITE"
 	if _mandatory_city:
 		title.text = "CHOOSE THE SITE OF YOUR CAPITAL"
 		help.text = "Click a site on %s  ·  Drag to rotate  ·  Scroll to zoom" \
@@ -3425,7 +3608,7 @@ func _prompt_city_name(def: DistrictDef, site: Vector2, cost: float) -> void:
 	v.add_theme_constant_override("separation", 10)
 	box.add_child(v)
 	var title := Label.new()
-	title.text = "NAME YOUR CAPITAL" if _mandatory_city else "NAME YOUR CITY"
+	title.text = "NAME YOUR CAPITAL" if _mandatory_city else ("NAME YOUR FIRST %s CITY" % current_data.planet_name.to_upper() if _lunar_landing else "NAME YOUR CITY")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_apply_orbitron(title, 12)
 	title.add_theme_color_override("font_color", Color(1.0, 0.90, 0.55))
@@ -3441,7 +3624,7 @@ func _prompt_city_name(def: DistrictDef, site: Vector2, cost: float) -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_child(row)
 	var ok_btn := Button.new()
-	ok_btn.text = "FOUND CITY" + ("" if cost <= 0.0 else "  ·  ◈ %s" % HUDManager.fmt_credits(cost))
+	ok_btn.text = ("LAND HERE" if _lunar_landing else "FOUND CITY") + ("" if cost <= 0.0 else "  ·  ◈ %s" % HUDManager.fmt_credits(cost))
 	_apply_orbitron(ok_btn, 10)
 	row.add_child(ok_btn)
 	var cancel_btn: Button = null
@@ -3464,7 +3647,11 @@ func _prompt_city_name(def: DistrictDef, site: Vector2, cost: float) -> void:
 			return
 		close.call()
 		_mandatory_city = false
+		var landing := _lunar_landing
 		_end_district_placement()
+		if landing:
+			_land_lander(nm, def, site)
+			return
 		AudioManager.play("construct")
 		_spawn_district(current_data, nm, def, site, "")
 	ok_btn.pressed.connect(confirm)
@@ -3867,6 +4054,7 @@ func _on_colonize_progress_changed(planet_seed: int, key: String, progress: floa
 			pbar.value = progress * 100.0
 
 func _build_planet_overview(data: PlanetData) -> void:
+	_orbit_panel_open = false
 	if data == null:
 		return
 	# The planet view opens once a City reaches Lv 2; until then show the City.
@@ -3983,7 +4171,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 			pbar.add_theme_stylebox_override("fill", fg)
 			
 			var plabel := Label.new()
-			plabel.text = "Establishing..." if (data.planet_type == PlanetData.Type.MOON or data.planet_type == PlanetData.Type.ASTEROID) else "Colonizing..."
+			plabel.text = "Lander in transit..." if data.planet_type == PlanetData.Type.MOON else ("Establishing..." if data.planet_type == PlanetData.Type.ASTEROID else "Colonizing...")
 			plabel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			plabel.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			plabel.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -4012,14 +4200,20 @@ func _build_planet_overview(data: PlanetData) -> void:
 			col_hb.bg_color = Color(0.15, 0.42, 0.65)
 			col_btn.add_theme_stylebox_override("hover", col_hb)
 			col_btn.add_theme_color_override("font_color", Color.WHITE)
-			col_btn.pressed.connect(func() -> void:
-				_show_colonize_popup(data, pp)
-			)
+			if data.planet_type == PlanetData.Type.MOON:
+				_setup_moon_colonize_button(col_btn, data)
+			else:
+				col_btn.pressed.connect(func() -> void:
+					_show_colonize_popup(data, pp)
+				)
 			planet_page.add_child(col_btn)
 		
 		root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		panel_content.add_child(root)
 		return
+
+	if pp.lander_state == 1 and _city_count(data) == 0:
+		_add_found_settlement_button(planet_page)
 
 	# ── District slot indicators ─────────────────────────────────────────────
 	var st := get_node_or_null("/root/SkillTree")
@@ -4041,12 +4235,11 @@ func _build_planet_overview(data: PlanetData) -> void:
 	tab_row.add_theme_constant_override("separation", 0)
 	root.add_child(tab_row)
 
-	var dist_btn:    Button = _make_overview_tab_btn("CITIES  %d" % surface_pois.size(), _inner_tab_active == "SURFACE")
+	_inner_tab_active = "SURFACE"   # stations live in the Orbit card now
+	var dist_btn:    Button = _make_overview_tab_btn("CITIES  %d" % Leveling.cities_used(data, pp), true)
 	var orbital_btn: Button = _make_overview_tab_btn("ORBITAL  %d/%d" % [orbital_pois.size(), p_max_orbital],
 		_inner_tab_active == "ORBITAL")
 	tab_row.add_child(dist_btn)
-	if has_orbital_unlocked:
-		tab_row.add_child(orbital_btn)
 
 	# ── DISTRICTS scroll + page ───────────────────────────────────────────────
 	var dist_scroll := ScrollContainer.new()
@@ -4066,6 +4259,10 @@ func _build_planet_overview(data: PlanetData) -> void:
 	_stop_tut_panel_pulse()
 	for poi: POIData in surface_pois:
 		districts_page.add_child(_build_district_overview_card(poi, data, pp, panel_content, root))
+	if pp.orbit_level > 0:
+		districts_page.add_child(_build_orbit_card(data, pp))
+	elif has_orbital_unlocked:
+		districts_page.add_child(_build_found_orbit_card(data, pp))
 
 	var can_add_surface := UNLIMITED_SURFACE_DISTRICTS or surface_pois.size() < pp.max_districts
 	if can_add_surface:
@@ -4297,6 +4494,62 @@ func _build_resources_section(parent: VBoxContainer, data: PlanetData, pp: Plane
 		grid.add_child(_mineral_grid_card(rd, stored, true, "", pp))
 	parent.add_child(grid)
 
+## Station cards: stations don't level, so a station glyph instead of a level.
+func _station_tile() -> PanelContainer:
+	var tile := PanelContainer.new()
+	tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tile.custom_minimum_size = Vector2(40, 40)
+	tile.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.12, 0.11, 0.24, 0.95)
+	sb.border_color = Color(0.60, 0.55, 1.0, 0.8)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	tile.add_theme_stylebox_override("panel", sb)
+	var l := Label.new()
+	l.text = "◈"
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.add_theme_font_size_override("font_size", 18)
+	l.add_theme_color_override("font_color", Color(0.75, 0.70, 1.0))
+	tile.add_child(l)
+	return tile
+
+## Coloured "LV / n" tile for district and City cards (gold rim for a City).
+func _level_badge(lv: int, is_city: bool) -> PanelContainer:
+	var col := Leveling.level_color(lv)
+	var tile := PanelContainer.new()
+	tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tile.custom_minimum_size = Vector2(40, 40)
+	tile.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(col.r * 0.22, col.g * 0.22, col.b * 0.22, 0.95)
+	sb.border_color = Color(1.0, 0.85, 0.35) if is_city else col
+	sb.set_border_width_all(2 if is_city else 1)
+	sb.set_corner_radius_all(4)
+	tile.add_theme_stylebox_override("panel", sb)
+	var v := VBoxContainer.new()
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", -2)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tile.add_child(v)
+	var cap := Label.new()
+	cap.text = "LV"
+	cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_apply_orbitron(cap, 7)
+	cap.add_theme_color_override("font_color", Color(col, 0.8))
+	v.add_child(cap)
+	var num := Label.new()
+	num.text = str(lv)
+	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	num.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_apply_orbitron(num, 18)
+	num.add_theme_color_override("font_color", col.lightened(0.2))
+	v.add_child(num)
+	return tile
+
 ## `as_capital`: a City shown as its Capital District (inside the City panel);
 ## otherwise a City card opens the City panel.
 func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetProgress,
@@ -4326,13 +4579,10 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	# Big level number on the left
 	var as_city := poi.is_city() and not as_capital
 	var dist_lv_ov: int = Leveling.city_level(pp, poi) if as_city else pp.district_levels.get(poi.label, 1)
-	var lv_lbl := Label.new()
-	lv_lbl.text = str(dist_lv_ov)
-	lv_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	lv_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_apply_orbitron(lv_lbl, 22)
-	lv_lbl.add_theme_color_override("font_color", Color(0.38, 0.58, 0.95, 0.75))
-	hbox.add_child(lv_lbl)
+	if poi.is_orbital():
+		hbox.add_child(_station_tile())
+	else:
+		hbox.add_child(_level_badge(dist_lv_ov, as_city))
 
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -4351,6 +4601,13 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	for eb: Dictionary in district_buildings:
 		total_size += eb.get("amount", 1)
 	t_lbl.text = ("Capital" if as_capital else poi.type_label()) + "  ·  Size %d" % total_size
+	if poi.is_orbital():
+		var mod := "no module yet"
+		for eb: Dictionary in district_buildings:
+			var mdef := BuildingDef.find(eb.get("building_id", ""))
+			if mdef != null:
+				mod = mdef.display_name + ("  (building)" if eb.get("constructing", false) else "")
+		t_lbl.text = "Station  ·  " + mod
 	if as_city:
 		var n_children := 0
 		for child: POIData in planet.custom_pois:
@@ -4628,7 +4885,7 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 	else:
 		at_limit = def.max_per_planet > 0 and DistrictDef.count_on_planet(def, data) >= def.max_per_planet
 		if def.is_system_anchor():
-			at_limit = at_limit or _city_count(data) >= GameState.get_planet(data.seed).max_cities()
+			at_limit = at_limit or Leveling.cities_used(data, GameState.get_planet(data.seed)) >= GameState.get_planet(data.seed).max_cities()
 
 	btn.disabled = not can_afford or at_limit
 	if at_limit:
@@ -4719,14 +4976,21 @@ func _on_district_clicked(index: int, _data: Dictionary) -> void:
 	_last_click_label = poi.label
 	if is_double and not poi.is_orbital():
 		_focus_city(_city_of(poi))
+		return   # the first click already chose the panel
 	if poi.constructing:
 		TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\n%d%% built · %.0fs total" % [
 			int(poi.construct_progress * 100.0), poi.construct_duration])
 		_hide_tip_when_mouse_leaves(get_viewport().get_mouse_position())
 		return
 	_reveal_panel()   # selecting a district brings the side panel back
-	# zoomed out a City icon is the whole City; zoomed in it's its Capital District
-	if poi.is_city() and _zoom < ZOOM_DETAIL_FULL:
+	# zoomed out a City icon is the whole City; zoomed in it's its Capital District.
+	# Clicking it again toggles City <-> Capital District.
+	var shown := $RightPanel/PanelContent.get_node_or_null("DistrictBuildPanel")
+	var showing_capital: bool = shown != null and not shown.is_queued_for_deletion() \
+			and shown.get_meta("district", "") == poi.label
+	if poi.is_city() and _city_panel_poi == poi:
+		_build_district_panel(poi, current_data)
+	elif poi.is_city() and (showing_capital or _zoom < ZOOM_DETAIL_FULL):
 		_build_city_panel(poi, current_data)
 	else:
 		_build_district_panel(poi, current_data)
@@ -5853,10 +6117,21 @@ func _entry_input_text(entry: Dictionary, def: BuildingDef) -> String:
 	for id: String in def.inputs:
 		var name: String = Economy.INFO.get(id, {}).get("short", id)
 		if id == Economy.RAW:
-			var burn: String = entry.get("burning_mineral", "")
-			name = Economy.display_name(burn) if burn != "" else "raw"
+			name = Economy.display_name(_raw_burn_id(entry, float(def.inputs[id]) * n))
 		parts.append("−%s %s" % [BuildingDef._num(float(def.inputs[id]) * n), name])
 	return " · ".join(parts)
+
+## The raw resource a building burns: the one it last paid with, else the
+## one it would take now, else this world's own deposit.
+func _raw_burn_id(entry: Dictionary, need: float) -> String:
+	var burn: String = entry.get("burning_mineral", "")
+	if burn == "":
+		burn = Economy.best_raw_in_stock(need)
+	if burn == "" and current_data != null:
+		var raws := Economy.raw_for_body(current_data)
+		if not raws.is_empty():
+			burn = raws[0]["id"]
+	return burn if burn != "" else Economy.RAW
 
 # ── Coloured tooltip text (BBCode) ──────────────────────────────────────────
 const BB_BAD  := "#ff6a5c"
@@ -7174,12 +7449,12 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 		_hbox: HBoxContainer, _def: BuildingDef, pm_key: String, pp: PlanetProgress,
 		_poi: POIData, entry: Dictionary, rebuild_sp: Callable) -> void:
 
-	# Station limit check — 1 station per planet (SkillTree-upgradeable later)
+	# Station limit — one per planet level (PlanetProgress.max_orbital_districts)
 	var station_count: int = 0
 	for s: ShipData in ShipManager.ships_for(pp.planet_seed):
 		if s.ship_type == "station":
 			station_count += 1
-	var station_locked: bool = station_count >= 1
+	var station_locked: bool = station_count >= pp.max_orbital_districts
 	if station_locked and entry.get("ship_type", "shuttle") == "station":
 		entry["ship_type"] = "shuttle"
 
@@ -8255,7 +8530,247 @@ func _toggle_mineral_dropdown(btn: Control, raw_list: Array, target_key: String,
 var _city_scroll: ScrollContainer = null
 var _city_scroll_label := ""
 
+# ── Orbit (a unique City-like hub of Space Stations) ────────────────────────
+
+## Older saves had stations but no Orbit — give them one big enough.
+func _migrate_orbit(data: PlanetData) -> void:
+	var pp := GameState.get_planet(data.seed)
+	var n := Leveling.orbit_stations(data).size()
+	if pp.orbit_level < n:
+		pp.orbit_level = clampi(n, 1, Leveling.MAX_ORBIT_LEVEL)
+		pp.recalculate_limits()
+
+func _orbit_card_shell(enabled: bool) -> PanelContainer:
+	var card := PanelContainer.new()
+	var sb := _card_panel_style()
+	sb.bg_color = Color(0.06, 0.08, 0.18, 0.85) if enabled else Color(0.05, 0.06, 0.10, 0.45)
+	sb.border_color = Color(0.55, 0.50, 1.0, 0.55) if enabled else Color(0.25, 0.25, 0.38, 0.4)
+	card.add_theme_stylebox_override("panel", sb)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size = Vector2(0, 48)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	return card
+
+## The Orbit in the Cities list — opens its panel.
+func _build_orbit_card(data: PlanetData, pp: PlanetProgress) -> PanelContainer:
+	var card := _orbit_card_shell(true)
+	var m := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		m.add_theme_constant_override("margin_" + side, 8 if side != "left" else 10)
+	m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(m)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 10)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	m.add_child(h)
+	h.add_child(_level_badge(pp.orbit_level, true))
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(info)
+	var n := Label.new()
+	n.text = "Orbit"
+	_apply_orbitron(n, 10)
+	n.add_theme_color_override("font_color", Color(0.82, 0.80, 1.0))
+	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info.add_child(n)
+	var t := Label.new()
+	t.text = "Space Stations  %d / %d" % [Leveling.orbit_stations(data).size(), pp.orbit_level]
+	_apply_orbitron(t, 7)
+	t.add_theme_color_override("font_color", Color(0.50, 0.55, 0.80))
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	info.add_child(t)
+	card.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
+	card.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
+	card.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
+				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			AudioManager.play("click")
+			_build_orbit_panel(data))
+	return card
+
+## "+ FOUND ORBIT" — takes a City slot and launches the first station.
+func _build_found_orbit_card(data: PlanetData, pp: PlanetProgress) -> PanelContainer:
+	var city_def := DistrictDef.find(DistrictDef.Type.CITY)
+	var cost := DistrictDef.placement_cost(city_def, data)
+	var block := ""
+	if Leveling.cities_used(data, pp) >= pp.max_cities():
+		block = "No free City slot — level up the planet"
+	elif not _has_finished_building(pp, "spaceport"):
+		block = "Build a Spaceport to launch stations"
+	elif GameState.credits < cost:
+		block = "Not enough credits"
+	var card := _orbit_card_shell(block == "")
+	var m := MarginContainer.new()
+	m.add_theme_constant_override("margin_left", 10); m.add_theme_constant_override("margin_right", 10)
+	m.add_theme_constant_override("margin_top", 8); m.add_theme_constant_override("margin_bottom", 8)
+	m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(m)
+	var h := HBoxContainer.new()
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	m.add_child(h)
+	var plus := Label.new()
+	plus.text = "+"
+	_apply_orbitron(plus, 14)
+	plus.add_theme_color_override("font_color", Color(0.65, 0.60, 1.0) if block == "" else Color(0.35, 0.35, 0.5))
+	plus.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(plus)
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(sp)
+	var l := Label.new()
+	l.text = "FOUND ORBIT  ·  ◈ %s" % HUDManager.fmt_credits(cost)
+	_apply_orbitron(l, 8)
+	l.add_theme_color_override("font_color", Color(0.70, 0.66, 1.0) if block == "" else Color(0.38, 0.40, 0.55))
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(l)
+	var tip := "A hub in orbit that takes one City slot. It starts with one Space Station; every Orbit level opens one more. Each station holds a single module.\n\nCost  " \
+		+ _cost_bb(cost, 0, data, pp) + ("" if block == "" else "\n\n" + _bb("➡ " + block, BB_BAD))
+	card.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Found Orbit", tip))
+	card.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	card.gui_input.connect(func(e: InputEvent) -> void:
+		if not (e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
+				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT):
+			return
+		TooltipManager.hide_tip()
+		if block != "" or not GameState.spend_credits(cost):
+			AudioManager.play("error")
+			return
+		pp.orbit_level = 1
+		pp.recalculate_limits()
+		GameState.planet_progress_changed.emit(data.seed)
+		_launch_station(data, true))
+	return card
+
+func _has_finished_building(pp: PlanetProgress, building_id: String) -> bool:
+	for b: Dictionary in pp.buildings:
+		if b.get("building_id", "") == building_id and not b.get("constructing", false):
+			return true
+	return false
+
+## Launches one Space Station (free when `free` — the Orbit's first).
+func _launch_station(data: PlanetData, free := false) -> void:
+	var pp := GameState.get_planet(data.seed)
+	var def := DistrictDef.find(DistrictDef.Type.SPACE_STATION)
+	if def == null or Leveling.orbit_stations(data).size() >= pp.orbit_level:
+		AudioManager.play("error")
+		return
+	if not free and not GameState.spend_credits(DistrictDef.placement_cost(def, data)):
+		AudioManager.play("error")
+		return
+	_spawn_district(data, def.suggest_name(data), def)
+
+func _build_orbit_panel(planet: PlanetData) -> void:
+	_active_district_poi = null
+	_city_panel_poi = null
+	_orbit_panel_open = true
+	var panel_content := $RightPanel/PanelContent
+	var old := panel_content.get_node_or_null("DistrictBuildPanel")
+	if old:
+		old.name = "__freeing_district__"
+		old.queue_free()
+		_bar_meta.clear()
+	var pp := GameState.get_planet(planet.seed)
+	var lv := pp.orbit_level
+	var stations := Leveling.orbit_stations(planet)
+	var root := VBoxContainer.new()
+	root.name = "DistrictBuildPanel"
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 8)
+	root.add_child(HSeparator.new())
+	var back := Button.new()
+	back.text = "‹  " + planet.planet_name
+	back.flat = true
+	back.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	back.focus_mode = Control.FOCUS_NONE
+	_apply_orbitron(back, 9)
+	back.add_theme_color_override("font_color", Color(0.55, 0.70, 1.0))
+	back.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
+	back.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		_build_planet_overview(planet))
+	root.add_child(back)
+	var header := HBoxContainer.new()
+	var title := Label.new()
+	title.text = "Orbit"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_apply_orbitron(title, 12)
+	title.add_theme_color_override("font_color", Color(0.80, 0.76, 1.0))
+	header.add_child(title)
+	header.add_child(_level_badge(lv, true))
+	root.add_child(header)
+	var info := Label.new()
+	info.text = "Stations  %d / %d   ·   one module each" % [stations.size(), lv]
+	_apply_orbitron(info, 8)
+	info.add_theme_color_override("font_color", Color(0.55, 0.60, 0.85))
+	root.add_child(info)
+
+	var body_scroll := ScrollContainer.new()
+	body_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	body_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_style_scroll(body_scroll)
+	root.add_child(body_scroll)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 8)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_scroll.add_child(body)
+	_poi_overview_cards.clear()
+	for st: POIData in stations:
+		body.add_child(_build_district_overview_card(st, planet, pp, panel_content, body))
+	if stations.size() < lv:
+		var def := DistrictDef.find(DistrictDef.Type.SPACE_STATION)
+		var cost := DistrictDef.placement_cost(def, planet)
+		var add := Button.new()
+		add.text = "+  LAUNCH STATION  ·  ◈ %s" % HUDManager.fmt_credits(cost)
+		add.focus_mode = Control.FOCUS_NONE
+		_apply_orbitron(add, 9)
+		add.disabled = GameState.credits < cost
+		add.pressed.connect(func() -> void:
+			AudioManager.play("click")
+			_launch_station(planet))
+		body.add_child(add)
+
+	var sep := HSeparator.new()
+	var sep_s := StyleBoxFlat.new(); sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
+	sep.add_theme_stylebox_override("separator", sep_s)
+	root.add_child(sep)
+	root.add_child(_build_orbit_level_row(planet, pp))
+	panel_content.add_child(root)
+
+func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
+	var lv := pp.orbit_level
+	var next := lv + 1
+	var credits := Leveling.orbit_level_credits(next)
+	var block := Leveling.orbit_level_block(planet, pp)
+	var btn := Button.new()
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_apply_orbitron(btn, 9)
+	btn.text = "ORBIT  Lv %d → Lv %d  ◈ %s" % [lv, next, HUDManager.fmt_credits(credits)] if lv < Leveling.MAX_ORBIT_LEVEL else "ORBIT  MAX LEVEL"
+	btn.disabled = block != "" or GameState.credits < credits
+	var tip := "Raise the Orbit to Lv %d:\n%s\n\nCost  %s\n%s" % [next,
+		_bb("+1 Space Station slot (%d → %d)" % [lv, next], Color(0.75, 0.70, 1.0)),
+		_cost_bb(credits, 0, planet, pp),
+		_bb("Needs every station launched with its module built.", BB_DIM)]
+	if block != "":
+		tip += "\n\n" + _bb("➡ " + block, BB_BAD)
+	btn.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Orbit level up", tip))
+	btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	btn.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		if Leveling.orbit_level_block(planet, pp) != "" or not GameState.spend_credits(credits):
+			AudioManager.play("error")
+			return
+		AudioManager.play("construct")
+		pp.orbit_level = next
+		pp.recalculate_limits()
+		GameState.planet_progress_changed.emit(planet.seed)
+		_build_orbit_panel(planet))
+	return btn
+
 func _build_city_panel(city: POIData, planet: PlanetData) -> void:
+	_orbit_panel_open = false
 	var keep_scroll := 0
 	if _city_scroll != null and is_instance_valid(_city_scroll) and _city_scroll_label == city.label:
 		keep_scroll = _city_scroll.scroll_vertical
@@ -8492,6 +9007,7 @@ func _show_unlock_toast(title_txt: String, body_txt: String) -> void:
 	tw.tween_callback(box.queue_free)
 
 func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
+	_orbit_panel_open = false
 	# keep the body's scroll position when the same district is rebuilt in place
 	var saved_scroll := 0
 	if _district_body_scroll != null and is_instance_valid(_district_body_scroll) \
@@ -8517,12 +9033,26 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	var pp   := GameState.get_planet(planet.seed)
 	var root := VBoxContainer.new()
 	root.name = "DistrictBuildPanel"
+	root.set_meta("district", poi.label)   # lets a re-click toggle to the City
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 8)
 	root.add_child(HSeparator.new())
 
 	# Districts (and the Capital District) live in a City: offer the way back up.
 	var parent_city := _find_poi(planet, poi.parent_city) if not poi.is_city() else poi
+	if poi.is_orbital():
+		var oback := Button.new()
+		oback.text = "‹  Orbit"
+		oback.flat = true
+		oback.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		oback.focus_mode = Control.FOCUS_NONE
+		_apply_orbitron(oback, 9)
+		oback.add_theme_color_override("font_color",       Color(0.55, 0.70, 1.0))
+		oback.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
+		oback.pressed.connect(func() -> void:
+			AudioManager.play("click")
+			_build_orbit_panel(planet))
+		root.add_child(oback)
 	if parent_city != null:
 		var back := Button.new()
 		back.text = "‹  " + parent_city.shown_name()

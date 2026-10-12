@@ -263,6 +263,7 @@ func _ready() -> void:
 	_science_display = GameState.science_points
 
 	GameState.credits_changed.connect(_on_credits_changed)
+	GameState.act1_completed.connect(_show_act1_complete)
 	GameState.science_changed.connect(_on_science_changed)
 	AchievementManager.achievement_unlocked.connect(_on_achievement_unlocked)
 
@@ -1213,3 +1214,52 @@ func _input(event: InputEvent) -> void:
 	if is_instance_valid(_raw_cell) and _raw_cell.get_global_rect().has_point(pos):
 		return
 	_close_raw_dropdown()
+
+
+# ── End of Act I (demo) ──────────────────────────────────────────────────────
+
+## Shown once the first City on the Moon is finished.
+func _show_act1_complete() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 240
+	get_tree().root.add_child(layer)
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0.0)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(shade)
+	var orbitron := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 14)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	box.modulate.a = 0.0
+	shade.add_child(box)
+	var mk := func(text: String, size: int, col: Color) -> Label:
+		var l := Label.new()
+		l.text = text
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if orbitron: l.add_theme_font_override("font", orbitron)
+		l.add_theme_font_size_override("font_size", size)
+		l.add_theme_color_override("font_color", col)
+		box.add_child(l)
+		return l
+	mk.call("ACT I COMPLETE", 34, Color(1.0, 0.90, 0.55))
+	mk.call("From a single settlement to a city on the Moon.", 13, Color(0.75, 0.82, 1.0))
+	mk.call("Thank you for playing the Voidle demo.", 11, Color(0.55, 0.62, 0.80))
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_child(row)
+	var btn := Button.new()
+	btn.text = "KEEP PLAYING"
+	if orbitron: btn.add_theme_font_override("font", orbitron)
+	btn.add_theme_font_size_override("font_size", 12)
+	btn.custom_minimum_size = Vector2(220, 40)
+	btn.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		layer.queue_free())
+	row.add_child(btn)
+	var tw := shade.create_tween().set_parallel(true)
+	tw.tween_property(shade, "color:a", 0.72, 1.2)
+	tw.tween_property(box, "modulate:a", 1.0, 1.6).set_delay(0.6)
+	AudioManager.play("building_done")

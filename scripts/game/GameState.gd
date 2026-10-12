@@ -392,6 +392,59 @@ func colonize_planet(planet_seed: int, cost: float = 1000.0) -> bool:
 	planet_progress_changed.emit(planet_seed)
 	return true
 
+# ── Moon colonization (end of Act I) ──────────────────────────────────────────
+# Start Colonization (Local System view) launches a lander from the home world;
+# it flies MOON_TRANSIT_SEC, parks in lunar orbit (lander_state 1), the player
+# picks a landing site with "Found First Settlement", the lander drops onto it
+# (lander_state 2) and the first lunar City starts building.
+const MOON_COLONIZE_CREDITS := 10000.0
+const MOON_COLONIZE_FUEL    := 100.0
+const MOON_TRANSIT_SEC      := 60.0
+
+signal act1_completed
+
+## Set once the first City on another world is finished — the demo's goal.
+var act1_complete: bool = false
+
+## Why the Moon can't be colonized right now ("" when it can).
+func moon_colonize_block(planet_seed: int) -> String:
+	var pp := get_planet(planet_seed)
+	if pp.is_colonized or pp.is_colonizing:
+		return "Already underway"
+	if not get_node("/root/SkillTree").is_unlocked("unlock_moon"):
+		return "Research Lunar Program first"
+	var missing: Array[String] = []
+	if credits < MOON_COLONIZE_CREDITS:
+		missing.append("%s Credits" % Economy.fmt(MOON_COLONIZE_CREDITS))
+	if get_resource(Economy.FUEL) < MOON_COLONIZE_FUEL:
+		missing.append("%s Fuel Rods" % Economy.fmt(MOON_COLONIZE_FUEL))
+	return "" if missing.is_empty() else "Needs " + ", ".join(missing)
+
+func start_moon_colonization(planet_seed: int) -> bool:
+	if moon_colonize_block(planet_seed) != "":
+		return false
+	credits -= MOON_COLONIZE_CREDITS
+	consume_resource(Economy.FUEL, MOON_COLONIZE_FUEL)
+	var pp := get_planet(planet_seed)
+	pp.is_colonizing = true
+	pp.colonize_progress = 0.0
+	pp.colonize_duration = MOON_TRANSIT_SEC
+	planet_progress_changed.emit(planet_seed)
+	save()
+	return true
+
+## The lander touched down — the first lunar City is being built.
+func mark_landed(planet_seed: int) -> void:
+	get_planet(planet_seed).lander_state = 2
+	planet_progress_changed.emit(planet_seed)
+
+func complete_act1() -> void:
+	if act1_complete:
+		return
+	act1_complete = true
+	act1_completed.emit()
+	save()
+
 func finish_colonization(planet_seed: int) -> void:
 	var pp := get_planet(planet_seed)
 	pp.is_colonizing = false
@@ -399,6 +452,9 @@ func finish_colonization(planet_seed: int) -> void:
 	pp.is_colonized = true
 	
 	var pd := get_planet_data(planet_seed)
+	if pd != null and pd.planet_type == PlanetData.Type.MOON:
+		pp.lander_state = 1   # parked in orbit; the player picks the landing site
+		pd = null
 	if pd != null:
 		var has_poi := false
 		for p in pd.custom_pois:
@@ -432,6 +488,7 @@ func save() -> void:
 		"science_points":       science_points,
 		"solar_unlocked":       solar_unlocked,
 		"moon_unlocked":        moon_unlocked,
+		"act1_complete":        act1_complete,
 		"galaxy_unlocked":      galaxy_unlocked,
 		"discovered_asteroids": discovered_asteroids,
 		"asteroid_scan_counts": asteroid_scan_counts,
@@ -493,6 +550,8 @@ func save() -> void:
 			"stored_resources":  pp.stored_resources,
 			"has_spaceport":     pp.has_spaceport,
 			"moons_unlocked":    pp.moons_unlocked,
+			"lander_state":      pp.lander_state,
+			"orbit_level":       pp.orbit_level,
 			"custom_pois":       pois_save,
 		}
 	data["global_resources"]    = global_resources
@@ -500,6 +559,7 @@ func save() -> void:
 	data["revealed_resources"]  = revealed_resources
 	data["planet_view_unlocked"] = planet_view_unlocked
 	data["light_angle"]         = light_angle
+	data["production"]          = ProductionManager.get_save_data()
 	data["achievements"]        = AchievementManager.get_save_data()
 	data["tutorial_done"]        = TutorialManager._tutorial_done
 	data["tutorial_quest_done"]  = TutorialManager._quest_done
@@ -520,10 +580,12 @@ func load_save() -> bool:
 	if not file:
 		return false
 	var data: Dictionary     = file.get_var()
+	ProductionManager.load_save_data(data.get("production", {}))
 	credits                  = data.get("credits",              500.0)
 	science_points           = data.get("science_points",       0.0)
 	solar_unlocked           = data.get("solar_unlocked",       false)
 	moon_unlocked            = data.get("moon_unlocked",        false)
+	act1_complete            = data.get("act1_complete",        false)
 	galaxy_unlocked          = data.get("galaxy_unlocked",      false)
 	home_planet_seed         = data.get("home_planet_seed",     -1)
 	home_star_idx            = data.get("home_star_idx",        -1)
@@ -588,9 +650,12 @@ func load_save() -> bool:
 		pp.district_levels   = d.get("district_levels",  {})
 		pp.city_levels       = d.get("city_levels",      {})
 		pp.buildings          = d.get("buildings",          [])
+		pp.consolidate_buildings()
 		pp.district_upgrading = d.get("district_upgrading", {})
 		pp.has_spaceport      = d.get("has_spaceport",      false)
 		pp.moons_unlocked     = d.get("moons_unlocked",     false)
+		pp.lander_state       = d.get("lander_state",       0)
+		pp.orbit_level        = d.get("orbit_level",        0)
 		pp.recalculate_limits()
 		_planet_progress[seed_val] = pp
 		# Store POI data for later — applied in _apply_pending_pois() after _bootstrap_world
@@ -606,6 +671,7 @@ func delete_save() -> void:
 	science_points       = 0.0
 	solar_unlocked       = false
 	moon_unlocked        = false
+	act1_complete        = false
 	galaxy_unlocked      = false
 	discovered_asteroids = []
 	asteroid_scan_counts = {}

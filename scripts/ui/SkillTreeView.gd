@@ -104,7 +104,7 @@ func _ready() -> void:
 
 	# Subtitle
 	var sub := Label.new()
-	sub.text = "Invest credits to upgrade colony systems"
+	sub.text = "Spend Science to research new technology"
 	if _font: sub.add_theme_font_override("font", _font)
 	sub.add_theme_font_size_override("font_size", 9)
 	sub.add_theme_color_override("font_color", Color(0.4, 0.48, 0.65))
@@ -210,6 +210,10 @@ func _build_tree_graph() -> void:
 			shadow_color = Color(0.15, 0.85, 0.95, 0.2)
 			border_width = 2.0
 
+		if node.act2 if "act2" in node else false:
+			bg_color = Color(0.06, 0.05, 0.1, 0.85)
+			border_color = Color(0.45, 0.38, 0.7, 0.6)
+			border_width = 1.0
 		card.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 
 		# Add a wrapper Control inside the PanelContainer to escape Container alignment rules
@@ -272,152 +276,21 @@ func _build_tree_graph() -> void:
 		var icon_col := Color(0.5, 0.5, 0.5)
 		var icon_tier := 1
 		
-		# Define unique colors and shapes per upgrade type (T1-T5 base shapes)
-		match id:
-			"root":
-				icon_col = Color(0.9, 0.8, 0.4) # Gold
-				icon_tier = 5 # Core
-			"unlock_solar_panel":
-				icon_col = Color(1.0, 0.9, 0.2) # Sun Yellow
-				icon_tier = 3 # Energy
-			"unlock_residential":
-				icon_col = Color(0.2, 0.95, 0.4) # Green
-				icon_tier = 1 # Data/Node
-			"unlock_lab":
-				icon_col = Color(0.2, 0.6, 1.0) # Science Blue
-				icon_tier = 2 # Flask
-			# Energy
-			"unlock_thermal_plant":
-				icon_col = Color(1.0, 0.4, 0.1) # Fire Orange
-				icon_tier = 3 # Energy
-			"solar_efficiency":
-				icon_col = Color(1.0, 0.9, 0.2) # Sun Yellow
-				icon_tier = 4 # Grid
-			"generator_efficiency":
-				icon_col = Color(1.0, 0.3, 0.0) # Deep Orange
-				icon_tier = 3 # Energy
-			"supercharged_generators":
-				icon_col = Color(1.0, 0.5, 0.0) # Bright Orange
-				icon_tier = 5 # Core
-			"power_transmission":
-				icon_col = Color(0.4, 0.9, 1.0) # Light Cyan
-				icon_tier = 4 # Grid
-			"energy_efficiency":
-				icon_col = Color(0.2, 1.0, 0.8) # Bright Cyan
-				icon_tier = 4 # Grid
-			"unlock_fusion_reactor":
-				icon_col = Color(0.4, 0.9, 1.0) # Cyan/Blue plasma
-				icon_tier = 5 # Core
-			"dyson_swarm":
-				icon_col = Color(1.0, 0.8, 0.0) # Bright Sun Gold
-				icon_tier = 9 # Sun
-			# Mining
-			"unlock_mining":
-				icon_col = Color(0.9, 0.6, 0.2) # Amber/Gold — mining operations
-				icon_tier = 2 # Drill
-			"unlock_deep_drill":
-				icon_col = Color(1.0, 0.5, 0.2) # Industrial Orange
-				icon_tier = 2 # Drill
-			"mine_speed":
-				icon_col = Color(0.8, 0.7, 0.6) # Copper/Bronze
-				icon_tier = 2 # Drill
-			"unlock_refinery":
-				icon_col = Color(0.5, 0.5, 0.5) # Steel/Iron
-				icon_tier = 3 # Energy/Furnace
-			"deep_mining":
-				icon_col = Color(0.6, 0.4, 0.2) # Deep Brown
-				icon_tier = 2 # Drill
-			"core_extractor":
-				icon_col = Color(0.9, 0.3, 0.1) # Magma Orange
-				icon_tier = 2 # Drill
-			"deep_core_drilling":
-				icon_col = Color(1.0, 0.1, 0.0) # Bright Red
-				icon_tier = 5 # Core
-			"mineral_compression":
-				icon_col = Color(0.6, 0.3, 1.0) # Deep Purple
-				icon_tier = 1 # Data
-			"omega_drill":
-				icon_col = Color(1.0, 0.0, 0.0) # Pure Red
-				icon_tier = 5 # Core
-			"unlock_commercial":
-				icon_col = Color(0.2, 0.95, 0.4) # Emerald Green (Money)
-				icon_tier = 1 # Data/Node
-			"unlock_luxury_complex":
-				icon_col = Color(0.9, 0.2, 0.6) # Pink/Magenta (Luxury)
-				icon_tier = 1 # Data
-			"credit_boost":
-				icon_col = Color(0.4, 1.0, 0.5) # Bright Green
-				icon_tier = 1 # Data
-			"unlock_trade_hub":
-				icon_col = Color(0.1, 0.8, 0.6) # Turquoise
-				icon_tier = 4 # Cargo/Trade -> Grid
-			"planetary_architecture":
-				icon_col = Color(0.8, 0.6, 1.0) # Light Purple
-				icon_tier = 4 # Grid
-			"global_logistics":
-				icon_col = Color(0.2, 0.8, 1.0) # Bright Cyan
-				icon_tier = 4 # Grid
-			"unlock_commercial_hub":
-				icon_col = Color(0.2, 1.0, 0.5) # Neon Green
-				icon_tier = 4 # Grid
-			"unlock_logistics_center":
-				icon_col = Color(0.8, 0.8, 0.2) # Yellow
-				icon_tier = 4 # Grid
-			"unlock_command_center":
-				icon_col = Color(0.9, 0.1, 0.3) # Deep Red
-				icon_tier = 5 # Core
-			"unlock_research_academy":
-				icon_col = Color(0.5, 0.2, 1.0) # Deep Purple
-				icon_tier = 3 # Data
-			# Science/Space
-			"unlock_advanced_lab":
-				icon_col = Color(0.2, 0.6, 1.0) # Science Blue
-				icon_tier = 2 # Flask/Data
-			"unlock_space_station":
-				icon_col = Color(0.8, 0.8, 0.8) # Silver/White
-				icon_tier = 3 # Station/Core
-			"unlock_orbital_shipyard":
-				icon_col = Color(0.4, 0.6, 1.0) # Steel Blue
-				icon_tier = 4 # Grid
-			"unlock_moon":
-				icon_col = Color(0.7, 0.7, 0.75) # Moon Grey
-				icon_tier = 3 # Moon
-			"unlock_lunar_observatory":
-				icon_col = Color(0.2, 0.6, 1.0) # Science Blue
-				icon_tier = 4 # Grid
-			"unlock_asteroids":
-				icon_col = Color(0.5, 0.4, 0.3) # Asteroid Brown
-				icon_tier = 4 # Asteroid
-			"unlock_asteroid_harvester":
-				icon_col = Color(1.0, 0.5, 0.2) # Industrial Orange
-				icon_tier = 4 # Grid
-			"colonize_ice":
-				icon_col = Color(0.5, 0.9, 1.0) # Ice Blue
-				icon_tier = 5 # Planet
-			"unlock_cryo_vault":
-				icon_col = Color(0.2, 0.8, 1.0) # Deep Ice Blue
-				icon_tier = 4 # Grid
-			"colonize_desert":
-				icon_col = Color(0.9, 0.8, 0.4) # Sand Yellow
-				icon_tier = 5 # Planet
-			"unlock_solar_matrix":
-				icon_col = Color(1.0, 0.9, 0.2) # Sun Yellow
-				icon_tier = 4 # Grid
-			"colonize_gas":
-				icon_col = Color(0.8, 0.4, 0.9) # Gas Purple
-				icon_tier = 5 # Planet
-			"unlock_atmospheric_siphon":
-				icon_col = Color(0.6, 0.2, 1.0) # Deep Purple
-				icon_tier = 4 # Grid
-			"colonize_volcanic":
-				icon_col = Color(1.0, 0.3, 0.1) # Magma Orange
-				icon_tier = 5 # Planet
-			"unlock_geothermal_plant":
-				icon_col = Color(1.0, 0.1, 0.0) # Bright Red
-				icon_tier = 4 # Grid
-			"unlock_interstellar":
-				icon_col = Color(1.0, 1.0, 1.0) # Pure White (Star)
-				icon_tier = 5 # Star -> Core
+		# Colour and glyph per branch
+		var branch: String = node.branch if "branch" in node else "core"
+		match branch:
+			"core":       icon_col = Color(0.9, 0.8, 0.4);   icon_tier = 5
+			"ascent":     icon_col = Color(0.75, 0.7, 1.0);  icon_tier = 5
+			"energy":     icon_col = Color(1.0, 0.75, 0.25); icon_tier = 3
+			"industry":   icon_col = Color(0.95, 0.5, 0.3);  icon_tier = 2
+			"science":    icon_col = Color(0.35, 0.7, 1.0);  icon_tier = 1
+			"habitation": icon_col = Color(0.45, 0.95, 0.55); icon_tier = 1
+			"commerce":   icon_col = Color(1.0, 0.88, 0.3);  icon_tier = 4
+		if shape_type == 1:
+			icon_tier = 4   # bonus diamonds share the grid glyph
+		var teaser: bool = node.act2 if "act2" in node else false
+		if teaser:
+			icon_col = Color(0.5, 0.45, 0.65)
 
 		# De-saturate color slightly if locked/unpurchasable
 		if not unlocked and not purchasable:
@@ -467,6 +340,8 @@ func _build_tree_graph() -> void:
 		# Root is a dummy central core - format clean
 		if id == "root":
 			tip_body.append(node.description)
+		elif node.act2:
+			tip_body.append(node.description + "\n\n[color=#9d8cff]✦ Coming in Act II ✦[/color]")
 		else:
 			var body_str := ""
 			# Format level information to show at the right top of the tooltip body
@@ -480,11 +355,8 @@ func _build_tree_graph() -> void:
 			body_str += node.description
 			
 			var effect_text: String = node.effect_desc
-			var def: BuildingDef = null
-			if (id as String).begins_with("unlock_"):
-				var bid: String = (id as String).trim_prefix("unlock_")
-				if bid == "mining": bid = "mine"
-				def = BuildingDef.find(bid)
+			for bid: String in node.grants:
+				var def: BuildingDef = BuildingDef.find(bid)
 				if def:
 					effect_text = effect_text.replace(def.display_name, "[color=#fce205]" + def.display_name + "[/color]")
 					var cycle := " / %ds" % def.tick_duration
@@ -530,6 +402,9 @@ func _build_tree_graph() -> void:
 				
 				if missing_parents.size() > 0:
 					body_str += "\n\n[color=#ff5544]Requires: " + ", ".join(missing_parents) + "[/color]"
+				var gate_txt: String = st.call("gate_block", id)
+				if gate_txt != "":
+					body_str += "\n\n[color=#ffaa44]" + gate_txt + "[/color]"
 			
 			tip_body.append(body_str)
 

@@ -258,7 +258,11 @@ static func available_buildings() -> Array[BuildingDef]:
 	for b in all():
 		if b.unlock_skill != "" and (st == null or not st.is_unlocked(b.unlock_skill)):
 			continue
-		if b.unlocked_by_default or GameState.unlocked_buildings.has(b.building_id):
+		# a building the research tree grants is available once that node is bought
+		if st != null and st.node_for_building(b.building_id) != "":
+			if st.building_unlocked(b.building_id):
+				result.append(b)
+		elif b.unlocked_by_default or GameState.unlocked_buildings.has(b.building_id):
 			result.append(b)
 	return result
 

@@ -146,6 +146,8 @@ static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: Stri
 		for poi: POIData in data.custom_pois:
 			if poi.is_city() and not poi.is_orbital():
 				cities += 1
+		if cities > 0 and GameState.get_planet(data.seed).orbit_level > 0:
+			cities += 1   # the Orbit takes a City slot
 		return 0.0 if cities == 0 else roundf(CITY_BASE_COST * pow(CITY_COST_GROWTH, float(cities - 1)))
 	return roundf(DISTRICT_BASE_COST * pow(DISTRICT_COST_GROWTH, float(districts_in_city(data, parent_city))))
 
