@@ -25,6 +25,8 @@ var _reveal_poi: Dictionary = {}
 ## Per-ship landing animation state
 ## ship_id -> DescentFX while that ship comes down (the effect draws it).
 var _landing: Dictionary = {}
+## Ships the planet view draws itself (flights to a neighbouring body).
+var hidden_ships: Dictionary = {}
 ## ship_id -> coast state while a landing ship flies on to its dive point.
 var _coasting: Dictionary = {}
 const DescentScript := preload("res://scripts/planetary/DescentFX.gd")
@@ -409,8 +411,8 @@ func _draw() -> void:
 	var center := _planet_center if _planet_center != Vector2.ZERO else size * 0.5
 
 	for ship: ShipData in ShipManager.ships_for(_planet_seed):
-		if _landing.has(ship.ship_id):
-			continue  # drawn by its DescentFX
+		if _landing.has(ship.ship_id) or hidden_ships.has(ship.ship_id):
+			continue  # drawn by its DescentFX / the planet view's flight
 
 		var is_selected: bool = ship == _selected_ship
 		var is_hovered:  bool = ship == _hovered_ship
@@ -565,12 +567,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			accept_event()
 			return
 		var prev := _hovered_ship
-		_hovered_ship = _ship_at(event.global_position)
+		_hovered_ship = _ship_at(event.global_position, true)   # landers show their name too
 		if _hovered_ship != prev:
 			queue_redraw()
 			if _hovered_ship != null:
 				ship_hovered.emit(_hovered_ship, event.global_position)
-				CursorManager.set_state(CursorManager.State.POINTER)
+				CursorManager.set_state(CursorManager.State.NORMAL if _hovered_ship.ship_type == "lander" \
+					else CursorManager.State.POINTER)
 			else:
 				ship_unhovered.emit()
 				CursorManager.set_state(CursorManager.State.NORMAL)
@@ -752,13 +755,15 @@ func _station_poi_at(local_pos: Vector2) -> String:
 			return poi.label
 	return ""
 
-func _ship_at(global_pos: Vector2) -> ShipData:
+## Ship under the cursor. The colony lander only answers hover (its name) —
+## it takes orders from Found First Settlement, not clicks.
+func _ship_at(global_pos: Vector2, include_landers := false) -> ShipData:
 	if _planet_seed < 0 or _planet_radius <= 0.0:
 		return null
 	var center := get_global_rect().position + (_planet_center if _planet_center != Vector2.ZERO else size * 0.5)
 	for ship: ShipData in ShipManager.ships_for(_planet_seed):
-		if ship.ship_type == "lander":
-			continue   # the colony lander answers to Found First Settlement only
+		if ship.ship_type == "lander" and not include_landers:
+			continue
 		var sv := _project(ship, ship.orbit_angle)
 		if _is_occluded(sv):
 			continue

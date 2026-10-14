@@ -42,7 +42,9 @@ var _r0 := 0.0
 var _da := 0.0
 var _pos := Vector2.ZERO
 var _heading := Vector2.RIGHT
-var _trail: Array[Vector2] = []
+## Exhaust trail as route parameters (t), re-projected every frame so it stays
+## glued to the turning globe.
+var _trail: Array[float] = []
 var _hidden := false   # behind the globe right now (3D route)
 var _bits: Array[Dictionary] = []   # impact particles, offsets from the site
 # last centre / site read — used if the owner of the callables goes away
@@ -82,7 +84,7 @@ func _c() -> Vector2:
 func _site3() -> Vector3:
 	if _path3.is_valid():
 		var e: Vector3 = _path3.call(1.0)
-		_last_site = Vector3(e.x, e.y, 1.0)
+		_last_site = Vector3(e.x, e.y, -1.0 if e.z > 0.5 else 1.0)   # z>0: facing us
 	elif _target_fn.is_valid():
 		_last_site = _target_fn.call()
 	return _last_site
@@ -142,10 +144,8 @@ func _process(delta: float) -> void:
 			var mv := _pos - prev
 			if mv.length() > 0.05:
 				_heading = _heading.lerp(mv.normalized(), 0.25).normalized()
-			if _hidden:
-				_trail.clear()
-			elif _trail.is_empty() or _trail[-1].distance_to(_pos) > 3.0:
-				_trail.append(_pos)
+			if _trail.is_empty() or _t - _trail[-1] > 0.012:
+				_trail.append(clampf(_t, 0.0, 1.0))
 				if _trail.size() > 40:
 					_trail.remove_at(0)
 			if _t >= 1.0:
@@ -226,11 +226,13 @@ func _draw() -> void:
 				prev3 = p3
 			# target marker
 			draw_arc(site - o, 5.0, 0.0, TAU, 16, Color(1.0, 0.75, 0.3, 0.6), 1.0)
-			_draw_trail(o)
+			_draw_trail(o, c, site)
 			if not _hidden:
 				_draw_craft(_pos - o, 1.0)
 		2:
-			_draw_trail(o)
+			_draw_trail(o, c, site)
+			if tgt3.z <= 0.0:
+				return   # the site has turned away from us
 			var life := 1.0 - _t
 			for b: Dictionary in _bits:
 				var p: Vector2 = site + (b["off"] as Vector2) - o
@@ -239,10 +241,13 @@ func _draw() -> void:
 			if kind == Kind.LAND:
 				draw_arc(site - o, 4.0 + _t * 18.0, 0.0, TAU, 24, Color(0.85, 0.82, 0.75, life * 0.5), 1.0)
 
-func _draw_trail(o: Vector2) -> void:
+func _draw_trail(o: Vector2, c: Vector2, site: Vector2) -> void:
 	for i in _trail.size():
+		var p := _at(_trail[i], c, site)
+		if p.z > 0.5:
+			continue   # behind the globe
 		var a := float(i + 1) / float(_trail.size() + 1)
-		draw_rect(Rect2(_trail[i] - o - Vector2(1, 1), Vector2(2, 2)), Color(1.0, 0.6, 0.2, a * 0.55))
+		draw_rect(Rect2(Vector2(p.x, p.y) - o - Vector2(1, 1), Vector2(2, 2)), Color(1.0, 0.6, 0.2, a * 0.55))
 
 func _draw_craft(p: Vector2, flame: float) -> void:
 	draw_set_transform(p, _heading.angle(), Vector2.ONE * sprite_scale)

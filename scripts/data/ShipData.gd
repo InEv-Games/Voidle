@@ -59,6 +59,12 @@ extends Resource
 ## Travel duration in seconds.
 @export var travel_duration: float = 0.0
 
+## Transfer route between two bodies (planet view): the origin-orbit angle of
+## the burn that leaves it, and the destination-orbit angle the ship holds when
+## the journey ends (it keeps orbiting from there). NAN = not chosen yet.
+@export var transfer_depart_angle: float = NAN
+@export var transfer_arrive_angle: float = NAN
+
 func is_travelling() -> bool:
 	return dest_seed >= 0 and travel_progress < 1.0
 

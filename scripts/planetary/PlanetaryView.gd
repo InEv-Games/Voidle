@@ -109,7 +109,6 @@ var _city_panel_poi: POIData = null
 ## The Orbit panel is showing (see _build_orbit_panel).
 var _orbit_panel_open: bool = false
 const CompanionScript := preload("res://scripts/planetary/CompanionBodies.gd")
-const TransitRocketScript := preload("res://scripts/solar/LunarTransitRocket.gd")
 var _companions: Control = null          # CompanionBodies
 var _companion_parent: PlanetData = null # the planet, when viewing one of its moons
 var _switching_body: bool = false
@@ -117,8 +116,11 @@ var _switching_body: bool = false
 var _district_reveal: float = 1.0
 var _reveal_tween: Tween = null
 var _reveal_ghost: Control = null
-var _transit_rocket: Node2D = null
-var _transit_marker: Node2D = null
+## Ships flying between this body and a neighbour, drawn on _transit_canvas.
+var _transits: Array[ShipData] = []
+var _transit_canvas: Control = null
+## body -> its stand-in while a switch animation runs (flights follow them).
+var _switch_ghosts: Dictionary = {}
 const DescentScript := preload("res://scripts/planetary/DescentFX.gd")
 ## The colony lander is on its way down (OrbitalLayer DescentFX).
 var _lander_descending: bool = false
@@ -186,6 +188,7 @@ func _ready() -> void:
 	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
 	planet_renderer.planet_clicked.connect(_on_planet_clicked)
 	_setup_lowres_planet()
+	ShipManager.ship_arrived.connect(_on_ship_arrived_here)
 	_build_panel_toggle()
 	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - PANEL_FRACTION))
 	poi_layer.territory_lookup = _territory_at_screen
@@ -468,28 +471,15 @@ func _update_tutorial_highlight() -> void:
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+## Leaves the planet view for the star system (the Local System view is gone —
+## a body's moons show in the corner when zoomed out). Needs the system unlocked.
 func _go_back() -> void:
-	if not GameState.solar_unlocked and not GameState.moon_unlocked:
+	if not GameState.solar_unlocked:
 		return
 	AudioManager.set_construction_active(false)
 	_save_light_angle()
 	var sd := _system_solar if _system_solar != null else GameState.get_home_solar()
-	
-	var parent_planet: PlanetData = null
-	if current_data != null:
-		if current_data.planet_type == PlanetData.Type.MOON:
-			for p in sd.planets:
-				if p.moons.has(current_data):
-					parent_planet = p
-					break
-		else:
-			parent_planet = current_data
-			
-	if parent_planet != null:
-		parent_planet.set_meta("__solar_data", sd)
-		SceneTransition.go("res://scenes/solar/SolarView.tscn", parent_planet)
-	else:
-		SceneTransition.go("res://scenes/solar/SolarView.tscn", sd)
+	SceneTransition.go("res://scenes/solar/SolarView.tscn", sd)
 
 func _on_unlock_changed(_key: String, _val: bool) -> void:
 	_refresh_solar_btn()
@@ -718,59 +708,232 @@ func _tick_companions() -> void:
 		_companions.fade = clampf((ZOOM_MIN - _zoom) / (ZOOM_MIN - ZOOM_SYSTEM), 0.0, 1.0)
 	else:
 		_companions.fade = 0.0
-	_tick_transit_rocket()
+	_tick_transits()
 
-## The Moon lander's flight drawn between this body and its neighbour.
-func _tick_transit_rocket() -> void:
-	var moon: PlanetData = null
-	if current_data != null and current_data.planet_type == PlanetData.Type.MOON:
-		if GameState.get_planet(current_data.seed).is_colonizing:
-			moon = current_data
-	else:
+# ── Flights between bodies ───────────────────────────────────────────────────
+# A ship flying to a neighbouring body is a ShipManager journey. Its route is a
+# function of travel_progress, rebuilt every frame from where both bodies are
+# on screen right now (stand-ins during a switch), so it never breaks: from the
+# origin's limb it curves onto the destination orbit, arriving tangent to that
+# orbit at the point facing the origin — ShipManager then continues the orbit
+# from exactly there (meta "arrival_angle"). The trail is the route behind it.
+
+## Where a body is drawn now: {c, r, rot, tilt} in global px (empty if not shown).
+func _body_screen(pd: PlanetData) -> Dictionary:
+	if pd == null:
+		return {}
+	if _switch_ghosts.has(pd) and is_instance_valid(_switch_ghosts[pd]):
+		var g: ColorRect = _switch_ghosts[pd]
+		var gr := g.get_global_rect()
+		return {"c": gr.get_center(), "r": gr.size.y * 0.40,
+			"rot": float((g.material as ShaderMaterial).get_shader_parameter("rotation_offset")), "tilt": 0.0}
+	if _switching_body:
+		return {}
+	if pd == current_data:
+		var oc := planet_renderer.global_position + planet_renderer.size * 0.5
+		if _orbital_layer != null and is_instance_valid(_orbital_layer):
+			oc = _orbital_layer.get_global_rect().position + _orbital_layer._center_now()
+		return {"c": oc, "r": float(planet_renderer._planet_radius_px),
+			"rot": planet_renderer.get_rotation_offset(), "tilt": planet_renderer.tilt}
+	if _companions != null and _companions.bodies.has(pd):
+		var cc: Vector2 = _companions.center_of(pd)
+		if cc.is_finite():
+			return {"c": cc, "r": _companions.radius_of(pd), "rot": _companions.spin(), "tilt": 0.0}
+	return {}
+
+## A point of `ship`'s orbit around a body drawn per `b` (OrbitalLayer._project
+## maths): Vector3(x, y, z) global px, z > 0 = behind the body.
+static func _orbit_screen(ship: ShipData, a: float, b: Dictionary) -> Vector3:
+	var rr: float = float(b["r"]) * ship.orbit_radius
+	var px := rr * cos(a)
+	var py := rr * sin(a) * sin(ship.orbit_inclination)
+	var pz := rr * sin(a) * cos(ship.orbit_inclination)
+	var rot: float = float(b["rot"]) + ship.orbit_node
+	var rx := px * cos(rot) + pz * sin(rot)
+	var rz := -px * sin(rot) + pz * cos(rot)
+	var t: float = b["tilt"]
+	var c: Vector2 = b["c"]
+	return Vector3(c.x + rx, c.y + py * cos(t) - rz * sin(t), py * sin(t) + rz * cos(t))
+
+func _bodies_in_view() -> Array[PlanetData]:
+	var out: Array[PlanetData] = []
+	if current_data != null:
+		out.append(current_data)
+	if _companions != null:
 		for b: PlanetData in _companions.bodies:
-			if b.planet_type == PlanetData.Type.MOON and GameState.get_planet(b.seed).is_colonizing:
-				moon = b
-				break
-	if moon == null:
-		if _transit_rocket != null and is_instance_valid(_transit_rocket):
-			_transit_rocket.queue_free()
-		_transit_rocket = null
-		return
-	var cont := planet_renderer.get_parent() as Control
-	var main_c := planet_renderer.global_position + planet_renderer.size * 0.5
-	var main_r := _planet_r_px()
-	var viewing_moon := moon == current_data
-	var other: PlanetData = _companion_parent if viewing_moon else moon
-	var other_c: Vector2 = _companions.center_of(other) if other != null else Vector2.INF
-	if not other_c.is_finite():
-		if _transit_rocket != null and is_instance_valid(_transit_rocket):
-			_transit_rocket.visible = false
-		return
-	if _transit_marker == null or not is_instance_valid(_transit_marker):
-		_transit_marker = Node2D.new()
-		cont.add_child(_transit_marker)
-	# from the home world to the moon — onto the lander's orbit when it's in view
-	var from_g := other_c if viewing_moon else main_c
-	var from_r: float = _companions.radius_of(other) if viewing_moon else main_r
-	_transit_marker.global_position = _lander_entry_point(main_c, main_r, other_c) if viewing_moon else other_c
-	if _transit_rocket == null or not is_instance_valid(_transit_rocket):
-		_transit_rocket = TransitRocketScript.new()
-		cont.add_child(_transit_rocket)
-		_transit_rocket.arrived.connect(_on_lander_arrived)
-	var origin := cont.global_position
-	if _transit_rocket.moon == null:
-		_transit_rocket.setup(moon, func() -> Vector2: return from_g - origin, from_r, _transit_marker)
-	_transit_rocket.planet_center = func() -> Vector2: return from_g - origin
-	_transit_rocket.planet_radius = from_r
-	_transit_rocket.visible = _companions.fade > 0.5
+			out.append(b)
+	return out
 
-func _on_lander_arrived(moon: PlanetData) -> void:
-	_transit_rocket = null
-	if current_data != null and current_data != moon and _companions.bodies.has(moon):
-		var r: Rect2 = Rect2(_companions.center_of(moon) - Vector2(48, 48), Vector2(96, 96))
-		_switch_to_body(moon, r)
-	else:
-		_refresh_active_panel()
+func _find_body(seed_val: int) -> PlanetData:
+	for b: PlanetData in _bodies_in_view():
+		if b.seed == seed_val:
+			return b
+	return null
+
+func _tick_transits() -> void:
+	_transits.clear()
+	var hidden := {}
+	var seeds := {}
+	for b: PlanetData in _bodies_in_view():
+		seeds[b.seed] = true
+	for b: PlanetData in _bodies_in_view():
+		for ship: ShipData in ShipManager.ships_for(b.seed):
+			if ship.is_travelling() and seeds.has(ship.dest_seed) and ship.dest_seed != b.seed:
+				_transits.append(ship)
+				hidden[ship.ship_id] = true
+	if _orbital_layer != null and is_instance_valid(_orbital_layer):
+		_orbital_layer.hidden_ships = hidden   # we draw these, not their old orbit
+	if _transit_canvas == null or not is_instance_valid(_transit_canvas):
+		_transit_canvas = Control.new()
+		_transit_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_transit_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_transit_canvas.z_index = 31   # above switch stand-ins
+		_transit_canvas.draw.connect(_draw_transits)
+		(planet_renderer.get_parent() as Control).add_child(_transit_canvas)
+	_transit_canvas.queue_redraw()
+
+# A transfer is three legs over travel_progress (like Apollo's): ride the
+# origin's parking orbit up to the burn point, fly the transfer arc, then ride
+# the destination orbit for a while — so the journey ends already orbiting.
+# The orbit legs are true 3D orbit projections (hidden behind their body); the
+# arc leaves and joins them along the orbit direction. Burn / arrival angles
+# are chosen once and saved on the ship.
+const DEPART_FRAC := 0.2       # share of the journey spent on the origin orbit
+const CAPTURE_FRAC := 0.2      # … and on the destination orbit
+const DEPART_ARC := 1.4        # radians of parking orbit flown before the burn
+const CAPTURE_ARC := 1.0       # radians of destination orbit flown before arrival
+const PARKING_RADIUS := 1.15   # origin parking orbit (planet radii)
+
+## The orbit point of `ship` around a body drawn per `b`, at `radius` planet
+## radii (default: the ship's own orbit radius).
+func _orbit_pt(ship: ShipData, a: float, b: Dictionary, radius := -1.0) -> Vector3:
+	var bb := b.duplicate()
+	if radius > 0.0:
+		bb["r"] = float(b["r"]) * radius / ship.orbit_radius
+	return _orbit_screen(ship, a, bb)
+
+static func _hidden_by(v: Vector3, b: Dictionary) -> bool:
+	return v.z > 0.0 and Vector2(v.x, v.y).distance_to(b["c"]) < float(b["r"])
+
+## Picks the burn / arrival angles the first time a route is drawn: the burn on
+## the side of the origin facing the destination, the arrival on the side of
+## the destination facing the origin (both on the visible side).
+func _plan_transfer(ship: ShipData, ob: Dictionary, db: Dictionary) -> void:
+	var dir: float = signf(ship.orbit_speed) if ship.orbit_speed != 0.0 else 1.0
+	if is_nan(ship.transfer_depart_angle):
+		ship.transfer_depart_angle = _facing_angle(ship, ob, db["c"], PARKING_RADIUS)
+	if is_nan(ship.transfer_arrive_angle):
+		ship.transfer_arrive_angle = _facing_angle(ship, db, ob["c"], -1.0) + dir * CAPTURE_ARC
+
+func _facing_angle(ship: ShipData, b: Dictionary, toward: Vector2, radius: float) -> float:
+	var c: Vector2 = b["c"]
+	var want := (toward - c).normalized()
+	var best_a := 0.0
+	var best := -INF
+	for i in 72:
+		var a := TAU * float(i) / 72.0
+		var v := _orbit_pt(ship, a, b, radius)
+		if v.z > 0.0:
+			continue
+		var d := (Vector2(v.x, v.y) - c).normalized().dot(want)
+		if d > best:
+			best = d
+			best_a = a
+	return best_a
+
+## Where a transfer is at progress p: Vector3(x, y, 1 if hidden behind a body).
+## Vector3.INF when an end isn't on screen.
+func _transfer_point(ship: ShipData, p: float, ob: Dictionary, db: Dictionary) -> Vector3:
+	var dir: float = signf(ship.orbit_speed) if ship.orbit_speed != 0.0 else 1.0
+	var burn := ship.transfer_depart_angle
+	var entry := ship.transfer_arrive_angle - dir * CAPTURE_ARC
+	if p <= DEPART_FRAC:
+		var v := _orbit_pt(ship, burn - dir * DEPART_ARC * (1.0 - p / DEPART_FRAC), ob, PARKING_RADIUS)
+		return Vector3(v.x, v.y, 1.0 if _hidden_by(v, ob) else 0.0)
+	if p >= 1.0 - CAPTURE_FRAC:
+		var k := (p - (1.0 - CAPTURE_FRAC)) / CAPTURE_FRAC
+		var v := _orbit_pt(ship, entry + dir * CAPTURE_ARC * k, db)
+		return Vector3(v.x, v.y, 1.0 if _hidden_by(v, db) else 0.0)
+	# transfer arc: leaves the parking orbit and joins the destination orbit
+	# along their directions of travel
+	var a0 := _orbit_pt(ship, burn, ob, PARKING_RADIUS)
+	var a0n := _orbit_pt(ship, burn + dir * 0.05, ob, PARKING_RADIUS)
+	var c0 := _orbit_pt(ship, entry, db)
+	var c0p := _orbit_pt(ship, entry - dir * 0.05, db)
+	var s := Vector2(a0.x, a0.y)
+	var e := Vector2(c0.x, c0.y)
+	var span := s.distance_to(e)
+	var p1 := s + (Vector2(a0n.x, a0n.y) - s).normalized() * span * 0.5
+	var p2 := e - (e - Vector2(c0p.x, c0p.y)).normalized() * span * 0.5
+	var t := (p - DEPART_FRAC) / (1.0 - DEPART_FRAC - CAPTURE_FRAC)
+	var u := 1.0 - t
+	var q := s * u * u * u + p1 * 3.0 * u * u * t + p2 * 3.0 * u * t * t + e * t * t * t
+	return Vector3(q.x, q.y, 0.0)
+
+func _draw_transits() -> void:
+	var cv := _transit_canvas
+	var o := cv.global_position
+	for ship: ShipData in _transits:
+		var ob := _body_screen(_find_body(ship.orbit_seed))
+		var db := _body_screen(_find_body(ship.dest_seed))
+		if ob.is_empty() or db.is_empty():
+			continue
+		_plan_transfer(ship, ob, db)
+		var p := clampf(ship.travel_progress, 0.0, 1.0)
+		# trail: the route just behind (hidden where a body covers it)
+		const TRAIL := 0.12
+		for k in 18:
+			var q := p - TRAIL * float(k + 1) / 18.0
+			if q < 0.0:
+				break
+			var tp := _transfer_point(ship, q, ob, db)
+			if tp.z < 0.5:
+				draw_trail_dot(cv, Vector2(tp.x, tp.y) - o, 1.0 - float(k) / 18.0)
+		var at := _transfer_point(ship, p, ob, db)
+		if at.z > 0.5:
+			continue   # behind a body right now
+		var pos := Vector2(at.x, at.y)
+		var nx := _transfer_point(ship, minf(1.0, p + 0.004), ob, db)
+		var heading := (Vector2(nx.x, nx.y) - pos).normalized() if Vector2(nx.x, nx.y).distance_to(pos) > 0.01 else Vector2.RIGHT
+		cv.draw_set_transform(pos - o, heading.angle(), Vector2.ONE)
+		var burning := p > DEPART_FRAC - 0.03 and p < DEPART_FRAC + 0.12
+		if burning:
+			var hue: float = 0.45 + randf() * 0.25
+			cv.draw_rect(Rect2(Vector2(-7, -1), Vector2(2, 2)), Color(1.0, hue, 0.05, 0.9))
+		cv.draw_rect(Rect2(Vector2(-3, -2), Vector2(6, 4)), Color(0.92, 0.95, 1.0))
+		cv.draw_rect(Rect2(Vector2(-1, -4), Vector2(2, 2)), Color(0.55, 0.75, 1.0))
+		cv.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var left := int(ceil((1.0 - ship.travel_progress) * ship.travel_duration))
+		cv.draw_string(ThemeDB.fallback_font, pos - o + Vector2(8, -6), "%s  %02d:%02d" % [ship.ship_name.to_upper(), left / 60, left % 60],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.65, 0.88, 1.0, 0.85))
+	# mid-switch the orbital layer is down: keep the stand-ins' ships flying
+	for pd: PlanetData in _switch_ghosts:
+		var b := _body_screen(pd)
+		if b.is_empty():
+			continue
+		for ship: ShipData in ShipManager.ships_for(pd.seed):
+			if ship.is_travelling():
+				continue
+			var v := _orbit_screen(ship, ship.orbit_angle, b)
+			if _hidden_by(v, b):
+				continue
+			cv.draw_rect(Rect2(Vector2(v.x, v.y) - o - Vector2(2, 2), Vector2(4, 4)), Color(1, 1, 1, 0.92))
+
+static func draw_trail_dot(cv: CanvasItem, p: Vector2, a: float) -> void:
+	cv.draw_rect(Rect2(p - Vector2(1, 1), Vector2(2, 2)), Color(1.0, 0.65, 0.25, a * 0.55))
+
+## A flight reached a body: if we're watching from the other end, follow it.
+func _on_ship_arrived_here(ship: ShipData) -> void:
+	if current_data == null or ship.ship_type != "lander":
+		return
+	var dest := _find_body(ship.orbit_seed)
+	if dest != null and dest != current_data:
+		var cc: Vector2 = _companions.center_of(dest)
+		if cc.is_finite():
+			var r: float = _companions.radius_of(dest) / 0.40
+			_switch_to_body(dest, Rect2(cc - Vector2(r, r) * 0.5, Vector2(r, r)))
+			return
+	_refresh_active_panel()
 
 ## Planet radius (fraction of view height) and shader cell count _setup_material
 ## gives `pd` — so a switch can animate to the body's real on-screen size.
@@ -782,6 +945,14 @@ func _pixel_count_for(pd: PlanetData) -> float:
 	return 140.0 if sz <= 1.2 else roundf(clampf(140.0 * (sz / 1.2), 140.0, 280.0))
 
 ## A stand-in body for the switch animation (radius 0.40 of its rect).
+## On-screen rect a body's globe fills (radius 0.40 of it), live — follows the
+## planet area as the side panel slides.
+func _globe_rect(base_radius: float, zoom: float) -> Rect2:
+	var cont := planet_renderer.get_parent() as Control
+	var centre := planet_renderer.global_position + planet_renderer.size * 0.5
+	var sz := Vector2.ONE * cont.size.y * base_radius * zoom / 0.40
+	return Rect2(centre - sz * 0.5, sz)
+
 func _body_ghost(pd: PlanetData, rect: Rect2, cells: float) -> ColorRect:
 	var g := ColorRect.new()
 	g.material = CompanionScript._material_for(pd, rect.size.x)
@@ -824,6 +995,7 @@ func _switch_to_body(pd: PlanetData, from_rect: Rect2) -> void:
 	# stand-ins: the clicked body, and ours in place of the live globe
 	var g_new := _body_ghost(pd, from_rect, from_rect.size.y * 0.5)
 	var g_old := _body_ghost(old, Rect2(centre - old_size * 0.5, old_size), old_size.y / cell_old)
+	_switch_ghosts = {pd: g_new, old: g_old}
 	g_old.z_index = 29
 	_companions.fade = 0.0
 	for n: CanvasItem in [_planet_view, poi_layer, _orbital_layer]:
@@ -851,12 +1023,21 @@ func _switch_to_body(pd: PlanetData, from_rect: Rect2) -> void:
 	tw.tween_method(func(t: float) -> void:
 		shade.call(g_new, pd, spin0, rot_new, t)
 		shade.call(g_old, old, rot_old, spin0, t), 0.0, 1.0, DUR)
-	tw.tween_property(g_new, "global_position", centre - new_size * 0.5, DUR)
-	tw.tween_property(g_new, "size", new_size, DUR)
+	# targets are re-read every frame: the side panel may slide meanwhile
+	var from_new := from_rect
+	var from_old := Rect2(centre - old_size * 0.5, old_size)
+	tw.tween_method(func(t: float) -> void:
+		var live := _globe_rect(_base_radius_for(pd), ZOOM_SYSTEM)
+		var r := Rect2(from_new.position.lerp(live.position, t), from_new.size.lerp(live.size, t))
+		g_new.global_position = r.position
+		g_new.size = r.size
+		var slot: Rect2 = _companions.predict_rects(new_list, new_parent).get(old,
+			Rect2(Vector2(cont.size.x + 40.0, -200.0), Vector2(96, 96)))
+		slot.position += _companions.global_position
+		g_old.global_position = from_old.position.lerp(slot.position, t)
+		g_old.size = from_old.size.lerp(slot.size, t), 0.0, 1.0, DUR)
 	tw.tween_method(func(c: float) -> void: (g_new.material as ShaderMaterial).set_shader_parameter("pixel_count", c),
 		from_rect.size.y * 0.5, new_size.y / cell_new, DUR)
-	tw.tween_property(g_old, "global_position", old_slot.position, DUR)
-	tw.tween_property(g_old, "size", old_slot.size, DUR)
 	tw.tween_method(func(c: float) -> void: (g_old.material as ShaderMaterial).set_shader_parameter("pixel_count", c),
 		old_size.y / cell_old, old_slot.size.y * 0.5, DUR)
 	await tw.finished
@@ -864,11 +1045,13 @@ func _switch_to_body(pd: PlanetData, from_rect: Rect2) -> void:
 		pd.set_meta("__solar_data", _system_solar if _system_solar != null else GameState.get_home_solar())
 	_district_reveal = 0.0
 	load_planet(pd)
+	planet_renderer.set_rotation_offset(rot_new)   # exactly where the stand-in stopped
 	_zoom = ZOOM_SYSTEM
 	_zoom_target = ZOOM_SYSTEM
 	_apply_zoom()
 	_companions.fade = 1.0
 	_planet_view.modulate.a = 1.0
+	_switch_ghosts.clear()
 	g_old.queue_free()
 	# the stand-in dissolves into the real globe; then settlements, lights,
 	# markers and orbits come in instead of popping
@@ -3023,6 +3206,10 @@ func _process(delta: float) -> void:
 	_update_placement_hover()
 	_tick_lander(delta)
 	_tick_companions()
+	if _reveal_ghost != null and is_instance_valid(_reveal_ghost) and not _switching_body:
+		var gr := _globe_rect(_base_radius, _zoom)   # fading stand-in stays on the real globe
+		_reveal_ghost.global_position = gr.position
+		_reveal_ghost.size = gr.size
 	var pmat := planet_renderer.material as ShaderMaterial
 	if pmat != null:
 		pmat.set_shader_parameter("district_reveal",   _district_reveal)

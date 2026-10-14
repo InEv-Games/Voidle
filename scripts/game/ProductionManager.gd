@@ -131,6 +131,12 @@ func invalidate(planet_seed: int) -> void:
 func _tick_all(delta: float) -> void:
 	for pp: PlanetProgress in GameState._planet_progress.values():
 		if pp.is_colonizing:
+			# a lander in flight sets the pace; it finishes the job on arrival
+			var lander: ShipData = ShipManager.travelling_to(pp.planet_seed, "lander")
+			if lander != null:
+				pp.colonize_progress = lander.travel_progress
+				building_progress_changed.emit(pp.planet_seed, "colonize", pp.colonize_progress)
+				continue
 			pp.colonize_progress += delta / max(0.1, pp.colonize_duration)
 			if pp.colonize_progress >= 1.0:
 				GameState.finish_colonization(pp.planet_seed)

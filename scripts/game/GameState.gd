@@ -99,6 +99,7 @@ var _autosave_timer: float = 0.0
 const AUTOSAVE_INTERVAL := 60.0
 
 func _ready() -> void:
+	ShipManager.ship_arrived.connect(_on_ship_arrived)
 	load_save()
 	if home_planet_seed < 0:
 		home_planet_seed = randi_range(1000, 99999)
@@ -429,21 +430,43 @@ func start_moon_colonization(planet_seed: int) -> bool:
 	pp.is_colonizing = true
 	pp.colonize_progress = 0.0
 	pp.colonize_duration = MOON_TRANSIT_SEC
+	launch_moon_lander(planet_seed, MOON_TRANSIT_SEC)
 	planet_progress_changed.emit(planet_seed)
 	save()
 	return true
 
 ## The colony lander as a real ship in the moon's orbit (OrbitalLayer draws,
-## spins and lands it). "aim_home" asks the planet view to park it where the
-## transfer flight came in.
+## spins and lands it). "aim_home" asks the planet view to park it facing the
+## home world — used when no flight was drawn (older saves, cheats).
 func spawn_moon_lander(planet_seed: int) -> ShipData:
 	var ship := ShipManager.launch(planet_seed, "Colony Lander")
+	_lander_orbit(ship)
+	ship.set_meta("aim_home", true)
+	return ship
+
+## The lander leaves the home world now and flies `secs` to the moon (a ShipManager
+## journey: the planet view draws it between the two bodies and hands it to
+## the moon's orbit on arrival).
+func launch_moon_lander(moon_seed: int, secs: float) -> ShipData:
+	var ship := ShipManager.launch(home_planet_seed, "Colony Lander")
+	_lander_orbit(ship)   # the orbit it will settle into at the moon
+	ship.dest_seed = moon_seed
+	ship.travel_duration = secs
+	ship.travel_progress = 0.0
+	return ship
+
+func _lander_orbit(ship: ShipData) -> void:
 	ship.ship_type = "lander"
 	ship.orbit_radius = 1.35
 	ship.orbit_speed = 0.08
 	ship.orbit_inclination = randf_range(0.15, 0.45)
-	ship.set_meta("aim_home", true)
-	return ship
+
+## A journey ended: a colony lander reaching its moon finishes the colonization.
+func _on_ship_arrived(ship: ShipData) -> void:
+	if ship.ship_type == "lander":
+		var pp := get_planet(ship.orbit_seed)
+		if pp.is_colonizing:
+			finish_colonization(ship.orbit_seed)
 
 ## The moon's colony lander, if it is still in orbit.
 func moon_lander(planet_seed: int) -> ShipData:
@@ -473,7 +496,8 @@ func finish_colonization(planet_seed: int) -> void:
 	var pd := get_planet_data(planet_seed)
 	if pd != null and pd.planet_type == PlanetData.Type.MOON:
 		pp.lander_state = 1   # parked in orbit; the player picks the landing site
-		spawn_moon_lander(planet_seed)
+		if moon_lander(planet_seed) == null:
+			spawn_moon_lander(planet_seed)   # no flight (older saves): appear in orbit
 		pd = null
 	if pd != null:
 		var has_poi := false

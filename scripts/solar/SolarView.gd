@@ -15,10 +15,6 @@ signal back_pressed
 
 var _survey_btn: Button = null
 var _scan_wrap: VBoxContainer = null
-const LunarTransitRocketScript := preload("res://scripts/solar/LunarTransitRocket.gd")
-var _transit_rockets: Array[Node] = []
-var _moon_panel_sig: String = ""
-var _moon_wrap: VBoxContainer = null
 
 var _current:      SolarData
 var _star:         ColorRect
@@ -26,8 +22,6 @@ var _star2:        ColorRect   # binary companion, null if not binary
 var _star2_angle:  float = 0.0
 var _pivot:        Node2D
 var _orbit_lines:  OrbitLines
-var _orbit_lines_local_back: OrbitLines
-var _orbit_lines_local_front: OrbitLines
 var _orbits:       Array[PlanetOrbitNode] = []
 var _belts:        Array[AsteroidBelt]    = []
 var _belt_configs: Array[Dictionary]     = []   # {slot, rx, seed} per belt
@@ -36,8 +30,6 @@ var _view_angle:      float     = 0.0
 var _orbit_tilt:      float     = 0.38
 var _solar_view_angle: float    = 0.0
 var _solar_orbit_tilt: float    = 0.38
-var _local_view_angle: float    = 0.0
-var _local_orbit_tilt: float    = 0.38
 var _max_orbit_px:    float     = 200.0  # updated after build_planets
 var _dragging:        bool      = false
 var _left_drag_from:  Vector2   = Vector2.ZERO
@@ -49,9 +41,6 @@ var _enter_charge:    int        = 0   # scroll-in on hovered planet
 var _back_charge:     int        = 0   # scroll-out to go back to galaxy
 var _is_ready:        bool       = false
 
-enum Mode { SOLAR, LOCAL }
-var _mode:         Mode = Mode.SOLAR
-var _current_local: PlanetData = null
 
 const ORBIT_Y_RATIO := 0.38   # must match OrbitLines.y_ratio and PlanetOrbitNode
 
@@ -83,24 +72,16 @@ func _ready() -> void:
 	_pivot = Node2D.new()
 	_space.add_child(_pivot)
 	GameState.asteroid_discovered.connect(_on_asteroid_discovered)
-	GameState.planet_progress_changed.connect(_on_progress_changed)
-	GameState.credits_changed.connect(_on_credits_changed)
 
 	# wait one frame so Control sizes are computed
 	await get_tree().process_frame
 
 	var pending = SceneTransition.pending_data
 	SceneTransition.pending_data = null
-	if pending is PlanetData:
+	if pending is PlanetData:   # coming back from a body: show its star system
 		var pd := pending as PlanetData
-		if pd.has_meta("__solar_data"):
-			_current = pd.get_meta("__solar_data") as SolarData
-		else:
-			_current = GameState.get_home_solar()
-		if pd.planet_type == PlanetData.Type.ASTEROID:
-			load_system(_current)
-		else:
-			load_local(pd)
+		load_system(pd.get_meta("__solar_data") as SolarData if pd.has_meta("__solar_data") \
+			else GameState.get_home_solar())
 	elif pending is SolarData:
 		load_system(pending as SolarData)
 	elif solar_data != null:
@@ -115,20 +96,14 @@ func _ready() -> void:
 func _save_current_angles_to_game_state() -> void:
 	if not _is_ready:
 		return
-	if _mode == Mode.SOLAR and _current != null:
+	if _current != null:
 		GameState.set_meta("solar_view_angle_%d" % _current.seed, _view_angle)
 		GameState.set_meta("solar_orbit_tilt_%d" % _current.seed, _orbit_tilt)
-	elif _mode == Mode.LOCAL and _current_local != null:
-		GameState.set_meta("local_view_angle_%d" % _current_local.seed, _view_angle)
-		GameState.set_meta("local_orbit_tilt_%d" % _current_local.seed, _orbit_tilt)
 
 func _load_current_angles_from_game_state() -> void:
-	if _mode == Mode.SOLAR and _current != null:
+	if _current != null:
 		_view_angle = GameState.get_meta("solar_view_angle_%d" % _current.seed, 0.0)
 		_orbit_tilt = GameState.get_meta("solar_orbit_tilt_%d" % _current.seed, 0.38)
-	elif _mode == Mode.LOCAL and _current_local != null:
-		_view_angle = GameState.get_meta("local_view_angle_%d" % _current_local.seed, 0.0)
-		_orbit_tilt = GameState.get_meta("local_orbit_tilt_%d" % _current_local.seed, 0.38)
 
 func _go_to_galaxy() -> void:
 	if not GameState.galaxy_unlocked:
@@ -171,142 +146,11 @@ func _on_planet_selected(pd: PlanetData) -> void:
 		_show_access_denied_text()
 		return
 		
-	if _mode == Mode.SOLAR:
-		if pd.planet_type == PlanetData.Type.MOON or pd.planet_type == PlanetData.Type.ASTEROID:
-			# Direct jump to moon/asteroid surface if somehow clicked from Solar View
-			_save_current_angles_to_game_state()
-			pd.set_meta("__solar_data", _current)
-			SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", pd)
-		else:
-			# Enter LOCAL mode for this planet
-			load_local(pd)
-	else:
-		# In LOCAL mode, clicking the central planet or any moon goes to the surface
-		_save_current_angles_to_game_state()
-		pd.set_meta("__solar_data", _current)
-		SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", pd)
-
-# ── Moon colonization ────────────────────────────────────────────────────────
-
-## Colonization block in the Local System panel: one entry per moon that can
-## still be colonised (the plain moon list stays hidden by design).
-func _build_moon_section() -> void:
-	if _moon_wrap != null and is_instance_valid(_moon_wrap):
-		_moon_wrap.queue_free()
-	_moon_wrap = null
-	_moon_panel_sig = _moon_signature()
-	if _mode != Mode.LOCAL or _current_local == null or not GameState.moon_unlocked:
-		return
-	_moon_wrap = VBoxContainer.new()
-	_moon_wrap.add_theme_constant_override("separation", 6)
-	_panel_content.add_child(_moon_wrap)
-	_panel_content.move_child(_moon_wrap, _planet_list.get_index() + 1)
-	for md: PlanetData in _current_local.moons:
-		_add_moon_colonize_row(md)
-
-func _add_moon_colonize_row(md: PlanetData) -> void:
-	if md.planet_type != PlanetData.Type.MOON:
-		return
-	var pp := GameState.get_planet(md.seed)
-	if pp.is_colonized:
-		return
-	var orbitron := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
-	var sep := HSeparator.new()
-	var sep_s := StyleBoxFlat.new()
-	sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
-	sep.add_theme_stylebox_override("separator", sep_s)
-	_moon_wrap.add_child(sep)
-	var head := Label.new()
-	head.text = md.planet_name
-	if orbitron: head.add_theme_font_override("font", orbitron)
-	head.add_theme_font_size_override("font_size", 14)
-	head.add_theme_color_override("font_color", Color(0.85, 0.88, 0.95))
-	_moon_wrap.add_child(head)
-	if pp.is_colonizing:
-		var lbl := Label.new()
-		lbl.text = "Lander in transit…"
-		if orbitron: lbl.add_theme_font_override("font", orbitron)
-		lbl.add_theme_font_size_override("font_size", 10)
-		lbl.add_theme_color_override("font_color", Color(0.65, 0.88, 1.0))
-		_moon_wrap.add_child(lbl)
-		return
-	var block := GameState.moon_colonize_block(md.seed)
-	var b := Button.new()
-	b.text = "START COLONIZATION"
-	if orbitron: b.add_theme_font_override("font", orbitron)
-	b.add_theme_font_size_override("font_size", 11)
-	var nb := StyleBoxFlat.new()
-	nb.bg_color = Color(0.10, 0.32, 0.12) if block == "" else Color(0.12, 0.13, 0.17)
-	nb.content_margin_top = 8; nb.content_margin_bottom = 8
-	nb.set_border_width_all(1)
-	nb.border_color = Color(0.25, 0.75, 0.30, 0.8) if block == "" else Color(0.3, 0.32, 0.4, 0.6)
-	nb.set_corner_radius_all(3)
-	b.add_theme_stylebox_override("normal", nb)
-	var hb := nb.duplicate() as StyleBoxFlat
-	hb.bg_color = nb.bg_color.lightened(0.15)
-	b.add_theme_stylebox_override("hover", hb)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	b.add_theme_color_override("font_color", Color(0.80, 1.0, 0.82) if block == "" else Color(0.55, 0.58, 0.66))
-	var cost_txt := "◈ %s Credits  ·  %s Fuel Rods\nFlight %ds" % [Economy.fmt(GameState.MOON_COLONIZE_CREDITS),
-		Economy.fmt(GameState.MOON_COLONIZE_FUEL), int(GameState.MOON_TRANSIT_SEC)]
-	b.mouse_entered.connect(func() -> void:
-		AudioManager.play("hover")
-		TooltipManager.show_tip("Colonize " + md.planet_name,
-			"Launch a lander from %s. It parks in lunar orbit; then pick where to found your first lunar City.\n\n%s%s"
-			% [_current_local.planet_name, cost_txt, "" if block == "" else "\n\n[color=#ff7766]" + block + "[/color]"]))
-	b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
-	b.pressed.connect(func() -> void:
-		TooltipManager.hide_tip()
-		if GameState.start_moon_colonization(md.seed):
-			AudioManager.play("rocket", -4.0)
-			_spawn_transit_rockets(_current_local)
-			_update_panel()
-		else:
-			AudioManager.play("error"))
-	_moon_wrap.add_child(b)
-
-## Rockets for every moon of `data` whose lander is in flight.
-func _spawn_transit_rockets(data: PlanetData) -> void:
-	for r in _transit_rockets:
-		if is_instance_valid(r):
-			r.queue_free()
-	_transit_rockets.clear()
-	if data == null:
-		return
-	for node: PlanetOrbitNode in _orbits:
-		var md := node.planet_data
-		if md == null or not GameState.get_planet(md.seed).is_colonizing:
-			continue
-		var r: Node2D = LunarTransitRocketScript.new()
-		r.setup(md, func() -> Vector2: return _star_center(), 240.0 * 0.40, node)
-		r.arrived.connect(_on_lander_arrived)
-		_space.add_child(r)
-		_transit_rockets.append(r)
-
-## The lander reached lunar orbit — follow it to the Moon.
-func _on_lander_arrived(md: PlanetData) -> void:
-	_update_panel()
-	if _mode != Mode.LOCAL:
-		return
-	await get_tree().create_timer(0.8).timeout
-	if is_inside_tree() and _mode == Mode.LOCAL:
-		planet_selected.emit(md)
-
-func _moon_signature() -> String:
-	if _current_local == null:
-		return ""
-	var sig := ""
-	for md: PlanetData in _current_local.moons:
-		var pp := GameState.get_planet(md.seed)
-		sig += "%d%d%s|" % [int(pp.is_colonizing), int(pp.is_colonized), GameState.moon_colonize_block(md.seed)]
-	return sig
-
-func _on_credits_changed(_c: float) -> void:
-	_on_progress_changed(0)
-
-func _on_progress_changed(_seed: int) -> void:
-	if _mode == Mode.LOCAL and _current_local != null and _moon_signature() != _moon_panel_sig:
-		_update_panel()
+	# straight to the body's planet view — its moons are reached from there
+	# (zoom out: they show in the corner)
+	_save_current_angles_to_game_state()
+	pd.set_meta("__solar_data", _current)
+	SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", pd)
 
 func _show_access_denied_text(msg: String = "ACCESS DENIED") -> void:
 	var lbl := Label.new()
@@ -330,17 +174,6 @@ func load_system(data: SolarData) -> void:
 	_save_current_angles_to_game_state()
 	_current = data
 
-	if data.planets.size() > 0 and not GameState.solar_unlocked and not data.is_home:
-		var target_p: PlanetData = data.planets[0]
-		for p in data.planets:
-			if p.seed == GameState.home_planet_seed:
-				target_p = p
-				break
-		load_local(target_p)
-		return
-
-	_mode = Mode.SOLAR
-	_current_local = null
 	_load_current_angles_from_game_state()
 	get_tree().root.set_meta("__active_solar", data)
 	# auto-unlock if any planet already has a POI (e.g. returned from PlanetaryView)
@@ -348,20 +181,6 @@ func load_system(data: SolarData) -> void:
 	_clear()
 	_build_star(data)
 	_build_planets(data)
-	_update_panel()
-	_apply_current_angles()
-	queue_redraw()
-
-func load_local(data: PlanetData) -> void:
-	_save_current_angles_to_game_state()
-		
-	_mode = Mode.LOCAL
-	_current_local = data
-	_load_current_angles_from_game_state()
-	_clear()
-	_build_local_star(data)
-	_build_local_moons(data)
-	_spawn_transit_rockets(data)
 	_update_panel()
 	_apply_current_angles()
 	queue_redraw()
@@ -375,10 +194,6 @@ func _apply_current_angles() -> void:
 		belt.set_tilt(_orbit_tilt)
 	if _orbit_lines:
 		_orbit_lines.set_tilt(_orbit_tilt)
-	if _orbit_lines_local_back:
-		_orbit_lines_local_back.set_tilt(_orbit_tilt)
-	if _orbit_lines_local_front:
-		_orbit_lines_local_front.set_tilt(_orbit_tilt)
 
 func _check_poi_unlock(data: SolarData) -> void:
 	if data.is_home:
@@ -476,124 +291,6 @@ func _build_star(data: SolarData) -> void:
 		else:
 			_star2.z_index = 48   # companion is higher → behind
 			_star.z_index  = 50
-
-func _build_local_star(data: PlanetData) -> void:
-	var px_size: float = 240.0
-	
-	_star               = ColorRect.new()
-	_star.size          = Vector2(px_size, px_size)
-	_star.position      = _star_center() - _star.size * 0.5
-	_star.z_as_relative = false
-	_star.z_index       = 50
-	
-	var shader_path := PlanetData.get_shader_path(data.planet_type)
-	var mat         := ShaderMaterial.new()
-	mat.shader       = load(shader_path)
-	
-	mat.set_shader_parameter("planet_radius",     0.40)
-	mat.set_shader_parameter("pixel_count",       px_size)
-	mat.set_shader_parameter("aspect_ratio",      1.0)
-	mat.set_shader_parameter("seed",              data.seed)
-	mat.set_shader_parameter("terrain_roughness", data.terrain_roughness)
-	mat.set_shader_parameter("rotation_offset",   0.0)
-	
-	var stype := PlanetData.get_shader_type(data.planet_type)
-	match stype:
-		PlanetData.ShaderType.ROCKY:
-			mat.set_shader_parameter("sea_level",          data.sea_level)
-			mat.set_shader_parameter("continent_scale",    data.continent_scale)
-			mat.set_shader_parameter("has_clouds",         0.0)
-			mat.set_shader_parameter("atmosphere_density", data.atmosphere_density if data.has_atmosphere else 0.0)
-			mat.set_shader_parameter("specular_strength",  data.specular_strength)
-			mat.set_shader_parameter("city_lights",        0.0)
-			mat.set_shader_parameter("poi_count",          0)
-			for key in PlanetData.get_colors(data.planet_type):
-				mat.set_shader_parameter(key, PlanetData.get_colors(data.planet_type)[key])
-		PlanetData.ShaderType.GAS:
-			mat.set_shader_parameter("cloud_speed",        0.0)
-			mat.set_shader_parameter("atmosphere_density", data.atmosphere_density)
-			var c := PlanetData.get_colors(data.planet_type)
-			mat.set_shader_parameter("color_band_a",    c.get("color_sand",       Vector3(0.72,0.55,0.35)))
-			mat.set_shader_parameter("color_band_b",    c.get("color_forest",     Vector3(0.50,0.32,0.18)))
-			mat.set_shader_parameter("color_storm",     c.get("color_snow",       Vector3(0.88,0.82,0.72)))
-			mat.set_shader_parameter("color_atmosphere",c.get("color_atmosphere", Vector3(0.72,0.55,0.35)))
-		PlanetData.ShaderType.MOON:
-			var c := PlanetData.get_colors(data.planet_type)
-			mat.set_shader_parameter("color_highland", c.get("color_mountain",   Vector3(0.62,0.60,0.56)))
-			mat.set_shader_parameter("color_mare",     c.get("color_deep_ocean", Vector3(0.22,0.21,0.20)))
-			mat.set_shader_parameter("color_rim",      c.get("color_snow",       Vector3(0.78,0.76,0.72)))
-			mat.set_shader_parameter("color_floor",    c.get("color_ocean",      Vector3(0.16,0.15,0.14)))
-		PlanetData.ShaderType.ASTEROID:
-			mat.set_shader_parameter("irregularity", data.irregularity)
-			mat.set_shader_parameter("elongation",   1.0 + data.irregularity * 0.8)
-
-	_star.material = mat
-	_space.add_child(_star)
-	
-	_star.mouse_filter = Control.MOUSE_FILTER_STOP
-	_star.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_star.mouse_entered.connect(func() -> void:
-		_hovered_planet = data
-	)
-	_star.mouse_exited.connect(func() -> void:
-		if _hovered_planet == data:
-			_hovered_planet = null
-	)
-
-func _build_local_moons(data: PlanetData) -> void:
-	_pivot          = Node2D.new()
-	_pivot.position = _star_center()
-	_space.add_child(_pivot)
-
-	_orbit_lines_local_back = OrbitLines.new()
-	_orbit_lines_local_back.draw_mode = OrbitLines.DrawMode.BACK
-	_pivot.add_child(_orbit_lines_local_back)
-
-	_orbit_lines_local_front = OrbitLines.new()
-	_orbit_lines_local_front.draw_mode = OrbitLines.DrawMode.FRONT
-	_pivot.add_child(_orbit_lines_local_front)
-
-	var rng := RandomNumberGenerator.new()
-	rng.seed = data.seed ^ 0x6969
-	
-	_orbits.clear()
-	var base_rx: float = 160.0
-	var radii: Array[float] = []
-	for i in data.moons.size():
-		var md: PlanetData = data.moons[i]
-		var rx    := base_rx + i * 60.0
-		var start := rng.randf_range(0.0, TAU)
-		
-		var node := PlanetOrbitNode.new()
-		_pivot.add_child(node)
-		node.setup(md, rx, start)
-		node._height = 0.0   # moons follow orbit ellipse exactly, no vertical scatter
-		node._update_position()
-		
-		node.hover_start.connect(func(pd: PlanetData) -> void: _hovered_planet = pd)
-		node.hover_end.connect(func() -> void:
-			if _hovered_planet == md:
-				_hovered_planet = null
-		)
-		
-		node.clicked.connect(func(pd: PlanetData) -> void: planet_selected.emit(pd))
-		
-		_orbits.append(node)
-		radii.append(rx)
-		
-	_orbit_lines_local_back.refresh(radii)
-	_orbit_lines_local_front.refresh(radii)
-		
-	_orbit_lines_local_back.z_as_relative = false
-	_orbit_lines_local_back.z_index       = 10
-	
-	_orbit_lines_local_front.z_as_relative = false
-	_orbit_lines_local_front.z_index       = 60
-	
-	_pivot.z_as_relative       = false
-	_pivot.z_index             = 20
-	
-	_max_orbit_px = base_rx + data.moons.size() * 60.0
 
 func _build_planets(data: SolarData) -> void:
 	_pivot          = Node2D.new()
@@ -698,40 +395,21 @@ func _on_asteroid_discovered(slot: int, count: int) -> void:
 			return
 
 func _update_panel() -> void:
-	if _mode == Mode.SOLAR:
-		_build_moon_section()   # clears the Local-only block
-		_system_name.text = _current.system_name
-		_star_type.text   = SolarData.get_star_type_name(_current.star_type)
-		for child in _planet_list.get_children():
-			child.queue_free()
-		for i in _current.planets.size():
-			var pd: PlanetData = _current.planets[i]
-			var btn := Button.new()
-			btn.text        = "%d. %s" % [i + 1, pd.planet_name]
-			btn.flat        = true
-			btn.alignment   = HORIZONTAL_ALIGNMENT_LEFT
-			if not _can_access(pd):
-				btn.disabled = true
-				btn.modulate.a = 0.5
-			btn.pressed.connect(func() -> void: planet_selected.emit(pd))
-			_planet_list.add_child(btn)
-	else:
-		_system_name.text = _current_local.planet_name + " System"
-		_star_type.text   = "Planet"
-		for child in _planet_list.get_children():
-			child.queue_free()
-		for i in _current_local.moons.size():
-			var md: PlanetData = _current_local.moons[i]
-			var btn := Button.new()
-			btn.text        = "%s" % md.planet_name
-			btn.flat        = true
-			btn.alignment   = HORIZONTAL_ALIGNMENT_LEFT
-			if not _can_access(md):
-				btn.disabled = true
-				btn.modulate.a = 0.5
-			btn.pressed.connect(func() -> void: planet_selected.emit(md))
-			_planet_list.add_child(btn)
-		_build_moon_section()
+	_system_name.text = _current.system_name
+	_star_type.text   = SolarData.get_star_type_name(_current.star_type)
+	for child in _planet_list.get_children():
+		child.queue_free()
+	for i in _current.planets.size():
+		var pd: PlanetData = _current.planets[i]
+		var btn := Button.new()
+		btn.text        = "%d. %s" % [i + 1, pd.planet_name]
+		btn.flat        = true
+		btn.alignment   = HORIZONTAL_ALIGNMENT_LEFT
+		if not _can_access(pd):
+			btn.disabled = true
+			btn.modulate.a = 0.5
+		btn.pressed.connect(func() -> void: planet_selected.emit(pd))
+		_planet_list.add_child(btn)
 
 	# remove old survey / scan buttons
 	if _survey_btn and is_instance_valid(_survey_btn):
@@ -753,7 +431,7 @@ func _update_panel() -> void:
 
 	if is_surveyed:
 		# Scan Asteroid button — only in SOLAR mode, only if skill unlocked, only if belts exist
-		if _mode == Mode.SOLAR and _current != null \
+		if _current != null \
 				and not _current.asteroid_belt_slots.is_empty() \
 				and SkillTree.call("is_unlocked", "unlock_asteroids"):
 			_build_scan_asteroid_section()
@@ -1071,14 +749,7 @@ func _input(event: InputEvent) -> void:
 			else:
 				_right_dragging = false
 				if mb.position.distance_to(_right_drag_from) < 5.0:
-					if _mode == Mode.LOCAL:
-						if not GameState.solar_unlocked:
-							print("[SolarView] Access denied to exit Local System.")
-							_show_access_denied_text()
-						else:
-							load_system(_current)
-					else:
-						_go_to_galaxy()
+					_go_to_galaxy()
 			return
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed and _space.get_global_rect().has_point(mb.global_position):
@@ -1088,14 +759,10 @@ func _input(event: InputEvent) -> void:
 				_dragging = false
 				if mb.position.distance_to(_left_drag_from) < 5.0:
 					var target_pd: PlanetData = _hovered_planet
-					if target_pd == null and _mode == Mode.LOCAL and _star != null and _star.get_global_rect().has_point(mb.global_position):
-						target_pd = _current_local
 					if target_pd != null:
 						planet_selected.emit(target_pd)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
 			var target_pd: PlanetData = _hovered_planet
-			if target_pd == null and _mode == Mode.LOCAL and _star != null and _star.get_global_rect().has_point(mb.global_position):
-				target_pd = _current_local
 			if target_pd != null:
 				_enter_charge += 1
 				_back_charge   = 0
@@ -1107,22 +774,13 @@ func _input(event: InputEvent) -> void:
 			_back_charge  += 1
 			if _back_charge >= 3:
 				_back_charge = 0
-				if _mode == Mode.LOCAL:
-					if not GameState.solar_unlocked:
-						print("[SolarView] Access denied to exit Local System.")
-						_show_access_denied_text()
-					else:
-						load_system(_current)
+				if not GameState.galaxy_unlocked:
+					_show_access_denied_text("Galaxy Nav  LOCKED")
 				else:
-					if not GameState.galaxy_unlocked:
-						_show_access_denied_text("Galaxy Nav  LOCKED")
-					else:
-						_go_to_galaxy()
+					_go_to_galaxy()
 	elif event is InputEventMagnifyGesture:
 		if event.factor > 1.0:
 			var target_pd: PlanetData = _hovered_planet
-			if target_pd == null and _mode == Mode.LOCAL and _star != null and _star.get_global_rect().has_point(event.position):
-				target_pd = _current_local
 			if target_pd != null:
 				_enter_charge += 1
 				_back_charge   = 0
@@ -1134,16 +792,10 @@ func _input(event: InputEvent) -> void:
 			_back_charge  += 1
 			if _back_charge >= 3:
 				_back_charge = 0
-				if _mode == Mode.LOCAL:
-					if not GameState.solar_unlocked:
-						_show_access_denied_text()
-					else:
-						load_system(_current)
+				if not GameState.galaxy_unlocked:
+					_show_access_denied_text("Galaxy Nav  LOCKED")
 				else:
-					if not GameState.galaxy_unlocked:
-						_show_access_denied_text("Galaxy Nav  LOCKED")
-					else:
-						_go_to_galaxy()
+					_go_to_galaxy()
 	elif event is InputEventPanGesture:
 		# 2-finger trackpad swipe → rotate (horizontal) / tilt (vertical)
 		_view_angle += event.delta.x * 0.012
@@ -1156,10 +808,6 @@ func _input(event: InputEvent) -> void:
 			belt.set_tilt(_orbit_tilt)
 		if _orbit_lines:
 			_orbit_lines.set_tilt(_orbit_tilt)
-		if _orbit_lines_local_back:
-			_orbit_lines_local_back.set_tilt(_orbit_tilt)
-		if _orbit_lines_local_front:
-			_orbit_lines_local_front.set_tilt(_orbit_tilt)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and (_dragging or _right_dragging):
 		var mm  := event as InputEventMouseMotion
@@ -1174,10 +822,6 @@ func _input(event: InputEvent) -> void:
 				belt.set_tilt(_orbit_tilt)
 			if _orbit_lines:
 				_orbit_lines.set_tilt(_orbit_tilt)
-			if _orbit_lines_local_back:
-				_orbit_lines_local_back.set_tilt(_orbit_tilt)
-			if _orbit_lines_local_front:
-				_orbit_lines_local_front.set_tilt(_orbit_tilt)
 		else:
 			_view_angle -= mm.relative.x * 0.0042
 		for node in _orbits:

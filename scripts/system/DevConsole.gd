@@ -680,6 +680,14 @@ func _cmd_moonlaunch(parts: Array) -> void:
 		mp.district_levels.clear()
 		mp.city_levels.clear()
 		moon.custom_pois.clear()
+		# landers left over from earlier runs, parked or still flying
+		var parked := GameState.moon_lander(moon.seed)
+		if parked != null:
+			ShipManager.remove_ship(moon.seed, parked.ship_id)
+		var flying_old := ShipManager.travelling_to(moon.seed, "lander")
+		while flying_old != null:
+			ShipManager.remove_ship(flying_old.orbit_seed, flying_old.ship_id)
+			flying_old = ShipManager.travelling_to(moon.seed, "lander")
 	var st := get_node("/root/SkillTree")
 	if not st.is_unlocked("unlock_moon"):
 		st.unlocked_skills.append("unlock_moon")
@@ -692,6 +700,9 @@ func _cmd_moonlaunch(parts: Array) -> void:
 	if not GameState.start_moon_colonization(moon.seed):
 		_log_err("Couldn't start: %s" % GameState.moon_colonize_block(moon.seed)); return
 	mp.colonize_duration = secs
+	var flying := ShipManager.travelling_to(moon.seed, "lander")
+	if flying != null:
+		flying.travel_duration = secs
 	# a lander left in orbit from a previous run would be a second one
 	var old := GameState.moon_lander(moon.seed)
 	if old != null:
@@ -706,7 +717,7 @@ func _cmd_moonlaunch(parts: Array) -> void:
 # ── Seed ─────────────────────────────────────────────────────────────────────
 
 ## Prints (and copies) the seed of whatever the current scene shows: the planet
-## or moon in the planet view, the planet / system in the solar view.
+## or moon in the planet view, the star system in the solar view.
 func _cmd_seed() -> void:
 	var scene := get_tree().current_scene
 	var label := ""
@@ -717,11 +728,6 @@ func _cmd_seed() -> void:
 		var kind := String(PlanetData.Type.keys()[pd.planet_type]).capitalize()
 		label = "%s  [color=#aaaaaa](%s)[/color]" % [pd.planet_name, kind]
 		seed_val = pd.seed
-		found = true
-	elif scene != null and "_current_local" in scene and scene.get("_current_local") != null:
-		var lp: PlanetData = scene.get("_current_local")
-		label = "%s  [color=#aaaaaa](local system)[/color]" % lp.planet_name
-		seed_val = lp.seed
 		found = true
 	elif scene != null and "_current" in scene and scene.get("_current") is SolarData:
 		var sd: SolarData = scene.get("_current")
