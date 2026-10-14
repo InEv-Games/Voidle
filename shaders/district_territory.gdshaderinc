@@ -26,6 +26,9 @@ uniform int  district_hover    = -1;
 uniform int  district_selected = -1;
 // Borders fade in only once zoomed in (set from PlanetaryView).
 uniform float border_alpha     = 1.0;
+// 0..1: territories (sprawl, lights, borders) grow out from their centres —
+// animated when the view switches to another body.
+uniform float district_reveal  = 1.0;
 
 // Resource lens overlay (ResourceMap.lens_texture): equirectangular RGBA,
 // alpha = strength. lens_alpha 0 = off.
@@ -74,6 +77,10 @@ int district_owner_raw(vec3 rn, out float score) {
 int district_owner(vec3 rn, out float score) {
 	int owner = district_owner_raw(rn, score);
 	if (owner < 0) return -1;
+	if (district_reveal < 1.0) {
+		score /= max(district_reveal, 0.001);   // shrink every territory towards its centre
+		if (score >= 1.0) { score = 2.0; return -1; }
+	}
 	vec3 c = district_pos[owner].xyz;
 	float s2;
 	for (int k = 1; k <= EXCLAVE_CHECKS; k++) {

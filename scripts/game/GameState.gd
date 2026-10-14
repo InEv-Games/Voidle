@@ -433,6 +433,25 @@ func start_moon_colonization(planet_seed: int) -> bool:
 	save()
 	return true
 
+## The colony lander as a real ship in the moon's orbit (OrbitalLayer draws,
+## spins and lands it). "aim_home" asks the planet view to park it where the
+## transfer flight came in.
+func spawn_moon_lander(planet_seed: int) -> ShipData:
+	var ship := ShipManager.launch(planet_seed, "Colony Lander")
+	ship.ship_type = "lander"
+	ship.orbit_radius = 1.35
+	ship.orbit_speed = 0.08
+	ship.orbit_inclination = randf_range(0.15, 0.45)
+	ship.set_meta("aim_home", true)
+	return ship
+
+## The moon's colony lander, if it is still in orbit.
+func moon_lander(planet_seed: int) -> ShipData:
+	for s: ShipData in ShipManager.ships_for(planet_seed):
+		if s.ship_type == "lander":
+			return s
+	return null
+
 ## The lander touched down — the first lunar City is being built.
 func mark_landed(planet_seed: int) -> void:
 	get_planet(planet_seed).lander_state = 2
@@ -454,6 +473,7 @@ func finish_colonization(planet_seed: int) -> void:
 	var pd := get_planet_data(planet_seed)
 	if pd != null and pd.planet_type == PlanetData.Type.MOON:
 		pp.lander_state = 1   # parked in orbit; the player picks the landing site
+		spawn_moon_lander(planet_seed)
 		pd = null
 	if pd != null:
 		var has_poi := false

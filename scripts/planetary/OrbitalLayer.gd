@@ -23,11 +23,15 @@ var _reveal: Dictionary = {}
 var _reveal_poi: Dictionary = {}
 
 ## Per-ship landing animation state
+## ship_id -> DescentFX while that ship comes down (the effect draws it).
 var _landing: Dictionary = {}
+## ship_id -> coast state while a landing ship flies on to its dive point.
+var _coasting: Dictionary = {}
+const DescentScript := preload("res://scripts/planetary/DescentFX.gd")
+## Set by PlanetaryView: (ship's global screen pos) -> landing site as
+## Vector2(lon, lat) in radians, or Vector2.INF for none.
+var landing_site_for: Callable
 
-const _LAND_COLLAPSE_DUR: float = 1.20
-const _LAND_CURVE_DUR:    float = 2.80
-const _LAND_EXPLODE_DUR:  float = 1.40
 
 signal ship_hovered(ship: ShipData, screen_pos: Vector2)
 signal ship_unhovered()
@@ -54,40 +58,130 @@ func select_ship(ship: ShipData) -> void:
 	queue_redraw()
 	ship_clicked.emit(ship)
 
-func start_landing(ship: ShipData) -> void:
-	if _landing.has(ship.ship_id):
+## Brings `ship` down onto the surface point `site` (lon, lat in radians;
+## Vector2.INF = ask landing_site_for, else wherever its orbit dives to).
+## It never turns back in the air: it keeps flying its orbit (sped up) until it
+## is just short of where the orbit passes closest to the site, then dives
+## forward onto it. The route lives in the planet's own frame, so it turns
+## with the globe and hides behind it. `on_touchdown` runs at the ground.
+func start_landing(ship: ShipData, site: Vector2 = Vector2.INF, on_touchdown: Callable = Callable()) -> void:
+	if _landing.has(ship.ship_id) or _coasting.has(ship.ship_id):
 		return
-	var center := _planet_center if _planet_center != Vector2.ZERO else size * 0.5
-	var sv     := _project(ship, ship.orbit_angle)
-	var spos   := center + Vector2(sv.x, sv.y)
-	# Impact point on planet surface in the direction of the ship
-	var impact: Vector2 = center + (spos - center).normalized() * _planet_radius * 0.88
-	# Skip orbit-reveal animation for ships that immediately land.
-	_reveal[ship.ship_id] = {"progress": 1.0, "spawn_angle": ship.orbit_angle}
-
-	# Freeze position: compute arc from current speed then zero it so the ship
-	# doesn't drift during the animation phases.
-	var arc: float = ship.orbit_speed * _LAND_CURVE_DUR * 6.0
-	ship.orbit_speed = 0.0
-	_landing[ship.ship_id] = {
-		"phase":       0,
-		"progress":    0.0,
-		"ship":        ship,
-		"spos":        spos,
-		"impact":      impact,
-		"start_angle": ship.orbit_angle,
-		"start_r":     ship.orbit_radius,
-		"arc":         arc,
-		"sparks":      [],
-	}
-	if _selected_ship == ship:
+	if not site.is_finite() and landing_site_for.is_valid():
+		var sv := _project(ship, ship.orbit_angle)
+		site = landing_site_for.call(global_position + _center_now() + Vector2(sv.x, sv.y))
+	var dir: float = signf(ship.orbit_speed) if ship.orbit_speed != 0.0 else 1.0
+	var s_dir: Vector3
+	if site.is_finite():
+		s_dir = Vector3(sin(site.x) * cos(site.y), -sin(site.y), -cos(site.x) * cos(site.y))
+	else:   # no site: where the orbit itself comes down
+		s_dir = _frame_point(ship, ship.orbit_angle + dir * (LAND_LEAD + 0.3)).normalized()
+	# where the orbit passes closest to the site, looking ahead only
+	var best_k := 0.0
+	var best_dot := -INF
+	for i in 120:
+		var k := TAU * float(i) / 120.0
+		var d := _frame_point(ship, ship.orbit_angle + dir * k).normalized().dot(s_dir)
+		if d > best_dot:
+			best_dot = d
+			best_k = k
+	var coast := fposmod(best_k - LAND_LEAD, TAU)   # forward distance to the dive point
+	if coast > TAU - 0.15:
+		coast = 0.0   # already (just past) there
+	if selected_ship_is(ship):
 		_selected_ship = null
 		queue_redraw()
 		ship_deselected.emit()
+	_coasting[ship.ship_id] = {"ship": ship, "left": coast, "dir": dir, "s_dir": s_dir,
+		"on_touchdown": on_touchdown, "speed": absf(ship.orbit_speed)}
+	if coast <= 0.0:
+		_begin_dive(ship.ship_id)
+
+## Radians of orbit the dive itself covers before reaching the site's longitude.
+const LAND_LEAD := 0.9
+## Fastest a ship flies its orbit while heading for the dive point (rad/s).
+const LAND_COAST_SPEED := 0.9
+
+func selected_ship_is(ship: ShipData) -> bool:
+	return _selected_ship == ship
+
+## Flies coasting ships forward along their orbits until their dive point.
+func _tick_coasting(delta: float) -> void:
+	for sid: String in _coasting.keys():
+		var c: Dictionary = _coasting[sid]
+		var ship: ShipData = c["ship"]
+		# ease up towards coast speed, ease back down near the dive point
+		var left: float = c["left"]
+		var target := minf(LAND_COAST_SPEED, maxf(c["speed"], left * 1.6))
+		c["speed"] = lerpf(c["speed"], target, 1.0 - exp(-delta * 3.0))
+		var step: float = minf(left, float(c["speed"]) * delta)
+		ship.orbit_angle += float(c["dir"]) * step
+		c["left"] = left - step
+		if c["left"] <= 0.0005:
+			_begin_dive(sid)
+
+func _begin_dive(sid: String) -> void:
+	var c: Dictionary = _coasting[sid]
+	_coasting.erase(sid)
+	var ship: ShipData = c["ship"]
+	var dir: float = c["dir"]
+	var s_dir: Vector3 = c["s_dir"]
+	var a0 := ship.orbit_angle
+	var r0 := ship.orbit_radius
+	var path3 := func(t: float) -> Vector3:
+		var e := DescentScript.ease_dive(t)
+		# keep flying the orbit forward while the pull towards the site grows
+		var on_orbit := _frame_point(ship, a0 + dir * LAND_LEAD * e).normalized()
+		var q := on_orbit.lerp(s_dir, smoothstep(0.0, 1.0, e)).normalized()
+		var v := _view(q * lerpf(r0, 1.0, pow(t, 1.4)) * _planet_radius)
+		var cc := global_position + _center_now()
+		return Vector3(cc.x + v.x, cc.y + v.y, 1.0 if _is_occluded(v) else 0.0)
+	var sv := _project(ship, a0)
+	var start := global_position + _center_now() + Vector2(sv.x, sv.y)
+	_reveal[ship.ship_id] = {"progress": 1.0, "spawn_angle": a0}
+	var fx: Control = DescentScript.new()
+	fx.sprite = ship.ship_type if ship.ship_type in ["station", "lander"] else "shuttle"
+	fx.sprite_scale = 1.0
+	_landing[sid] = fx
+	# the ship is gone the moment it touches down (the effect plays on its own)
+	fx.touched_down.connect(func() -> void:
+		_landing.erase(sid)
+		ShipManager.remove_ship(ship.orbit_seed, sid)
+		ship_landed.emit(ship))
+	var on_touchdown: Callable = c["on_touchdown"]
+	if on_touchdown.is_valid():
+		fx.touched_down.connect(on_touchdown)
+	get_parent().add_child(fx)
+	fx.begin(start, func() -> Vector2: return global_position + _center_now(),
+		func() -> Vector3: return Vector3.ZERO,   # (the route ends on the site)
+		func(a: float) -> Vector2:
+			var v := _project(ship, a)
+			return global_position + _center_now() + Vector2(v.x, v.y),
+		a0, dir, path3)
+
+## A point of `ship`'s orbit in the planet's own frame (before the globe's spin
+## and the camera tilt) — the frame where surface points stay put.
+func _frame_point(ship: ShipData, angle: float) -> Vector3:
+	var r := ship.orbit_radius
+	var inc := ship.orbit_inclination
+	var px := r * cos(angle)
+	var py := r * sin(angle) * sin(inc)
+	var pz := r * sin(angle) * cos(inc)
+	var node := ship.orbit_node
+	return Vector3(px * cos(node) + pz * sin(node), py, -px * sin(node) + pz * cos(node))
+
+## Planet-frame point → view (spin + tilt), same as _project.
+func _view(f: Vector3) -> Vector3:
+	var rot := _planet_rotation
+	return _tilted(f.x * cos(rot) + f.z * sin(rot), f.y, -f.x * sin(rot) + f.z * cos(rot))
+
+func _center_now() -> Vector2:
+	return _planet_center if _planet_center != Vector2.ZERO else size * 0.5
 
 func _process(delta: float) -> void:
 	if _planet_seed < 0:
 		return
+	_tick_coasting(delta)
 	for ship_id: String in _reveal:
 		var rv: Dictionary = _reveal[ship_id]
 		if rv["progress"] < 1.0:
@@ -96,7 +190,6 @@ func _process(delta: float) -> void:
 		var rv: Dictionary = _reveal_poi[poi_label]
 		if rv["progress"] < 1.0:
 			rv["progress"] = minf(rv["progress"] + delta * 0.6, 1.0)
-	_tick_landing(delta)
 	_tick_rendezvous(delta)
 	queue_redraw()
 
@@ -168,52 +261,6 @@ func _project_at_node(ship: ShipData, node: float) -> Vector3:
 	var rz: float  = -px * sin(rot) + pz * cos(rot)
 	return _tilted(rx, py, rz)
 
-func _tick_landing(delta: float) -> void:
-	var finished: Array[String] = []
-	for sid: String in _landing:
-		var ld: Dictionary = _landing[sid]
-		var dur: float
-		match int(ld["phase"]):
-			0: dur = _LAND_COLLAPSE_DUR
-			1: dur = _LAND_CURVE_DUR
-			_: dur = _LAND_EXPLODE_DUR
-		ld["progress"] = minf(ld["progress"] + delta / dur, 1.0)
-
-		# Tick spark physics — store as screen offset so planet rotation stays anchored
-		if int(ld["phase"]) == 2:
-			for spark: Dictionary in ld["sparks"]:
-				spark["offset"] = (spark["offset"] as Vector2) + (spark["vel"] as Vector2) * delta
-				spark["vel"]    = (spark["vel"] as Vector2) + Vector2(0, 40.0) * delta
-				spark["life"]   = (spark["life"] as float) - delta / _LAND_EXPLODE_DUR
-
-		if ld["progress"] >= 1.0:
-			ld["phase"]    = int(ld["phase"]) + 1
-			ld["progress"] = 0.0
-			var ls: ShipData = ld["ship"]
-			if int(ld["phase"]) == 1:
-				ld["start_angle"] = ls.orbit_angle  # same as initial since speed=0
-				ld["start_r"]     = ls.orbit_radius
-				# arc already set at start_landing; don't recalculate (orbit_speed is 0)
-			elif int(ld["phase"]) == 2:
-				# Store impact angle/radius instead of fixed Vector2
-				# ep at p=1: 1*(1+1)/2 = 1.0
-				ld["impact_angle"] = (ld["start_angle"] as float) + (ld["arc"] as float) * 1.0
-				var sparks: Array = []
-				for _i in 3:
-					sparks.append({
-						"offset": Vector2(randf_range(-22.0, 22.0), randf_range(-26.0, -6.0)) * 0.0,
-						"vel":    Vector2(randf_range(-22.0, 22.0), randf_range(-26.0, -6.0)),
-						"life":   1.0,
-					})
-				ld["sparks"] = sparks
-			elif int(ld["phase"]) >= 3:
-				finished.append(sid)
-	for sid: String in finished:
-		var ship: ShipData = _landing[sid]["ship"]
-		_landing.erase(sid)
-		ShipManager.remove_ship(ship.orbit_seed, ship.ship_id)
-		ship_landed.emit(ship)
-
 func _on_ship_changed(ship: ShipData) -> void:
 	if ship.orbit_seed == _planet_seed:
 		if not _reveal.has(ship.ship_id):
@@ -250,6 +297,14 @@ func _draw_pixel_ship(pos: Vector2, col: Color) -> void:
 	draw_rect(Rect2(p + Vector2(-2, -2), sz), col)
 	draw_rect(Rect2(p + Vector2( 0, -2), sz), col)
 	draw_rect(Rect2(p,                   sz), col)
+
+## Pixel-art colony lander: a squat hull on two splayed legs.
+func _draw_pixel_lander(pos: Vector2, col: Color) -> void:
+	var p := (pos - Vector2.ONE).floor()
+	draw_rect(Rect2(p + Vector2(-2, -2), Vector2(6, 4)), col)
+	draw_rect(Rect2(p + Vector2(0, -4), Vector2(2, 2)), Color(0.55, 0.75, 1.0, col.a))
+	draw_rect(Rect2(p + Vector2(-4, 2), Vector2(2, 2)), Color(col, col.a * 0.8))
+	draw_rect(Rect2(p + Vector2(4, 2), Vector2(2, 2)), Color(col, col.a * 0.8))
 
 ## Pixel-art ISS: horizontal truss + solar panels + center node.
 func _draw_pixel_station(pos: Vector2, col: Color) -> void:
@@ -355,7 +410,7 @@ func _draw() -> void:
 
 	for ship: ShipData in ShipManager.ships_for(_planet_seed):
 		if _landing.has(ship.ship_id):
-			continue  # drawn by _draw_landing below
+			continue  # drawn by its DescentFX
 
 		var is_selected: bool = ship == _selected_ship
 		var is_hovered:  bool = ship == _hovered_ship
@@ -407,6 +462,8 @@ func _draw() -> void:
 
 		if ship.ship_type == "station":
 			_draw_pixel_station(spos, col)
+		elif ship.ship_type == "lander":
+			_draw_pixel_lander(spos, col)
 		else:
 			_draw_pixel_ship(spos, col)
 
@@ -421,8 +478,6 @@ func _draw() -> void:
 			_draw_hover_label(spos, ship)
 
 	# ── Landing animations ───────────────────────────────────────────────────
-	for sid: String in _landing:
-		_draw_landing(_landing[sid])
 
 	# ── Space station districts ───────────────────────────────────────────────
 	_draw_station_pois(center)
@@ -444,97 +499,6 @@ func _project_r(ship: ShipData, angle: float, orbit_r: float) -> Vector2:
 	var rz: float  = -px * sin(rot) + pz * cos(rot)
 	var v := _tilted(rx, py, rz)
 	return center + Vector2(v.x, v.y)
-
-func _draw_landing(ld: Dictionary) -> void:
-	var phase:    int   = int(ld["phase"])
-	var progress: float = ld["progress"]
-	var ship:     ShipData = ld["ship"]
-	var center := _planet_center if _planet_center != Vector2.ZERO else size * 0.5
-
-	match phase:
-		0:
-			# ── Orbit collapse: arc shrinks from tail, HEAD stays locked to ship position
-			var dir: float    = sign(ship.orbit_speed) if ship.orbit_speed != 0.0 else 1.0
-			var remaining: float = (1.0 - progress) * TAU
-			# HEAD = ship's current angle, TAIL = head - dir * remaining
-			var head_a: float  = ship.orbit_angle
-			var tail_a: float  = head_a - dir * remaining
-			var col := Color(1, 1, 1, (1.0 - progress) * 0.30)
-			var steps := 60
-			var prev_v  := _project(ship, tail_a)
-			var prev_p  := center + Vector2(prev_v.x, prev_v.y)
-			for s in range(1, steps + 1):
-				var frac: float = float(s) / float(steps)
-				if frac * TAU > remaining:
-					break
-				var a: float = tail_a + dir * frac * TAU
-				var v        := _project(ship, a)
-				var cur_p    := center + Vector2(v.x, v.y)
-				if (s % 6) < 3 and not _is_occluded(prev_v) and not _is_occluded(v):
-					draw_line(prev_p, cur_p, col, 1.2, true)
-				prev_v = v
-				prev_p = cur_p
-			# Ship at its current orbit position
-			var sv := _project(ship, ship.orbit_angle)
-			if not _is_occluded(sv):
-				var sp := center + Vector2(sv.x, sv.y)
-				if ship.ship_type == "station":
-					_draw_pixel_station(sp, Color(1, 1, 1, 0.92))
-				else:
-					_draw_pixel_ship(sp, Color(1, 1, 1, 0.92))
-
-		1:
-			# ── Orbital descent: accelerating spiral, projection line ahead of ship
-			var start_angle: float = ld["start_angle"]
-			var start_r: float     = ld["start_r"]
-			var arc: float         = ld["arc"]
-			const RADIUS_DROP: float = 0.12  # total inward drop over full descent
-
-			# Easing: p*(1+p)/2 → starts at orbital speed, smoothly accelerates
-			var ep: float = progress * (1.0 + progress) / 2.0
-			var angle: float = start_angle + arc * ep
-			var cur_r: float = start_r - RADIUS_DROP * ep
-
-			# ── Projection line: dashed, shows remaining path, fades as ship advances
-			var proj_steps := 28
-			var prev_proj  := _project_r(ship, angle, cur_r)
-			for s in range(1, proj_steps + 1):
-				var pt: float  = progress + float(s) / float(proj_steps) * (1.0 - progress)
-				var pet: float = pt * (1.0 + pt) / 2.0
-				var pa: float  = start_angle + arc * pet
-				var pr: float  = start_r - RADIUS_DROP * pet
-				var pv         := _project_r(ship, pa, pr)
-				if (s % 5) < 3:
-					draw_line(prev_proj, pv,
-						Color(1.0, 0.65, 0.25, 0.35 * (1.0 - progress)), 1.0, true)
-				prev_proj = pv
-
-			# ── Trail behind ship
-			for ti in 6:
-				var tt: float  = maxf(0.0, progress - float(ti + 1) * 0.032)
-				var tet: float = tt * (1.0 + tt) / 2.0
-				var ta: float  = start_angle + arc * tet
-				var tr: float  = start_r - RADIUS_DROP * tet
-				var tp         := _project_r(ship, ta, tr)
-				var alpha: float = (1.0 - float(ti) / 6.0) * 0.50
-				draw_circle(tp, 1.3, Color(1.0, 0.55, 0.15, alpha))
-
-			var ship_pos := _project_r(ship, angle, cur_r)
-			var col       := Color(1.0, 0.88, 0.55, 1.0 - progress * 0.25)
-			if ship.ship_type == "station":
-				_draw_pixel_station(ship_pos, col)
-			else:
-				_draw_pixel_ship(ship_pos, col)
-
-		2:
-			# ── Explosion sparks — anchor re-projected each frame so planet rotation is tracked
-			var imp_angle: float = ld["impact_angle"]
-			var imp: Vector2     = _project_r(ship, imp_angle, (ld["start_r"] as float) - 0.12)
-			for spark: Dictionary in ld["sparks"]:
-				var life: float   = maxf(0.0, spark["life"] as float)
-				var sp: Vector2   = imp + (spark["offset"] as Vector2)
-				draw_rect(Rect2(sp.floor(), Vector2(2, 2)),
-					Color(1.0, 0.15 + life * 0.2, 0.05, life))
 
 ## Hover nameplate: leader line + name only, no bracket reticle. Like districts on hover.
 func _draw_hover_label(spos: Vector2, ship: ShipData) -> void:
@@ -793,6 +757,8 @@ func _ship_at(global_pos: Vector2) -> ShipData:
 		return null
 	var center := get_global_rect().position + (_planet_center if _planet_center != Vector2.ZERO else size * 0.5)
 	for ship: ShipData in ShipManager.ships_for(_planet_seed):
+		if ship.ship_type == "lander":
+			continue   # the colony lander answers to Found First Settlement only
 		var sv := _project(ship, ship.orbit_angle)
 		if _is_occluded(sv):
 			continue

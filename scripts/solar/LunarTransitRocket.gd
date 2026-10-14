@@ -11,6 +11,8 @@ var moon: PlanetData
 var planet_center: Callable   # () -> Vector2, in this node's parent space
 var planet_radius: float = 96.0
 var target: Node2D            # the moon's orbit node
+## Hull size multiplier for the pixel sprite.
+var sprite_scale := 1.0
 
 var _trail: Array[Vector2] = []
 var _eta: Label
@@ -72,6 +74,7 @@ func _draw() -> void:
 	for i in _trail.size():
 		var a := float(i) / maxf(1.0, float(_trail.size()))
 		draw_rect(Rect2(inv * _trail[i] - Vector2(1, 1), Vector2(2, 2)), Color(1.0, 0.65, 0.25, a * 0.5))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE * sprite_scale)
 	# flame
 	var hue: float = 0.45 + randf() * 0.25
 	draw_rect(Rect2(Vector2(-9, -1), Vector2(3, 2)), Color(1.0, hue, 0.05, 0.9))

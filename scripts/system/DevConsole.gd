@@ -311,6 +311,11 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]credits[/color] [color=#aaaaaa]<amount>[/color]          — add credits")
 			_log_info("  [color=#88ddcc]credits set[/color] [color=#aaaaaa]<amount>[/color]      — set exact")
 			_log_info("  [color=#88ddcc]credits clear[/color]               — reset to 0")
+			_log_info("  [color=#88ddcc]res[/color]                         — list resources in stock")
+			_log_info("  [color=#88ddcc]res[/color] [color=#aaaaaa]<id> <amount>[/color]          — add (capped by storage)")
+			_log_info("  [color=#88ddcc]res set[/color] [color=#aaaaaa]<id> <amount>[/color]      — set exact (ignores cap)")
+			_log_info("  [color=#88ddcc]res fill[/color] [color=#aaaaaa][id][/color]              — fill to storage cap (all if no id)")
+			_log_info("  [color=#555f6a]  ids: ferrite, moonstone, goods, fuel, rare … (name or short)[/color]")
 			_log_info("[color=#33cc55]── UNLOCKS ──────────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]unlock solar / galaxy / moon / all[/color]")
 			_log_info("  [color=#88ddcc]lock solar / galaxy / moon[/color]")
@@ -328,6 +333,8 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]clear_save[/color]        — delete save file")
 			_log_info("[color=#33cc55]── DEBUG ─────────────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]state[/color]  [color=#88ddcc]clear[/color]  [color=#88ddcc]debug coords[/color]")
+			_log_info("  [color=#88ddcc]--seed[/color]            — seed of what you're looking at (copied)")
+			_log_info("  [color=#88ddcc]moonlaunch[/color] [color=#aaaaaa][sec] [reset][/color] — send the Moon lander now (default 15s)")
 			_log_info("  [color=#88ddcc]tutorial complete[/color] — skip/finish tutorial")
 
 		# ── Credits ─────────────────────────────────────────────────────────
@@ -508,6 +515,18 @@ func _exec(line: String) -> void:
 			else:
 				_log_err("Unknown target. Try: tutorial complete")
 
+		# ── Stocked resources (raw minerals, goods, fuel, rare elements) ──────
+		"res", "resource", "resources":
+			_cmd_res(parts)
+
+		# ── Moon lander test ──────────────────────────────────────────────────
+		"moonlaunch":
+			_cmd_moonlaunch(parts)
+
+		# ── Seed of the current view ──────────────────────────────────────────
+		"--seed", "seed":
+			_cmd_seed()
+
 		# ── State ───────────────────────────────────────────────────────────
 		"state":
 			var pp := GameState.get_planet(GameState.home_planet_seed)
@@ -556,6 +575,163 @@ func _raw_append(bbcode: String) -> void:
 	if _log.get_parsed_text().split("\n").size() > MAX_LINES:
 		_log.clear()
 	_log.append_text(bbcode + "\n")
+
+# ── Resources ────────────────────────────────────────────────────────────────
+
+## Stocked resource ids: the processed ones plus every raw mineral.
+func _stock_ids() -> Array[String]:
+	var out: Array[String] = []
+	for id: String in Economy.PROCESSED:
+		out.append(id)
+	for r: Dictionary in Economy.RAW_TABLE:
+		out.append(r["id"])
+	return out
+
+## "ferrite", "Fuel Rods", "fuel", "rare" … → resource id ("" if unknown).
+func _resolve_res(word: String) -> String:
+	var w := word.to_lower().replace("_", " ")
+	for id: String in _stock_ids():
+		var name := Economy.display_name(id).to_lower()
+		var short: String = Economy.INFO.get(id, {}).get("short", "")
+		if w == id.replace("_", " ") or w == name or w == short or name.begins_with(w):
+			return id
+	return ""
+
+func _res_line(id: String) -> String:
+	var c := Economy.cap(id)
+	return "  [color=#%s]%-14s[/color] [color=#ccddff]%s[/color]%s" % [Economy.color_of(id).to_html(false),
+		Economy.display_name(id), Economy.fmt(GameState.get_resource(id)),
+		"" if is_inf(c) else "[color=#555f6a] / %s[/color]" % Economy.fmt(c)]
+
+func _cmd_res(parts: Array) -> void:
+	if parts.size() == 1:
+		_log_info("[color=#aabbff]─── Resources ────────────────────────[/color]")
+		for id: String in _stock_ids():
+			if GameState.get_resource(id) > 0.0 or id in Economy.PROCESSED:
+				_log_info(_res_line(id))
+		return
+	var sub: String = String(parts[1]).to_lower()
+	match sub:
+		"fill":
+			var ids: Array[String] = []
+			if parts.size() > 2:
+				var fname := " ".join(parts.slice(2))
+				var one := _resolve_res(fname)
+				if one == "":
+					_log_err("Unknown resource '%s'." % fname); return
+				ids.append(one)
+			else:
+				ids = _stock_ids()
+			for id: String in ids:
+				var c := Economy.cap(id)
+				GameState.global_resources[id] = 1_000_000.0 if is_inf(c) else c
+			GameState.global_resources_changed.emit()
+			_log_ok("Filled %s to storage cap." % ("everything" if ids.size() > 1 else Economy.display_name(ids[0])))
+		"set":
+			if parts.size() < 4:
+				_log_err("Usage: res set <id> <amount>"); return
+			var sname := " ".join(parts.slice(2, parts.size() - 1))   # names may have spaces
+			var id := _resolve_res(sname)
+			if id == "":
+				_log_err("Unknown resource '%s'." % sname); return
+			var v := _parse_float(parts, parts.size() - 1); if is_nan(v): return
+			GameState.global_resources[id] = maxf(v, 0.0)
+			GameState.global_resources_changed.emit()
+			_log_ok(_res_line(id).strip_edges())
+		_:
+			if parts.size() < 3:
+				_log_err("Usage: res <id> <amount>"); return
+			var aname := " ".join(parts.slice(1, parts.size() - 1))   # names may have spaces
+			var id := _resolve_res(aname)
+			if id == "":
+				_log_err("Unknown resource '%s'. Type [color=#88ddcc]res[/color] to list." % aname); return
+			var v := _parse_float(parts, parts.size() - 1); if is_nan(v): return
+			GameState.add_resource(id, v)   # respects storage caps
+			_log_ok("+%s  →  %s" % [Economy.fmt(v), _res_line(id).strip_edges()])
+
+# ── Moon lander test ─────────────────────────────────────────────────────────
+
+## Starts the Moon colonization flight right away (unlocks, tops up, short
+## flight) and zooms the planet view out to watch it. `reset` wipes a Moon that
+## was already settled so the whole thing can be replayed.
+func _cmd_moonlaunch(parts: Array) -> void:
+	var home := GameState.get_home_planet()
+	if home == null or home.moons.is_empty():
+		_log_err("Home planet has no moon."); return
+	var moon: PlanetData = home.moons[0]
+	var mp := GameState.get_planet(moon.seed)
+	var secs := 15.0
+	var reset := false
+	for i in range(1, parts.size()):
+		var a: String = String(parts[i]).to_lower()
+		if a == "reset":
+			reset = true
+		elif a.is_valid_float():
+			secs = maxf(2.0, a.to_float())
+	if mp.is_colonized or mp.is_colonizing or mp.lander_state > 0:
+		if not reset:
+			_log_err("%s is already settled / underway. Add [color=#88ddcc]reset[/color] to wipe it and replay [color=#ee5555](deletes its districts)[/color]." % moon.planet_name)
+			return
+		mp.is_colonized = false
+		mp.is_colonizing = false
+		mp.colonize_progress = 0.0
+		mp.lander_state = 0
+		mp.buildings.clear()
+		mp.district_levels.clear()
+		mp.city_levels.clear()
+		moon.custom_pois.clear()
+	var st := get_node("/root/SkillTree")
+	if not st.is_unlocked("unlock_moon"):
+		st.unlocked_skills.append("unlock_moon")
+		st.skill_levels["unlock_moon"] = 1
+	GameState.moon_unlocked = true
+	GameState.unlock_changed.emit("moon_unlocked", true)
+	GameState.credits = maxf(GameState.credits, GameState.MOON_COLONIZE_CREDITS)
+	if GameState.get_resource(Economy.FUEL) < GameState.MOON_COLONIZE_FUEL:
+		GameState.global_resources[Economy.FUEL] = GameState.MOON_COLONIZE_FUEL
+	if not GameState.start_moon_colonization(moon.seed):
+		_log_err("Couldn't start: %s" % GameState.moon_colonize_block(moon.seed)); return
+	mp.colonize_duration = secs
+	# a lander left in orbit from a previous run would be a second one
+	var old := GameState.moon_lander(moon.seed)
+	if old != null:
+		ShipManager.remove_ship(moon.seed, old.ship_id)
+	# zoom out so the flight is visible
+	var scene := get_tree().current_scene
+	if scene != null and scene.has_method("_set_zoom_target"):
+		scene.call("_set_zoom_target", 0.0, Vector2.INF)
+		scene.call("_refresh_active_panel")
+	_log_ok("Lander launched to [color=#aabbff]%s[/color] — %ds flight." % [moon.planet_name, int(secs)])
+
+# ── Seed ─────────────────────────────────────────────────────────────────────
+
+## Prints (and copies) the seed of whatever the current scene shows: the planet
+## or moon in the planet view, the planet / system in the solar view.
+func _cmd_seed() -> void:
+	var scene := get_tree().current_scene
+	var label := ""
+	var seed_val := 0
+	var found := false
+	if scene != null and "current_data" in scene and scene.get("current_data") != null:
+		var pd: PlanetData = scene.get("current_data")
+		var kind := String(PlanetData.Type.keys()[pd.planet_type]).capitalize()
+		label = "%s  [color=#aaaaaa](%s)[/color]" % [pd.planet_name, kind]
+		seed_val = pd.seed
+		found = true
+	elif scene != null and "_current_local" in scene and scene.get("_current_local") != null:
+		var lp: PlanetData = scene.get("_current_local")
+		label = "%s  [color=#aaaaaa](local system)[/color]" % lp.planet_name
+		seed_val = lp.seed
+		found = true
+	elif scene != null and "_current" in scene and scene.get("_current") is SolarData:
+		var sd: SolarData = scene.get("_current")
+		label = "%s  [color=#aaaaaa](star system)[/color]" % sd.system_name
+		seed_val = sd.seed
+		found = true
+	if not found:
+		_log_err("Nothing with a seed in view."); return
+	DisplayServer.clipboard_set(str(seed_val))
+	_log_ok("%s  seed [color=#ffdd66]%d[/color]  [color=#555f6a](copied)[/color]" % [label, seed_val])
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
