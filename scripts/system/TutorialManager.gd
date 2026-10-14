@@ -633,6 +633,8 @@ func set_allowed_rects(rects: Array[Rect2]) -> void:
 
 ## Input blocker — only clicks inside _allowed_rects pass through.
 func _process(_delta: float) -> void:
+	if is_instance_valid(_quest_panel):
+		_quest_panel.position.x = _side_panel_edge() + 40.0   # clear of the panel's open/close tab
 	if not _active or _tutorial_done or _guided_step >= GUIDED_STEPS.size(): return
 	var step: Dictionary = GUIDED_STEPS[_guided_step]
 	if step["type"] == "action":
@@ -801,12 +803,18 @@ func _end_guided_tutorial() -> void:
 		_build_quest_ui()
 		_show_quest_step(_quest_step)
 
+## The side panel sits on the left: the planet area is the rest of the screen.
+func _side_panel_edge() -> float:
+	var side := get_tree().root.find_child("SidePanel", true, false) as Control
+	if not is_instance_valid(side) or not side.is_visible_in_tree():
+		return 0.0
+	return maxf(0.0, side.position.x + side.size.x)
+
 func _planet_area_center_anchor() -> float:
 	var vp_w: float = get_viewport().get_visible_rect().size.x
-	if vp_w <= 0.0: return 0.35
-	var right_panel := get_tree().root.find_child("RightPanel", true, false) as Control
-	var rp_w: float = right_panel.size.x if is_instance_valid(right_panel) else vp_w * 0.30
-	return (vp_w - rp_w) * 0.5 / vp_w
+	if vp_w <= 0.0: return 0.65
+	var edge := _side_panel_edge()
+	return (edge + (vp_w - edge) * 0.5) / vp_w
 
 # ── Dim overlay ────────────────────────────────────────────────────────────────
 func _show_dim() -> void:
@@ -1101,7 +1109,7 @@ func _build_quest_ui() -> void:
 	_quest_panel.add_theme_stylebox_override("panel", sb)
 	_quest_panel.custom_minimum_size = Vector2(260, 0)
 	_quest_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	_quest_panel.position    = Vector2(16, 72)
+	_quest_panel.position    = Vector2(_side_panel_edge() + 40.0, 72)   # kept right of the side panel in _process
 	_quest_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_quest_panel.modulate.a  = 0.0
 	add_child(_quest_panel)
@@ -1357,7 +1365,7 @@ func _show_inventory_hint() -> void:
 	hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	hint.add_theme_constant_override("outline_size", 3)
 	hint.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	hint.position = Vector2(20, -140)
+	hint.position = Vector2(_side_panel_edge() + 20.0, -140)
 	hint.modulate.a = 0.0
 	add_child(hint)
 	var tw := create_tween()

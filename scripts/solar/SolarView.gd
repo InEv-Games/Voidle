@@ -8,10 +8,10 @@ signal back_pressed
 @export var debug_seed: int = 99999
 
 @onready var _space:        Control      = $SpaceContainer
-@onready var _system_name:  Label        = $UICanvas/RightPanel/PanelContent/SystemName
-@onready var _star_type:    Label        = $UICanvas/RightPanel/PanelContent/StarType
-@onready var _planet_list:  VBoxContainer = $UICanvas/RightPanel/PanelContent/PlanetList
-@onready var _panel_content: VBoxContainer = $UICanvas/RightPanel/PanelContent
+@onready var _system_name:  Label        = $UICanvas/SidePanel/PanelContent/SystemName
+@onready var _star_type:    Label        = $UICanvas/SidePanel/PanelContent/StarType
+@onready var _planet_list:  VBoxContainer = $UICanvas/SidePanel/PanelContent/PlanetList
+@onready var _panel_content: VBoxContainer = $UICanvas/SidePanel/PanelContent
 
 var _survey_btn: Button = null
 var _scan_wrap: VBoxContainer = null
@@ -75,6 +75,10 @@ func _ready() -> void:
 
 	# wait one frame so Control sizes are computed
 	await get_tree().process_frame
+	# the side panel (left) starts under the HUD's resource bar
+	var cp = HUDManager.get("credits_panel")
+	var bar_h: float = (cp as Control).size.y + 6.0 if cp != null and is_instance_valid(cp as Node) and (cp as Control).size.y > 4.0 else 58.0
+	($UICanvas/SidePanel as Control).offset_top = bar_h
 
 	var pending = SceneTransition.pending_data
 	SceneTransition.pending_data = null

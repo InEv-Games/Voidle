@@ -900,9 +900,15 @@ func _label_merges() -> Dictionary:
 		var members: Array = groups[cid]
 		if members.size() < 2:
 			continue
+		# a City always speaks for its cluster; otherwise the biggest settlement
 		var lead: int = members[0]
 		for m: int in members:
-			if float(_pois[m]["data"].get("size", 0.0)) > float(_pois[lead]["data"].get("size", 0.0)):
+			var m_city: bool = _pois[m]["data"].get("is_city", false)
+			var l_city: bool = _pois[lead]["data"].get("is_city", false)
+			if m_city != l_city:
+				if m_city:
+					lead = m
+			elif float(_pois[m]["data"].get("size", 0.0)) > float(_pois[lead]["data"].get("size", 0.0)):
 				lead = m
 		for m: int in members:
 			if m == lead or m == _hovered_index or m == _selected_index:
@@ -1059,16 +1065,18 @@ func _draw_scene(font: Font) -> void:
 		var fc := Color(1.0, 0.95, 0.5, alpha) if hovered else Color(1.0, 1.0, 1.0, alpha)
 		draw_string(font, label_pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, fc)
 
-		# level badge beside the name (City level for a City)
+		# Level badge beside the name. A City reads like a click on it does:
+		# zoomed in that's its Capital District (badge = Capital level, the
+		# City's level underneath); zoomed out it's the whole City.
 		var dist_lv: int = poi["data"].get("district_level", 0)
+		var cap_lv: int = poi["data"].get("capital_level", 0)
+		var close_city := cap_lv > 0 and detail >= 0.5
 		if dist_lv > 0:
-			_draw_level_badge(font, dist_lv, label_pos, text_size, horiz_dir, alpha,
-				poi["data"].get("capital_level", 0) > 0)
-		# Capital District level under a City's name, close up
-		if dist_lv > 0 and poi["data"].get("capital_level", 0) > 0 and detail >= 0.5:
+			_draw_level_badge(font, cap_lv if close_city else dist_lv, label_pos, text_size, horiz_dir, alpha,
+				cap_lv > 0 and not close_city)
+		if dist_lv > 0 and close_city:
 			const LV_SIZE := 10
-			var cap_lv: int = poi["data"].get("capital_level", 0)
-			var lv_str := "Capital District Lv %d" % cap_lv
+			var lv_str := "Capital District  ·  City Lv %d" % dist_lv
 			var lv_pos := label_pos + Vector2(0, text_size.y * 0.9)
 			if horiz_dir < 0.0:
 				var lv_w := font.get_string_size(lv_str, HORIZONTAL_ALIGNMENT_LEFT, -1, LV_SIZE).x

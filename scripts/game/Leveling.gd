@@ -84,6 +84,8 @@ static func city_pop_cost(lv: int) -> int:
 	return c
 
 static func city_level_block(pd: PlanetData, pp: PlanetProgress, city: POIData) -> String:
+	if pp.city_upgrading.has(city.label):
+		return "Already levelling up"
 	var next := city_level(pp, city) + 1
 	var have := city_district_levels(pd, pp, city)
 	var need := city_level_req(next)

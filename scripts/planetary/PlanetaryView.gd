@@ -189,6 +189,7 @@ func _ready() -> void:
 	planet_renderer.planet_clicked.connect(_on_planet_clicked)
 	_setup_lowres_planet()
 	ShipManager.ship_arrived.connect(_on_ship_arrived_here)
+	ProductionManager.city_leveled.connect(_on_city_leveled)
 	_build_panel_toggle()
 	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - PANEL_FRACTION))
 	poi_layer.territory_lookup = _territory_at_screen
@@ -362,7 +363,8 @@ func _update_tutorial_highlight() -> void:
 		return
 	var allowed: Array[Rect2] = []
 	var vp := get_viewport().get_visible_rect()
-	var planet_area := Rect2(0.0, 0.0, vp.size.x * 0.57, vp.size.y)
+	var px := _panel_right_edge()
+	var planet_area := Rect2(px, 0.0, vp.size.x - px, vp.size.y)
 	# Construction wait
 	if TutorialManager._waiting_for_bid != "":
 		TutorialManager.set_highlight_pos(Vector2(-999.0, -999.0))
@@ -523,8 +525,7 @@ func _input(event: InputEvent) -> void:
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT \
 				and _tut_highlight == "generator_district" and _active_district_poi != null:
 			var click := mb.position
-			var vp_w: float = get_viewport().get_visible_rect().size.x
-			if click.x < vp_w * 0.57:
+			if click.x > _panel_right_edge():
 				_tut_highlight_node = null
 				_go_up_one_level()
 				get_viewport().set_input_as_handled()
@@ -814,6 +815,36 @@ func _orbit_pt(ship: ShipData, a: float, b: Dictionary, radius := -1.0) -> Vecto
 
 static func _hidden_by(v: Vector3, b: Dictionary) -> bool:
 	return v.z > 0.0 and Vector2(v.x, v.y).distance_to(b["c"]) < float(b["r"])
+
+## WASD / arrow keys turn the globe (A/D spin, W/S tilt) — not while typing,
+## in the console, or with the Upgrade Tree open. Slower when zoomed in.
+const KEY_SPIN_SPEED := 1.6   # rad/s at the widest zoom
+func _tick_key_spin(delta: float) -> void:
+	if SkillTreeView.is_open or _naming_open or _switching_body:
+		return
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit:
+		return
+	var dc := get_node_or_null("/root/DevConsole")
+	if dc != null and bool(dc.get("_open")):
+		return
+	var spin := 0.0
+	var tilt := 0.0
+	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
+		spin -= 1.0
+	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
+		spin += 1.0
+	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
+		tilt -= 1.0
+	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
+		tilt += 1.0
+	if spin == 0.0 and tilt == 0.0:
+		return
+	var speed := KEY_SPIN_SPEED / maxf(_zoom, 0.5) * delta
+	if spin != 0.0:
+		planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset() + spin * speed)
+	if tilt != 0.0 and not planet_renderer.tilt_locked:
+		planet_renderer.set_tilt(planet_renderer.tilt + tilt * speed * 0.6)
 
 ## Picks the burn / arrival angles the first time a route is drawn: the burn on
 ## the side of the origin facing the destination, the arrival on the side of
@@ -1955,8 +1986,8 @@ func _refresh_poi_lights(data: PlanetData) -> void:
 	_upload_territories(data)
 
 func _update_panel(data: PlanetData) -> void:
-	var name_label  := $RightPanel/PanelContent/PlanetName as Label
-	var type_label  := $RightPanel/PanelContent/PlanetType as Label
+	var name_label  := $SidePanel/PanelContent/PlanetName as Label
+	var type_label  := $SidePanel/PanelContent/PlanetType as Label
 	var type_names  := ["Terran", "Arid", "Ice", "Volcanic", "Barren", "Gas Giant", "Moon", "Asteroid"]
 	if name_label: name_label.text = data.planet_name
 	if type_label:
@@ -1973,7 +2004,7 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 		_name_form_overlay.queue_free()
 		_name_form_overlay = null
 
-	var panel_content := $RightPanel/PanelContent
+	var panel_content := $SidePanel/PanelContent
 
 	var overlay := PanelContainer.new()
 	overlay.add_theme_stylebox_override("panel", _make_hud_style(Color(0.06, 0.08, 0.17, 0.98), 8))
@@ -2043,7 +2074,7 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	_apply_orbitron(confirm, 9)
 	confirm.add_theme_color_override("font_color",       Color(0.90, 0.82, 0.45))
 	confirm.add_theme_color_override("font_hover_color", Color(1.00, 0.95, 0.60))
-	confirm.disabled = GameState.credits < cost
+	_live_enable(confirm, func() -> bool: return GameState.credits >= cost)
 	var cap_def  := def
 	var cap_data := data
 	var cap_cost := cost
@@ -3192,20 +3223,23 @@ func _add_orbit_toggle(planet_cont: Control, layer: OrbitalLayer) -> void:
 	btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 
 	planet_cont.add_child(btn)
-	btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	btn.offset_bottom = -12
-	btn.offset_right  = -12
+	btn.offset_left   = 40   # clear of the panel's open/close tab
 	btn.offset_top    = btn.offset_bottom - SIZE
-	btn.offset_left   = btn.offset_right  - SIZE
+	btn.offset_right  = btn.offset_left + SIZE
 
 func _process(delta: float) -> void:
 	_poll_slot_dropdown(delta)
+	if absf(($SidePanel as Control).offset_top - _hud_bar_height()) > 0.5:
+		_apply_panel_t(_panel_t)
 	_update_tutorial_highlight()
 	_update_aspect()
 	_tick_zoom(delta)
 	_update_placement_hover()
 	_tick_lander(delta)
 	_tick_companions()
+	_tick_key_spin(delta)
 	if _reveal_ghost != null and is_instance_valid(_reveal_ghost) and not _switching_body:
 		var gr := _globe_rect(_base_radius, _zoom)   # fading stand-in stays on the real globe
 		_reveal_ghost.global_position = gr.position
@@ -3525,11 +3559,11 @@ func _build_panel_toggle() -> void:
 	btn.tooltip_text = ""
 	_apply_orbitron(btn, 12)
 	var st := _make_hud_style(Color(0.07, 0.08, 0.13, 0.95), 0)
-	st.corner_radius_top_left = 6
-	st.corner_radius_bottom_left = 6
+	st.corner_radius_top_right = 6
+	st.corner_radius_bottom_right = 6
 	st.border_color = Color(0.2, 0.25, 0.4, 0.5)
-	st.border_width_left = 1; st.border_width_top = 1; st.border_width_bottom = 1
-	st.border_width_right = 0
+	st.border_width_right = 1; st.border_width_top = 1; st.border_width_bottom = 1
+	st.border_width_left = 0
 	st.content_margin_left = 6; st.content_margin_right = 6
 	var hov := st.duplicate() as StyleBoxFlat
 	hov.bg_color = Color(0.12, 0.16, 0.30, 0.98)
@@ -3546,22 +3580,21 @@ func _build_panel_toggle() -> void:
 	add_child(btn)
 	_panel_toggle_btn = btn
 	# If content ever widens the panel past its anchors, keep the tab on its edge
-	($RightPanel as Control).resized.connect(_place_panel_toggle)
-	($RightPanel as Control).item_rect_changed.connect(_place_panel_toggle)
+	($SidePanel as Control).resized.connect(_place_panel_toggle)
+	($SidePanel as Control).item_rect_changed.connect(_place_panel_toggle)
 	_apply_panel_t(_panel_t)
 
-## Puts the open/close tab on the side panel's actual left edge.
+## Puts the open/close tab on the side panel's actual right edge.
 func _place_panel_toggle() -> void:
 	if _panel_toggle_btn == null:
 		return
-	var panel := $RightPanel as Control
-	var x := panel.position.x
+	var x := _panel_right_edge()
 	_panel_toggle_btn.anchor_left   = 0.0
 	_panel_toggle_btn.anchor_right  = 0.0
 	_panel_toggle_btn.anchor_top    = 0.5
 	_panel_toggle_btn.anchor_bottom = 0.5
-	_panel_toggle_btn.offset_left   = x - 26.0
-	_panel_toggle_btn.offset_right  = x
+	_panel_toggle_btn.offset_left   = x
+	_panel_toggle_btn.offset_right  = x + 26.0
 	_panel_toggle_btn.offset_top    = -28.0
 	_panel_toggle_btn.offset_bottom = 28.0
 
@@ -3577,20 +3610,36 @@ func _set_panel_open(open: bool) -> void:
 	_panel_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_panel_tween.tween_method(_apply_panel_t, _panel_t, 1.0 if open else 0.0, PANEL_SLIDE_SEC)
 
+## Screen x of the side panel's right edge (0 when it's slid away).
+func _panel_right_edge() -> float:
+	var panel := $SidePanel as Control
+	return maxf(0.0, panel.position.x + panel.size.x)
+
+## Height of the HUD's resource bar — the side panel starts below it.
+func _hud_bar_height() -> float:
+	var cp = HUDManager.get("credits_panel")
+	if cp != null and is_instance_valid(cp as Node) and (cp as Control).size.y > 4.0:
+		return (cp as Control).size.y + 6.0
+	return 58.0
+
 ## Lays out panel, planet area, toggle tab and HUD for a slide position t (1 = open).
+## The panel lives on the left, under the resource bar; the globe fills the rest.
 func _apply_panel_t(t: float) -> void:
 	_panel_t = t
-	var view_frac := 1.0 - PANEL_FRACTION * t
-	var panel := $RightPanel as Control
-	panel.anchor_left  = view_frac
-	panel.anchor_right = view_frac + PANEL_FRACTION
+	var panel := $SidePanel as Control
+	panel.anchor_left  = -PANEL_FRACTION * (1.0 - t)
+	panel.anchor_right = PANEL_FRACTION * t
 	panel.offset_left  = 0.0
 	panel.offset_right = 0.0
-	($PlanetContainer as Control).anchor_right = view_frac
-	HUDManager.set_view_area_fraction(view_frac)
+	panel.offset_top   = _hud_bar_height()
+	($PlanetContainer as Control).anchor_left  = PANEL_FRACTION * t
+	($PlanetContainer as Control).anchor_right = 1.0
+	HUDManager.set_view_area_fraction(1.0 - PANEL_FRACTION * t)
 	if _panel_toggle_btn != null:
-		_panel_toggle_btn.text = "›" if _panel_open else "‹"
+		_panel_toggle_btn.text = "‹" if _panel_open else "›"
 		_place_panel_toggle()
+	if _toast_container != null and is_instance_valid(_toast_container):
+		_toast_container.offset_left = PANEL_FRACTION * t * get_viewport_rect().size.x + 14.0
 
 # ── Zoom / pan ────────────────────────────────────────────────────────────────
 
@@ -3979,7 +4028,7 @@ func _site_resource_lines(def: DistrictDef, tags: Dictionary, coastal: bool, ter
 	if not def.base_outputs.is_empty() and current_data != null:
 		var ppv := GameState.get_planet(current_data.seed)
 		var sm := def.site_mult(probe)
-		lines.append(["Base: %s%s" % [_district_base_text(ppv, probe), "   site ×%.2f" % sm if sm > 1.005 else ""],
+		lines.append(["Base: %s%s" % [_district_base_text(ppv, probe), "   site +%d%%" % int(round((sm - 1.0) * 100.0)) if sm > 1.005 else ""],
 			Color(0.55, 0.95, 0.60)])
 		var iso := ProductionManager.isolation_mult(current_data, probe)
 		lines.append(["Space: +%d%% base income  (further from others = more; nearer = neighbour income)" %
@@ -4226,6 +4275,44 @@ func _show_colonize_popup(data: PlanetData, pp: PlanetProgress) -> void:
 	overlay.add_child(popup)
 	get_viewport().add_child(overlay)
 
+## Keeps a cost-gated button's enabled state current: re-checks `can_use`
+## a few times a second, so it lights up as soon as the resources are there
+## (no reopening the panel).
+func _live_enable(btn: BaseButton, can_use: Callable) -> void:
+	btn.disabled = not bool(can_use.call())
+	var t := Timer.new()
+	t.wait_time = 0.25
+	t.autostart = true
+	t.timeout.connect(func() -> void:
+		var ok := bool(can_use.call())
+		if btn.disabled == ok:
+			btn.disabled = not ok)
+	btn.add_child(t)
+
+## What levelling the planet gives and needs (the button's tooltip).
+func _planet_level_tip(data: PlanetData, pp: PlanetProgress) -> String:
+	var next := pp.level + 1
+	var have := Leveling.planet_city_levels(data, pp)
+	var need := Leveling.planet_level_req(next)
+	var cities_now := Leveling.max_cities(pp)
+	var lines: Array[String] = ["Raise %s to Lv %d:" % [data.planet_name, next],
+		_bb("+1 City slot (%d → %d)" % [cities_now, cities_now + 1], Economy.color_of(Economy.POPULATION)),
+		"",
+		"Needs %d total City levels on this planet — you have %d." % [need, have],
+		_bb("City levels come from levelling up each City (the Orbit counts too).", BB_DIM)]
+	var cost := pp.get_upgrade_cost()
+	if cost.has("credits"):
+		lines.append("")
+		lines.append("Cost  " + _res_bb(Economy.CREDITS, float(cost["credits"]), ""))
+	var block := Leveling.planet_level_block(data, pp)
+	if block != "":
+		lines.append("")
+		lines.append(_bb("➡ " + block, BB_BAD))
+	elif cost.has("credits") and GameState.credits < float(cost["credits"]):
+		lines.append("")
+		lines.append(_bb("➡ Not enough credits", BB_BAD))
+	return "\n".join(lines)
+
 func _show_level_up_popup(pp: PlanetProgress) -> void:
 	if pp.is_upgrading:
 		return
@@ -4386,7 +4473,15 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 	btn_sb.content_margin_left = 12; btn_sb.content_margin_right = 12
 	up_btn.add_theme_stylebox_override("normal", btn_sb)
 	up_btn.add_theme_color_override("font_color", Color.WHITE if can_afford else Color(0.5, 0.55, 0.6))
-	up_btn.disabled = not can_afford
+	var lv_ok := lv_block == ""
+	_live_enable(up_btn, func() -> bool:
+		if not lv_ok:
+			return false
+		for k in cost.keys():
+			var have: float = GameState.credits if k == "credits" else GameState.get_resource(k)
+			if have < float(cost[k]):
+				return false
+		return true)
 	up_btn.pressed.connect(func():
 		for k in cost.keys():
 			var k_str: String = str(k)
@@ -4523,7 +4618,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 				_build_city_panel(p, data)
 				return
 	_city_panel_poi = null
-	var panel_content := $RightPanel/PanelContent
+	var panel_content := $SidePanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
 		# Save active scroll position before destroying
@@ -4823,7 +4918,10 @@ func _build_planet_overview(data: PlanetData) -> void:
 		up_btn.add_theme_stylebox_override("hover", h_sb)
 		up_btn.add_theme_stylebox_override("pressed", h_sb)
 		up_btn.add_theme_color_override("font_color", Color(0.70, 1.0, 0.75))
-		up_btn.mouse_entered.connect(func(): AudioManager.play("hover"))
+		up_btn.mouse_entered.connect(func():
+			AudioManager.play("hover")
+			TooltipManager.show_tip("Planet level up", _planet_level_tip(data, pp)))
+		up_btn.mouse_exited.connect(func(): TooltipManager.hide_tip())
 		up_btn.pressed.connect(func(): AudioManager.play("click"); _show_level_up_popup(pp))
 		root.add_child(up_btn)
 		_notify_tutorial_planet_level_up_btn(up_btn)
@@ -5089,29 +5187,27 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 			inc_lbl.add_theme_color_override("font_color", Color(0.55, 0.95, 0.60, 0.9))
 			info.add_child(inc_lbl)
 			# energy / housing are continuous — only stock income has a cycle
-			if ProductionManager._has_stock_income(ProductionManager.district_income(pp, poi)):
-				info.add_child(_base_cycle_bar(planet.seed, poi.label))
+			var d_inc := ProductionManager.district_income(pp, poi)
+			if ProductionManager._has_stock_income(d_inc):
+				var cyc_col := Color(0.45, 0.85, 0.55)
+				for rid: String in d_inc:
+					if rid != Economy.ENERGY and rid != Economy.POPULATION:
+						cyc_col = Economy.color_of(rid) if rid != Economy.RAW else Color(0.85, 0.78, 0.70)
+						break
+				var p_seed := planet.seed
+				var p_label := poi.label
+				card.add_child(_cycle_fill(func() -> float: return ProductionManager.base_progress(p_seed, p_label), cyc_col))
 
+	# being built / levelled: the shared hazard fill behind the whole card
+	var c_poi := poi
 	if poi.constructing:
-		var pbar := ProgressBar.new()
-		pbar.value = poi.construct_progress * 100.0
-		pbar.custom_minimum_size = Vector2(0, 4)
-		pbar.show_percentage = false
-		var bg_s := StyleBoxFlat.new()
-		bg_s.bg_color = Color(0.1, 0.1, 0.15)
-		var fg_s := StyleBoxFlat.new()
-		fg_s.bg_color = Color(0.3, 0.7, 0.4)
-		pbar.add_theme_stylebox_override("background", bg_s)
-		pbar.add_theme_stylebox_override("fill", fg_s)
-		info.add_child(pbar)
+		card.add_child(_hazard_fill(func() -> float: return c_poi.construct_progress))
 		t_lbl.text = "Constructing..."
-		
-		# Register for live updates
-		_district_pbars[poi.label] = pbar
-		pbar.tree_exited.connect(func():
-			if _district_pbars.get(poi.label) == pbar:
-				_district_pbars.erase(poi.label)
-		)
+	elif as_city and pp.city_upgrading.has(poi.label):
+		card.add_child(_hazard_fill(func() -> float: return float(pp.city_upgrading.get(c_poi.label, 1.0))))
+		t_lbl.text = "City levelling up…"
+	elif not as_city and pp.is_district_upgrading(poi.label):
+		card.add_child(_hazard_fill(func() -> float: return float(pp.district_upgrading.get(c_poi.label, 1.0))))
 
 	hbox.add_child(info)
 
@@ -5234,6 +5330,10 @@ func _build_add_district_card(data: PlanetData, enabled: bool, orbital_only: boo
 	txt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(txt)
 
+	var founds_city := parent == null and not orbital_only
+	if founds_city:   # the cost and what's in the way, before the player tries
+		card.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Found City", _found_city_tip(data)))
+		card.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	if enabled:
 		card.mouse_entered.connect(func() -> void:
 			AudioManager.play("hover")
@@ -5258,11 +5358,9 @@ func _build_add_district_card(data: PlanetData, enabled: bool, orbital_only: boo
 			var opts := _district_options(cap_data, orbital_only, parent)
 			if opts.size() == 1 and not orbital_only \
 					and not (parent == null and _orbit_option_visible(cap_data)):
-				var cpp := GameState.get_planet(cap_data.seed)
-				if opts[0].is_system_anchor() and cpp != null and _city_count(cap_data) >= cpp.max_cities():
+				if opts[0].is_system_anchor() and _found_city_block(cap_data) != "":
 					AudioManager.play("error")
-					TooltipManager.show_tip("City limit", "Planet Lv %d supports %d cit%s.\nLevel the planet up to found another." % [
-						cpp.level, cpp.max_cities(), "y" if cpp.max_cities() == 1 else "ies"])
+					TooltipManager.show_tip("Found City", _found_city_tip(cap_data))
 					return
 				_begin_district_placement(opts[0], parent)
 				return
@@ -5293,6 +5391,30 @@ func _build_add_district_card(data: PlanetData, enabled: bool, orbital_only: boo
 					dd.position.y = maxf(8.0, r.position.y - dd.size.y - 2.0))
 
 	return wrapper
+
+## Why a new City can't be founded right now ("" when it can).
+func _found_city_block(data: PlanetData) -> String:
+	var pp := GameState.get_planet(data.seed)
+	if Leveling.cities_used(data, pp) >= pp.max_cities():
+		return "No free City slot — Planet Lv %d supports %d. Level the planet up." % [pp.level, pp.max_cities()]
+	var cost := DistrictDef.placement_cost(DistrictDef.find(DistrictDef.Type.CITY), data)
+	if GameState.credits < cost:
+		return "Not enough credits — need %s, have %s." % [HUDManager.fmt_credits(cost), HUDManager.fmt_credits(GameState.credits)]
+	return ""
+
+func _found_city_tip(data: PlanetData) -> String:
+	var pp := GameState.get_planet(data.seed)
+	var cost := DistrictDef.placement_cost(DistrictDef.find(DistrictDef.Type.CITY), data)
+	var lines: Array[String] = ["Pick a site on the planet for a new City.",
+		"",
+		"Cost  " + _cost_bb(cost, 0, data, pp),
+		"Cities  %d / %d  (planet Lv %d)" % [Leveling.cities_used(data, pp), pp.max_cities(), pp.level],
+		_bb("Each City costs more than the last.", BB_DIM)]
+	var block := _found_city_block(data)
+	if block != "":
+		lines.append("")
+		lines.append(_bb("➡ " + block, BB_BAD))
+	return "\n".join(lines)
 
 ## District types the add card offers: the planet overview founds Cities, a
 ## City's panel adds the other districts, the orbital tab stations.
@@ -5347,7 +5469,8 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 		if def.is_system_anchor():
 			at_limit = at_limit or Leveling.cities_used(data, GameState.get_planet(data.seed)) >= GameState.get_planet(data.seed).max_cities()
 
-	btn.disabled = not can_afford or at_limit
+	var cap_limit := at_limit
+	_live_enable(btn, func() -> bool: return GameState.credits >= cost and not cap_limit)
 	if at_limit:
 		btn.add_theme_color_override("font_disabled_color", Color(0.5, 0.5, 0.6))
 	elif not can_afford:
@@ -5445,7 +5568,7 @@ func _on_district_clicked(index: int, _data: Dictionary) -> void:
 	_reveal_panel()   # selecting a district brings the side panel back
 	# zoomed out a City icon is the whole City; zoomed in it's its Capital District.
 	# Clicking it again toggles City <-> Capital District.
-	var shown := $RightPanel/PanelContent.get_node_or_null("DistrictBuildPanel")
+	var shown := $SidePanel/PanelContent.get_node_or_null("DistrictBuildPanel")
 	var showing_capital: bool = shown != null and not shown.is_queued_for_deletion() \
 			and shown.get_meta("district", "") == poi.label
 	if poi.is_city() and _city_panel_poi == poi:
@@ -6364,35 +6487,21 @@ func _get_toast_container() -> VBoxContainer:
 	tc.grow_vertical   = Control.GROW_DIRECTION_BEGIN   # stack upward
 	tc.grow_horizontal = Control.GROW_DIRECTION_END
 	tc.custom_minimum_size = Vector2(260, 0)
-	tc.offset_left = 14.0
+	tc.offset_left = PANEL_FRACTION * _panel_t * get_viewport_rect().size.x + 14.0   # follows the panel
 	tc.add_theme_constant_override("separation", 5)
 	tc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(tc)
 	_toast_container = tc
 	return tc
 
-## Measures the credits panel height and updates the toast container offset so
-## toasts always stack just above the credits bar. Safe to call every time.
+## Keeps the toast stack at the bottom-left of the planet area (right of the
+## side panel), above the marker (eye) button. Safe to call every time.
 func _reanchor_toast_above_credits() -> void:
 	var tc := _get_toast_container()
-	var hud: Node = get_tree().root.find_child("HUDManager", true, false)
-	var credits_h: float = 38.0
-	var science_h: float = 38.0
-	if hud != null:
-		var cp = hud.get("credits_panel")
-		if cp != null and is_instance_valid(cp as Node):
-			var real_h: float = (cp as Control).size.y
-			if real_h > 4.0:
-				credits_h = real_h
-		var sp = hud.get("science_panel")
-		if sp != null and is_instance_valid(sp as Node):
-			var real_h: float = (sp as Control).size.y
-			if real_h > 4.0:
-				science_h = real_h
-	var hud_bar_h: float = maxf(credits_h, science_h)
-	tc.offset_bottom = -(12.0 + hud_bar_h + 8.0)
+	tc.offset_left = PANEL_FRACTION * _panel_t * get_viewport_rect().size.x + 14.0
+	tc.offset_bottom = -(12.0 + 36.0 + 10.0)
 
-## Shows a brief construction-complete notification at the bottom-left,
+## Shows a brief construction-complete notification at the bottom-left of the planet area,
 ## then fades it out after a few seconds.
 func _show_construction_toast(building_name: String, district_label: String) -> void:
 	# Re-measure credits panel height each time in case it changed after layout
@@ -6491,12 +6600,7 @@ func _build_construction_bar(def: BuildingDef, pm_key: String) -> PanelContainer
 	var fill_ctrl := Control.new()
 	fill_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var prog_ref: Array = [ProductionManager.get_construct_progress(pm_key)]
-	fill_ctrl.draw.connect(func() -> void:
-		var p: float = (prog_ref as Array)[0]
-		var w: float = fill_ctrl.size.x * p
-		if w > 0.5:
-			fill_ctrl.draw_rect(Rect2(0, 0, w, fill_ctrl.size.y), Color(0.72, 0.52, 0.12, 0.22))
-			fill_ctrl.draw_rect(Rect2(w - 2.0, 0, 2.0, fill_ctrl.size.y), Color(0.95, 0.75, 0.25, 0.65)))
+	fill_ctrl.draw.connect(func() -> void: _paint_hazard(fill_ctrl, float((prog_ref as Array)[0])))
 	body.add_child(fill_ctrl)
 
 	var margin := MarginContainer.new()
@@ -6638,21 +6742,6 @@ func _income_text(inc: Dictionary) -> String:
 	return " · ".join(parts)
 
 ## Thin bar that fills over a district's base-income cycle (redraws itself).
-func _base_cycle_bar(planet_seed: int, district_label: String) -> Control:
-	var bar := Control.new()
-	bar.custom_minimum_size = Vector2(0, 3)
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.draw.connect(func() -> void:
-		var p := ProductionManager.base_progress(planet_seed, district_label)
-		bar.draw_rect(Rect2(Vector2.ZERO, bar.size), Color(0.12, 0.15, 0.25, 0.8))
-		bar.draw_rect(Rect2(Vector2.ZERO, Vector2(bar.size.x * p, bar.size.y)), Color(0.45, 0.85, 0.55, 0.85)))
-	var t := Timer.new()
-	t.wait_time = 0.2
-	t.autostart = true
-	t.timeout.connect(bar.queue_redraw)
-	bar.add_child(t)
-	return bar
-
 ## "+12 cr /30s · +2 ⚡/s" — what a district makes on its own (ProductionManager.district_base).
 func _district_base_text(pp: PlanetProgress, poi: POIData) -> String:
 	var ddef := ProductionManager.district_def(poi)
@@ -6688,7 +6777,7 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 	k.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var v := Label.new()
 	var sm := ddef.site_mult(poi)
-	v.text = _district_base_text(pp, poi) + ("   site ×%.2f" % sm if sm > 1.005 else "")
+	v.text = _district_base_text(pp, poi) + ("   site +%d%%" % int(round((sm - 1.0) * 100.0)) if sm > 1.005 else "")
 	# wraps instead of widening the side panel
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -6703,6 +6792,7 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 	var tip_lines: Array[String] = ["What this district makes before any buildings.",
 		"Neighbour income flows along roads — thicker roads pay more."]
 	tip_lines.append("")
+	tip_lines.append("Site bonus — this spot's terrain and resources boost the base income:")
 	for pair: Array in ddef.site_breakdown(poi):
 		tip_lines.append("+%d%%  %s" % [int(round(float(pair[1]) * 100.0)), pair[0]])
 	if ddef.site_breakdown(poi).is_empty():
@@ -6778,7 +6868,8 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 	else:
 		btn.text = "Lv %d  ·  LEVEL UP  ◈ %s" % [lv, HUDManager.fmt_credits(credits)] \
 			+ ("  ☺ %s" % Economy.fmt(need) if need > 0 else "")
-		btn.disabled = block != "" or GameState.credits < credits
+		_live_enable(btn, func() -> bool:
+			return Leveling.district_level_block(planet, pp, poi) == "" and GameState.credits >= credits)
 		var add_slots := PlanetProgress.slots_per_level(poi)
 		tip = "Raise to Lv %d:\n%s  ·  +%d building slot%s (%d → %d)\n\nCost  %s" % [
 			lv + 1, _bb("more base income", Economy.color_of(Economy.CREDITS)), add_slots,
@@ -6813,7 +6904,9 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 		btn.add_theme_color_override("font_disabled_color", Color(0.45, 0.48, 0.60))
 	if tip != "":
 		btn.mouse_entered.connect(func() -> void:
-			TooltipManager.show_tip("Level up %s" % poi.shown_name(), tip))
+			# a City's own district is its Capital District — not the City (that
+			# levels from the City panel)
+			TooltipManager.show_tip("Level up Capital District" if poi.is_city() else "Level up %s" % poi.shown_name(), tip))
 		btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	btn.pressed.connect(func() -> void:
 		TooltipManager.hide_tip()
@@ -6871,11 +6964,8 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		elif auto_off:
 			fill_ctrl.draw_rect(Rect2(0, 0, w, fill_ctrl.size.y),
 				Color(0.35, 0.38, 0.55, 0.22))
-		elif w > 0.5:
-			fill_ctrl.draw_rect(Rect2(0, 0, w, fill_ctrl.size.y),
-				Color(fc.r, fc.g, fc.b, 0.20))
-			fill_ctrl.draw_rect(Rect2(w - 2.0, 0, 2.0, fill_ctrl.size.y),
-				Color(fc.r, fc.g, fc.b, 0.55)))
+		else:
+			_paint_cycle(fill_ctrl, p, fc))
 	body.add_child(fill_ctrl)
 
 	# Content layout on top of fill
@@ -9134,7 +9224,7 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	_active_district_poi = null
 	_city_panel_poi = null
 	_orbit_panel_open = true
-	var panel_content := $RightPanel/PanelContent
+	var panel_content := $SidePanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
 		old.name = "__freeing_district__"
@@ -9221,7 +9311,8 @@ func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_apply_orbitron(btn, 9)
 	btn.text = "ORBIT  Lv %d → Lv %d  ◈ %s" % [lv, next, HUDManager.fmt_credits(credits)] if lv < Leveling.MAX_ORBIT_LEVEL else "ORBIT  MAX LEVEL"
-	btn.disabled = block != "" or GameState.credits < credits
+	_live_enable(btn, func() -> bool:
+		return Leveling.orbit_level_block(planet, pp) == "" and GameState.credits >= credits)
 	var tip := "Raise the Orbit to Lv %d:\n%s\n\nCost  %s\n%s" % [next,
 		_bb("+1 Space Station slot (%d → %d)" % [lv, next], Color(0.75, 0.70, 1.0)),
 		_cost_bb(credits, 0, planet, pp),
@@ -9249,7 +9340,7 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 		keep_scroll = _city_scroll.scroll_vertical
 	_active_district_poi = null
 	_city_panel_poi = city
-	var panel_content := $RightPanel/PanelContent
+	var panel_content := $SidePanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
 		old.name = "__freeing_district__"
@@ -9363,24 +9454,51 @@ func _hazard_fill(progress: Callable) -> Control:
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.show_behind_parent = true
 	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	c.draw.connect(func() -> void:
-		var r := Rect2(Vector2.ZERO, c.size)
-		c.draw_rect(r, Color(0.10, 0.09, 0.05, 0.9))
-		var w := c.size.x * clampf(float(progress.call()), 0.0, 1.0)
-		const STRIPE := 8.0
-		var shift := fmod(float(Time.get_ticks_msec()) / 40.0, STRIPE * 2.0)
-		var y := 0.0
-		while y < c.size.y:   # diagonal stripes, built row by row from rects
-			var x := -STRIPE * 2.0 + fmod(shift + y, STRIPE * 2.0)
-			while x < w:
-				var x0 := maxf(x, 0.0)
-				var x1 := minf(x + STRIPE, w)
-				if x1 > x0:
-					c.draw_rect(Rect2(x0, y, x1 - x0, 2.0), Color(1.0, 0.82, 0.15, 0.32))
-				x += STRIPE * 2.0
-			y += 2.0)
+	c.draw.connect(func() -> void: _paint_hazard(c, float(progress.call())))
 	var t := Timer.new()
 	t.wait_time = 0.05
+	t.autostart = true
+	t.timeout.connect(c.queue_redraw)
+	c.add_child(t)
+	return c
+
+## The one look for anything being built or levelled (buildings, districts,
+## Cities): crawling black/yellow stripes filling left → right.
+static func _paint_hazard(c: Control, progress: float) -> void:
+	c.draw_rect(Rect2(Vector2.ZERO, c.size), Color(0.10, 0.09, 0.05, 0.9))
+	var w := c.size.x * clampf(progress, 0.0, 1.0)
+	const STRIPE := 8.0
+	var shift := fmod(float(Time.get_ticks_msec()) / 40.0, STRIPE * 2.0)
+	var y := 0.0
+	while y < c.size.y:   # diagonal stripes, built row by row from rects
+		var x := -STRIPE * 2.0 + fmod(shift + y, STRIPE * 2.0)
+		while x < w:
+			var x0 := maxf(x, 0.0)
+			var x1 := minf(x + STRIPE, w)
+			if x1 > x0:
+				c.draw_rect(Rect2(x0, y, x1 - x0, 2.0), Color(1.0, 0.82, 0.15, 0.32))
+			x += STRIPE * 2.0
+		y += 2.0
+	if w > 1.0:
+		c.draw_rect(Rect2(w - 2.0, 0, 2.0, c.size.y), Color(1.0, 0.82, 0.15, 0.7))
+
+## The one look for anything producing on a cycle (buildings, districts,
+## Cities): the card fills in its resource's colour, bright leading edge.
+static func _paint_cycle(c: Control, progress: float, col: Color) -> void:
+	var w := c.size.x * clampf(progress, 0.0, 1.0)
+	if w > 0.5:
+		c.draw_rect(Rect2(0, 0, w, c.size.y), Color(col.r, col.g, col.b, 0.20))
+		c.draw_rect(Rect2(w - 2.0, 0, 2.0, c.size.y), Color(col.r, col.g, col.b, 0.55))
+
+## Card-sized production fill behind a card's content (see _paint_cycle).
+func _cycle_fill(progress: Callable, col: Color) -> Control:
+	var c := Control.new()
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.show_behind_parent = true
+	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	c.draw.connect(func() -> void: _paint_cycle(c, float(progress.call()), col))
+	var t := Timer.new()
+	t.wait_time = 0.1
 	t.autostart = true
 	t.timeout.connect(c.queue_redraw)
 	c.add_child(t)
@@ -9398,8 +9516,13 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_apply_orbitron(btn, 9)
+	var upgrading := pp.city_upgrading.has(city.label)
 	btn.text = "CITY  Lv %d → Lv %d  ◈ %s  ☺ %s" % [lv, next, HUDManager.fmt_credits(credits), Economy.fmt(pop)]
-	btn.disabled = block != "" or GameState.credits < credits
+	if upgrading:
+		btn.text = "CITY  Lv %d → Lv %d  ·  LEVELLING UP…" % [lv, next]
+		btn.add_child(_hazard_fill(func() -> float: return float(pp.city_upgrading.get(city.label, 1.0))))
+	_live_enable(btn, func() -> bool:
+		return Leveling.city_level_block(planet, pp, city) == "" and GameState.credits >= credits)
 	var st := StyleBoxFlat.new()
 	st.bg_color = Color(0.08, 0.20, 0.12, 0.85)
 	st.border_color = Color(0.35, 0.80, 0.45, 0.6)
@@ -9411,12 +9534,15 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 	var dis := st.duplicate() as StyleBoxFlat
 	dis.bg_color = Color(0.08, 0.09, 0.14, 0.7)
 	dis.border_color = Color(0.25, 0.28, 0.40, 0.5)
+	if upgrading:
+		dis.bg_color = Color(0, 0, 0, 0)   # let the hazard fill behind it show
+		dis.border_color = Color(1.0, 0.82, 0.15, 0.6)
 	btn.add_theme_stylebox_override("normal", st)
 	btn.add_theme_stylebox_override("hover", hov)
 	btn.add_theme_stylebox_override("pressed", hov)
 	btn.add_theme_stylebox_override("disabled", dis)
 	btn.add_theme_color_override("font_color", Color(0.70, 1.0, 0.75))
-	btn.add_theme_color_override("font_disabled_color", Color(0.45, 0.48, 0.60))
+	btn.add_theme_color_override("font_disabled_color", Color(1.0, 0.9, 0.6) if upgrading else Color(0.45, 0.48, 0.60))
 	var tip := "Raise %s to Lv %d:\n%s\n\nCost  %s\n%s" % [city.shown_name(), next,
 		_bb("+%d districts allowed (%d → %d)" % [Leveling.city_max_districts(next) - Leveling.city_max_districts(lv),
 			Leveling.city_max_districts(lv), Leveling.city_max_districts(next)], Economy.color_of(Economy.POPULATION)),
@@ -9432,14 +9558,20 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 			AudioManager.play("error")
 			return
 		AudioManager.play("construct")
-		pp.city_levels[city.label] = next
-		if not GameState.planet_view_unlocked and next >= 2:
-			GameState.planet_view_unlocked = true
-			_show_unlock_toast("PLANET VIEW UNLOCKED", "Found more cities and level up the planet.")
+		pp.city_upgrading[city.label] = 0.0   # ProductionManager finishes it (city_leveled)
 		GameState.planet_progress_changed.emit(planet.seed)
 		_build_city_panel(city, planet))
 	_notify_tutorial_city_level_btn(btn)
 	return btn
+
+## A City's level-up timer ran out.
+func _on_city_leveled(planet_seed: int, _city_label: String, _level: int, unlocked_planet_view: bool) -> void:
+	if current_data == null or current_data.seed != planet_seed:
+		return
+	AudioManager.play("building_done")
+	if unlocked_planet_view:
+		_show_unlock_toast("PLANET VIEW UNLOCKED", "Found more cities and level up the planet.")
+	_refresh_active_panel()
 
 func _notify_tutorial_city_level_btn(btn: Button) -> void:
 	if TutorialManager.get_action_step_type() != "city_level_up":
@@ -9488,7 +9620,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		saved_scroll = _district_body_scroll.scroll_vertical
 	_active_district_poi = poi   # remember for _on_building_constructed
 	_city_panel_poi = null
-	var panel_content := $RightPanel/PanelContent
+	var panel_content := $SidePanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
 		# Save scroll position before destroying

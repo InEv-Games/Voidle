@@ -110,6 +110,9 @@ func toggle_user_pause(key: String) -> void:
 func is_user_paused(key: String) -> bool:
 	return _user_paused.get(key, false)
 
+## A City finished levelling up (`unlocked_planet_view`: that opened the planet view).
+signal city_leveled(planet_seed: int, city_label: String, level: int, unlocked_planet_view: bool)
+
 ## Returns 0.0–1.0: global energy coverage ratio. < 1.0 = energy crisis.
 func get_energy_ratio(_planet_seed: int = 0) -> float:
 	return _global_energy_ratio
@@ -157,6 +160,20 @@ func _tick_all(delta: float) -> void:
 					pp.level += 1
 					pp.recalculate_limits()
 					GameState.planet_progress_changed.emit(planet_seed)
+
+			# City level-ups
+			for clabel in pp.city_upgrading.keys():
+				var c_next: int = int(pp.city_levels.get(clabel, 1)) + 1
+				pp.city_upgrading[clabel] += delta / max(0.1, PlanetProgress.city_upgrade_duration(c_next))
+				if pp.city_upgrading[clabel] >= 1.0:
+					pp.city_upgrading.erase(clabel)
+					pp.city_levels[clabel] = c_next
+					var opened := not GameState.planet_view_unlocked and c_next >= 2
+					if opened:
+						GameState.planet_view_unlocked = true
+					GameState.planet_progress_changed.emit(planet_seed)
+					city_leveled.emit(planet_seed, clabel, c_next, opened)
+					break  # dict modified — next frame handles the rest
 
 			# District upgrades (independent of planet upgrade state)
 			for dlabel in pp.district_upgrading.keys():

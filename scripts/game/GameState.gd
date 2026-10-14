@@ -589,6 +589,7 @@ func save() -> void:
 			"districts_used":    pp.districts_used,
 			"district_levels":   pp.district_levels,
 			"city_levels":       pp.city_levels,
+			"city_upgrading":    pp.city_upgrading,
 			"district_upgrading": pp.district_upgrading,
 			"buildings":         pp.buildings,
 			"stored_resources":  pp.stored_resources,
@@ -693,6 +694,7 @@ func load_save() -> bool:
 		pp.districts_used    = d.get("districts_used",   0)
 		pp.district_levels   = d.get("district_levels",  {})
 		pp.city_levels       = d.get("city_levels",      {})
+		pp.city_upgrading    = d.get("city_upgrading",   {})
 		pp.buildings          = d.get("buildings",          [])
 		pp.consolidate_buildings()
 		pp.district_upgrading = d.get("district_upgrading", {})

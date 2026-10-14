@@ -59,7 +59,9 @@ func pop_use() -> int:
 		return 0
 	if not planet_bonus.is_empty():
 		return 1000
-	return [500, 1500, 3000, 6000][clampi(tier - 1, 0, 3)]
+	# Tier 1 is the workforce-light option: higher tiers make more per slot,
+	# tier 1 makes more per worker (and per credit)
+	return [250, 1500, 3000, 6000][clampi(tier - 1, 0, 3)]
 
 ## Building tier within its district (1 = basic). Display / ordering only.
 @export var tier: int = 1

@@ -158,7 +158,7 @@ func _ready() -> void:
 	skill_btn.mouse_entered.connect(func() -> void:
 		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("Upgrades & Tech Tree", "Open system upgrade matrix using credits."))
+		TooltipManager.show_tip("Upgrade Tree", "Research new buildings and upgrades with Science."))
 	skill_btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
@@ -222,14 +222,14 @@ func _ready() -> void:
 	top_layer.call_deferred("add_child", settings_btn)
 
 
-	# Science + Upgrade Tree panel — bottom-left
+	# Upgrade Tree panel — bottom-right (the side panel holds the left)
 	var sci_panel := PanelContainer.new()
 	var ss := StyleBoxFlat.new()
 	ss.bg_color    = Color(0.05, 0.06, 0.11, 0.82)
-	ss.border_width_top   = 1
-	ss.border_width_right = 1
+	ss.border_width_top  = 1
+	ss.border_width_left = 1
 	ss.border_color = Color(0.25, 0.32, 0.55, 0.45)
-	ss.corner_radius_top_right = 8
+	ss.corner_radius_top_left = 8
 	ss.content_margin_left   = 14
 	ss.content_margin_right  = 14
 	ss.content_margin_top    = 8
@@ -248,13 +248,13 @@ func _ready() -> void:
 	sci_vbox.add_child(skill_btn)
 	_build_resource_cells(hbox)
 
-	sci_panel.anchor_left   = 0.0
-	sci_panel.anchor_right  = 0.0
+	sci_panel.anchor_left   = 1.0
+	sci_panel.anchor_right  = 1.0
 	sci_panel.anchor_top    = 1.0
 	sci_panel.anchor_bottom = 1.0
-	sci_panel.grow_horizontal = Control.GROW_DIRECTION_END
+	sci_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	sci_panel.grow_vertical   = Control.GROW_DIRECTION_BEGIN
-	sci_panel.offset_left   = 0.0
+	sci_panel.offset_right  = 0.0
 	sci_panel.offset_bottom = 0.0
 	science_panel = sci_panel
 	top_layer.call_deferred("add_child", sci_panel)
@@ -717,14 +717,18 @@ func _on_achievement_unlocked(def) -> void:
 	panel.anchor_top    = 1.0
 	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	panel.grow_vertical   = Control.GROW_DIRECTION_BEGIN
+	# above the Upgrade Tree panel, which holds the bottom-right corner
+	var above := 12.0
+	if science_panel != null and is_instance_valid(science_panel):
+		above += science_panel.size.y + 6.0
 	panel.offset_right  = -12.0
-	panel.offset_bottom = -12.0
+	panel.offset_bottom = -above
 	overlay.add_child(panel)
 
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var h := panel.size.y
-	panel.offset_bottom = -12.0
+	panel.offset_bottom = -above
 	panel.offset_top    = panel.offset_bottom - h
 
 	# Slide in, hold, fade out
@@ -1021,11 +1025,15 @@ func _cell_tip(id: String, base: String) -> String:
 				if GameState.active_planet_seed != -1 else null
 			var pp: PlanetProgress = GameState.get_planet(pd.seed) if pd != null else null
 			var head := ""
+			var penalty := ""
 			if pd != null and pp != null and pp.is_colonized:
 				head = "Available  %s\nUsed       %s\nMax        %s\n\n" % [Economy.fmt(Economy.free_population(pd, pp)),
 					Economy.fmt(Economy.used_population(pd, pp)), Economy.fmt(Economy.max_population(pd, pp))]
-			return head + "Shown as available / max.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population." % [
-				Economy.fmt(Economy.CITY_BASE_POP), Economy.fmt(Economy.DISTRICT_POP)]
+				var spd := Economy.pop_speed(pd, pp)
+				if spd < 0.999:
+					penalty = "\n\n[color=#ff6a5c]Overcrowded — every building and district on this planet works at %d%% speed.[/color]" % int(round(spd * 100.0))
+			return head + "Shown as available / max.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, all production on the planet slows (down to %d%% at worst) until you build homes." % [
+				Economy.fmt(Economy.CITY_BASE_POP), Economy.fmt(Economy.DISTRICT_POP), int(round((1.0 - Economy.MAX_POP_SLOWDOWN) * 100.0))] + penalty
 	var r: float = ProductionManager.resource_rates().get(id, 0.0)
 	return "%s\n\nStored  %s  (max %s)\nPer second  %s%s" % [base, Economy.fmt(Economy.amount(id)),
 		Economy.fmt(Economy.cap(id)), "+" if r >= 0.0 else "", Economy.fmt(r)]

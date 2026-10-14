@@ -28,6 +28,8 @@ const PORT_REACH_CELLS: int = 2   # a port may reach the sea across this much sa
 ## Once a route uses a port it becomes cheap for later routes, so a city's sea
 ## lanes share one harbour instead of opening a new port next door each time.
 const PORT_REUSE_WEIGHT: float = 0.1
+## A port must lie within this of the district it serves (≈ a city's borders).
+const PORT_NEAR_RAD: float = 0.061   # ~3.5°
 ## Land cells a road already runs over become this much cheaper, so later roads
 ## join existing ones and share trunks instead of running in parallel.
 const ROAD_REUSE_FACTOR: float = 0.4
@@ -215,8 +217,12 @@ func route(lon_a: float, lat_a: float, lon_b: float, lat_b: float,
 	_astar.kind = _kind
 	_astar.land_only = a < WIDTH * HEIGHT and b < WIDTH * HEIGHT and _kind[a] == 0 and _kind[b] == 0 \
 		and _land_root(a) == _land_root(b)
+	_astar.port_reach = 2.0 * sin(PORT_NEAR_RAD * 0.5)
+	_astar.port_end_a = _to_vec(lon_a, lat_a)
+	_astar.port_end_b = _to_vec(lon_b, lat_b)
 	var ids := _astar.get_id_path(a, b)
 	_astar.land_only = false
+	_astar.port_reach = 0.0
 	if ids.is_empty():
 		return {}
 	var n := WIDTH * HEIGHT

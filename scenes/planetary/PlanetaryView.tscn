@@ -48,7 +48,7 @@ content_margin_top = 24.0
 content_margin_right = 20.0
 content_margin_bottom = 24.0
 bg_color = Color(0.07, 0.08, 0.13, 1)
-border_width_left = 1
+border_width_right = 1
 border_color = Color(0.2, 0.25, 0.4, 0.5)
 
 [node name="PlanetaryView" type="Control" unique_id=279896849]
@@ -71,7 +71,8 @@ color = Color(0.04, 0.05, 0.1, 1)
 
 [node name="PlanetContainer" type="Control" parent="." unique_id=1811771985]
 layout_mode = 1
-anchor_right = 0.7
+anchor_left = 0.3
+anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
@@ -89,28 +90,26 @@ script = ExtResource("2_bbbb")
 [node name="POILayer" type="Node2D" parent="." unique_id=236819060]
 script = ExtResource("3_cccc")
 
-[node name="RightPanel" type="PanelContainer" parent="." unique_id=744795451]
+[node name="SidePanel" type="PanelContainer" parent="." unique_id=744795451]
 z_index = 200
 z_as_relative = false
 layout_mode = 1
 anchors_preset = -1
-anchor_left = 0.7
-anchor_right = 1.0
+anchor_right = 0.3
 anchor_bottom = 1.0
-grow_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
-[node name="PanelContent" type="VBoxContainer" parent="RightPanel" unique_id=1853658727]
+[node name="PanelContent" type="VBoxContainer" parent="SidePanel" unique_id=1853658727]
 layout_mode = 2
 theme_override_constants/separation = 3
 
-[node name="PlanetName" type="Label" parent="RightPanel/PanelContent" unique_id=1277833476]
+[node name="PlanetName" type="Label" parent="SidePanel/PanelContent" unique_id=1277833476]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("4_orbitron")
 theme_override_font_sizes/font_size = 18
 text = "PLANET NAME"
 
-[node name="PlanetType" type="Label" parent="RightPanel/PanelContent" unique_id=342667273]
+[node name="PlanetType" type="Label" parent="SidePanel/PanelContent" unique_id=342667273]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.6, 0.75, 0.8)
 theme_override_fonts/font = ExtResource("4_orbitron")
