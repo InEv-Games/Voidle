@@ -835,9 +835,9 @@ func _tick_key_spin(delta: float) -> void:
 	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
 		spin += 1.0
 	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
-		tilt -= 1.0
-	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
 		tilt += 1.0
+	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
+		tilt -= 1.0
 	if spin == 0.0 and tilt == 0.0:
 		return
 	var speed := KEY_SPIN_SPEED / maxf(_zoom, 0.5) * delta
@@ -1236,7 +1236,14 @@ func _maybe_require_first_city() -> void:
 	if city_def == null:
 		return
 	_mandatory_city = true
+	# start with the panel already tucked away (no open-then-slide flicker on a new game)
+	var was_open := _panel_open
+	if _panel_tween != null and _panel_tween.is_valid():
+		_panel_tween.kill()
+	_panel_open = false
+	_apply_panel_t(0.0)
 	_begin_district_placement(city_def)
+	_reopen_panel_after_place = was_open
 
 ## Bakes the exact GPU terrain for CPU lookups, then re-reads everything that was
 ## sampled from the (inexact) GDScript noise fallback in the meantime.
@@ -4289,6 +4296,21 @@ func _live_enable(btn: BaseButton, can_use: Callable) -> void:
 			btn.disabled = not ok)
 	btn.add_child(t)
 
+## How much of a level-up cost key the player has: credits, a resource id, or
+## "ANY_T<n>" (all raw minerals of that tier together).
+func _level_cost_have(k: String) -> float:
+	if k == "credits":
+		return GameState.credits
+	if k.begins_with("ANY_T"):
+		var tier := k.trim_prefix("ANY_T").to_int()
+		var total := 0.0
+		for rid: String in GameState.global_resources:
+			var rd: ResourceData = GameState.known_resources.get(rid) as ResourceData
+			if rd != null and rd.tag == ResourceData.Tag.RAW_MINERAL and rd.tier == tier:
+				total += GameState.global_resources[rid]
+		return total
+	return GameState.global_resources.get(k, 0.0)
+
 ## What levelling the planet gives and needs (the button's tooltip).
 func _planet_level_tip(data: PlanetData, pp: PlanetProgress) -> String:
 	var next := pp.level + 1
@@ -4478,8 +4500,7 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 		if not lv_ok:
 			return false
 		for k in cost.keys():
-			var have: float = GameState.credits if k == "credits" else GameState.get_resource(k)
-			if have < float(cost[k]):
+			if _level_cost_have(str(k)) < float(cost[k]):
 				return false
 		return true)
 	up_btn.pressed.connect(func():
