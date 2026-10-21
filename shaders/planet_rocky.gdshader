@@ -107,6 +107,7 @@ void fragment() {
 		float ice   = smoothstep(0.78, 0.94, polar);
 		surf = mix(surf, color_snow * 0.95, ice);
 		surf += vec3(fbm3(rn * 14.0, 2) * 0.04 - 0.02);
+		surf = apply_features(surf, rn, step(0.10, h), TIME);   // FeatureMap
 
 		// clouds — auto-rotate with TIME (always animating)
 		vec3 crn = rot_y(tn, rotation_offset + TIME * cloud_speed);

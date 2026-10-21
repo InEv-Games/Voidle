@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_def")
+min_civilization = 1
 building_id = "quantum_computer"
 display_name = "Quantum Lab"
 description = "Quantum research. Consumes Rare Elements."
@@ -13,10 +14,10 @@ base_cost = 5000.0
 slot_cost = 1
 min_planet_lv = 4
 construct_duration = 4.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = -6.0
-outputs = {"science": 32.0}
-inputs = {"rare_elements": 2.0}
+outputs = {"science": 21.333333}
+inputs = {"rare_elements": 1.333333}
 planet_bonus = {}
 tier = 4
 unlocked_by_default = true

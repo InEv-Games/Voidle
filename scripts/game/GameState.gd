@@ -13,8 +13,8 @@ signal global_resources_changed
 signal district_placed(planet_seed: int, district_type_id: int)
 
 # ── Starting Config (edit these to change new-game defaults) ─────────────────
-## Starting credits for a new game.
-@export var start_credits:        float = 1000.0
+## Starting credits / Science for a new game come from the balance profile
+## (Balance.cfg.start_credits, start_science).
 ## Whether Solar View is unlocked from the start.
 @export var start_solar_unlocked: bool  = false
 ## Whether Galaxy View is unlocked from the start.
@@ -27,6 +27,59 @@ signal district_placed(planet_seed: int, district_type_id: int)
 var global_resources: Dictionary = {}
 ## Resources the top bar has revealed so far (it shows them as they're met).
 var revealed_resources: Array = []
+
+# ── Civilization & mineral discovery ─────────────────────────────────────────
+## Medeniyet tipi 0–5 (docs/design/PLAN.md M0.3). Gates which minerals exist for
+## the player (Economy.mineral_civ).
+var civilization_type: int = 0
+## Bodies whose minerals have been discovered: seed -> true. A body is surveyed
+## when its first raw producer (mine building or Mining district) is completed.
+var surveyed_bodies: Dictionary = {}
+## Minerals discovered anywhere: id -> true. Permanent — losing the last mine
+## doesn't hide a mineral again.
+var discovered_minerals: Dictionary = {}
+signal minerals_discovered(body_seed: int, mineral_ids: Array)
+
+func is_body_surveyed(body_seed: int) -> bool:
+	return surveyed_bodies.has(body_seed)
+
+## Discovers a body's minerals (for the current civilization) once its first
+## raw producer is complete. Returns the minerals new to the player.
+func discover_body_minerals(body_seed: int) -> Array:
+	var pd := get_planet_data(body_seed)
+	if pd == null:
+		return []
+	surveyed_bodies[body_seed] = true
+	var fresh: Array = []
+	for r: Dictionary in Economy.raw_for_body(pd):
+		if not discovered_minerals.has(r["id"]):
+			discovered_minerals[r["id"]] = true
+			fresh.append(r["id"])
+	if not fresh.is_empty():
+		minerals_discovered.emit(body_seed, fresh)
+	return fresh
+
+## Saves from before discovery existed: bodies that already have a finished
+## raw producer count as surveyed.
+func _sync_mineral_discoveries() -> void:
+	for pp: PlanetProgress in _planet_progress.values():
+		if not pp.is_colonized or surveyed_bodies.has(pp.planet_seed):
+			continue
+		var found := false
+		for b: Dictionary in pp.buildings:
+			var def := BuildingDef.find(String(b.get("building_id", "")))
+			if def != null and def.outputs.has(Economy.RAW) and not b.get("constructing", false):
+				found = true
+				break
+		var pd := get_planet_data(pp.planet_seed)
+		if not found and pd != null:
+			for poi: POIData in pd.custom_pois:
+				var ddef := ProductionManager.district_def(poi)
+				if ddef != null and not poi.constructing and ddef.base_outputs.has(Economy.RAW):
+					found = true
+					break
+		if found:
+			discover_body_minerals(pp.planet_seed)
 ## The planet-wide view (planet overview, more cities, planet level) opens once
 ## the first City reaches Lv 2 — until then the side panel stays on the City.
 var planet_view_unlocked: bool = false
@@ -191,10 +244,24 @@ func _bootstrap_world() -> void:
 	# Build home solar and inject home planet at chosen index
 	if _home_solar == null:
 		_home_solar = _build_home_solar()
+	if not _loaded_from_save:
+		_apply_new_game_start()
 
 	_seed_starting_resources()
 	_apply_pending_pois()
+	_sync_mineral_discoveries()
 	world_ready.emit()
+
+## Starting budget and unlocks of a brand-new game (Balance.cfg + Starting Config).
+## Runs once per new world: loading a save, switching scenes or resetting a
+## settlement never hands the budget out again.
+func _apply_new_game_start() -> void:
+	credits         = Balance.cfg.start_credits
+	science_points  = Balance.cfg.start_science
+	solar_unlocked  = start_solar_unlocked
+	galaxy_unlocked = start_galaxy_unlocked
+	get_planet(home_planet_seed).is_colonized = start_colonized
+	_loaded_from_save = true   # this world is now the game in progress
 
 func _apply_pending_pois() -> void:
 	for seed_val: int in _pending_poi_restore:
@@ -222,6 +289,7 @@ func _apply_pending_pois() -> void:
 			poi.coastal            = pd_entry.get("coastal",            false)
 			poi.parent_city        = pd_entry.get("parent_city",        "")
 			poi.resource_tags      = pd_entry.get("resource_tags",      {})
+			poi.site_features      = pd_entry.get("site_features",      {})
 			poi.spoke_birth        = pd_entry.get("spoke_birth",        {})
 			poi.constructing       = pd_entry.get("constructing",       false)
 			poi.construct_progress = pd_entry.get("construct_progress", 0.0)
@@ -284,14 +352,8 @@ func _build_home_solar() -> SolarData:
 
 	sd.set_meta("__is_home", true)
 
-	# Apply starting config
-	credits         = start_credits
-	solar_unlocked  = start_solar_unlocked
-	galaxy_unlocked = start_galaxy_unlocked
-
-	var home_pp := get_planet(home_planet_seed)
-	home_pp.is_colonized = start_colonized
-
+	# The new-game budget and unlocks are applied in _bootstrap_world, and only
+	# for a real new game — never over a loaded save.
 	# No starting City: the player picks the site and names it (PlanetaryView).
 
 	if home_planet_idx < sd.planets.size():
@@ -581,11 +643,23 @@ func finish_colonization(planet_seed: int) -> void:
 
 # ── Save / Load ───────────────────────────────────────────────────────────────
 const SAVE_PATH := "user://voidle_save.dat"
+## Bump when the save format or the economy changes so old saves can't be
+## loaded into rules they weren't made for. Saves without a version are v1.
+const SAVE_VERSION := 1
+## Oldest save version this build can still load.
+const MIN_SAVE_VERSION := 1
+## True once the in-memory world is a loaded save or a started new game.
+var _loaded_from_save: bool = false
+## Version of a save on disk this build can't load (-1 = none). While set, the
+## file is never overwritten; NEW GAME archives it instead of deleting it.
+var incompatible_save_version: int = -1
 
 func save() -> void:
-	if showcase_mode:
+	if showcase_mode or incompatible_save_version >= 0:
 		return
 	var data := {
+		"save_version":         SAVE_VERSION,
+		"balance_profile":      Balance.profile_name,
 		"credits":              credits,
 		"science_points":       science_points,
 		"solar_unlocked":       solar_unlocked,
@@ -625,6 +699,7 @@ func save() -> void:
 					"coastal":            poi.coastal,
 					"parent_city":        poi.parent_city,
 					"resource_tags":      poi.resource_tags,
+					"site_features":      poi.site_features,
 					"spoke_birth":        poi.spoke_birth,
 					"constructing":       poi.constructing,
 					"construct_progress": poi.construct_progress,
@@ -660,6 +735,9 @@ func save() -> void:
 	data["global_resources"]    = global_resources
 	data["unlocked_buildings"]  = unlocked_buildings
 	data["revealed_resources"]  = revealed_resources
+	data["civilization_type"]   = civilization_type
+	data["surveyed_bodies"]     = surveyed_bodies
+	data["discovered_minerals"] = discovered_minerals
 	data["planet_view_unlocked"] = planet_view_unlocked
 	data["light_angle"]         = light_angle
 	data["production"]          = ProductionManager.get_save_data()
@@ -682,7 +760,23 @@ func load_save() -> bool:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	if not file:
 		return false
-	var data: Dictionary     = file.get_var()
+	var raw = file.get_var()
+	if not raw is Dictionary:
+		incompatible_save_version = 0
+		push_warning("[GameState] Save file is unreadable — kept, not loaded.")
+		return false
+	var data: Dictionary = raw
+	var version := int(data.get("save_version", 1))
+	if version < MIN_SAVE_VERSION or version > SAVE_VERSION:
+		incompatible_save_version = version
+		push_warning("[GameState] Save v%d can't be loaded by this build (v%d) — kept, not loaded." % [version, SAVE_VERSION])
+		return false
+	incompatible_save_version = -1
+	# play on with the balance profile the save was made with
+	var profile := String(data.get("balance_profile", ""))
+	if profile != "" and profile != Balance.profile_name and not Balance.load_profile(profile):
+		push_warning("[GameState] Save's balance profile '%s' not found — using '%s'." % [profile, Balance.profile_name])
+	_loaded_from_save = true
 	ProductionManager.load_save_data(data.get("production", {}))
 	credits                  = data.get("credits",              500.0)
 	science_points           = data.get("science_points",       0.0)
@@ -719,6 +813,9 @@ func load_save() -> bool:
 	global_resources.erase(Economy.ENERGY)   # energy is a flow; older saves stored it
 	unlocked_buildings  = data.get("unlocked_buildings", {})
 	revealed_resources  = data.get("revealed_resources", [])
+	civilization_type   = int(data.get("civilization_type", 0))
+	surveyed_bodies     = data.get("surveyed_bodies", {})
+	discovered_minerals = data.get("discovered_minerals", {})
 	planet_view_unlocked = data.get("planet_view_unlocked", false)
 	light_angle         = data.get("light_angle",        0.8)
 
@@ -767,12 +864,29 @@ func load_save() -> bool:
 			_pending_poi_restore[seed_val] = d["custom_pois"]
 	return true
 
+## Why CONTINUE can't load the save on disk ("" when it can, or there's none).
+func save_block_reason() -> String:
+	if incompatible_save_version == 0:
+		return "The save file can't be read."
+	if incompatible_save_version > SAVE_VERSION:
+		return "This save is from a newer version of Voidle (v%d)." % incompatible_save_version
+	if incompatible_save_version >= 0:
+		return "This save is from an older version (v%d) and can't be continued. NEW GAME keeps it as a backup." % incompatible_save_version
+	return ""
+
 func delete_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
+		if incompatible_save_version >= 0:
+			# never destroy a save this build couldn't read — set it aside
+			var backup := "user://voidle_save_v%d_%d.dat" % [incompatible_save_version, int(Time.get_unix_time_from_system())]
+			DirAccess.rename_absolute(SAVE_PATH, backup)
+		else:
+			DirAccess.remove_absolute(SAVE_PATH)
+	incompatible_save_version = -1
+	_loaded_from_save = false   # what follows is a brand-new world
 	save_deleted.emit()
-	credits              = 500.0
-	science_points       = 0.0
+	credits              = Balance.cfg.start_credits
+	science_points       = Balance.cfg.start_science
 	solar_unlocked       = false
 	moon_unlocked        = false
 	act1_complete        = false
@@ -794,6 +908,9 @@ func delete_save() -> void:
 		st.skill_levels[def_node] = 1
 	unlocked_buildings.clear()
 	revealed_resources.clear()
+	civilization_type = 0
+	surveyed_bodies.clear()
+	discovered_minerals.clear()
 	planet_view_unlocked = false
 	global_resources.clear()
 	_planet_progress.clear()

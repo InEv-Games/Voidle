@@ -4,22 +4,22 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 250
+required_features = Array[String](["terrain_wind"])
 building_id = "wind_turbine"
 display_name = "Wind Turbine"
-description = "Harvests wind. Needs a windy site; output scales with wind strength."
+description = "Harvests wind. Must stand on a windy region (pale streaks on the map); +30% output there."
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([])
-base_cost = 220.0
+base_cost = 200.0
 slot_cost = 1
 min_planet_lv = 1
 construct_duration = 4.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = 0.0
-outputs = {"energy": 3.0}
+outputs = {"energy": 4.0}
 inputs = {}
 planet_bonus = {}
 tier = 1
 unlocked_by_default = true
-required_tag = "wind"
-required_min = 0.2
 output_tag = "wind"

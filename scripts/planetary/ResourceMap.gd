@@ -218,6 +218,12 @@ static func _index(lon: float, lat: float) -> int:
 	var y := clampi(floori((0.5 - lat / PI) * HEIGHT), 0, HEIGHT - 1)
 	return y * WIDTH + x
 
+## One energy field (geothermal / solar / wind / tidal) at a point, 0..1 (0 when not built).
+static func field(planet_seed: int, key: String, lon: float, lat: float) -> float:
+	if not _maps.has(planet_seed) or not _maps[planet_seed].has(key):
+		return 0.0
+	return (_maps[planet_seed][key] as PackedFloat32Array)[_index(lon, lat)]
+
 ## Resource tags at a point: { geothermal, solar, wind, tidal: 0..1, minerals: { id: 0..1 } }.
 ## Empty when the map isn't built yet.
 static func sample(planet_seed: int, lon: float, lat: float) -> Dictionary:

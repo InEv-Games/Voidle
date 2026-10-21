@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="BuildingDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "local_trade_center"
+allowed_poi_types = Array[int]([8])
+allowed_planet_types = Array[int]([])
+tick_duration = 20.0
+unlocked_by_default = true
+display_name = "Local Trade Center"
+tier = 1
+slot_cost = 2
+base_cost = 375.0
+outputs = {"credits": 50.0}
+inputs = {}
+energy_per_tick = -3.0
+pop_cost = 625
+construct_duration = 4.0
+description = "A larger market without upkeep: more credits per slot than two Markets, at a higher price."

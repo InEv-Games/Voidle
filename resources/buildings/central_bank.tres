@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_def")
+min_civilization = 1
 building_id = "central_bank"
 display_name = "Interstellar Bank"
 description = "Finance on a planetary scale. Consumes Consumer Goods."

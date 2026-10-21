@@ -4,18 +4,19 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 750
 building_id = "deep_drill"
 display_name = "Deep Drill"
 description = "Reaches deeper deposits for more raw resources."
 allowed_poi_types = Array[int]([1])
 allowed_planet_types = Array[int]([])
-base_cost = 800.0
-slot_cost = 1
+base_cost = 600.0
+slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
 tick_duration = 20.0
 energy_per_tick = -3.0
-outputs = {"raw": 8.0}
+outputs = {"raw": 30.0}
 inputs = {}
 planet_bonus = {}
 tier = 2

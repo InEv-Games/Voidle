@@ -336,6 +336,10 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]--seed[/color]            — seed of what you're looking at (copied)")
 			_log_info("  [color=#88ddcc]moonlaunch[/color] [color=#aaaaaa][sec] [reset][/color] — send the Moon lander now (default 15s)")
 			_log_info("  [color=#88ddcc]tutorial complete[/color] — skip/finish tutorial")
+			_log_info("[color=#33cc55]── BALANCE ───────────────────────────────[/color]")
+			_log_info("  [color=#88ddcc]balance[/color]                     — active profile and the ones available")
+			_log_info("  [color=#88ddcc]balance[/color] [color=#aaaaaa]<name>[/color]              — switch profile now and list what changed")
+			_log_info("  [color=#88ddcc]balance show[/color]                — every value of the active profile")
 			_log_info("[color=#33cc55]── SHOWCASE ──────────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]showcase[/color] [color=#aaaaaa][on|off][/color]      — read-only viewer: enter / leave now")
 			_log_info("  [color=#88ddcc]showcase menu[/color] [color=#aaaaaa]<on|off>[/color] — show/hide the main menu button")
@@ -549,6 +553,10 @@ func _exec(line: String) -> void:
 			_out_gen += 1   # cancel pending drain
 			_log.clear()
 
+		# ── Balance ─────────────────────────────────────────────────────────
+		"balance":
+			_cmd_balance(parts)
+
 		# ── Showcase ────────────────────────────────────────────────────────
 		"showcase":
 			_cmd_showcase(parts)
@@ -725,6 +733,52 @@ func _cmd_moonlaunch(parts: Array) -> void:
 
 ## Prints (and copies) the seed of whatever the current scene shows: the planet
 ## or moon in the planet view, the star system in the solar view.
+## balance [name] — show or switch the active balance profile (Balance.cfg).
+## Switching applies at once: prices and rates read the profile live.
+func _cmd_balance(parts: Array) -> void:
+	var names := Balance.available_profiles()
+	if parts.size() < 2:
+		_log_info("[color=#aaaaaa]balance profile[/color]  [color=#ffdd66]%s[/color]" % Balance.profile_name)
+		_log_info("  [color=#555f6a]available: %s  ·  `balance show` lists its values[/color]" % ", ".join(names))
+		return
+	var want := String(parts[1])
+	if want.to_lower() == "show":
+		_log_info("[color=#aaaaaa]balance profile[/color]  [color=#ffdd66]%s[/color]" % Balance.profile_name)
+		for row: Array in _balance_rows(Balance.cfg):
+			if row[0] == "group":
+				_log_info("[color=#33cc55]  ── %s[/color]" % row[1])
+			else:
+				_log_info("    [color=#88ddcc]%s[/color]  %s" % [row[1], str(row[2])])
+		return
+	var before := Balance.cfg
+	if not Balance.load_profile(want):
+		_log_err("No profile '%s'. Available: %s" % [want, ", ".join(names)])
+		return
+	GameState.global_resources_changed.emit()
+	_log_ok("Balance profile [color=#ffdd66]%s[/color] active." % want)
+	var changed := 0
+	for row: Array in _balance_rows(Balance.cfg):
+		if row[0] != "value" or row[1] == "profile_name":
+			continue
+		var old_v = before.get(row[1])
+		if str(old_v) != str(row[2]):
+			changed += 1
+			_log_info("    [color=#88ddcc]%s[/color]  [color=#aaaaaa]%s[/color] → [color=#ffdd66]%s[/color]" % [row[1], str(old_v), str(row[2])])
+	if changed == 0:
+		_log_info("  [color=#555f6a]no values differ from the previous profile[/color]")
+
+## The profile's exported fields in inspector order: ["group", name] headers and
+## ["value", field, value] rows.
+func _balance_rows(cfg: BalanceConfig) -> Array:
+	var rows: Array = []
+	for prop: Dictionary in cfg.get_property_list():
+		var usage: int = prop["usage"]
+		if usage & PROPERTY_USAGE_GROUP:
+			rows.append(["group", prop["name"]])
+		elif usage & PROPERTY_USAGE_SCRIPT_VARIABLE and usage & PROPERTY_USAGE_EDITOR:
+			rows.append(["value", prop["name"], cfg.get(prop["name"])])
+	return rows
+
 ## showcase [on|off] — enter / leave the read-only viewer;
 ## showcase menu <on|off> — main menu button for this session
 ## (persist it with `voidle/showcase/enabled` in project.godot).

@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 0
 building_id = "residential"
 display_name = "Habitat Block"
 description = "Basic housing. Raises the planet's max population."
@@ -13,7 +14,7 @@ base_cost = 120.0
 slot_cost = 1
 min_planet_lv = 1
 construct_duration = 4.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = -1.0
 outputs = {"population": 2500.0}
 inputs = {}

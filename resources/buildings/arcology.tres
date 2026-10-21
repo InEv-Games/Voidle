@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_def")
+min_civilization = 1
 building_id = "arcology"
 display_name = "Arcology"
 description = "A self-contained city in a single structure. Consumes Consumer Goods."
@@ -13,10 +14,10 @@ base_cost = 3500.0
 slot_cost = 1
 min_planet_lv = 4
 construct_duration = 4.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = -5.0
 outputs = {"population": 300000.0}
-inputs = {"goods": 2.0}
+inputs = {"goods": 1.333333}
 planet_bonus = {}
 tier = 4
 unlocked_by_default = true

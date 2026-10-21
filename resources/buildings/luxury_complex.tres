@@ -4,19 +4,21 @@
 
 [resource]
 script = ExtResource("1_def")
+build_materials = {"ferrite": 90.0, "goods": 15.0, "fuel": 5.0, "rare_elements": 2.0, "moonstone": 60.0}
+pop_cost = 0
 building_id = "luxury_complex"
 display_name = "Luxury Spires"
 description = "High-end living. Needs a steady supply of Consumer Goods."
 allowed_poi_types = Array[int]([7])
 allowed_planet_types = Array[int]([])
-base_cost = 1400.0
-slot_cost = 1
+base_cost = 1080.0
+slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
-tick_duration = 30.0
-energy_per_tick = -3.0
-outputs = {"population": 60000.0}
-inputs = {"goods": 1.0}
+tick_duration = 20.0
+energy_per_tick = -6.0
+outputs = {"population": 22500.0}
+inputs = {"goods": 0.666667, "fuel": 0.333333}
 planet_bonus = {}
 tier = 3
 unlocked_by_default = false

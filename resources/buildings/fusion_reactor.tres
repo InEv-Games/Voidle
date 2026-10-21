@@ -4,19 +4,20 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 2250
 building_id = "fusion_reactor"
 display_name = "Fusion Reactor"
 description = "Large, steady power. Burns Fuel Rods."
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([])
-base_cost = 2200.0
-slot_cost = 1
+base_cost = 1350.0
+slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = 0.0
-outputs = {"energy": 22.0}
-inputs = {"fuel": 1.0}
+outputs = {"energy": 27.0}
+inputs = {"fuel": 0.666667}
 planet_bonus = {}
 tier = 3
 unlocked_by_default = false

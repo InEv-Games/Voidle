@@ -4,19 +4,20 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 0
 building_id = "apartments"
 display_name = "Apartment Towers"
 description = "Dense housing for a growing city."
 allowed_poi_types = Array[int]([7])
 allowed_planet_types = Array[int]([])
-base_cost = 450.0
-slot_cost = 1
+base_cost = 360.0
+slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = -2.0
-outputs = {"population": 12000.0}
-inputs = {}
+outputs = {"population": 7500.0}
+inputs = {"goods": 0.333333}
 planet_bonus = {}
 tier = 2
 unlocked_by_default = false

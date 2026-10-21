@@ -4,23 +4,22 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 750
+required_features = Array[String](["terrain_seacoast"])
 building_id = "tidal_generator"
 display_name = "Tidal Generator"
-description = "Turns the tides into energy. Needs a coastal site with tidal flow."
+description = "Turns the tides into energy. Must stand on a sea coast; +20% output there."
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([])
-base_cost = 450.0
-slot_cost = 1
+base_cost = 600.0
+slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = 0.0
-outputs = {"energy": 6.0}
-inputs = {}
+outputs = {"energy": 12.0}
+inputs = {"goods": 0.333333}
 planet_bonus = {}
 tier = 2
 unlocked_by_default = true
-requires_coastal = true
-required_tag = "tidal"
-required_min = 0.2
 output_tag = "tidal"

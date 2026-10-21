@@ -47,6 +47,10 @@ static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⚗", "�
 ## { geothermal, solar, wind, tidal: 0..1, minerals: { resource_id: 0..1 } }.
 ## Empty until sampled.
 @export var resource_tags: Dictionary = {}
+## Visible features at this site and the share of their bonus: { "terrain_mountain": 1.0,
+## "terrain_seacoast": 0.5, … } (FeatureMap.shares). Stored so the economy works
+## for bodies that aren't on screen.
+@export var site_features: Dictionary = {}
 
 ## Settlement growth along roads: for each road (keyed by the district at its
 ## other end) the settlement size this district had when the road appeared.

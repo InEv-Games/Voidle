@@ -21,6 +21,7 @@ boot_splash/minimum_display_time=1800
 
 [autoload]
 
+Balance="*res://scripts/game/balance/Balance.gd"
 SceneTransition="*res://scripts/ui/SceneTransition.gd"
 GameState="*res://scripts/game/GameState.gd"
 CursorManager="*res://scripts/system/CursorManager.gd"

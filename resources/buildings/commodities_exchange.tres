@@ -4,19 +4,21 @@
 
 [resource]
 script = ExtResource("1_def")
+build_materials = {"ferrite": 90.0, "goods": 15.0, "fuel": 5.0, "rare_elements": 2.0, "moonstone": 90.0}
+pop_cost = 2250
 building_id = "commodities_exchange"
 display_name = "Commodity Exchange"
 description = "Sells Consumer Goods at a premium."
 allowed_poi_types = Array[int]([8])
 allowed_planet_types = Array[int]([])
 base_cost = 1800.0
-slot_cost = 1
+slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
 tick_duration = 20.0
-energy_per_tick = -3.0
-outputs = {"credits": 140.0}
-inputs = {"goods": 1.0}
+energy_per_tick = -9.0
+outputs = {"credits": 270.0}
+inputs = {"goods": 3.0, "fuel": 0.333333}
 planet_bonus = {}
 tier = 3
 unlocked_by_default = false

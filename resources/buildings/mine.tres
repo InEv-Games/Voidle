@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 250
 building_id = "mine"
 display_name = "Mine"
 description = "Extracts the raw resources under the district."
@@ -15,7 +16,7 @@ min_planet_lv = 1
 construct_duration = 4.0
 tick_duration = 20.0
 energy_per_tick = -1.0
-outputs = {"raw": 3.0}
+outputs = {"raw": 10.0}
 inputs = {}
 planet_bonus = {}
 tier = 1

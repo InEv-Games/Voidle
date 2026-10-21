@@ -38,21 +38,22 @@ const INFO := {
 
 # ── Raw resources ────────────────────────────────────────────────────────────
 ## Named raw resources. `bodies` = planet types that carry it (empty = any),
-## `min_hop` = how many systems from home before it appears there.
+## Which civilization opens a mineral follows its rarity: R1–2 Tip 0 (Ferrite,
+## Moonstone), R3–4 Tip 1, R5–6 Tip 2 … R11–12 Tip 5 (see mineral_civ).
 ## Higher rarity converts into more processed goods (see yield_mult).
 const RAW_TABLE := [
-	{"id": "ferrite",     "name": "Ferrite",     "rarity": 1,  "color": Color(0.66, 0.58, 0.52), "bodies": [0, 1, 4],    "min_hop": 0},
-	{"id": "moonstone",   "name": "Moonstone",   "rarity": 2,  "color": Color(0.80, 0.84, 0.95), "bodies": [6],          "min_hop": 0},
-	{"id": "cinderite",   "name": "Cinderite",   "rarity": 3,  "color": Color(0.98, 0.45, 0.20), "bodies": [3],          "min_hop": 0},
-	{"id": "cryolite",    "name": "Cryolite",    "rarity": 4,  "color": Color(0.55, 0.88, 1.00), "bodies": [2],          "min_hop": 0},
-	{"id": "dune_quartz", "name": "Dune Quartz", "rarity": 5,  "color": Color(0.98, 0.82, 0.45), "bodies": [1],          "min_hop": 1},
-	{"id": "helion",      "name": "Helion",      "rarity": 6,  "color": Color(0.85, 0.70, 1.00), "bodies": [5],          "min_hop": 0},
-	{"id": "astralite",   "name": "Astralite",   "rarity": 7,  "color": Color(0.60, 0.98, 0.80), "bodies": [7],          "min_hop": 0},
-	{"id": "aurorium",    "name": "Aurorium",    "rarity": 8,  "color": Color(0.40, 1.00, 0.60), "bodies": [0, 2],       "min_hop": 2},
-	{"id": "xenite",      "name": "Xenite",      "rarity": 9,  "color": Color(0.30, 0.90, 1.00), "bodies": [5, 6],       "min_hop": 2},
-	{"id": "nyxium",      "name": "Nyxium",      "rarity": 10, "color": Color(0.60, 0.40, 0.95), "bodies": [3, 4],       "min_hop": 3},
-	{"id": "quantium",    "name": "Quantium",    "rarity": 11, "color": Color(1.00, 0.88, 0.30), "bodies": [7],          "min_hop": 3},
-	{"id": "singularite", "name": "Singularite", "rarity": 12, "color": Color(0.95, 0.30, 0.60), "bodies": [],           "min_hop": 4},
+	{"id": "ferrite",     "name": "Ferrite",     "rarity": 1,  "color": Color(0.66, 0.58, 0.52), "bodies": [0, 1, 4]},
+	{"id": "moonstone",   "name": "Moonstone",   "rarity": 2,  "color": Color(0.80, 0.84, 0.95), "bodies": [6]},
+	{"id": "cinderite",   "name": "Cinderite",   "rarity": 3,  "color": Color(0.98, 0.45, 0.20), "bodies": [3]},
+	{"id": "cryolite",    "name": "Cryolite",    "rarity": 4,  "color": Color(0.55, 0.88, 1.00), "bodies": [2]},
+	{"id": "dune_quartz", "name": "Dune Quartz", "rarity": 5,  "color": Color(0.98, 0.82, 0.45), "bodies": [1]},
+	{"id": "helion",      "name": "Helion",      "rarity": 6,  "color": Color(0.85, 0.70, 1.00), "bodies": [5]},
+	{"id": "astralite",   "name": "Astralite",   "rarity": 7,  "color": Color(0.60, 0.98, 0.80), "bodies": [7]},
+	{"id": "aurorium",    "name": "Aurorium",    "rarity": 8,  "color": Color(0.40, 1.00, 0.60), "bodies": [0, 2]},
+	{"id": "xenite",      "name": "Xenite",      "rarity": 9,  "color": Color(0.30, 0.90, 1.00), "bodies": [5, 6]},
+	{"id": "nyxium",      "name": "Nyxium",      "rarity": 10, "color": Color(0.60, 0.40, 0.95), "bodies": [3, 4]},
+	{"id": "quantium",    "name": "Quantium",    "rarity": 11, "color": Color(1.00, 0.88, 0.30), "bodies": [7]},
+	{"id": "singularite", "name": "Singularite", "rarity": 12, "color": Color(0.95, 0.30, 0.60), "bodies": []},
 ]
 
 static func raw_info(id: String) -> Dictionary:
@@ -64,17 +65,34 @@ static func raw_info(id: String) -> Dictionary:
 static func is_raw(id: String) -> bool:
 	return not raw_info(id).is_empty()
 
-## Raw resources found on a body (by type and distance from home), lowest rarity first.
+## Civilization type that can extract a mineral: two rarities per type.
+static func mineral_civ(r: Dictionary) -> int:
+	return int(floor((float(r["rarity"]) - 1.0) / 2.0))
+
+## Raw resources a body yields to the current civilization (its mineral set by
+## body type, gated by GameState.civilization_type), lowest rarity first.
+## Every one is extracted from anywhere on the body — no deposits or densities.
 static func raw_for_body(pd: PlanetData) -> Array:
 	var out: Array = []
 	for r: Dictionary in RAW_TABLE:
 		var bodies: Array = r["bodies"]
 		if not bodies.is_empty() and not (int(pd.planet_type) in bodies):
 			continue
-		if pd.system_hop < int(r["min_hop"]):
+		if mineral_civ(r) > GameState.civilization_type:
 			continue
 		out.append(r)
 	return out
+
+## The body's minerals the player has discovered there (empty until a Production
+## building or district has been completed on it — see GameState.discover_body_minerals).
+static func discovered_raw_for_body(pd: PlanetData) -> Array:
+	if pd == null or not GameState.is_body_surveyed(pd.seed):
+		return []
+	return raw_for_body(pd)
+
+## True once the mineral has been discovered anywhere (its name, icon and price may show).
+static func is_mineral_discovered(id: String) -> bool:
+	return GameState.discovered_minerals.has(id)
 
 ## Processed output per unit for a raw input of this rarity: R1 = 1×, R2 = 1.75×,
 ## R3 = 2.5× … so better raw resources stretch further.
@@ -109,13 +127,15 @@ static func fmt(v: float) -> String:
 ## flow and isn't stored). Base caps here;
 ## buildings raise them with BuildingDef.storage = { resource_id: +amount }
 ## ("raw" there raises every raw resource's cap). Population's cap is the
-## per-planet housing (max_population).
-const BASE_CAP := {
-	GOODS:  200.0,
-	FUEL:   200.0,
-	RARE:   100.0,
-	RAW:    500.0,   # per raw resource kind
-}
+## per-planet housing (max_population). Base caps come from the balance profile.
+static func base_cap(key: String) -> float:
+	var c: BalanceConfig = Balance.cfg
+	match key:
+		GOODS: return c.base_cap_goods
+		FUEL:  return c.base_cap_fuel
+		RARE:  return c.base_cap_rare
+		RAW:   return c.base_cap_raw   # per raw resource kind
+	return 0.0
 
 static var _cap_cache: Dictionary = {}
 static var _cap_frame: int = -1
@@ -134,7 +154,7 @@ static func cap(id: String) -> float:
 	if _cap_cache.has(id):
 		return _cap_cache[id]
 	var key := RAW if is_raw(id) else id
-	var total: float = float(BASE_CAP.get(key, 0.0))
+	var total: float = base_cap(key)
 	for pp: PlanetProgress in GameState._planet_progress.values():
 		if not pp.is_colonized:
 			continue
@@ -179,44 +199,120 @@ static func raw_total() -> float:
 		t += amount(r["id"])
 	return t
 
-## The raw resource a converter should feed on: the highest-rarity one with at
-## least `need` in stock (best yield first). "" if none.
-static func best_raw_in_stock(need: float) -> String:
-	var best := ""
-	var best_r := 0
-	for r: Dictionary in RAW_TABLE:
-		if amount(r["id"]) >= need and int(r["rarity"]) > best_r:
-			best = r["id"]
-			best_r = int(r["rarity"])
-	return best
-
 # ── Costs ────────────────────────────────────────────────────────────────────
-## Every building already in a district makes the next one there dearer,
-## whatever its type — districts (and their types) don't affect each other.
-const BUILD_COST_GROWTH := 1.35
-
+## Buildings already in a district make the next one there dearer
+## (Balance.cfg.building_cost_growth each). The profile picks what counts: every
+## building in the district, or only the same model. Districts don't affect each other.
 static func building_cost(pp: PlanetProgress, def: BuildingDef, district_label: String) -> float:
-	var in_district := 0
+	var c: BalanceConfig = Balance.cfg
+	var same_model_only := c.building_counter_scope == "model"
+	var owned := 0
 	if pp != null:
 		for b: Dictionary in pp.buildings_in_district(district_label):
-			in_district += int(b.get("amount", 1))
-	return roundf(def.base_cost * pow(BUILD_COST_GROWTH, float(in_district)))
+			if same_model_only and String(b.get("building_id", "")) != def.building_id:
+				continue
+			owned += int(b.get("amount", 1))
+	return roundf(Balance.geometric(def.base_cost, c.building_cost_growth, owned))
+
+## Named materials one building of this model costs on top of credits
+## (fixed — not grown by the repeat counter). Its own list, else its tier's.
+static func building_materials(def: BuildingDef) -> Dictionary:
+	if not def.build_materials.is_empty():
+		return def.build_materials
+	var c: BalanceConfig = Balance.cfg
+	match def.tier:
+		2: return c.build_materials_tier2
+		3: return c.build_materials_tier3
+		4: return c.build_materials_tier4
+	return {}
+
+## Full price of `count` more of a model in a district: { "credits": Σ each
+## unit's repeat price, material: amount × count, … }. Same rounding as single buys.
+static func building_full_cost(pp: PlanetProgress, def: BuildingDef, district_label: String, count: int = 1) -> Dictionary:
+	var c: BalanceConfig = Balance.cfg
+	var owned := 0
+	if pp != null:
+		for b: Dictionary in pp.buildings_in_district(district_label):
+			if c.building_counter_scope == "model" and String(b.get("building_id", "")) != def.building_id:
+				continue
+			owned += int(b.get("amount", 1))
+	var credits := 0.0
+	for i in count:
+		credits += roundf(Balance.geometric(def.base_cost, c.building_cost_growth, owned + i))
+	var out := {CREDITS: credits}
+	var mats := building_materials(def)
+	for id: String in mats:
+		out[id] = float(mats[id]) * float(count)
+	return out
+
+## Stock of a resource for paying costs (credits and Science included).
+static func payable_amount(id: String) -> float:
+	match id:
+		CREDITS: return GameState.credits
+		SCIENCE: return GameState.science_points
+	return amount(id)
+
+## Why `cost` can't be paid ("" when it can), e.g. "Need 30 Ferrite".
+static func cost_block(cost: Dictionary) -> String:
+	var missing: Array[String] = []
+	for id: String in cost:
+		var need: float = float(cost[id])
+		if need > 0.0 and payable_amount(id) + 0.0001 < need:
+			missing.append("%s %s" % [fmt(need - payable_amount(id)), display_name(id)])
+	return "" if missing.is_empty() else "Need " + ", ".join(missing)
+
+static func can_pay(cost: Dictionary) -> bool:
+	return cost_block(cost) == ""
+
+## Takes the whole cost, or nothing if any part is short.
+static func pay(cost: Dictionary) -> bool:
+	if not can_pay(cost):
+		return false
+	for id: String in cost:
+		var v: float = float(cost[id])
+		if v <= 0.0:
+			continue
+		match id:
+			CREDITS: GameState.spend_credits(v)
+			SCIENCE: GameState.spend_science(v)
+			_:       GameState.consume_resource(id, v)
+	return true
+
+## Short cost text: "450 cr · 30 Ferrite · 5 goods".
+static func cost_text(cost: Dictionary) -> String:
+	var parts: Array[String] = []
+	if cost.has(CREDITS):
+		parts.append("%s cr" % fmt(float(cost[CREDITS])))
+	for id: String in cost:
+		if id != CREDITS:
+			parts.append("%s %s" % [fmt(float(cost[id])), INFO.get(id, {}).get("short", display_name(id))])
+	return " · ".join(parts)
+
+## How many of a model can be bought in a district now (slots, per-district
+## limit and every part of the cost), up to `cap`.
+static func max_buildable(pp: PlanetProgress, def: BuildingDef, poi: POIData, cap: int) -> int:
+	var free_slots: int = pp.district_slots(poi) - pp.slots_used_in_district(poi.label)
+	var n := mini(cap, int(floor(float(free_slots) / float(maxi(def.slot_cost, 1)))))
+	if def.max_per_district > 0:
+		var have := 0
+		for b: Dictionary in pp.buildings_in_district(poi.label):
+			if String(b.get("building_id", "")) == def.building_id:
+				have += int(b.get("amount", 1))
+		n = mini(n, def.max_per_district - have)
+	while n > 0 and not can_pay(building_full_cost(pp, def, poi.label, n)):
+		n -= 1
+	return maxi(n, 0)
 
 # ── Population ────────────────────────────────────────────────────────────────
-## Every City houses this many people before any Population buildings.
-const CITY_BASE_POP:    int = 15_000
-## Founding a non-City district.
-const DISTRICT_POP:     int = 3_000
-## Raising a district from level L to L+1 costs LEVEL_POP_BASE × 2^(L-1)
-## population (2K, 4K, 8K … 512K for Lv 10), so late levels need millions housed.
-const LEVEL_POP_BASE:   int = 2_000
-## Highest level a district can be raised to.
-const MAX_DISTRICT_LEVEL: int = 10
+## Numbers come from the balance profile (Balance.cfg): every City houses
+## city_base_pop before any Population buildings; founding and levelling
+## districts cost population (see below); max_district_level caps districts.
 
 ## Population the k-th district of a City (0-based, Residential ones not
-## counted) takes to found: DISTRICT_POP, then +50% of it for each one before.
+## counted) takes to found: base × (1 + step·k) — 3K, 4.5K, 6K … in "current".
 static func district_found_pop(k: int) -> int:
-	return int(round(DISTRICT_POP * (1.0 + 0.5 * float(k))))
+	var c: BalanceConfig = Balance.cfg
+	return int(round(c.district_found_pop_base * (1.0 + c.district_found_pop_step * float(k))))
 
 ## Founding order of a district among its City's non-Residential districts.
 static func district_index(pd: PlanetData, poi: POIData) -> int:
@@ -236,7 +332,7 @@ static func district_pop_cost(poi: POIData, level: int, pd: PlanetData = null) -
 		return 0
 	var cost := 0
 	if not poi.is_city():
-		cost = district_found_pop(district_index(pd, poi)) if pd != null else DISTRICT_POP
+		cost = district_found_pop(district_index(pd, poi)) if pd != null else district_found_pop(0)
 	for l in range(1, level):
 		cost += level_up_pop(l)
 	return cost
@@ -245,11 +341,8 @@ static func district_pop_cost(poi: POIData, level: int, pd: PlanetData = null) -
 static func level_up_pop_for(poi: POIData, level: int) -> int:
 	return 0 if poi.poi_type == POIData.POIType.RESIDENTIAL else level_up_pop(level)
 
-## Largest slowdown overpopulation causes (0.5 = 50% speed at worst).
-const MAX_POP_SLOWDOWN := 0.5
-
 ## Work speed of a planet: 1 while population fits its housing; past that,
-## production slows (like an energy deficit) down to 1 − MAX_POP_SLOWDOWN.
+## production slows (like an energy deficit) down to 1 − Balance.cfg.pop_max_slowdown.
 ## Population may go negative — nothing is ever locked by it.
 static func pop_speed(pd: PlanetData, pp: PlanetProgress) -> float:
 	var used := used_population(pd, pp)
@@ -258,7 +351,7 @@ static func pop_speed(pd: PlanetData, pp: PlanetProgress) -> float:
 	var mx := max_population(pd, pp)
 	if used <= mx:
 		return 1.0
-	return 1.0 - MAX_POP_SLOWDOWN * (1.0 - clampf(float(mx) / float(used), 0.0, 1.0))
+	return 1.0 - Balance.cfg.pop_max_slowdown * (1.0 - clampf(float(mx) / float(used), 0.0, 1.0))
 
 ## Population needed to found a district of this kind. Cities, orbital stations
 ## and Residential districts need none — housing must always be buildable, or a
@@ -268,16 +361,18 @@ static func founding_pop(def: DistrictDef, pd: PlanetData = null, parent_city: S
 			or def.id == DistrictDef.Type.RESIDENTIAL:
 		return 0
 	if pd == null:
-		return DISTRICT_POP
+		return district_found_pop(0)
 	var k := 0
 	for p: POIData in pd.custom_pois:
 		if p.parent_city == parent_city and not p.is_orbital() and p.poi_type != POIData.POIType.RESIDENTIAL:
 			k += 1
 	return district_found_pop(k)
 
-## Population needed to raise a district from `level` to `level + 1`.
+## Population needed to raise a district from `level` to `level + 1`:
+## base × growth^(level−1) — 2K, 4K, 8K … in "current".
 static func level_up_pop(level: int) -> int:
-	return LEVEL_POP_BASE * (1 << maxi(level - 1, 0))
+	var c: BalanceConfig = Balance.cfg
+	return int(round(Balance.geometric(c.level_pop_base, c.level_pop_growth, maxi(level - 1, 0))))
 
 ## Max population of a planet: City housing + running Population buildings.
 static func max_population(pd: PlanetData, pp: PlanetProgress) -> int:
@@ -288,7 +383,7 @@ static func max_population(pd: PlanetData, pp: PlanetProgress) -> int:
 		if poi.is_orbital():
 			continue
 		if poi.is_city():
-			total += CITY_BASE_POP * scope_bonus(pp, poi.label, POPULATION, pd)
+			total += Balance.cfg.city_base_pop * scope_bonus(pp, poi.label, POPULATION, pd)
 		total += ProductionManager.district_base(pp, poi, POPULATION)   # bonus included
 	for b: Dictionary in pp.buildings:
 		if b.get("constructing", false):
@@ -349,7 +444,7 @@ static func district_pop_used(pp: PlanetProgress, poi: POIData) -> int:
 static func district_housing(pd: PlanetData, pp: PlanetProgress, poi: POIData) -> int:
 	var total := ProductionManager.district_base(pp, poi, POPULATION)
 	if poi.is_city():
-		total += CITY_BASE_POP * scope_bonus(pp, poi.label, POPULATION, pd)
+		total += Balance.cfg.city_base_pop * scope_bonus(pp, poi.label, POPULATION, pd)
 	for b: Dictionary in pp.buildings_in_district(poi.label):
 		if b.get("constructing", false):
 			continue

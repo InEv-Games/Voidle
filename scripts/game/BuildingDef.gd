@@ -18,6 +18,9 @@ enum OutputType { NONE, ENERGY, CREDITS, RAW_MINERAL, REFINED_MINERAL, SCIENCE, 
 @export var max_per_district:  int      = 0
 ## Required skill node to unlock this building. Empty = unlocked by default.
 @export var unlock_skill:      String   = ""
+## Lowest civilization type (0–5) that can build it. Tier 4 models belong to
+## the upper scales' plans and stay closed in Tip 0.
+@export var min_civilization:  int      = 0
 
 ## Production
 @export var construct_duration: float     = 0.0    # build time; 0 = use tick_duration
@@ -48,6 +51,9 @@ enum OutputType { NONE, ENERGY, CREDITS, RAW_MINERAL, REFINED_MINERAL, SCIENCE, 
 ## Storage limit raised per building: { resource_id: +amount }. "raw" raises
 ## every raw resource's cap. See Economy.cap.
 @export var storage: Dictionary = {}
+## Named materials to build one, on top of credits: { resource_id: amount }.
+## Empty = the tier's default from the balance profile (Economy.building_materials).
+@export var build_materials: Dictionary = {}
 ## Workers a building employs (population it uses). -1 = derive: housing 0,
 ## City (planet-wide boost) buildings 1K, others by tier (500 / 1.5K / 3K …).
 @export var pop_cost: int = -1
@@ -104,11 +110,22 @@ func output_label() -> String:
 func input_label() -> String:
 	var parts: Array[String] = []
 	for id: String in inputs:
-		parts.append("−%s %s" % [_num(float(inputs[id])), Economy.INFO.get(id, {}).get("short", id)])
+		parts.append("−%s %s" % [_num(float(inputs[id])), Economy.INFO.get(id, {}).get("short", Economy.display_name(id))])
 	return " · ".join(parts)
 
 static func _num(v: float) -> String:
 	return "%d" % int(v) if is_equal_approx(v, round(v)) else "%.1f" % v
+
+## True when every mineral this model's recipe or build cost names has been
+## discovered — until then the model stays hidden so the name doesn't leak.
+func minerals_known() -> bool:
+	for id: String in inputs:
+		if Economy.is_raw(id) and not Economy.is_mineral_discovered(id):
+			return false
+	for id: String in Economy.building_materials(self):
+		if Economy.is_raw(id) and not Economy.is_mineral_discovered(id):
+			return false
+	return true
 
 ## Fills the legacy single-output fields from `outputs` so older UI code that
 ## reads output_type / output_amount keeps working.
@@ -135,6 +152,9 @@ func _derive_legacy_fields() -> void:
 ## ── Site requirements (the district's resource tags, see ResourceMap) ──────
 ## Tag this building needs at the district site: "geothermal", "solar", "wind",
 ## "tidal" or "" for none, and the minimum value (0..1) of that tag.
+## Visible features the site must stand on (any one, full share) — e.g.
+## ["terrain_wind"]. FeatureMap / POIData.site_features.
+@export var required_features: Array[String] = []
 @export var required_tag: String = ""
 @export var required_min: float  = 0.0
 ## Needs a coastal site.
@@ -184,6 +204,9 @@ static func terrain_label(t: int) -> String:
 func site_block_reason(poi: POIData) -> String:
 	if poi == null:
 		return ""
+	var feat := FeatureMap.requirement_block(poi.site_features, required_features)
+	if feat != "":
+		return feat
 	if requires_coastal and not poi.coastal:
 		return "Needs a coastal site"
 	if not required_terrain.is_empty() and not (poi.terrain in required_terrain):
@@ -260,6 +283,10 @@ static func available_buildings() -> Array[BuildingDef]:
 	for b in all():
 		if b.unlock_skill != "" and (st == null or not st.is_unlocked(b.unlock_skill)):
 			continue
+		if b.min_civilization > GameState.civilization_type:
+			continue
+		if not b.minerals_known():
+			continue   # never show a model whose recipe or cost names an undiscovered mineral
 		# a building the research tree grants is available once that node is bought
 		if st != null and st.node_for_building(b.building_id) != "":
 			if st.building_unlocked(b.building_id):

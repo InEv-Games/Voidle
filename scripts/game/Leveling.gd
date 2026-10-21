@@ -3,16 +3,14 @@ extends RefCounted
 
 ## Level rules for districts, cities and the planet — each tier is unlocked by
 ## the one below it:
-##   District  the Capital District levels freely; any other district needs a
-##             road partner (POIData.neighbors) already at the target level, so
-##             levels spread outward from the Capital. Costs credits + population;
-##             gives +2 building slots and more base income.
+##   District  levels freely (no road partner needed). Costs credits +
+##             population; gives +2 building slots and more base income.
 ##   City      needs a total of city_level_req(next) district levels in the City
 ##             (Capital District included). Costs credits + population; each
 ##             level lets the City hold more districts.
 ##   Planet    needs a total of planet_level_req(next) city levels; each level
 ##             lets the planet hold one more City.
-## First-pass balance numbers — tune here.
+## Balance numbers come from the active profile (Balance.cfg).
 
 ## Badge colour for a level: cool at Lv1, warming towards gold at Lv5+.
 static func level_color(lv: int) -> Color:
@@ -24,23 +22,18 @@ static func level_color(lv: int) -> Color:
 
 ## Credits to raise a district from `lv` to `lv + 1`.
 static func district_level_credits(lv: int) -> float:
-	return 400.0 * pow(2.2, float(lv - 1))
+	return Balance.geometric(Balance.cfg.level_credit_base, Balance.cfg.level_credit_growth, lv - 1)
 
 ## Why `poi` can't go up a level right now ("" when it can).
 static func district_level_block(pd: PlanetData, pp: PlanetProgress, poi: POIData) -> String:
 	var lv: int = pp.district_levels.get(poi.label, 1)
 	if pp.is_district_upgrading(poi.label):
 		return "Already upgrading"
-	if lv >= Economy.MAX_DISTRICT_LEVEL:
+	if lv >= Balance.cfg.max_district_level:
 		return "Max level"
 	if poi.is_orbital():
 		return "Stations don't level — level the Orbit for more stations"
-	if poi.is_city():
-		return ""   # the Capital District leads
-	for nb: String in poi.neighbors:
-		if int(pp.district_levels.get(nb, 1)) >= lv + 1:
-			return ""
-	return "Needs a road-linked neighbour at Lv %d first" % (lv + 1)
+	return ""
 
 # ── Cities ───────────────────────────────────────────────────────────────────
 
@@ -66,15 +59,21 @@ static func city_district_levels(pd: PlanetData, pp: PlanetProgress, city: POIDa
 			total += int(pp.district_levels.get(p.label, 1))
 	return total
 
-## Total district levels a City needs to reach level `next`: 3, 9, 18, 30 …
+## Total district levels a City needs to reach level `next`: round(a·n² + b·n + c)
+## — 3, 9, 18, 30 … in "current".
 static func city_level_req(next: int) -> int:
-	return int(round(1.5 * float(next) * float(next - 1)))
+	var c: BalanceConfig = Balance.cfg
+	var n := float(next)
+	return int(round(c.city_level_req_a * n * n + c.city_level_req_b * n + c.city_level_req_c))
 
 static func city_level_credits(next: int) -> float:
-	return 1500.0 * pow(2.5, float(next - 2))
+	return Balance.geometric(Balance.cfg.city_level_credit_base, Balance.cfg.city_level_credit_growth, next - 2)
 
+## Population for City level `next`: base × (next−1 if linear) × growth^(next−2).
 static func city_level_pop(next: int) -> int:
-	return 4000 * (next - 1)
+	var c: BalanceConfig = Balance.cfg
+	var lin := float(next - 1) if c.city_level_pop_linear else 1.0
+	return int(round(c.city_level_pop_base * lin * pow(c.city_level_pop_growth, float(next - 2))))
 
 ## Population a City's levels occupy (all levels gained so far).
 static func city_pop_cost(lv: int) -> int:
@@ -96,7 +95,8 @@ static func city_level_block(pd: PlanetData, pp: PlanetProgress, city: POIData) 
 # ── Orbit ────────────────────────────────────────────────────────────────────
 ## The Orbit takes one City slot. Lv n holds n Space Stations, each with a
 ## single module; it levels once every station is up with its module built.
-const MAX_ORBIT_LEVEL := 5
+static func max_orbit_level() -> int:
+	return Balance.cfg.max_orbit_level
 
 static func orbit_stations(pd: PlanetData) -> Array[POIData]:
 	var out: Array[POIData] = []
@@ -106,10 +106,10 @@ static func orbit_stations(pd: PlanetData) -> Array[POIData]:
 	return out
 
 static func orbit_level_credits(next: int) -> float:
-	return city_level_credits(next) * 1.2
+	return city_level_credits(next) * Balance.cfg.orbit_level_credit_mult
 
 static func orbit_level_block(pd: PlanetData, pp: PlanetProgress) -> String:
-	if pp.orbit_level >= MAX_ORBIT_LEVEL:
+	if pp.orbit_level >= max_orbit_level():
 		return "Max level"
 	var stations := orbit_stations(pd)
 	if stations.size() < pp.orbit_level:
@@ -141,9 +141,9 @@ static func planet_city_levels(pd: PlanetData, pp: PlanetProgress) -> int:
 			total += city_level(pp, p)
 	return total
 
-## Total city levels a planet needs to reach level `next`: 3, 5, 7 …
+## Total city levels a planet needs to reach level `next`: a·n + b — 3, 5, 7 … in "current".
 static func planet_level_req(next: int) -> int:
-	return 2 * next - 1
+	return Balance.cfg.planet_level_req_a * next + Balance.cfg.planet_level_req_b
 
 static func planet_level_block(pd: PlanetData, pp: PlanetProgress) -> String:
 	var need := planet_level_req(pp.level + 1)

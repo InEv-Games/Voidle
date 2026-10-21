@@ -1,0 +1,126 @@
+## Location economy (docs/design/VOIDLE_GDD.md §7): real surface distances in km,
+## proximity contributions and the distance bonus. Roads, intersections and
+## what lies in between play no part — only physical distance.
+##
+## A district's location multiplier = 1 + proximity + centres + distance bonus.
+## It applies once to the district's base income and to every building in it.
+##   proximity  every other finished district of the same family:
+##              very near +proximity_very_near, near +proximity_near (no
+##              diminishing, no source cap — Balance.cfg.proximity_cap is a total cap, 0 = none)
+##   centres    every City (its Capital District) in reach supports all families
+##   distance   by the nearest other finished district: 0 / 12.5 / 25 / 37.5 / 50 %
+## Numbers come from Balance.cfg. Results are cached per planet until a
+## district is placed, finished or removed.
+class_name Location
+extends RefCounted
+
+## Distance labels, nearest first.
+enum Band { VERY_NEAR, NEAR, MID, FAR, VERY_FAR }
+
+static var _cache: Dictionary = {}   # seed -> { "sig": String, "mult": {label: Dictionary} }
+
+## Surface radius of a body in km (reference world × planet_size).
+static func radius_km(pd: PlanetData) -> float:
+	return Balance.cfg.planet_radius_km * maxf(pd.planet_size, 0.05)
+
+static func distance_km(pd: PlanetData, a: POIData, b: POIData) -> float:
+	return TerrainSampler.angular_distance(deg_to_rad(a.lon_deg), deg_to_rad(a.lat_deg),
+		deg_to_rad(b.lon_deg), deg_to_rad(b.lat_deg)) * radius_km(pd)
+
+## Band of a distance: ≤ very_near, ≤ near, ≤ mid, < far, then very far.
+static func band(km: float) -> Band:
+	var c: BalanceConfig = Balance.cfg
+	if km <= c.distance_very_near_km: return Band.VERY_NEAR
+	if km <= c.distance_near_km:      return Band.NEAR
+	if km <= c.distance_mid_km:       return Band.MID
+	if km < c.distance_far_km:        return Band.FAR
+	return Band.VERY_FAR
+
+static func band_label(b: Band) -> String:
+	return ["Very near", "Near", "Mid", "Far", "Very far"][int(b)]
+
+static func band_bonus(b: Band) -> float:
+	var bonuses: Array = Balance.cfg.distance_bonuses
+	return float(bonuses[int(b)]) if int(b) < bonuses.size() else 0.0
+
+## Districts that count as places on the map: finished, on the surface.
+static func _counts(p: POIData) -> bool:
+	return not p.constructing and not p.is_orbital()
+
+## Family key for proximity: the district type ("city" = a centre).
+static func family(p: POIData) -> String:
+	return p.type_tag
+
+## Full breakdown for a district (or a placement probe with label ""):
+## { "mult": float, "proximity": float, "centre": float, "distance": float,
+##   "nearest_km": float, "band": Band, "sources": [{ "poi", "km", "share", "kind" }] }
+static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
+	if pd == null or poi == null:
+		return {"mult": 1.0, "proximity": 0.0, "centre": 0.0, "distance": 0.0,
+			"nearest_km": INF, "band": Band.VERY_FAR, "sources": []}
+	if poi.label != "":
+		var cached := _cached(pd, poi.label)
+		if not cached.is_empty():
+			return cached
+	var c: BalanceConfig = Balance.cfg
+	var prox := 0.0
+	var centre := 0.0
+	var nearest := INF
+	var sources: Array = []
+	for p: POIData in pd.custom_pois:
+		if p == poi or (poi.label != "" and p.label == poi.label) or not _counts(p):
+			continue
+		var km := distance_km(pd, poi, p)
+		nearest = minf(nearest, km)
+		var b := band(km)
+		if b != Band.VERY_NEAR and b != Band.NEAR:
+			continue
+		if p.is_city():   # a centre supports every family in reach
+			var cs := c.centre_very_near if b == Band.VERY_NEAR else c.centre_near
+			centre += cs
+			sources.append({"poi": p, "km": km, "share": cs, "kind": "centre"})
+		elif family(p) == family(poi) and not poi.is_city():
+			var ps := c.proximity_very_near if b == Band.VERY_NEAR else c.proximity_near
+			prox += ps
+			sources.append({"poi": p, "km": km, "share": ps, "kind": "family"})
+	if c.proximity_cap > 0.0:
+		prox = minf(prox, c.proximity_cap)
+	var nb := band(nearest) if nearest != INF else Band.VERY_FAR
+	var dist := band_bonus(nb)
+	var out := {"mult": 1.0 + prox + centre + dist, "proximity": prox, "centre": centre,
+		"distance": dist, "nearest_km": nearest, "band": nb, "sources": sources}
+	if poi.label != "":
+		_store(pd, poi.label, out)
+	return out
+
+## The district's location multiplier (1 = no bonus).
+static func mult(pd: PlanetData, poi: POIData) -> float:
+	return float(breakdown(pd, poi)["mult"])
+
+static func invalidate(planet_seed: int = -1) -> void:
+	if planet_seed < 0:
+		_cache.clear()
+	else:
+		_cache.erase(planet_seed)
+
+# Cache: valid while the set of finished surface districts is unchanged.
+static func _signature(pd: PlanetData) -> String:
+	var built := 0
+	for p: POIData in pd.custom_pois:
+		if _counts(p):
+			built += 1
+	return "%d|%d|%s" % [pd.custom_pois.size(), built, Balance.profile_name]
+
+static func _cached(pd: PlanetData, label: String) -> Dictionary:
+	var entry: Dictionary = _cache.get(pd.seed, {})
+	if entry.is_empty() or entry["sig"] != _signature(pd):
+		return {}
+	return entry["mult"].get(label, {})
+
+static func _store(pd: PlanetData, label: String, value: Dictionary) -> void:
+	var sig := _signature(pd)
+	var entry: Dictionary = _cache.get(pd.seed, {})
+	if entry.is_empty() or entry["sig"] != sig:
+		entry = {"sig": sig, "mult": {}}
+		_cache[pd.seed] = entry
+	entry["mult"][label] = value

@@ -634,7 +634,7 @@ func set_allowed_rects(rects: Array[Rect2]) -> void:
 ## Input blocker — only clicks inside _allowed_rects pass through.
 func _process(_delta: float) -> void:
 	if is_instance_valid(_quest_panel):
-		_quest_panel.position.x = _side_panel_edge() + 40.0   # clear of the panel's open/close tab
+		_place_quest_panel()
 	if not _active or _tutorial_done or _guided_step >= GUIDED_STEPS.size(): return
 	var step: Dictionary = GUIDED_STEPS[_guided_step]
 	if step["type"] == "action":
@@ -1109,7 +1109,7 @@ func _build_quest_ui() -> void:
 	_quest_panel.add_theme_stylebox_override("panel", sb)
 	_quest_panel.custom_minimum_size = Vector2(260, 0)
 	_quest_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	_quest_panel.position    = Vector2(_side_panel_edge() + 40.0, 72)   # kept right of the side panel in _process
+	_place_quest_panel()   # top-right of the screen, kept there in _process
 	_quest_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_quest_panel.modulate.a  = 0.0
 	add_child(_quest_panel)
@@ -1280,6 +1280,11 @@ func _advance_quest_sub() -> void:
 	else:
 		# More sub-steps remain — check if the next one is already done too
 		_check_quest_sub_already_done()
+
+## Objectives sit at the top-right, below the settings button and clear of the map's middle.
+func _place_quest_panel() -> void:
+	var vp := get_viewport().get_visible_rect().size
+	_quest_panel.position = Vector2(vp.x - maxf(_quest_panel.size.x, 260.0) - 24.0, 72.0)
 
 func _dismiss_quest_panel() -> void:
 	_quest_done = true

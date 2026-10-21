@@ -4,20 +4,21 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 0
+required_features = Array[String](["terrain_seacoast"])
 building_id = "seaside_villas"
 display_name = "Seaside Villas"
-description = "Sought-after homes by the sea. Only on coastal sites."
+description = "Sought-after homes by the sea. Must stand on a sea coast."
 allowed_poi_types = Array[int]([7])
 allowed_planet_types = Array[int]([])
-base_cost = 600.0
-slot_cost = 1
+base_cost = 360.0
+slot_cost = 2
 min_planet_lv = 1
 construct_duration = 6.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = -1.0
-outputs = {"population": 8000.0}
-inputs = {}
+outputs = {"population": 6000.0}
+inputs = {"goods": 0.333333}
 planet_bonus = {}
 tier = 2
 unlocked_by_default = true
-requires_coastal = true

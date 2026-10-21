@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_def")
+min_civilization = 1
 building_id = "antimatter_chamber"
 display_name = "Antimatter Plant"
 description = "Enormous output for a heavy Fuel Rod appetite."
@@ -13,10 +14,10 @@ base_cost = 5500.0
 slot_cost = 1
 min_planet_lv = 1
 construct_duration = 4.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = 0.0
 outputs = {"energy": 50.0}
-inputs = {"fuel": 3.0}
+inputs = {"fuel": 2.0}
 planet_bonus = {}
 tier = 4
 unlocked_by_default = false

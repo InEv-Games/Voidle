@@ -1,5 +1,6 @@
 ## Back/forward history for the map views (Galaxy › System › Planet › City/District)
-## and the navigation HUD that drives it — so right-click stays free for actions.
+## and the navigation HUD (top-centre of the map) that drives it — so
+## right-click stays free for actions.
 ##
 ## Views report where the player is with visit(). Going back/forward restores an
 ## entry: in place via the view's nav_apply(entry) when it's already showing that
@@ -247,12 +248,13 @@ func _process(_delta: float) -> void:
 	_bar.visible = on_map and not SkillTreeView.is_open and not (_user_hidden and GameState.showcase_mode)
 	if not _bar.visible:
 		return
-	# bottom-centre of the map area (the right part of the screen beside the side panel)
+	# top-centre of the map area (the part of the screen beside the side panel);
+	# the bottom edge belongs to the lens / role buttons
 	var vp := get_viewport().get_visible_rect().size
 	var frac := 1.0 if GameState.showcase_mode else clampf(HUDManager.view_area_fraction, 0.3, 1.0)
 	var cx := vp.x * (1.0 - frac) + vp.x * frac * 0.5
 	_bar.reset_size()
-	_bar.position = Vector2(roundf(cx - _bar.size.x * 0.5), vp.y - _bar.size.y - 14.0)
+	_bar.position = Vector2(roundf(cx - _bar.size.x * 0.5), 12.0)
 
 ## Unhandled, so typing in text fields (dev console) never triggers navigation.
 func _unhandled_input(event: InputEvent) -> void:

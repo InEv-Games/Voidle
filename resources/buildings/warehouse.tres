@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 250
 building_id = "warehouse"
 display_name = "Warehouse"
 description = "Storage halls for raw resources and processed goods. Raises storage limits."
@@ -13,11 +14,11 @@ base_cost = 300.0
 slot_cost = 1
 min_planet_lv = 1
 construct_duration = 5.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = -1.0
 outputs = {}
 inputs = {}
 planet_bonus = {}
 tier = 1
 unlocked_by_default = true
-storage = {"raw": 500.0, "goods": 150.0, "fuel": 150.0, "rare_elements": 75.0}
+storage = {"raw": 1000.0, "goods": 150.0, "fuel": 150.0, "rare_elements": 75.0}

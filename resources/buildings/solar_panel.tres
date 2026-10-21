@@ -4,16 +4,17 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 250
 building_id = "solar_panel"
 display_name = "Solar Array"
-description = "Clean energy from sunlight. Output scales with the site's solar rating."
+description = "Clean energy from sunlight. +30% on a desert."
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([])
 base_cost = 150.0
 slot_cost = 1
 min_planet_lv = 1
 construct_duration = 4.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = 0.0
 outputs = {"energy": 3.0}
 inputs = {}

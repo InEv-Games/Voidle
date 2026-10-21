@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BuildingDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "coastal_apartments"
+allowed_poi_types = Array[int]([7])
+allowed_planet_types = Array[int]([])
+tick_duration = 20.0
+unlocked_by_default = true
+display_name = "Coastal Apartments"
+tier = 2
+slot_cost = 2
+base_cost = 432.0
+outputs = {"population": 9000.0}
+inputs = {"goods": 0.333333}
+energy_per_tick = -3.0
+pop_cost = 0
+required_features = Array[String](["terrain_seacoast"])
+unlock_skill = "unlock_seaside_villas"
+construct_duration = 4.0
+description = "Dense homes on the shore — more housing than Seaside Villas, more power. Must stand on a sea coast."

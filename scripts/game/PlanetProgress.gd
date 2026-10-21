@@ -69,6 +69,8 @@ static func city_upgrade_duration(target_lv: int) -> float:
 static func district_upgrade_duration(target_lv: int) -> float:
 	return 5.0 * target_lv
 
+## Planet level-up cost. Credits follow the balance profile ("legacy" table or
+## geometric); materials are the same either way for now.
 func get_upgrade_cost() -> Dictionary:
 	var cost := {}
 	var next_lv := level + 1
@@ -83,6 +85,9 @@ func get_upgrade_cost() -> Dictionary:
 			cost["ANY_T1"]  = 250 * next_lv          # any raw resources
 			if next_lv > 4:
 				cost[Economy.GOODS] = 50 * (next_lv - 4)  # later levels need Consumer Goods
+	var c: BalanceConfig = Balance.cfg
+	if c.planet_level_credit_mode == "geometric":
+		cost["credits"] = roundf(Balance.geometric(c.planet_level_credit_base, c.planet_level_credit_growth, next_lv - 2))
 	return cost
 
 func recalculate_limits() -> void:
@@ -137,7 +142,7 @@ func max_cities() -> int:
 
 func can_upgrade_district(district_label: String) -> bool:
 	var lv: int = district_levels.get(district_label, 1)
-	return lv < Economy.MAX_DISTRICT_LEVEL and not district_upgrading.has(district_label)
+	return lv < Balance.cfg.max_district_level and not district_upgrading.has(district_label)
 
 func is_district_upgrading(district_label: String) -> bool:
 	return district_upgrading.has(district_label)

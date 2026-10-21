@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 250
 building_id = "commercial"
 display_name = "Market"
 description = "Local commerce. Produces credits."

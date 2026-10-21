@@ -308,9 +308,11 @@ func _process(delta: float) -> void:
 
 func _update_continue_btn() -> void:
 	if not is_instance_valid(_cont_btn): return
-	var has := GameState.has_save()
+	var block := GameState.save_block_reason()
+	var has := GameState.has_save() and block == ""
 	_cont_btn.disabled = not has
 	_cont_btn.modulate = Color(1, 1, 1, 1.0 if has else 0.3)
+	_cont_btn.tooltip_text = block   # why an existing save can't be continued
 
 func _on_new_game() -> void:
 	AudioManager.play("click", 0.0)

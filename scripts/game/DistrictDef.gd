@@ -73,9 +73,14 @@ func site_breakdown(poi: POIData) -> Array:
 func income_from(key: String) -> Dictionary:
 	return neighbor_income.get(key, {})
 
-## Base income grows +50% per district level above 1.
+## District output by level (Balance.cfg): linear 1 + step·(L−1) — +50% per
+## level in "current" — or geometric growth^(L−1).
 static func level_mult(level: int) -> float:
-	return 1.0 + 0.5 * float(maxi(level, 1) - 1)
+	var c: BalanceConfig = Balance.cfg
+	var l := float(maxi(level, 1) - 1)
+	if c.level_output_mode == "geometric":
+		return pow(c.level_output_growth, l)
+	return 1.0 + c.level_output_step * l
 
 ## Lower-case type key used by neighbor_bonuses and POIData.type_tag.
 func type_key() -> String:
@@ -130,13 +135,9 @@ static func find(district_type: Type) -> DistrictDef:
 # ── Factory ───────────────────────────────────────────────────────────────────
 
 ## Credits to place a district. The type doesn't matter — the price grows with
-## how many districts its City already has (×DISTRICT_COST_GROWTH each), so a
+## how many districts its City already has (× district_cost_growth each), so a
 ## City of five Commercial districts costs the same as a mixed one. Cities grow
-## in price per City on the planet; a planet's first City is free.
-const DISTRICT_BASE_COST := 300.0
-const DISTRICT_COST_GROWTH := 1.6
-const CITY_BASE_COST := 2500.0
-const CITY_COST_GROWTH := 2.5
+## in price per City on the planet; a planet's first City is free. (Balance.cfg)
 
 static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: String = "") -> float:
 	if def.is_orbital:
@@ -148,8 +149,9 @@ static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: Stri
 				cities += 1
 		if cities > 0 and GameState.get_planet(data.seed).orbit_level > 0:
 			cities += 1   # the Orbit takes a City slot
-		return 0.0 if cities == 0 else roundf(CITY_BASE_COST * pow(CITY_COST_GROWTH, float(cities - 1)))
-	return roundf(DISTRICT_BASE_COST * pow(DISTRICT_COST_GROWTH, float(districts_in_city(data, parent_city))))
+		return 0.0 if cities == 0 else roundf(Balance.geometric(Balance.cfg.city_base_cost, Balance.cfg.city_cost_growth, cities - 1))
+	return roundf(Balance.geometric(Balance.cfg.district_base_cost, Balance.cfg.district_cost_growth,
+		districts_in_city(data, parent_city)))
 
 ## Districts already built under a City (orbital ones not counted).
 static func districts_in_city(data: PlanetData, parent_city: String) -> int:

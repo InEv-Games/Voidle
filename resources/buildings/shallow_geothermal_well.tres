@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BuildingDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "shallow_geothermal_well"
+allowed_poi_types = Array[int]([2])
+allowed_planet_types = Array[int]([])
+tick_duration = 20.0
+unlocked_by_default = true
+display_name = "Shallow Geothermal Well"
+tier = 1
+slot_cost = 1
+base_cost = 250.0
+outputs = {"energy": 5.0}
+inputs = {}
+energy_per_tick = 0.0
+pop_cost = 250
+output_tag = "geothermal"
+required_features = Array[String](["terrain_volcanic", "terrain_geothermal"])
+unlock_skill = "unlock_geothermal_plant"
+construct_duration = 4.0
+description = "A small first well on hot ground. Must stand on a volcanic field or a geothermal rift."

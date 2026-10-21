@@ -4,21 +4,22 @@
 
 [resource]
 script = ExtResource("1_def")
+pop_cost = 750
 building_id = "logistics_center"
 display_name = "Logistics Center"
-description = "+15% raw extraction and +10% processed output across the whole planet. Adds warehouse space. One per City."
+description = "+10% raw and processed output in this City, and Warehouse-sized storage."
 allowed_poi_types = Array[int]([0])
 allowed_planet_types = Array[int]([])
-base_cost = 4000.0
-slot_cost = 1
+base_cost = 1200.0
+slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
-tick_duration = 30.0
+tick_duration = 20.0
 energy_per_tick = -2.0
 outputs = {}
 inputs = {}
-planet_bonus = {"raw": 0.15, "goods": 0.1, "fuel": 0.1, "rare_elements": 0.1}
-storage = {"raw": 500.0, "goods": 200.0, "fuel": 200.0, "rare_elements": 100.0}
+planet_bonus = {"raw": 0.1, "goods": 0.1, "fuel": 0.1, "rare_elements": 0.1}
+storage = {"raw": 1000.0, "goods": 150.0, "fuel": 150.0, "rare_elements": 75.0}
 tier = 2
 unlocked_by_default = false
 planet_wide = true

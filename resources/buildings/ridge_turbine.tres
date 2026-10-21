@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BuildingDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "ridge_turbine"
+allowed_poi_types = Array[int]([2])
+allowed_planet_types = Array[int]([])
+tick_duration = 20.0
+unlocked_by_default = true
+display_name = "Ridge Turbine"
+tier = 2
+slot_cost = 2
+base_cost = 900.0
+outputs = {"energy": 18.0}
+inputs = {"goods": 0.333333}
+energy_per_tick = 0.0
+pop_cost = 750
+output_tag = "wind"
+required_features = Array[String](["terrain_wind"])
+unlock_skill = "unlock_wind_turbine"
+construct_duration = 4.0
+description = "Tall turbines on windy ground: four Wind Turbines' worth in two slots. Must stand on a windy region; best on mountains."

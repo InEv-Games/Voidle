@@ -1019,9 +1019,9 @@ func _cell_tip(id: String, base: String) -> String:
 				"Consumed   −%s ⚡" % Economy.fmt(sp.y),
 				"Balance    %s%s ⚡" % ["+" if net >= 0.0 else "", Economy.fmt(net)],
 				"",
-				"A deficit slows energy-using buildings (down to 50% at worst)."]
+				"A deficit lowers what energy-using buildings make (down to %d%% at worst) — cycles keep their length." % int(round((1.0 - Balance.cfg.energy_max_slowdown) * 100.0))]
 			if net < 0.0:
-				lines.append("Now running at %d%% speed." % int(round(pm.get_energy_ratio() * 100.0)))
+				lines.append("Now producing at %d%% output." % int(round(pm.get_energy_ratio() * 100.0)))
 			lines.append("")
 			lines.append(_energy_breakdown_text())
 			return "\n".join(lines)
@@ -1036,9 +1036,9 @@ func _cell_tip(id: String, base: String) -> String:
 					Economy.fmt(Economy.used_population(pd, pp)), Economy.fmt(Economy.max_population(pd, pp))]
 				var spd := Economy.pop_speed(pd, pp)
 				if spd < 0.999:
-					penalty = "\n\n[color=#ff6a5c]Overcrowded — every building and district on this planet works at %d%% speed.[/color]" % int(round(spd * 100.0))
-			return head + "Shown as available / max.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, all production on the planet slows (down to %d%% at worst) until you build homes." % [
-				Economy.fmt(Economy.CITY_BASE_POP), Economy.fmt(Economy.DISTRICT_POP), int(round((1.0 - Economy.MAX_POP_SLOWDOWN) * 100.0))] + penalty
+					penalty = "\n\n[color=#ff6a5c]Overcrowded — every building and district on this planet makes %d%% of its output.[/color]" % int(round(spd * 100.0))
+			return head + "Shown as available / max.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, every finished cycle on the planet makes less (down to %d%% at worst) until you build homes." % [
+				Economy.fmt(Balance.cfg.city_base_pop), Economy.fmt(Economy.district_found_pop(0)), int(round((1.0 - Balance.cfg.pop_max_slowdown) * 100.0))] + penalty
 	var r: float = ProductionManager.resource_rates().get(id, 0.0)
 	return "%s\n\nStored  %s  (max %s)\nPer second  %s%s" % [base, Economy.fmt(Economy.amount(id)),
 		Economy.fmt(Economy.cap(id)), "+" if r >= 0.0 else "", Economy.fmt(r)]
@@ -1118,19 +1118,12 @@ func _refresh_resource_cells() -> void:
 	if _raw_dd != null:
 		_fill_raw_dropdown()
 
-## Raw resources worth listing: anything in stock or found on a colonized body.
+## Raw resources worth listing: discovered ones (or anything in stock).
+## Undiscovered minerals never leak their name here.
 func _listed_raws() -> Array:
-	var ids := {}
-	for pp: PlanetProgress in GameState._planet_progress.values():
-		if not pp.is_colonized:
-			continue
-		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
-		if pd != null:
-			for r: Dictionary in Economy.raw_for_body(pd):
-				ids[r["id"]] = true
 	var out: Array = []
 	for r: Dictionary in Economy.RAW_TABLE:
-		if ids.has(r["id"]) or Economy.amount(r["id"]) > 0.0:
+		if Economy.is_mineral_discovered(r["id"]) or Economy.amount(r["id"]) > 0.0:
 			out.append(r)
 	return out
 

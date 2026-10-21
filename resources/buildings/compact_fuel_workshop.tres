@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="BuildingDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "compact_fuel_workshop"
+allowed_poi_types = Array[int]([1])
+allowed_planet_types = Array[int]([])
+tick_duration = 20.0
+unlocked_by_default = true
+display_name = "Compact Fuel Workshop"
+tier = 1
+slot_cost = 1
+base_cost = 450.0
+outputs = {"fuel": 2.0}
+inputs = {"ferrite": 8.0}
+energy_per_tick = -2.0
+pop_cost = 250
+unlock_skill = "unlock_plasma_smelter"
+construct_duration = 4.0
+description = "A small first Fuel line: 8 Ferrite into 2 Fuel."

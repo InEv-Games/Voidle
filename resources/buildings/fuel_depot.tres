@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BuildingDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "fuel_depot"
+allowed_poi_types = Array[int]([1])
+allowed_planet_types = Array[int]([])
+tick_duration = 20.0
+unlocked_by_default = true
+display_name = "Fuel Depot"
+tier = 1
+slot_cost = 1
+base_cost = 150.0
+outputs = {}
+inputs = {}
+energy_per_tick = -0.5
+pop_cost = 125
+storage = {"fuel": 300.0}
+unlock_skill = "unlock_plasma_smelter"
+construct_duration = 2.0
+description = "+300 Fuel storage."

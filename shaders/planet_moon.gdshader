@@ -100,6 +100,7 @@ void fragment() {
 		// apply craters: dark floor, bright rim
 		surf = mix(surf, color_floor, clamp(-total_depth, 0.0, 1.0));
 		surf = mix(surf, color_rim,   clamp(total_rim, 0.0, 1.0) * (1.0 - mare_mask * 0.8));
+		surf = apply_features(surf, rn, 1.0, TIME);   // FeatureMap: major craters
 
 		// district territory tint
 		vec3 d_rn;
