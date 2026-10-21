@@ -9160,16 +9160,21 @@ func _build_orbit_card(data: PlanetData, pp: PlanetProgress) -> PanelContainer:
 			_build_orbit_panel(data))
 	return card
 
-## The Orbit is offered as a second City type in FOUND CITY once Orbital
-## Assembly is researched — one per planet, and only beside a surface City.
+## The Orbit is offered as a second City type in FOUND CITY — one per planet,
+## and only beside a surface City. It shows before it can be founded (greyed,
+## with the reason) so players can find it.
 func _orbit_option_visible(data: PlanetData) -> bool:
 	var pp := GameState.get_planet(data.seed)
-	return get_node("/root/SkillTree").is_unlocked("unlock_space_station") \
-		and pp.orbit_level == 0 and _city_count(data) > 0
+	var def := DistrictDef.find(DistrictDef.Type.SPACE_STATION)
+	if def == null or not (def.allowed_planet_types.is_empty() or data.planet_type in def.allowed_planet_types):
+		return false
+	return pp.orbit_level == 0 and _city_count(data) > 0
 
 ## Why the Orbit can't be founded right now ("" when it can).
 func _orbit_found_block(data: PlanetData) -> String:
 	var pp := GameState.get_planet(data.seed)
+	if not get_node("/root/SkillTree").is_unlocked("unlock_space_station"):
+		return "Research Orbital Assembly"
 	if Leveling.cities_used(data, pp) >= pp.max_cities():
 		return "No free City slot — level up the planet"
 	if not _has_finished_building(pp, "spaceport"):
