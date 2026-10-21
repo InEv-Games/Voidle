@@ -79,6 +79,10 @@ func _ready() -> void:
 	var cp = HUDManager.get("credits_panel")
 	var bar_h: float = (cp as Control).size.y + 6.0 if cp != null and is_instance_valid(cp as Node) and (cp as Control).size.y > 4.0 else 58.0
 	($UICanvas/SidePanel as Control).offset_top = bar_h
+	($UICanvas/SidePanel as Control).visible = not GameState.showcase_mode
+	if GameState.showcase_mode:
+		_space.anchor_left = 0.0   # no side panel: the system fills the screen
+		await get_tree().process_frame
 
 	var pending = SceneTransition.pending_data
 	SceneTransition.pending_data = null
@@ -110,7 +114,7 @@ func _load_current_angles_from_game_state() -> void:
 		_orbit_tilt = GameState.get_meta("solar_orbit_tilt_%d" % _current.seed, 0.38)
 
 func _go_to_galaxy() -> void:
-	if not GameState.galaxy_unlocked:
+	if not GameState.can_view_galaxy():
 		return
 	_save_current_angles_to_game_state()
 	var gd: GalaxyData = null
@@ -122,9 +126,9 @@ func _go_to_galaxy() -> void:
 
 func _can_access(pd: PlanetData) -> bool:
 	if pd.planet_type == PlanetData.Type.MOON:
-		if not GameState.moon_unlocked:
+		if not GameState.can_view_moon():
 			return false
-		if not GameState.solar_unlocked:
+		if not GameState.can_view_solar():
 			var home_pd: PlanetData = null
 			if _current != null:
 				for p in _current.planets:
@@ -140,7 +144,7 @@ func _can_access(pd: PlanetData) -> bool:
 				if not is_home_moon:
 					return false
 	else:
-		if not GameState.solar_unlocked and pd.seed != GameState.home_planet_seed:
+		if not GameState.can_view_solar() and pd.seed != GameState.home_planet_seed:
 			return false
 	return true
 
@@ -200,7 +204,7 @@ func _apply_current_angles() -> void:
 		_orbit_lines.set_tilt(_orbit_tilt)
 
 func _check_poi_unlock(data: SolarData) -> void:
-	if data.is_home:
+	if data.is_home or GameState.showcase_mode:   # showcase never changes progress
 		return
 	var gd: GalaxyData = data.get_meta("__galaxy_data") as GalaxyData if data.has_meta("__galaxy_data") else null
 	var idx: int       = data.get_meta("__galaxy_star_idx") as int     if data.has_meta("__galaxy_star_idx") else -1
@@ -778,7 +782,7 @@ func _input(event: InputEvent) -> void:
 			_back_charge  += 1
 			if _back_charge >= 3:
 				_back_charge = 0
-				if not GameState.galaxy_unlocked:
+				if not GameState.can_view_galaxy():
 					_show_access_denied_text("Galaxy Nav  LOCKED")
 				else:
 					_go_to_galaxy()
@@ -796,7 +800,7 @@ func _input(event: InputEvent) -> void:
 			_back_charge  += 1
 			if _back_charge >= 3:
 				_back_charge = 0
-				if not GameState.galaxy_unlocked:
+				if not GameState.can_view_galaxy():
 					_show_access_denied_text("Galaxy Nav  LOCKED")
 				else:
 					_go_to_galaxy()

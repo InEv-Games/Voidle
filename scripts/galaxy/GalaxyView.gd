@@ -57,8 +57,9 @@ const STAR_TYPE_NAME: Dictionary = {
 }
 
 func _ready() -> void:
-	HUDManager.set_game_hud(true)
-	TutorialManager.start()
+	HUDManager.set_game_hud(not GameState.showcase_mode)
+	if not GameState.showcase_mode:
+		TutorialManager.start()
 	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
 	_build_right_panel()
 	var gd: GalaxyData = SceneTransition.pending_data as GalaxyData
@@ -74,7 +75,7 @@ func _ready() -> void:
 	_update_right_panel()   # populate stats on first frame
 
 	# First launch (no solar/galaxy unlock) → go straight to home planet
-	if not GameState.solar_unlocked and not GameState.galaxy_unlocked:
+	if not GameState.can_view_solar() and not GameState.can_view_galaxy():
 		var home_pd := GameState.get_home_planet()
 		if home_pd != null:
 			SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", home_pd)
@@ -87,7 +88,8 @@ func _ready() -> void:
 		_tilt     = _galaxy.view_tilt
 		_rotation = _galaxy.view_rotation
 	else:
-		_offset = Vector2(size.x * 0.35, size.y * 0.5)   # center of left 70%
+		# center of the left 70% (the right panel takes the rest; hidden in showcase)
+		_offset = Vector2(size.x * (0.5 if GameState.showcase_mode else 0.35), size.y * 0.5)
 		_zoom   = 2.5
 
 func _build_right_panel() -> void:
@@ -106,6 +108,7 @@ func _build_right_panel() -> void:
 	panel.anchor_top    = 0.0
 	panel.anchor_bottom = 1.0
 	panel.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	panel.visible = not GameState.showcase_mode
 	add_child(panel)
 
 	var vbox := VBoxContainer.new()
@@ -229,7 +232,7 @@ func _process(delta: float) -> void:
 	var mouse   := get_viewport().get_mouse_position()
 	var new_hov := -1
 	for i in _galaxy.star_count():
-		if not _galaxy.is_visible(i):
+		if not _star_visible(i):
 			continue
 		if _star_screen_pos(i).distance_to(mouse) < _hit_radius(i):
 			new_hov = i
@@ -251,6 +254,13 @@ func _process(delta: float) -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 	queue_redraw()
 
+## Showcase reveals and lights every star; otherwise only explored ones and their neighbours.
+func _star_visible(i: int) -> bool:
+	return GameState.showcase_mode or _galaxy.is_visible(i)
+
+func _star_lit(i: int) -> bool:
+	return GameState.showcase_mode or _galaxy.is_unlocked(i)
+
 func _star_screen_pos(i: int) -> Vector2:
 	var p  := _galaxy.positions[i]
 	var rx := p.x * cos(_rotation) - p.y * sin(_rotation)
@@ -271,23 +281,23 @@ func _draw() -> void:
 
 func _draw_lanes() -> void:
 	for link: Vector2i in _galaxy.links:
-		if not (_galaxy.is_visible(link.x) and _galaxy.is_visible(link.y)):
+		if not (_star_visible(link.x) and _star_visible(link.y)):
 			continue
 		var a := _star_screen_pos(link.x)
 		var b := _star_screen_pos(link.y)
-		var bright := _galaxy.is_unlocked(link.x) and _galaxy.is_unlocked(link.y)
+		var bright := _star_lit(link.x) and _star_lit(link.y)
 		draw_line(a, b, Color(0.35, 0.55, 0.90, 0.08 if not bright else 0.13), 3.5, true)
 		draw_line(a, b, Color(0.45, 0.65, 1.00, 0.18 if not bright else 0.38), 1.2, true)
 
 func _draw_stars() -> void:
 	for i in _galaxy.star_count():
-		if not _galaxy.is_visible(i):
+		if not _star_visible(i):
 			continue
 		var pos:     Vector2 = _star_screen_pos(i)
 		var stype:   int     = _galaxy.types[i]
 		var col:     Color   = STAR_COL.get(stype, Color.WHITE)
 		var r:       float   = float(STAR_R.get(stype, 3.5)) * _zoom
-		var unlocked := _galaxy.is_unlocked(i)
+		var unlocked := _star_lit(i)
 		var is_home  := (i == _galaxy.home_idx)
 		var is_hov   := (i == _hovered)
 		var alpha    := 1.0 if unlocked else 0.38

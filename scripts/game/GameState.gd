@@ -66,6 +66,62 @@ var science_points: float = 0.0 :
 var solar_unlocked:    bool = false
 var moon_unlocked:     bool = false
 var galaxy_unlocked:   bool = false
+
+# ── Showcase (read-only viewer) ──────────────────────────────────────────────
+## Read-only mode for marketing captures: every map is viewable, gameplay UI is
+## hidden, the economy is paused and nothing is saved. Never saved itself.
+## Toggle availability with the `voidle/showcase/enabled` project setting.
+var showcase_mode: bool = false
+
+static func showcase_available() -> bool:
+	return bool(ProjectSettings.get_setting("voidle/showcase/enabled", true))
+
+## View access — showcase opens every map without touching the unlock flags.
+func can_view_solar() -> bool:
+	return showcase_mode or solar_unlocked
+
+func can_view_galaxy() -> bool:
+	return showcase_mode or galaxy_unlocked
+
+func can_view_moon() -> bool:
+	return showcase_mode or moon_unlocked
+
+func enter_showcase() -> void:
+	if has_save():
+		save()   # keep any unsaved progress before freezing the world
+	showcase_mode = true
+	ProductionManager.process_mode = Node.PROCESS_MODE_DISABLED
+	ShipManager.process_mode = Node.PROCESS_MODE_DISABLED
+	HUDManager.set_game_hud(false)
+	_show_showcase_hint()
+
+## Brief controls hint that fades out, leaving clean frames for captures.
+func _show_showcase_hint() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 150
+	add_child(layer)
+	var lbl := Label.new()
+	lbl.text = "SHOWCASE  ·  ESC exit  ·  F12 screenshot"
+	var font := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	if font:
+		lbl.add_theme_font_override("font", font)
+	lbl.add_theme_font_size_override("font_size", 10)
+	lbl.add_theme_color_override("font_color", Color(0.75, 0.80, 1.0, 0.85))
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	lbl.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	lbl.position -= Vector2(16, 12)
+	layer.add_child(lbl)
+	var tw := layer.create_tween()
+	tw.tween_interval(4.0)
+	tw.tween_property(lbl, "modulate:a", 0.0, 1.0)
+	tw.tween_callback(layer.queue_free)
+
+func exit_showcase() -> void:
+	showcase_mode = false
+	ProductionManager.process_mode = Node.PROCESS_MODE_INHERIT
+	ShipManager.process_mode = Node.PROCESS_MODE_INHERIT
+
 ## Seed of the planet currently shown in PlanetaryView. -1 when not in that scene.
 var active_planet_seed: int = -1
 var discovered_asteroids: Array[int] = []
@@ -527,6 +583,8 @@ func finish_colonization(planet_seed: int) -> void:
 const SAVE_PATH := "user://voidle_save.dat"
 
 func save() -> void:
+	if showcase_mode:
+		return
 	var data := {
 		"credits":              credits,
 		"science_points":       science_points,

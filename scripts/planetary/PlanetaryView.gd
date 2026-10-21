@@ -251,6 +251,16 @@ func _ready() -> void:
 	GameState.light_last_unix = now
 
 	load_planet(planet_to_load)
+	if GameState.showcase_mode:
+		_enter_showcase_layout()
+
+## Showcase (read-only viewer): no side panel or tab, the globe fills the screen.
+func _enter_showcase_layout() -> void:
+	_panel_open = false
+	_apply_panel_t(0.0)
+	($SidePanel as Control).visible = false
+	if _panel_toggle_btn != null:
+		_panel_toggle_btn.visible = false
 
 func _save_light_angle() -> void:
 	GameState.light_angle     = _light_angle
@@ -476,7 +486,7 @@ func _update_tutorial_highlight() -> void:
 ## Leaves the planet view for the star system (the Local System view is gone —
 ## a body's moons show in the corner when zoomed out). Needs the system unlocked.
 func _go_back() -> void:
-	if not GameState.solar_unlocked:
+	if not GameState.can_view_solar():
 		return
 	AudioManager.set_construction_active(false)
 	_save_light_angle()
@@ -520,6 +530,11 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
+		# Showcase: right-click steps back out to the star system
+		if GameState.showcase_mode and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+			_go_back()
+			get_viewport().set_input_as_handled()
+			return
 		# Tutorial deselect: during generator-district step with panel open,
 		# left-click on planet area closes it so ADD DISTRICT becomes visible.
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT \
@@ -686,7 +701,7 @@ func _companion_list(data: PlanetData) -> Array[PlanetData]:
 
 ## Zooming out past the planet needs the Local System (Lunar Program) and a neighbour.
 func _system_zoom_ok() -> bool:
-	return GameState.moon_unlocked and _companions != null and not _companions.bodies.is_empty()
+	return GameState.can_view_moon() and _companions != null and not _companions.bodies.is_empty()
 
 func _setup_companions(data: PlanetData) -> void:
 	var cont := planet_renderer.get_parent() as Control
@@ -1220,6 +1235,8 @@ func _land_lander(nm: String, def: DistrictDef, site: Vector2) -> void:
 			poi_layer.spawn_floating_text(rad_to_deg(site.x), rad_to_deg(site.y), "Touchdown!", Color(0.65, 1.0, 0.7), 14))
 
 func _maybe_require_first_city() -> void:
+	if GameState.showcase_mode:
+		return
 	if current_data == null or _placing_def != null or _naming_open:
 		return
 	var pp := GameState.get_planet(current_data.seed)
@@ -3607,10 +3624,12 @@ func _place_panel_toggle() -> void:
 
 ## Slides the side panel in if it's hidden (used when the player selects something).
 func _reveal_panel() -> void:
-	if not _panel_open:
+	if not _panel_open and not GameState.showcase_mode:
 		_set_panel_open(true)
 
 func _set_panel_open(open: bool) -> void:
+	if open and GameState.showcase_mode:
+		return
 	_panel_open = open
 	if _panel_tween != null and _panel_tween.is_valid():
 		_panel_tween.kill()
@@ -4183,7 +4202,7 @@ func _prompt_city_name(def: DistrictDef, site: Vector2, cost: float) -> void:
 	edit.select_all()
 
 func _on_planet_clicked(_screen_pos: Vector2) -> void:
-	if _naming_open:
+	if _naming_open or GameState.showcase_mode:
 		return
 	if _placing_def != null:
 		_try_place_district(_screen_pos)
@@ -5557,7 +5576,7 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 	return btn
 
 func _on_district_clicked(index: int, _data: Dictionary) -> void:
-	if index >= poi_layer._pois.size():
+	if GameState.showcase_mode or index >= poi_layer._pois.size():
 		return
 	AudioManager.play("district_hover")
 	if _orbital_layer != null and is_instance_valid(_orbital_layer):

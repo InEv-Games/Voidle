@@ -57,5 +57,5 @@ Sınırsız yakınlık bonusu, boş nüfus geliri ve fiyat eğrileri öncelikli.
 Tip 1'in 50 district'i (GDD P25–P29) ve Tip 2–5 oynanabilir içeriği. Faz 1'deki veri yapısı bunlara uygun kurulur.
 
 ## Açık sorular
-1. Bina fiyat artışı: mevcut (district'teki bütün binalar ×1,35) mi, GDD (aynı model ×1,20) mi?
+1. Bina fiyat sayacı: district'teki bütün binalar (şu an) mı, aynı model (GDD) mi? Oran geçici olarak ×1,07, nihai değer denge testinde.
 2. Boş nüfus hesabında City'nin ücretsiz 15.000 kapasitesi sayılsın mı?

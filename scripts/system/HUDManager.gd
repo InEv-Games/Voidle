@@ -273,6 +273,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		var current_scene := get_tree().current_scene
 		if current_scene == null or current_scene.scene_file_path.ends_with("MainMenu.tscn"):
 			return
+		if GameState.showcase_mode:   # ESC leaves the read-only showcase
+			get_viewport().set_input_as_handled()
+			GameState.exit_showcase()
+			SceneTransition.go("res://scenes/MainMenu.tscn")
+			return
 		if get_tree().paused:
 			if _pause_overlay != null and is_instance_valid(_pause_overlay):
 				get_viewport().set_input_as_handled()

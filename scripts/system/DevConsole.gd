@@ -336,6 +336,9 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]--seed[/color]            — seed of what you're looking at (copied)")
 			_log_info("  [color=#88ddcc]moonlaunch[/color] [color=#aaaaaa][sec] [reset][/color] — send the Moon lander now (default 15s)")
 			_log_info("  [color=#88ddcc]tutorial complete[/color] — skip/finish tutorial")
+			_log_info("[color=#33cc55]── SHOWCASE ──────────────────────────────[/color]")
+			_log_info("  [color=#88ddcc]showcase[/color] [color=#aaaaaa][on|off][/color]      — read-only viewer: enter / leave now")
+			_log_info("  [color=#88ddcc]showcase menu[/color] [color=#aaaaaa]<on|off>[/color] — show/hide the main menu button")
 
 		# ── Credits ─────────────────────────────────────────────────────────
 		"credits":
@@ -546,6 +549,10 @@ func _exec(line: String) -> void:
 			_out_gen += 1   # cancel pending drain
 			_log.clear()
 
+		# ── Showcase ────────────────────────────────────────────────────────
+		"showcase":
+			_cmd_showcase(parts)
+
 		# ── Save ─────────────────────────────────────────────────────────────
 		"save":
 			GameState.save()
@@ -718,6 +725,41 @@ func _cmd_moonlaunch(parts: Array) -> void:
 
 ## Prints (and copies) the seed of whatever the current scene shows: the planet
 ## or moon in the planet view, the star system in the solar view.
+## showcase [on|off] — enter / leave the read-only viewer;
+## showcase menu <on|off> — main menu button for this session
+## (persist it with `voidle/showcase/enabled` in project.godot).
+func _cmd_showcase(parts: Array) -> void:
+	var on_off := func(v: bool) -> String:
+		return "[color=#55ff88]ON[/color]" if v else "[color=#ee5555]OFF[/color]"
+	var arg := String(parts[1]).to_lower() if parts.size() > 1 else ""
+	match arg:
+		"":
+			_log_info("[color=#aaaaaa]showcase[/color]  %s   [color=#aaaaaa]menu button[/color]  %s" \
+				% [on_off.call(GameState.showcase_mode), on_off.call(GameState.showcase_available())])
+		"on":
+			if GameState.showcase_mode:
+				_log_info("Showcase already on.")
+				return
+			GameState.enter_showcase()
+			SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
+			_log_ok("Showcase %s — ESC or `showcase off` to leave." % on_off.call(true))
+		"off":
+			if not GameState.showcase_mode:
+				_log_info("Showcase already off.")
+				return
+			GameState.exit_showcase()
+			SceneTransition.go("res://scenes/MainMenu.tscn")
+			_log_ok("Showcase %s" % on_off.call(false))
+		"menu":
+			var v := String(parts[2]).to_lower() if parts.size() > 2 else ""
+			if v != "on" and v != "off":
+				_log_err("Try: showcase menu on / off")
+				return
+			ProjectSettings.set_setting("voidle/showcase/enabled", v == "on")
+			_log_ok("Main menu button %s (this session; reopen the menu to see it)." % on_off.call(v == "on"))
+		_:
+			_log_err("Try: showcase / showcase on / showcase off / showcase menu on|off")
+
 func _cmd_seed() -> void:
 	var scene := get_tree().current_scene
 	var label := ""

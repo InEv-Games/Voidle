@@ -13,4 +13,6 @@ Bir kural birden fazla yerde farklıysa geçerli olan sıra:
 
 Uygulama planı: [PLAN.md](PLAN.md)
 
+Denge: [BALANCE_RAPORU.md](BALANCE_RAPORU.md) (öneri raporu, test edilmedi) ve [BALANCE_UYGULAMA_PLANI.md](BALANCE_UYGULAMA_PLANI.md) (koda nasıl geçirileceği)
+
 Belgelerde geçen `C:/Users/drosm/Voidle/...` bağlantıları belgeyi hazırlayanın kendi makinesindeki yollardır; repoda karşılıkları bu klasördedir.

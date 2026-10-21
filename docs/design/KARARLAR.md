@@ -8,7 +8,7 @@ Tarih: 21 Ekim 2026
 
 **GDD'de:** Oyuncu bir işleme binasının hangi minerali harcayacağını seçer; aynı model tek kartta mineral alt satırlarıyla gösterilir.
 
-**Kararımız:** Her bina modelinin tek ve sabit bir tarifi vardır. Moonstone harcayan bina Moonstone harcar; Ferrite harcayan bir yapı ayrı bir bina modelidir (örneğin Goods Factory ile Regolit Goods tesisi). Her model kendi fiyat sayacını kullanır. Nadirlik verimi modelin kendi çıktı değerine gömülür. Otomatik en nadir mineral harcama ve genel `raw` havuzu da kalkar.
+**Kararımız:** Her bina modelinin tek ve sabit bir tarifi vardır. Moonstone harcayan bina Moonstone harcar; Ferrite harcayan bir yapı ayrı bir bina modelidir (örneğin Goods Factory ile Regolit Goods tesisi). Tekrar sayacının kapsamı §2'deki açık soruya bağlıdır. Nadirlik verimi modelin kendi çıktı değerine gömülür. Otomatik en nadir mineral harcama ve genel `raw` havuzu da kalkar.
 
 ## 2. District fiyat artışı mevcut haliyle kalır
 
@@ -16,7 +16,11 @@ Tarih: 21 Ekim 2026
 
 **Kararımız:** Bunu daha önce denedik. Fiyatlar çok hızlı yükseldiği için uzmanlaşmış şehirler (örneğin maden şehri) kurmak yerine her şehre her şeyi kurmak mantıklı hale geliyordu ve taktiksel derinlik azalıyordu. Mevcut district fiyatlandırması korunur.
 
-*Açık:* Bina fiyat artışı (GDD: aynı model ×1,20; şu an: district'teki bütün binalar ×1,35) aynı gerekçeyle değerlendirilecek.
+Burada korunan şey **sayacın mantığıdır** (City'deki district'lerin türüne bakılmaksızın sayılması). Oranın kendisi (şu an `DistrictDef.gd`'de ×1,6) denge testinde düşürülebilir; [BALANCE_RAPORU.md](BALANCE_RAPORU.md) ×1,30 öneriyor.
+
+**Bina tekrar oranı:** Hem GDD'nin ×1,20'si hem şu anki ×1,35 idle/incremental için çok yüksek. Geçici başlangıç değeri **×1,07–1,08** (idle oyunlarda tipik aralık 1,07–1,15). Oranlar Economy'de tek bir sabit olarak tutulur; nihai değeri denge testi belirler.
+
+*Açık:* Bina sayacı "district'teki bütün binalar" mı (şu an), "aynı model" mi (GDD)? §1 sabit girdili her modeli ayrı model yapar, ancak tekrar sayacının model bazında mı district bazında mı tutulacağı bu sorudan bağımsızdır ve aynı uzmanlaşma gerekçesiyle değerlendirilecek.
 
 ## 3. Nüfus mevcut sistemde kalır, iki ekleme ile
 
@@ -46,3 +50,15 @@ Güncelle, taşı, içeriği temizle, sıfırla ve yık gibi işlemler seçili n
 ## 7. Genel değerlendirme
 
 GDD'nin geri kalanı kabul edildi. Derinliğin idle oyun için fazla olabileceği bir risk, ancak oyun 4X–Incremental çizgisinde konumlandığı için bu kabul edilebilir. Sayısal denge ayrı bir denge testinden geçecek.
+
+## 8. Fraktal skill ağacı
+
+**GDD'de:** Tip 1'de bütün Tip 0 ağacı tek bir "Tip 0 Mirası" düğümüne dönüşür. Fiyatı sabit: 4.000 × 10^(tip−1) Science.
+
+**Kararımız:**
+- Her medeniyetin skill ağacının **merkez düğümü bir önceki medeniyetin ağacını temsil eder**. Merkez düğüme **çift tıklayınca** o ağaç açılır. Bu özyinelemeli çalışır: Tip 2'nin merkezi Tip 1'i, onun merkezi Tip 0'ı açar.
+- Merkez düğümün altında **"buyout" fiyatı** görünür. Bu, önceki tipin ağacındaki bütün eksik skill'leri tek seferde satın alır.
+- **Buyout fiyatı, eksik skill'lerin toplam fiyatıdır** (eksik seviyeler dahil). İndirim veya sabit taban fiyat yoktur. Böylece Tip 0'da strateji düğümlerini ertelemek ödüllendirilmez.
+- Satın alınmış seviyeler fiyattan düşülür ve iki kez sayılmaz: etkin seviye = max(kendi alınan, buyout ile gelen).
+- GDD'nin "mirasın vermedikleri" listesi (bina, district, keşif, Spaceport, bedava Güncelle yok) geçerlidir. Demoda buyout yalnız önizlemedir.
+- *Açık:* Çapraz dal zammının buyout toplamına dahil edilip edilmeyeceği denge ekibine sorulacak.

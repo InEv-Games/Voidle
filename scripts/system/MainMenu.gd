@@ -187,6 +187,9 @@ func _build_menu() -> void:
 
 	_add_button(root, "NEW GAME",  _on_new_game)
 
+	if GameState.showcase_available():
+		_add_button(root, "SHOWCASE", _on_showcase)
+
 	_add_button(root, "SETTINGS",  _on_settings)
 	_add_button(root, "QUIT",      _on_quit)
 
@@ -316,6 +319,12 @@ func _on_new_game() -> void:
 
 func _on_continue() -> void:
 	AudioManager.play("click", 0.0)
+	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
+
+## Read-only tour of the galaxy, systems and planets (see GameState.showcase_mode).
+func _on_showcase() -> void:
+	AudioManager.play("click", 0.0)
+	GameState.enter_showcase()
 	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
 
 func _on_settings() -> void:
