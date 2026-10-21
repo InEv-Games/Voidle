@@ -101,7 +101,7 @@ func _show_showcase_hint() -> void:
 	layer.layer = 150
 	add_child(layer)
 	var lbl := Label.new()
-	lbl.text = "SHOWCASE  ·  ESC exit  ·  F12 screenshot"
+	lbl.text = "SHOWCASE  ·  ESC exit  ·  H hide navigation  ·  F12 screenshot"
 	var font := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
 	if font:
 		lbl.add_theme_font_override("font", font)

@@ -33,7 +33,7 @@ Geri bildirim gelmeden kodu bu sayılara kilitlemiyoruz. Önce bütün denge say
 | Economy.gd seviye nüfusu | `2.000 × 2^(L−1)` | `level_pop_growth` |
 | Economy.gd:249 | `MAX_POP_SLOWDOWN = 0.5` | `pop_deficit_floor` |
 | [ProductionManager.gd:26](../../scripts/game/ProductionManager.gd) | `MAX_ENERGY_SLOWDOWN = 0.5` | `energy_deficit_floor` |
-| ProductionManager.gd:408 | `ISOLATION_MAX`, `ISOLATION_RANGE_DEG` | `distance_bonus_max` vb. (Faz 3'te km'ye geçecek) |
+| ProductionManager.gd:408 | `ISOLATION_MAX`, `ISOLATION_RANGE_DEG` | `distance_bonus_max` vb. (M2'de km'ye geçecek) |
 | [DistrictDef.gd:77](../../scripts/game/DistrictDef.gd) | `level_mult = 1 + 0,5(L−1)` | `level_output_mode` (`LINEAR` / `GEOMETRIC`), `level_output_growth` |
 | DistrictDef.gd:136–139 | `DISTRICT_BASE_COST`, `DISTRICT_COST_GROWTH`, `CITY_BASE_COST`, `CITY_COST_GROWTH` | aynı adlarla |
 | [Leveling.gd:27](../../scripts/game/Leveling.gd) | district seviye kredisi `400 × 2,2^(L−1)` | `level_credit_base`, `level_credit_growth` |
@@ -41,7 +41,7 @@ Geri bildirim gelmeden kodu bu sayılara kilitlemiyoruz. Önce bütün denge say
 | Leveling.gd:109 | Orbit seviye kredisi `city × 1,2` | `orbit_level_credit_mult` |
 | Leveling.gd:146 | gezegen eşiği `2n − 1` | `planet_level_req_*` |
 | [PlanetProgress.gd:82](../../scripts/game/PlanetProgress.gd) | gezegen kredisi `8.000 × n`, `250 × n` ham | `planet_level_credit_*`, `planet_level_material_*` |
-| [BuildingDef.gd:225](../../scripts/game/BuildingDef.gd) | bina seviye yükseltme `× 1,5^(L−1)` | taşınmaz; GDD'ye göre kaldırılacak (Faz 2) |
+| [BuildingDef.gd:225](../../scripts/game/BuildingDef.gd) | bina seviye yükseltme `× 1,5^(L−1)` | taşınmaz; GDD'ye göre kaldırılacak (M1) |
 | GameState.gd:55, :716 | başlangıç kredisi 500 | `start_credits`, `start_science` |
 | SkillTree.gd | araştırma fiyat formülü | `research_level_mode`, `research_cross_branch` |
 | `resources/buildings/*.tres` | bina tabanları | `.tres` dosyalarında kalır (zaten veri). Toplu ölçek için `building_cost_scale`, `housing_scale` çarpanları. |
@@ -85,10 +85,10 @@ Bunlar bugünkü sistemleri değiştirmeden yalnız sayıları değiştirir. B0'
 | City seviye kredisi | 1.500 × 2,5^(n−2) | 1.200 × 1,8^(n−2) |
 | City seviye eşiği | 1,5·n(n−1) | n(n+1)/2 |
 | City seviye nüfusu | 4.000(n−1) | 3.000 × 1,3^(n−2) |
-| Gezegen seviyesi | 8.000n + 250n ham | 2.500 × 1,8^(n−2) (+ GDD malzemeleri Faz 2'de) |
+| Gezegen seviyesi | 8.000n + 250n ham | 2.500 × 1,8^(n−2) (+ GDD malzemeleri M1'de) |
 | Başlangıç | 500 kredi | 3.000 kredi + 450 Science |
 
-**Dikkat.** Seviye çıktısı bugün yalnız district tabanını ve doğrusal (`1 + 0,5(L−1)`) büyütüyor. Rapor, maliyetin çıktıdan ~1,5 kat hızlı büyümesi kuralını geometrik çıktıya (×1,20) göre kurdu. Bu yüzden B2'deki seviye kredileri **bugünkü doğrusal çıktıyla** fazla ucuz kalabilir. `level_output_mode` alanı bunun için var: profil B'de `GEOMETRIC 1,20`'ye geçiş, binaları da kapsayan çıktı değişikliğiyle (Faz 2) birlikte açılır. O zamana kadar B2 testinde seviye çıktısı modu ayrıca not edilir.
+**Dikkat.** Seviye çıktısı bugün yalnız district tabanını ve doğrusal (`1 + 0,5(L−1)`) büyütüyor. Rapor, maliyetin çıktıdan ~1,5 kat hızlı büyümesi kuralını geometrik çıktıya (×1,20) göre kurdu. Bu yüzden B2'deki seviye kredileri **bugünkü doğrusal çıktıyla** fazla ucuz kalabilir. `level_output_mode` alanı bunun için var: profil B'de `GEOMETRIC 1,20`'ye geçiş, binaları da kapsayan çıktı değişikliğiyle (M1) birlikte açılır. O zamana kadar B2 testinde seviye çıktısı modu ayrıca not edilir.
 
 ---
 
@@ -98,26 +98,26 @@ Bunlar bugünkü sistemleri değiştirmeden yalnız sayıları değiştirir. B0'
   - maliyet `b × r^k × (r^n − 1)/(r − 1)`
   - azami adet `floor(log_r(c(r−1)/(b·r^k) + 1))`
 - Bina yuvası kartında: `×1 / ×5 / Doldur / Azami`. Shift ve Ctrl ile kısayol.
-- Satın alma, Faz 1'deki komut sistemine (`BuildCommand` + `preview`) bağlanır. Önizlemede toplam bedel ve kaç adet alınacağı görünür.
+- Satın alma, M0'daki komut sistemine (`BuildCommand` + `preview`) bağlanır. Önizlemede toplam bedel ve kaç adet alınacağı görünür.
 - Yuva, nüfus ve enerji sınırları azami adedi kısıtlar.
 
 ---
 
 ## B4: Sistem değişikliği gerektiren denge maddeleri
 
-Bunlar ana [PLAN.md](PLAN.md) fazlarının içinde yapılır. Sayıları BalanceConfig'den okunur.
+Bunlar ana [PLAN.md](PLAN.md) kilometre taşlarının (M0–M9) içinde yapılır. Sayıları BalanceConfig'den okunur.
 
 | Madde | Ana plan fazı | Rapor önerisi | Denge ekibinin kararı gerekli mi? |
 |---|---|---|---|
-| Seviye çıktısının binaları da kapsaması, geometrik büyüme | Faz 2 | ×1,20 (B) / ×1,25 (A) | Evet: A mı B mi? |
-| Açıkta süre yerine çıktı düşüşü | Faz 2 | taban 0,5; açık süresi %30'u aşarsa 0,35 | Taban değeri |
-| Boş nüfus geliri | Faz 2 | 1.000 boş nüfus başına +5 kredi/dk ve +1 Science/dk (GDD'nin yarısı), seviye çarpanı yok | Evet: oran ve City tabanının sayılıp sayılmayacağı |
-| Bina seviye yükseltmesinin kaldırılması | Faz 2 | (GDD kararı) | Hayır |
-| Konut değerlerinin GDD'ye çekilmesi (kodda 2,5–13 kat yüksek) | Faz 4 (katalog) | önce GDD değerleri | Hayır, ama boş nüfus geliriyle birlikte ölçülmeli |
-| Mine / Lab zayıflığı | Faz 4 | GDD değerleri | Hayır |
-| Yakınlık tavanı | Faz 3 | tavan +%100 veya azalan paylar (%10 / %5 / %2,5) | Evet: tavan mı, azalan pay mı? |
-| District seviyesinde yol komşusu şartı | Faz 3 | GDD kaldırıyor | Hayır |
-| Fraktal miras fiyatı | Faz 7 | `max(4.000 × 10^(t−1), 0,5 × eksik düğümlerin toplamı)` | Evet (demoda yalnız önizleme, acil değil) |
+| Seviye çıktısının binaları da kapsaması, geometrik büyüme | M1 | ×1,20 (B) / ×1,25 (A) | Evet: A mı B mi? |
+| Açıkta süre yerine çıktı düşüşü | M1 | taban 0,5; açık süresi %30'u aşarsa 0,35 | Taban değeri |
+| Boş nüfus geliri | M1 | 1.000 boş nüfus başına +5 kredi/dk ve +1 Science/dk (GDD'nin yarısı), seviye çarpanı yok | Evet: oran ve City tabanının sayılıp sayılmayacağı |
+| Bina seviye yükseltmesinin kaldırılması | M1 | (GDD kararı) | Hayır |
+| Konut değerlerinin GDD'ye çekilmesi (kodda 2,5–13 kat yüksek) | M3 (katalog) | önce GDD değerleri | Hayır, ama boş nüfus geliriyle birlikte ölçülmeli |
+| Mine / Lab zayıflığı | M3 | GDD değerleri | Hayır |
+| Yakınlık tavanı | M2 | tavan +%100 veya azalan paylar (%10 / %5 / %2,5) | Evet: tavan mı, azalan pay mı? |
+| District seviyesinde yol komşusu şartı | M2 | GDD kaldırıyor | Hayır |
+| Fraktal ağaç buyout fiyatı | M6 | **Karar verildi (KARARLAR §8):** eksik skill'lerin tam toplamı | Yalnız çapraz dal zammının dahil olup olmadığı |
 | Aile başına seviye çarpanı | ilk testten sonra | isteğe bağlı | İlk test sonucuna göre |
 
 ---
@@ -150,10 +150,10 @@ Denge testinin sayısal olması için:
 
 | Adım | Ne zaman | Neden |
 |---|---|---|
-| B0, B1 | **Hemen**, ana plan Faz 1'den önce veya onunla birlikte | Küçük ve bağımsız. Sonraki her iş sayıları buradan okur. |
+| B0, B1 | **Hemen**, ana plan M0'dan önce veya onunla birlikte | Küçük ve bağımsız. Sonraki her iş sayıları buradan okur. |
 | B5 | B1'den hemen sonra | Denge ekibi mevcut oyunu ölçerek test edebilir. |
-| B2 | Geri bildirim gelince (ya da profil B olarak hemen) | Yalnız sayı değişikliği. Bugünkü yapı Faz 2'de değişeceği için bu yapıya fazla ince ayar yapmamak gerekir. |
-| B3 | Ana plan Faz 1'deki komut sistemiyle | Toplu alım bir satın alma komutu. |
+| B2 | Geri bildirim gelince (ya da profil B olarak hemen) | Yalnız sayı değişikliği. Bugünkü yapı M1'de değişeceği için bu yapıya fazla ince ayar yapmamak gerekir. |
+| B3 | Ana plan M0'daki komut sistemiyle | Toplu alım bir satın alma komutu. |
 | B4 | İlgili ana plan fazlarında | Sistem değişiklikleriyle birlikte. |
 | B6 | Sürekli | Her geri bildirim turunda. |
 

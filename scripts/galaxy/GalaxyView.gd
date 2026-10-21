@@ -33,6 +33,7 @@ var _drag_from:     Vector2 = Vector2.ZERO
 var _tilt_dragging: bool    = false
 var _rotation:      float   = 0.0   # horizontal galaxy rotation (radians)
 
+var _right_from:    Vector2 = Vector2.ZERO   # right-press spot: a short click opens the context menu
 var _entry_charge:  int  = 0
 var _entry_target:  int  = -1
 var _entering:      bool = false
@@ -62,6 +63,7 @@ func _ready() -> void:
 		TutorialManager.start()
 	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
 	_build_right_panel()
+	CommandRegistry.add_provider("star", self, _star_commands)
 	var gd: GalaxyData = SceneTransition.pending_data as GalaxyData
 	if gd != null:
 		SceneTransition.pending_data = null
@@ -80,6 +82,8 @@ func _ready() -> void:
 		if home_pd != null:
 			SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", home_pd)
 			return
+	NavigationManager.end_apply()
+	NavigationManager.visit(NavigationManager.galaxy_entry(_galaxy))
 
 	# restore saved camera or default to center
 	if _galaxy.view_zoom > 0.0:
@@ -373,6 +377,10 @@ func _input(event: InputEvent) -> void:
 					_dragging = false
 			MOUSE_BUTTON_RIGHT:
 				_tilt_dragging = mb.pressed
+				if mb.pressed:
+					_right_from = mb.position
+				elif mb.position.distance_to(_right_from) < 6.0 and _hovered >= 0:
+					_open_context_menu(_hovered, mb.global_position)
 			MOUSE_BUTTON_WHEEL_UP:
 				if _hovered >= 0:
 					# hovering a star: never zoom map, only charge entry
@@ -408,6 +416,25 @@ func _input(event: InputEvent) -> void:
 		elif _dragging and mm.relative.length() > 0.5:
 			_offset += mm.relative
 			get_viewport().set_input_as_handled()
+
+# ── Right-click actions (CommandRegistry + ContextMenu) ──────────────────────
+
+func _open_context_menu(star_idx: int, global_pos: Vector2) -> void:
+	if GameState.showcase_mode:
+		return
+	var cmds := CommandRegistry.commands_for("star", {"galaxy": _galaxy, "index": star_idx})
+	var stype: String = STAR_TYPE_NAME.get(int(_galaxy.types[star_idx]), "Star")
+	ContextMenu.open(self, _galaxy.names[star_idx], stype, cmds, global_pos)
+
+func _star_commands(t: Dictionary) -> Array:
+	return [GameCommand.make("enter_system", "Enter system", _enter_star.bind(int(t["index"])),
+		Callable(), {"icon": "☉", "color": Color(0.60, 0.75, 1.0)})]
+
+func _enter_star(star_idx: int) -> void:
+	if _entering:
+		return
+	_entering = true
+	_navigate_to(star_idx)
 
 func _zoom_at(screen_pos: Vector2, factor: float) -> void:
 	var new_zoom: float = clamp(_zoom * factor, ZOOM_MIN, ZOOM_MAX)

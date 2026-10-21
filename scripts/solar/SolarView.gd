@@ -68,6 +68,8 @@ func _ready() -> void:
 	# back button removed — right-click navigates back
 	get_tree().root.size_changed.connect(_on_resize)
 	planet_selected.connect(_on_planet_selected)
+	CommandRegistry.add_provider("planet", self, _planet_commands)
+	CommandRegistry.add_provider("system", self, _system_commands)
 	
 	_pivot = Node2D.new()
 	_space.add_child(_pivot)
@@ -98,6 +100,9 @@ func _ready() -> void:
 		load_system(SolarData.from_seed(randi() % 99999))
 	else:
 		load_system(SolarData.from_seed(debug_seed))
+	NavigationManager.end_apply()
+	if _current != null:
+		NavigationManager.visit(NavigationManager.solar_entry(_current))
 
 	_is_ready = true
 
@@ -159,6 +164,35 @@ func _on_planet_selected(pd: PlanetData) -> void:
 	_save_current_angles_to_game_state()
 	pd.set_meta("__solar_data", _current)
 	SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", pd)
+
+# ── Right-click actions (CommandRegistry + ContextMenu) ──────────────────────
+
+func _open_context_menu(global_pos: Vector2) -> void:
+	if GameState.showcase_mode or _current == null:
+		return
+	var pd: PlanetData = _hovered_planet
+	var cmds: Array[GameCommand]
+	if pd != null:
+		cmds = CommandRegistry.commands_for("planet", pd)
+		var kind: String = String(PlanetData.Type.keys()[pd.planet_type]).capitalize()
+		ContextMenu.open(self, pd.planet_name, kind, cmds, global_pos)
+	else:
+		cmds = CommandRegistry.commands_for("system", _current)
+		ContextMenu.open(self, _current.system_name, "Star system", cmds, global_pos)
+
+func _planet_commands(pd: PlanetData) -> Array:
+	return [GameCommand.make("view_planet", "View planet", planet_selected.emit.bind(pd),
+		_planet_access_block.bind(pd), {"icon": "◉", "color": Color(0.60, 0.75, 1.0)})]
+
+func _system_commands(_sd: SolarData) -> Array:
+	return [GameCommand.make("galaxy_view", "Galaxy view", _go_to_galaxy, _galaxy_access_block,
+		{"icon": "✦", "color": Color(0.60, 0.75, 1.0)})]
+
+func _planet_access_block(pd: PlanetData) -> String:
+	return "" if _can_access(pd) else "Not reachable yet"
+
+func _galaxy_access_block() -> String:
+	return "" if GameState.can_view_galaxy() else "Galaxy navigation is locked"
 
 func _show_access_denied_text(msg: String = "ACCESS DENIED") -> void:
 	var lbl := Label.new()
@@ -755,9 +789,9 @@ func _input(event: InputEvent) -> void:
 				_right_dragging  = true
 				_right_drag_from = mb.position
 			else:
-				_right_dragging = false
+				_right_dragging = false   # back/up lives in the navigation HUD
 				if mb.position.distance_to(_right_drag_from) < 5.0:
-					_go_to_galaxy()
+					_open_context_menu(mb.global_position)
 			return
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed and _space.get_global_rect().has_point(mb.global_position):

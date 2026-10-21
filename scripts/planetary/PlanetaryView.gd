@@ -209,6 +209,7 @@ func _ready() -> void:
 			_refresh_active_panel())
 	_refresh_solar_btn()
 	_register_mission_tasks()
+	_register_context_commands()
 	TutorialManager.highlight_changed.connect(_on_tutorial_highlight)
 	TutorialManager.highlight_cleared.connect(_on_tutorial_highlight_clear)
 	get_node("/root/SkillTree").skill_unlocked.connect(func(_id: String) -> void:
@@ -253,6 +254,302 @@ func _ready() -> void:
 	load_planet(planet_to_load)
 	if GameState.showcase_mode:
 		_enter_showcase_layout()
+	# back/forward may have asked for a specific panel of this planet
+	var nav_sub: Dictionary = NavigationManager.pending_sub
+	if not nav_sub.is_empty():
+		_apply_nav_sub(nav_sub)
+	NavigationManager.end_apply()
+	_nav_visit_current()
+
+# ── Navigation history (NavigationManager) ───────────────────────────────────
+
+## Restores a history entry in place when it is this planet (else the scene reloads).
+func nav_apply(entry: Dictionary) -> bool:
+	var pd := entry.get("data") as PlanetData
+	if current_data == null or pd == null or pd.seed != current_data.seed:
+		return false
+	_apply_nav_sub(entry.get("sub", {}))
+	return true
+
+## Opens the panel a history entry points at: overview, a City, a district or the Orbit.
+func _apply_nav_sub(sub: Dictionary) -> void:
+	if current_data == null:
+		return
+	var key := "city" if sub.has("city") else ("district" if sub.has("district") else "")
+	var target: POIData = null
+	if key != "":
+		for p: POIData in current_data.custom_pois:
+			if p.label == String(sub[key]):
+				target = p
+				break
+	if sub.has("orbit") and GameState.get_planet(current_data.seed).orbit_level > 0:
+		_build_orbit_panel(current_data)
+	elif key == "city" and target != null:
+		_build_city_panel(target, current_data)
+	elif key == "district" and target != null:
+		_build_district_panel(target, current_data)
+		if not target.is_orbital():
+			_select_district_on_planet(target.label)
+	else:   # overview, or the City/district no longer exists
+		_active_district_poi = null
+		_city_panel_poi = null
+		poi_layer.deselect_all()
+		_build_planet_overview(current_data)
+	_reveal_panel()
+
+# ── Right-click actions (CommandRegistry + ContextMenu) ──────────────────────
+
+## The City / district / station under the cursor, or null.
+func _poi_at_screen(global_pos: Vector2) -> POIData:
+	if current_data == null:
+		return null
+	var idx := _territory_at_screen(global_pos)
+	if idx < 0:
+		idx = poi_layer._hovered_index
+	if idx < 0 or idx >= poi_layer._pois.size():
+		return null
+	return _find_poi(current_data, String(poi_layer._pois[idx].get("label", "")))
+
+## Right-click: the actions for what's under the cursor (a POI, else the surface).
+func _open_context_menu(global_pos: Vector2) -> void:
+	if current_data == null or _placing_def != null or _naming_open or GameState.showcase_mode:
+		return
+	if not _is_over_planet_area(global_pos):   # e.g. over the side panel
+		return
+	var poi := _poi_at_screen(global_pos)
+	var kind := ""
+	var target: Variant = null
+	var title := ""
+	var subtitle := ""
+	var pp := GameState.get_planet(current_data.seed)
+	if poi != null:
+		target = poi
+		title = poi.shown_name()
+		if poi.is_orbital():
+			kind = "station"
+			subtitle = "Space Station"
+		elif poi.is_city():
+			kind = "city"
+			subtitle = "City  ·  Lv %d" % Leveling.city_level(pp, poi)
+		else:
+			kind = "district"
+			subtitle = "%s  ·  Lv %d" % [poi.type_tag.capitalize(), int(pp.district_levels.get(poi.label, 1))]
+		if poi.constructing:
+			subtitle += "  ·  under construction"
+	else:
+		kind = "surface"
+		target = {"pos": global_pos, "hit": _screen_to_lonlat(global_pos)}
+		title = current_data.planet_name
+		subtitle = "Surface" if bool(target["hit"]["hit"]) else "Space"
+	var cmds := CommandRegistry.commands_for(kind, target)
+	if cmds.is_empty():
+		return
+	AudioManager.play("click")
+	ContextMenu.open(self, title, subtitle, cmds, global_pos)
+
+## Why `poi` can't level up now ("" when it can). Shared by the panel button and the menu.
+func _district_level_up_block(poi: POIData, planet: PlanetData) -> String:
+	var pp := GameState.get_planet(planet.seed)
+	var lv: int = pp.district_levels.get(poi.label, 1)
+	if pp.is_district_upgrading(poi.label):
+		return "Already upgrading"
+	if lv >= Economy.MAX_DISTRICT_LEVEL:
+		return "Max level"
+	var block := Leveling.district_level_block(planet, pp, poi)
+	if block != "":
+		return block
+	if GameState.credits < Leveling.district_level_credits(lv):
+		return "Not enough credits"
+	return ""
+
+func _district_level_up(poi: POIData, planet: PlanetData) -> bool:
+	var pp := GameState.get_planet(planet.seed)
+	var lv: int = pp.district_levels.get(poi.label, 1)
+	if _district_level_up_block(poi, planet) != "" or not pp.can_upgrade_district(poi.label) \
+			or not GameState.spend_credits(Leveling.district_level_credits(lv)):
+		AudioManager.play("error")
+		return false
+	AudioManager.play("construct")
+	pp.upgrade_district(poi.label)
+	GameState.planet_progress_changed.emit(planet.seed)
+	return true
+
+func _city_level_up_block(city: POIData, planet: PlanetData) -> String:
+	var pp := GameState.get_planet(planet.seed)
+	var block := Leveling.city_level_block(planet, pp, city)
+	if block != "":
+		return block
+	if GameState.credits < Leveling.city_level_credits(Leveling.city_level(pp, city) + 1):
+		return "Not enough credits"
+	return ""
+
+func _city_level_up(city: POIData, planet: PlanetData) -> bool:
+	var pp := GameState.get_planet(planet.seed)
+	if _city_level_up_block(city, planet) != "" \
+			or not GameState.spend_credits(Leveling.city_level_credits(Leveling.city_level(pp, city) + 1)):
+		AudioManager.play("error")
+		return false
+	AudioManager.play("construct")
+	pp.city_upgrading[city.label] = 0.0   # ProductionManager finishes it (city_leveled)
+	GameState.planet_progress_changed.emit(planet.seed)
+	return true
+
+## Why a new district can't be placed in `city` right now ("" when it can).
+func _add_district_block(city: POIData, def: DistrictDef) -> String:
+	var pp := GameState.get_planet(current_data.seed)
+	if city.constructing:
+		return "The City is still under construction"
+	if Leveling.city_district_count(current_data, city) >= Leveling.city_max_districts(Leveling.city_level(pp, city)):
+		return "City is full — level the City up"
+	if def.max_per_planet > 0 and DistrictDef.count_on_planet(def, current_data) >= def.max_per_planet:
+		return "Limit reached (%d per planet)" % def.max_per_planet
+	if GameState.credits < DistrictDef.placement_cost(def, current_data, city.label):
+		return "Not enough credits"
+	return ""
+
+func _open_poi_panel(poi: POIData) -> void:
+	_reveal_panel()
+	if poi.is_orbital():
+		_build_orbit_panel(current_data)
+	elif poi.is_city():
+		_build_city_panel(poi, current_data)
+	else:
+		_build_district_panel(poi, current_data)
+		_select_district_on_planet(poi.label)
+
+## Default actions for things on the planet view. Other systems can add more
+## for the same kinds with CommandRegistry.add_provider.
+func _register_context_commands() -> void:
+	CommandRegistry.add_provider("city", self, _city_commands)
+	CommandRegistry.add_provider("district", self, _district_commands)
+	CommandRegistry.add_provider("station", self, _station_commands)
+	CommandRegistry.add_provider("surface", self, _surface_commands)
+
+const CMD_OPEN_COL  := Color(0.60, 0.75, 1.0)
+const CMD_LEVEL_COL := Color(0.55, 1.0, 0.65)
+const CMD_BUILD_COL := Color(1.0, 0.85, 0.45)
+
+func _city_commands(city: POIData) -> Array:
+	var pp := GameState.get_planet(current_data.seed)
+	var lv := Leveling.city_level(pp, city)
+	var cap_lv: int = pp.district_levels.get(city.label, 1)
+	var out: Array = [
+		GameCommand.make("open_city", "Open City", _open_poi_panel.bind(city), Callable(),
+			{"icon": "▤", "color": CMD_OPEN_COL}),
+		GameCommand.make("open_capital", "Open Capital District", _open_capital.bind(city),
+			_under_construction_block.bind(city), {"icon": "◆", "color": CMD_OPEN_COL}),
+		GameCommand.make("focus_city", "Focus City", _focus_city.bind(city), Callable(),
+			{"icon": "◎", "color": CMD_OPEN_COL}),
+		GameCommand.make("city_level_up", "Level up City  (Lv %d → %d)" % [lv, lv + 1],
+			_city_level_up_and_open.bind(city), _city_level_up_block.bind(city, current_data),
+			{"icon": "▲", "color": CMD_LEVEL_COL,
+			 "cost": "◈ " + HUDManager.fmt_credits(Leveling.city_level_credits(lv + 1)),
+			 "tooltip": "Needs %d total district levels in the City." % Leveling.city_level_req(lv + 1)}),
+		GameCommand.make("capital_level_up", "Level up Capital District  (Lv %d → %d)" % [cap_lv, cap_lv + 1],
+			_district_level_up_and_open.bind(city), _district_menu_block.bind(city),
+			{"icon": "△", "color": CMD_LEVEL_COL,
+			 "cost": "◈ " + HUDManager.fmt_credits(Leveling.district_level_credits(cap_lv))}),
+	]
+	for def: DistrictDef in _district_options(current_data, false, city):
+		out.append(GameCommand.make("add_district_" + def.type_key(), "Add %s" % def.display_name,
+			_begin_district_placement.bind(def, city), _add_district_block.bind(city, def),
+			{"icon": def.icon if def.icon != "" else "+", "color": CMD_BUILD_COL,
+			 "cost": "◈ " + HUDManager.fmt_credits(DistrictDef.placement_cost(def, current_data, city.label)),
+			 "tooltip": "Pick a site near %s for the new district." % city.shown_name()}))
+	return out
+
+func _district_commands(poi: POIData) -> Array:
+	var pp := GameState.get_planet(current_data.seed)
+	var lv: int = pp.district_levels.get(poi.label, 1)
+	var out: Array = [
+		GameCommand.make("open_district", "Open District", _open_poi_panel.bind(poi),
+			_under_construction_block.bind(poi), {"icon": "▤", "color": CMD_OPEN_COL}),
+		GameCommand.make("district_level_up", "Level up  (Lv %d → %d)" % [lv, lv + 1],
+			_district_level_up_and_open.bind(poi), _district_menu_block.bind(poi),
+			{"icon": "▲", "color": CMD_LEVEL_COL,
+			 "cost": "◈ " + HUDManager.fmt_credits(Leveling.district_level_credits(lv))}),
+	]
+	var city := _city_of(poi)
+	if city != null:
+		out.append(GameCommand.make("open_parent_city", "Open %s" % city.shown_name(),
+			_open_poi_panel.bind(city), Callable(), {"icon": "▣", "color": CMD_OPEN_COL}))
+		out.append(GameCommand.make("focus_city", "Focus City", _focus_city.bind(city), Callable(),
+			{"icon": "◎", "color": CMD_OPEN_COL}))
+	return out
+
+func _station_commands(poi: POIData) -> Array:
+	return [GameCommand.make("open_orbit", "Open Orbit", _open_poi_panel.bind(poi), Callable(),
+		{"icon": "◈", "color": CMD_OPEN_COL})]
+
+func _surface_commands(t: Dictionary) -> Array:
+	var out: Array = []
+	var city_def := DistrictDef.find(DistrictDef.Type.CITY)
+	if city_def != null:
+		out.append(GameCommand.make("found_city_here", "Found City here",
+			_found_city_at.bind(city_def, t["pos"]), _found_city_here_block.bind(bool(t["hit"]["hit"])),
+			{"icon": "✚", "color": CMD_BUILD_COL,
+			 "cost": "◈ " + HUDManager.fmt_credits(DistrictDef.placement_cost(city_def, current_data)),
+			 "tooltip": "Starts City placement at this spot. If it can't be built exactly here, placement stays open so you can pick another site."}))
+	out.append(GameCommand.make("planet_overview", "Planet overview", _show_planet_overview, Callable(),
+		{"icon": "▤", "color": CMD_OPEN_COL}))
+	out.append(GameCommand.make("star_system", "Star system view", _go_back, _star_system_block,
+		{"icon": "☉", "color": CMD_OPEN_COL}))
+	return out
+
+# small targets for the commands above (bound with .bind)
+func _under_construction_block(poi: POIData) -> String:
+	return "Under construction" if poi.constructing else ""
+
+func _district_menu_block(poi: POIData) -> String:
+	return "Under construction" if poi.constructing else _district_level_up_block(poi, current_data)
+
+func _open_capital(city: POIData) -> void:
+	_reveal_panel()
+	_build_district_panel(city, current_data)
+	_select_district_on_planet(city.label)
+
+func _city_level_up_and_open(city: POIData) -> void:
+	if _city_level_up(city, current_data):
+		_open_poi_panel(city)
+
+func _district_level_up_and_open(poi: POIData) -> void:
+	if _district_level_up(poi, current_data):
+		_open_poi_panel(poi)
+
+func _found_city_here_block(on_ground: bool) -> String:
+	if not on_ground:
+		return "Point at the planet's surface"
+	if not GameState.get_planet(current_data.seed).is_colonized:
+		return "This world isn't colonized"
+	return _found_city_block(current_data)
+
+func _found_city_at(city_def: DistrictDef, pos: Vector2) -> void:
+	_begin_district_placement(city_def, null)
+	_try_place_district(pos)
+
+func _show_planet_overview() -> void:
+	_reveal_panel()
+	_apply_nav_sub({})
+
+func _star_system_block() -> String:
+	return "" if GameState.can_view_solar() else "Star system not unlocked yet"
+
+func _nav_visit(planet: PlanetData, sub: Dictionary, label: String) -> void:
+	if planet != null:
+		NavigationManager.visit(NavigationManager.planet_entry(planet, sub, label))
+
+## Records whichever panel is showing (same precedence as _refresh_active_panel).
+func _nav_visit_current() -> void:
+	if current_data == null:
+		return
+	if _city_panel_poi != null and _city_panel_poi in current_data.custom_pois:
+		_nav_visit(current_data, {"city": _city_panel_poi.label}, _city_panel_poi.display_name)
+	elif _orbit_panel_open:
+		_nav_visit(current_data, {"orbit": true}, "Orbit")
+	elif _active_district_poi != null and _active_district_poi in current_data.custom_pois:
+		_nav_visit(current_data, {"district": _active_district_poi.label}, _active_district_poi.display_name)
+	else:
+		_nav_visit(current_data, {}, "")
 
 ## Showcase (read-only viewer): no side panel or tab, the globe fills the screen.
 func _enter_showcase_layout() -> void:
@@ -530,9 +827,8 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		# Showcase: right-click steps back out to the star system
+		# Showcase is read-only: no right-click actions (navigate with NavigationManager)
 		if GameState.showcase_mode and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
-			_go_back()
 			get_viewport().set_input_as_handled()
 			return
 		# Tutorial deselect: during generator-district step with panel open,
@@ -562,16 +858,15 @@ func _input(event: InputEvent) -> void:
 					_show_radial_menu(ship_hit, mb.global_position, _orbital_layer)
 					get_viewport().set_input_as_handled()
 					return
-			# Right-click on planet → planet command menu (or go back)
-			if poi_layer._selected_index >= 0:
-				poi_layer.deselect_all()
-				_go_up_one_level()
-				get_viewport().set_input_as_handled()
+			# Right-click is for actions only — going back/up lives in the
+			# navigation HUD (NavigationManager). With a ship selected, empty space
+			# keeps the ship's planet menu; otherwise the context menu (CommandRegistry).
+			if _orbital_layer != null and _orbital_layer._selected_ship != null \
+					and _poi_at_screen(mb.global_position) == null:
+				_show_planet_radial_menu(mb.global_position)
 			else:
-				if _orbital_layer != null and _orbital_layer._selected_ship != null:
-					_show_planet_radial_menu(mb.global_position)
-				# (the Local System is reached by zooming out — see CompanionBodies)
-				get_viewport().set_input_as_handled()
+				_open_context_menu(mb.global_position)
+			get_viewport().set_input_as_handled()
 		# Wheel / pinch only zoom. Leaving the planet view on zoom-out is disabled
 		# for now — it will be bound to another control.
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
@@ -4658,6 +4953,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 				_build_city_panel(p, data)
 				return
 	_city_panel_poi = null
+	_nav_visit(data, {}, "")
 	var panel_content := $SidePanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
@@ -6950,14 +7246,8 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 		btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	btn.pressed.connect(func() -> void:
 		TooltipManager.hide_tip()
-		if not pp.can_upgrade_district(poi.label) or Leveling.district_level_block(planet, pp, poi) != "" \
-				or not GameState.spend_credits(Leveling.district_level_credits(lv)):
-			AudioManager.play("error")
-			return
-		AudioManager.play("construct")
-		pp.upgrade_district(poi.label)
-		GameState.planet_progress_changed.emit(planet.seed)
-		_build_district_panel(poi, planet))
+		if _district_level_up(poi, planet):
+			_build_district_panel(poi, planet))
 	return btn
 
 func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
@@ -9269,6 +9559,7 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	_active_district_poi = null
 	_city_panel_poi = null
 	_orbit_panel_open = true
+	_nav_visit(planet, {"orbit": true}, "Orbit")
 	var panel_content := $SidePanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
@@ -9385,6 +9676,7 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 		keep_scroll = _city_scroll.scroll_vertical
 	_active_district_poi = null
 	_city_panel_poi = city
+	_nav_visit(planet, {"city": city.label}, city.display_name)
 	var panel_content := $SidePanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
@@ -9599,13 +9891,8 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 	btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	btn.pressed.connect(func() -> void:
 		TooltipManager.hide_tip()
-		if Leveling.city_level_block(planet, pp, city) != "" or not GameState.spend_credits(credits):
-			AudioManager.play("error")
-			return
-		AudioManager.play("construct")
-		pp.city_upgrading[city.label] = 0.0   # ProductionManager finishes it (city_leveled)
-		GameState.planet_progress_changed.emit(planet.seed)
-		_build_city_panel(city, planet))
+		if _city_level_up(city, planet):
+			_build_city_panel(city, planet))
 	_notify_tutorial_city_level_btn(btn)
 	return btn
 
@@ -9665,6 +9952,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		saved_scroll = _district_body_scroll.scroll_vertical
 	_active_district_poi = poi   # remember for _on_building_constructed
 	_city_panel_poi = null
+	_nav_visit(planet, {"district": poi.label}, poi.display_name)
 	var panel_content := $SidePanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:

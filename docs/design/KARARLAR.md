@@ -45,7 +45,9 @@ Burada korunan şey **sayacın mantığıdır** (City'deki district'lerin türü
 
 ## 6. Yerleşim işlemleri sağ tık menüsünden
 
-Güncelle, taşı, içeriği temizle, sıfırla ve yık gibi işlemler seçili nesnenin **sağ tık bağlam menüsünden** yapılır. Arka planda command pattern kullanılır: her işlem `can_execute` (yapılamıyorsa nedenini döner), `preview` (bedel, iade, değişen kapasite) ve `execute` adımlarına sahiptir.
+Güncelle, taşı, içeriği temizle, sıfırla ve yık gibi işlemler seçili nesnenin **sağ tık bağlam menüsünden** yapılır.
+
+**Sağ tık yalnızca eylemler içindir.** Geri gitme/bir üst seviyeye çıkma sağ tıktan kaldırılır ve ayrı bir **navigation HUD**'a taşınır: geri/ileri butonları (tarayıcı gibi geçmiş), Galaxy › Sistem › Gezegen › City/District breadcrumb'ı, fare geri/ileri tuşları ve Alt+←/→. Arka planda command pattern kullanılır: her işlem `can_execute` (yapılamıyorsa nedenini döner), `preview` (bedel, iade, değişen kapasite) ve `execute` adımlarına sahiptir.
 
 ## 7. Genel değerlendirme
 
