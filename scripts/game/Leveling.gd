@@ -3,8 +3,10 @@ extends RefCounted
 
 ## Level rules for districts, cities and the planet — each tier is unlocked by
 ## the one below it:
-##   District  levels freely (no road partner needed). Costs credits +
-##             population; gives +2 building slots and more base income.
+##   District  the Capital District levels freely; any other district needs a
+##             road partner (POIData.neighbors) already at the target level, so
+##             levels spread outward from the Capital. Costs credits + population;
+##             gives +2 building slots and more base income.
 ##   City      needs a total of city_level_req(next) district levels in the City
 ##             (Capital District included). Costs credits + population; each
 ##             level lets the City hold more districts.
@@ -33,7 +35,12 @@ static func district_level_block(pd: PlanetData, pp: PlanetProgress, poi: POIDat
 		return "Max level"
 	if poi.is_orbital():
 		return "Stations don't level — level the Orbit for more stations"
-	return ""
+	if poi.is_city():
+		return ""   # the Capital District leads
+	for nb: String in poi.neighbors:
+		if int(pp.district_levels.get(nb, 1)) >= lv + 1:
+			return ""
+	return "Needs a road-linked neighbour at Lv %d first" % (lv + 1)
 
 # ── Cities ───────────────────────────────────────────────────────────────────
 
@@ -93,10 +100,21 @@ static func city_level_block(pd: PlanetData, pp: PlanetProgress, city: POIData) 
 	return ""
 
 # ── Orbit ────────────────────────────────────────────────────────────────────
-## The Orbit takes one City slot. Lv n holds n Space Stations, each with a
+## The Orbit takes no City slot (it is the world's Central Orbit). Lv n holds n Space Stations, each with a
 ## single module; it levels once every station is up with its module built.
 static func max_orbit_level() -> int:
 	return Balance.cfg.max_orbit_level
+
+## The world's Central Orbit: its first station — the hub of the trade network
+## (Spaceports below link to it, other stations orbit as satellites, hubs of
+## other worlds link to each other). null without an Orbit.
+static func orbit_hub(pd: PlanetData) -> POIData:
+	if pd == null:
+		return null
+	for p: POIData in pd.custom_pois:
+		if p.is_orbital():
+			return p
+	return null
 
 static func orbit_stations(pd: PlanetData) -> Array[POIData]:
 	var out: Array[POIData] = []
@@ -126,7 +144,7 @@ static func cities_used(pd: PlanetData, pp: PlanetProgress) -> int:
 	for p: POIData in pd.custom_pois:
 		if p.is_city() and not p.is_orbital():
 			n += 1
-	return n + (1 if pp.orbit_level > 0 else 0)
+	return n   # the Orbit (the world's Central Orbit) takes no City slot
 
 # ── Planet ───────────────────────────────────────────────────────────────────
 

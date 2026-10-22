@@ -33,8 +33,10 @@ const PORT_NEAR_RAD: float = 0.061   # ~3.5°
 ## Land cells a road already runs over become this much cheaper, so later roads
 ## join existing ones and share trunks instead of running in parallel.
 const ROAD_REUSE_FACTOR: float = 0.4
+## The same for sea cells a lane already crosses (strong: lanes should merge).
+const SEA_REUSE_FACTOR: float = 0.3
 
-var _road_cells: Dictionary = {}   # land cell id -> true once a road uses it
+var _road_cells: Dictionary = {}   # land / sea cell id -> true once a road or lane uses it
 ## Land connectivity (union-find over green cells + bridges): same root = a
 ## land road is possible.
 var _land_parent := PackedInt32Array()
@@ -231,9 +233,13 @@ func route(lon_a: float, lat_a: float, lon_b: float, lat_b: float,
 			break
 		if id >= n:
 			_astar.set_point_weight_scale(id, PORT_REUSE_WEIGHT)
-		elif _kind[id] == 0 and not _road_cells.has(id):
+			_astar.used_ports[id] = _astar.get_point_position(id).normalized()
+		elif (_kind[id] == 0 or _kind[id] == 1) and not _road_cells.has(id):
+			# land roads and sea lanes alike: later routes follow the ones already
+			# there, so two harbours are joined by one shipping lane, not several
 			_road_cells[id] = true
-			_astar.set_point_weight_scale(id, _astar.get_point_weight_scale(id) * ROAD_REUSE_FACTOR)
+			var f := ROAD_REUSE_FACTOR if _kind[id] == 0 else SEA_REUSE_FACTOR
+			_astar.set_point_weight_scale(id, _astar.get_point_weight_scale(id) * f)
 	var segments: Array = []
 	var ports := PackedVector2Array()
 	var cur := PackedVector3Array()

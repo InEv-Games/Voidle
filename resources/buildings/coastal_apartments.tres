@@ -18,6 +18,5 @@ inputs = {"goods": 0.333333}
 energy_per_tick = -3.0
 pop_cost = 0
 required_features = Array[String](["terrain_seacoast"])
-unlock_skill = "unlock_seaside_villas"
 construct_duration = 4.0
 description = "Dense homes on the shore — more housing than Seaside Villas, more power. Must stand on a sea coast."

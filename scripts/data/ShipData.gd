@@ -65,6 +65,50 @@ extends Resource
 @export var transfer_depart_angle: float = NAN
 @export var transfer_arrive_angle: float = NAN
 
+## Spaceport traffic (ShipManager): a freighter's place in its loop —
+## "pad" (on the ground, hidden) → "ascend" → "orbit" (free orbit: circling,
+## tied to nothing, may leave any time) → "transfer" → "captured" (circling the
+## destination) → "descend" → "pad". Purely visual: no cargo, no economy.
+@export var traffic_state:   String = ""
+## The body it heads for next, and its route ("a:b", lower seed first).
+@export var traffic_partner: int    = -1
+@export var traffic_pair:    String = ""
+## Time in the current state and how long it lasts.
+@export var state_t:   float = 0.0
+@export var state_len: float = 0.0
+## Orbit radius it parks at (spread so freighters don't sit on one ring).
+@export var park_radius: float = 1.2
+
+## Planet-frame point of an orbit (radius, inclination, node, angle).
+static func orbit_point(r: float, inc: float, node: float, angle: float) -> Vector3:
+	var px := r * cos(angle)
+	var py := r * sin(angle) * sin(inc)
+	var pz := r * sin(angle) * cos(inc)
+	return Vector3(px * cos(node) + pz * sin(node), py, -px * sin(node) + pz * cos(node))
+
+## Planet-frame direction (OrbitalLayer's frame) of a surface point.
+static func frame_dir(lon: float, lat: float) -> Vector3:
+	return Vector3(cos(lat) * sin(lon), -sin(lat), -cos(lat) * cos(lon))
+
+## Puts the ship's orbit through point `p` (unit, planet frame) moving along
+## `dir` (tangent): sets inclination, node and angle; speed made positive.
+func fit_orbit(p: Vector3, dir: Vector3) -> void:
+	dir -= p * dir.dot(p)
+	if dir.length() < 1e-6:
+		dir = p.cross(Vector3.UP)
+		if dir.length() < 1e-6:
+			dir = Vector3.RIGHT
+	dir = dir.normalized()
+	var nrm := p.cross(dir).normalized()
+	var inc := acos(clampf(-nrm.y, -1.0, 1.0))
+	var node := atan2(nrm.x, nrm.z) if sin(inc) > 1e-5 else 0.0
+	var u := Vector3(cos(node), 0.0, -sin(node))
+	var w := Vector3(cos(inc) * sin(node), sin(inc), cos(inc) * cos(node))
+	orbit_inclination = inc
+	orbit_node = node
+	orbit_angle = atan2(p.dot(w), p.dot(u))
+	orbit_speed = absf(orbit_speed) if orbit_speed != 0.0 else 0.1
+
 func is_travelling() -> bool:
 	return dest_seed >= 0 and travel_progress < 1.0
 

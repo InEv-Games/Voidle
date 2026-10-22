@@ -39,6 +39,15 @@ var surveyed_bodies: Dictionary = {}
 ## doesn't hide a mineral again.
 var discovered_minerals: Dictionary = {}
 signal minerals_discovered(body_seed: int, mineral_ids: Array)
+signal trade_changed
+
+## Trade (see Trade.gd): player reserves {id: amount}, automation orders
+## {id: order}, recent trades and the running overflow-sale totals.
+var trade_reserves: Dictionary = {}
+var trade_orders: Dictionary = {}
+var trade_log: Array = []
+var trade_seq: int = 0
+var overflow_sold: Dictionary = {}
 
 func is_body_surveyed(body_seed: int) -> bool:
 	return surveyed_bodies.has(body_seed)
@@ -84,13 +93,17 @@ func _sync_mineral_discoveries() -> void:
 ## the first City reaches Lv 2 — until then the side panel stays on the City.
 var planet_view_unlocked: bool = false
 
-## Adds to the stock, up to the resource's storage cap (Economy.cap); the
-## overflow is lost.
+## Adds to the stock, up to the resource's storage cap (Economy.cap). New
+## stock that doesn't fit is sold once Trade Access is researched, otherwise
+## lost (Trade.sell_overflow). Old stock above the cap stays as it is.
 func add_resource(resource_id: String, amount: float) -> void:
 	var have: float = global_resources.get(resource_id, 0.0)
 	var v := have + amount
 	if amount > 0.0 and Economy.is_capped(resource_id):
 		v = maxf(have, minf(v, Economy.cap(resource_id)))
+		var overflow := have + amount - v
+		if overflow > 0.0001:
+			Trade.sell_overflow(resource_id, overflow)
 	global_resources[resource_id] = v
 	global_resources_changed.emit()
 
@@ -118,6 +131,9 @@ var science_points: float = 0.0 :
 # ── Unlock flags ─────────────────────────────────────────────────────────────
 var solar_unlocked:    bool = false
 var moon_unlocked:     bool = false
+## Moonstone actually mined on the Moon (bought Moonstone never counts) — the
+## final rocket's research needs 100 (GDD §17.9, KARARLAR §5).
+var moon_local_moonstone: float = 0.0
 var galaxy_unlocked:   bool = false
 
 # ── Showcase (read-only viewer) ──────────────────────────────────────────────
@@ -129,15 +145,27 @@ var showcase_mode: bool = false
 static func showcase_available() -> bool:
 	return bool(ProjectSettings.get_setting("voidle/showcase/enabled", true))
 
-## View access — showcase opens every map without touching the unlock flags.
+## View access — showcase opens every map without touching the unlock flags;
+## so does completing the demo (post-demo inspection, PLAN M7). Only viewing
+## opens: playing other content still follows playable_content_type.
 func can_view_solar() -> bool:
-	return showcase_mode or solar_unlocked
+	return showcase_mode or demo_completed or solar_unlocked
 
 func can_view_galaxy() -> bool:
-	return showcase_mode or galaxy_unlocked
+	return showcase_mode or demo_completed or galaxy_unlocked
 
 func can_view_moon() -> bool:
-	return showcase_mode or moon_unlocked
+	return showcase_mode or demo_completed or moon_unlocked
+
+## Whether a body can be played on (settled, built on). Showcase never plays;
+## after the demo, only the home world and its Moon keep being playable.
+func can_play_on(planet_seed: int) -> bool:
+	if showcase_mode:
+		return false
+	if not demo_completed:
+		return true
+	var moon := home_moon()
+	return planet_seed == home_planet_seed or (moon != null and planet_seed == moon.seed)
 
 func enter_showcase() -> void:
 	if has_save():
@@ -290,6 +318,7 @@ func _apply_pending_pois() -> void:
 			poi.parent_city        = pd_entry.get("parent_city",        "")
 			poi.resource_tags      = pd_entry.get("resource_tags",      {})
 			poi.site_features      = pd_entry.get("site_features",      {})
+			poi.paid_credits       = float(pd_entry.get("paid_credits",  -1.0))
 			poi.spoke_birth        = pd_entry.get("spoke_birth",        {})
 			poi.constructing       = pd_entry.get("constructing",       false)
 			poi.construct_progress = pd_entry.get("construct_progress", 0.0)
@@ -335,6 +364,7 @@ func _build_home_solar() -> SolarData:
 
 	# Override that slot with guaranteed Terran planet — always exactly 1 moon
 	var home_pd := PlanetData.from_seed_as_type(home_planet_seed, PlanetData.Type.TERRAN)
+	home_pd.continentality = HOME_CONTINENTALITY   # the home world: a few big continents
 	home_pd.moons.clear()
 	var moon := PlanetData.make_moon(home_planet_seed ^ 0x4D6F6F6E)
 	moon.planet_name = home_pd.planet_name + " a"
@@ -511,47 +541,359 @@ func colonize_planet(planet_seed: int, cost: float = 1000.0) -> bool:
 	planet_progress_changed.emit(planet_seed)
 	return true
 
-# ── Moon colonization (end of Act I) ──────────────────────────────────────────
-# Start Colonization (Local System view) launches a lander from the home world;
-# it flies MOON_TRANSIT_SEC, parks in lunar orbit (lander_state 1), the player
-# picks a landing site with "Found First Settlement", the lander drops onto it
-# (lander_state 2) and the first lunar City starts building.
-const MOON_COLONIZE_CREDITS := 10000.0
-const MOON_COLONIZE_FUEL    := 100.0
-const MOON_TRANSIT_SEC      := 60.0
+# ── Expeditions (GDD §20) ────────────────────────────────────────────────────
+# Two expeditions finish Civilization 0:
+#   lander  Earth Spaceport → Moon. Paid once when preparation starts (30 s),
+#           then it flies MOON_TRANSIT_SEC, parks in lunar orbit (lander_state 1),
+#           the player picks the landing site and the first lunar City is free.
+#   rocket  Lunar Spaceport → another natural planet of the home system. Paid
+#           once (60 s preparation); the target can change until it launches;
+#           the flight takes 60 s and its arrival completes Civilization 0.
+# States: preparing → ready → in_transit → arrived. A state change never
+# charges again, and the arrival is recorded once.
+const LANDER_COST := {"credits": 3000.0, "ferrite": 40.0, "fuel": 20.0}
+const LANDER_PREP_SEC  := 30.0
+const MOON_TRANSIT_SEC := 30.0
+const ROCKET_COST := {"credits": 12000.0, "moonstone": 1200.0, "goods": 30.0, "fuel": 120.0, "rare_elements": 40.0}
+const ROCKET_PREP_SEC   := 60.0
+const ROCKET_FLIGHT_SEC := 60.0
 
 signal act1_completed
+signal expedition_changed(kind: String)
+## Emitted once when the final rocket arrives (civ = the civilization reached).
+signal civilization_reached(civ: int)
+## Founding the first City on the Moon: the lander's landing module, paid
+## separately from the lander (which only reaches orbit and sets up the Moon's
+## Central Orbit).
+const LANDING_COST := {"credits": 1000.0, "ferrite": 20.0}
+## Worlds whose surface has been scanned from orbit: their role lenses work.
+## The home world counts as scanned. { seed: true }
+var scanned_bodies: Dictionary = {}
+## Worlds whose landing module is paid for (re-trying the landing is free).
+var landing_paid: Dictionary = {}
 
-## Set once the first City on another world is finished — the demo's goal.
+func is_scanned(planet_seed: int) -> bool:
+	return planet_seed == home_planet_seed or scanned_bodies.has(planet_seed)
+
+## The lander reached the Moon: it sets up the Moon's Central Orbit (the hub of
+## the trade network there) as the first part of colonising it.
+func deploy_central_orbit(planet_seed: int) -> void:
+	var pd := get_planet_data(planet_seed)
+	if pd == null or Leveling.orbit_hub(pd) != null:
+		return
+	var def := DistrictDef.find(DistrictDef.Type.SPACE_STATION)
+	if def == null:
+		return
+	var lander := moon_lander(planet_seed)
+	var poi := POIData.new()
+	poi.label = POIData.make_key(pd)
+	poi.display_name = "Central Orbit"
+	poi.poi_type = def.to_poi_type()
+	poi.type_tag = DistrictDef.Type.keys()[def.id].to_lower()
+	poi.placement = def.placement
+	poi.constructing = false
+	poi.construct_progress = 1.0
+	poi.paid_credits = 0.0
+	poi.orbit_angle = lander.orbit_angle if lander != null else randf() * TAU
+	poi.orbit_inclination = lander.orbit_inclination if lander != null else 0.5
+	poi.orbit_node = lander.orbit_node if lander != null else 0.0
+	poi.orbit_speed = 0.01
+	poi.orbit_radius = 1.06
+	poi.manual_position = true
+	poi.light_intensity = 0.0
+	pd.custom_pois.append(poi)
+	var pp := get_planet(planet_seed)
+	pp.orbit_level = maxi(pp.orbit_level, 1)
+	if lander != null:   # the lander itself becomes the Central Orbit
+		ShipManager.remove_ship(planet_seed, lander.ship_id)
+	planet_progress_changed.emit(planet_seed)
+
+## The landing module leaves the Central Orbit (INITIATE COLONIZATION): a lander
+## ship starting at the hub's place in orbit.
+func spawn_lander_from_hub(planet_seed: int) -> ShipData:
+	var hub := Leveling.orbit_hub(get_planet_data(planet_seed))
+	var ship := ShipManager.launch(planet_seed, "Landing Module")
+	_lander_orbit(ship)
+	if hub != null:
+		ship.orbit_radius = hub.orbit_radius
+		ship.orbit_inclination = hub.orbit_inclination
+		ship.orbit_node = hub.orbit_node
+		ship.orbit_angle = hub.orbit_angle
+	return ship
+
+## The lander parked in the Moon's orbit (HUD offers to fly there).
+signal lander_reached_moon(moon_seed: int)
+
+## The lander's one lap around the home world before it leaves for the Moon (rad/s).
+const LANDER_LOOP_SPEED := 0.35
+
+## Old saves: the first City on another world ended the old demo. Kept only so
+## those saves load; nothing reads it any more.
 var act1_complete: bool = false
+## Offline (KARARLAR §4, PLAN M8): the time the game was closed is recorded and
+## shown on return. Gains stay off behind one switch, the balance profile's
+## offline_progress_enabled; when it is ever turned on, the same cycle code
+## must advance the economy — no second offline economy.
+const OFFLINE_MIN_SECONDS := 60.0
+var offline_seconds: float = 0.0
+## Set by load_save; the HUD shows the "while you were away" screen once.
+var offline_pending: bool = false
+## Time away is measured once per session, at the first load of the save:
+## later loads (the main menu reads the save, CONTINUE reads it again) see a
+## fresh saved_at and would report nothing.
+var _offline_measured: bool = false
 
-## Why the Moon can't be colonized right now ("" when it can).
+static func offline_progress_enabled() -> bool:
+	return Balance.cfg.offline_progress_enabled
+
+## World generation version. 2: planets have continentality. Saves without the
+## field are 1 and keep their old terrain.
+const WORLD_GEN := 2
+## Home world's continentality. Above 1 pushes past the usual range: most of the
+## land gathers into two or three large continents, few island chains.
+const HOME_CONTINENTALITY := 1.35
+var world_gen: int = WORLD_GEN
+
+## The final rocket has arrived: Civilization 1 reached, the demo is complete.
+var demo_completed: bool = false
+## Highest civilization whose content can actually be played (0 in the demo).
+var playable_content_type: int = 0
+## kind -> { state, prep_left, flight_left, target_seed }
+var expeditions: Dictionary = {}
+
+func expedition(kind: String) -> Dictionary:
+	return expeditions.get(kind, {})
+
+func expedition_state(kind: String) -> String:
+	return String(expedition(kind).get("state", ""))
+
+## The home world's Moon (null before the world is built).
+func home_moon() -> PlanetData:
+	var home := get_home_planet()
+	if home == null or home.moons.is_empty():
+		return null
+	return home.moons[0]
+
+## True when a finished building of this id stands on that body.
+func has_finished_building(planet_seed: int, building_id: String) -> bool:
+	var pp: PlanetProgress = _planet_progress.get(planet_seed, null)
+	if pp == null:
+		return false
+	for b: Dictionary in pp.buildings:
+		if b.get("building_id", "") == building_id and not b.get("constructing", false):
+			return true
+	return false
+
+## Why the lander can't be prepared for this Moon right now ("" when it can).
 func moon_colonize_block(planet_seed: int) -> String:
 	var pp := get_planet(planet_seed)
-	if pp.is_colonized or pp.is_colonizing:
+	var st := expedition_state("lander")
+	if st == "preparing":
+		return "The lander is being prepared"
+	if st == "launching" or st == "orbiting":
+		return "The lander is lifting off"
+	if pp.is_colonized or pp.is_colonizing or st == "in_transit":
 		return "Already underway"
-	if not get_node("/root/SkillTree").is_unlocked("unlock_moon"):
+	if not get_node("/root/SkillTree").is_unlocked("lunar_program"):
 		return "Research Lunar Program first"
-	var missing: Array[String] = []
-	if credits < MOON_COLONIZE_CREDITS:
-		missing.append("%s Credits" % Economy.fmt(MOON_COLONIZE_CREDITS))
-	if get_resource(Economy.FUEL) < MOON_COLONIZE_FUEL:
-		missing.append("%s Fuel Rods" % Economy.fmt(MOON_COLONIZE_FUEL))
-	return "" if missing.is_empty() else "Needs " + ", ".join(missing)
+	if not has_finished_building(home_planet_seed, "spaceport"):
+		return "Build a Spaceport on your home world"
+	if not SkillTree.event_met("orbit_station"):
+		return "Put a Space Station into orbit first"
+	var short := Economy.cost_block(LANDER_COST)
+	return short
 
+## Pays the lander and starts its preparation (it launches on its own).
 func start_moon_colonization(planet_seed: int) -> bool:
 	if moon_colonize_block(planet_seed) != "":
 		return false
-	credits -= MOON_COLONIZE_CREDITS
-	consume_resource(Economy.FUEL, MOON_COLONIZE_FUEL)
-	var pp := get_planet(planet_seed)
-	pp.is_colonizing = true
-	pp.colonize_progress = 0.0
-	pp.colonize_duration = MOON_TRANSIT_SEC
-	launch_moon_lander(planet_seed, MOON_TRANSIT_SEC)
+	if not Economy.pay(LANDER_COST):
+		return false
+	expeditions["lander"] = {"state": "preparing", "prep_left": LANDER_PREP_SEC, "flight_left": MOON_TRANSIT_SEC,
+		"target_seed": planet_seed}
+	expedition_changed.emit("lander")
 	planet_progress_changed.emit(planet_seed)
 	save()
 	return true
+
+func _launch_lander(planet_seed: int, secs: float) -> void:
+	var pp := get_planet(planet_seed)
+	pp.is_colonizing = true
+	pp.colonize_progress = 0.0
+	pp.colonize_duration = secs
+	launch_moon_lander(planet_seed, secs)
+	expeditions["lander"]["state"] = "in_transit"
+	expedition_changed.emit("lander")
+	planet_progress_changed.emit(planet_seed)
+	save()
+
+## The lander ship of the current expedition (null if gone).
+func _lander_ship() -> ShipData:
+	var id := String(expedition("lander").get("ship_id", ""))
+	for s: ShipData in ShipManager.ships_for(home_planet_seed):
+		if s.ship_id == id:
+			return s
+	return null
+
+## A lander placed straight into the home orbit (no lift-off on screen).
+func _spawn_home_lander() -> ShipData:
+	var ship := ShipManager.launch(home_planet_seed, "Colony Lander")
+	ship.orbit_radius = 1.06
+	ship.orbit_inclination = randf_range(-0.4, 0.4)
+	return ship
+
+## The lander has reached the home orbit (after the Spaceport lift-off): it
+## laps the world once, then heads for the Moon. A lift-off that finishes
+## after the expedition moved on just removes its ship.
+func lander_in_orbit(ship: ShipData) -> void:
+	if ship == null:
+		return
+	if expedition_state("lander") != "launching":
+		ShipManager.remove_ship(ship.orbit_seed, ship.ship_id)
+		return
+	ship.ship_type = "lander"
+	ship.ship_name = "Colony Lander"
+	ship.orbit_speed = (1.0 if ship.orbit_speed >= 0.0 else -1.0) * LANDER_LOOP_SPEED
+	var ex: Dictionary = expeditions["lander"]
+	ex["state"] = "orbiting"
+	ex["ship_id"] = ship.ship_id
+	ex["loop_left"] = TAU
+	expedition_changed.emit("lander")
+	save()
+
+## The planet view saw the lander reach the point facing the Moon.
+func depart_lander_now() -> void:
+	var ship := _lander_ship()
+	if ship != null and expedition_state("lander") == "orbiting":
+		_depart_lander(ship)
+
+func _depart_lander(ship: ShipData) -> void:
+	var moon_seed := int(expedition("lander").get("target_seed", -1))
+	var pp := get_planet(moon_seed)
+	pp.is_colonizing = true
+	pp.colonize_progress = 0.0
+	pp.colonize_duration = MOON_TRANSIT_SEC
+	_lander_orbit(ship)   # the orbit it settles into at the Moon
+	ShipManager.dispatch(ship, moon_seed, MOON_TRANSIT_SEC)
+	expeditions["lander"]["state"] = "in_transit"
+	expedition_changed.emit("lander")
+	planet_progress_changed.emit(moon_seed)
+	save()
+
+## Why the final rocket can't be prepared right now ("" when it can).
+func rocket_block() -> String:
+	var st := expedition_state("rocket")
+	if st != "":
+		return "The rocket is already %s" % ("on its way" if st == "in_transit" else st if st != "arrived" else "there")
+	if playable_content_type > 0 or demo_completed:
+		return "Civilization 0 is complete"
+	if not get_node("/root/SkillTree").is_unlocked("advanced_planet_rocket"):
+		return "Research Advanced Planetary Rocket"
+	var moon := home_moon()
+	if moon == null or not has_finished_building(moon.seed, "lunar_spaceport"):
+		return "Build a Lunar Spaceport on the Moon"
+	return Economy.cost_block(ROCKET_COST)
+
+func start_rocket(target_seed: int = -1) -> bool:
+	if rocket_block() != "":
+		return false
+	if not Economy.pay(ROCKET_COST):
+		return false
+	expeditions["rocket"] = {"state": "preparing", "prep_left": ROCKET_PREP_SEC, "flight_left": ROCKET_FLIGHT_SEC,
+		"target_seed": target_seed if rocket_target_block(target_seed) == "" else -1}
+	expedition_changed.emit("rocket")
+	save()
+	return true
+
+## Why a body can't be the final rocket's target ("" when it can): another
+## natural planet of the home system — not the home world, not the Moon.
+func rocket_target_block(target_seed: int) -> String:
+	if target_seed < 0:
+		return "No target"
+	if target_seed == home_planet_seed:
+		return "Your home world isn't a new destination"
+	var moon := home_moon()
+	if moon != null and target_seed == moon.seed:
+		return "The Moon is where the rocket starts"
+	if _home_solar == null:
+		return "Unknown system"
+	for pd: PlanetData in _home_solar.planets:
+		if pd.seed == target_seed:
+			return "" if pd.planet_type != PlanetData.Type.ASTEROID else "Pick a planet"
+	return "Pick a planet of your home system"
+
+## Sets (or changes) the rocket's target while it is still on the ground.
+func set_rocket_target(target_seed: int) -> bool:
+	var st := expedition_state("rocket")
+	if (st != "preparing" and st != "ready") or rocket_target_block(target_seed) != "":
+		return false
+	expeditions["rocket"]["target_seed"] = target_seed
+	expedition_changed.emit("rocket")
+	save()
+	return true
+
+## Advances preparation and flights (ProductionManager calls it every frame).
+func tick_expeditions(delta: float) -> void:
+	var lander: Dictionary = expeditions.get("lander", {})
+	match String(lander.get("state", "")):
+		"preparing":   # being built at the Spaceport
+			lander["prep_left"] = float(lander["prep_left"]) - delta
+			if float(lander["prep_left"]) <= 0.0:
+				lander["state"] = "launching"
+				lander["launch_age"] = 0.0
+				lander["animating"] = false
+				expedition_changed.emit("lander")   # PlanetaryView plays the lift-off if it shows home
+		"launching":   # lifting off; without a lift-off on screen it appears in orbit
+			lander["launch_age"] = float(lander.get("launch_age", 0.0)) + delta
+			# a lift-off on screen hands the ship over itself (lander_in_orbit);
+			# only when none is playing does the lander appear in orbit directly
+			if not bool(lander.get("animating", false)) and float(lander["launch_age"]) > 0.3:
+				lander_in_orbit(_spawn_home_lander())
+		"orbiting":    # circles the home world, then leaves for the Moon
+			var ship := _lander_ship()
+			if ship == null:
+				_launch_lander(int(lander["target_seed"]), MOON_TRANSIT_SEC)
+			else:
+				lander["loop_left"] = float(lander.get("loop_left", TAU)) - absf(ship.orbit_speed) * delta
+				# while the home world is on screen, the planet view waits for the
+				# point of the orbit that faces the Moon (depart_lander_now); unseen,
+				# the lander leaves after its lap — and never circles a second time
+				var watched := Time.get_ticks_msec() - int(lander.get("watched_ms", -100000)) < 500
+				if (float(lander["loop_left"]) <= 0.0 and not watched) or float(lander["loop_left"]) <= -TAU:
+					_depart_lander(ship)
+	var rocket: Dictionary = expeditions.get("rocket", {})
+	match String(rocket.get("state", "")):
+		"preparing":
+			rocket["prep_left"] = float(rocket["prep_left"]) - delta
+			if float(rocket["prep_left"]) <= 0.0:
+				rocket["state"] = "ready"
+				expedition_changed.emit("rocket")
+				save()
+		"ready":
+			if rocket_target_block(int(rocket.get("target_seed", -1))) == "":
+				rocket["state"] = "in_transit"   # the target is locked at launch
+				expedition_changed.emit("rocket")
+				save()
+		"in_transit":
+			rocket["flight_left"] = float(rocket["flight_left"]) - delta
+			if float(rocket["flight_left"]) <= 0.0:
+				_rocket_arrived()
+
+## The one arrival: Civilization 0 is complete (GDD §20.18–§20.19). Nothing is
+## built or discovered at the target and Earth / Moon keep producing.
+func _rocket_arrived() -> void:
+	var rocket: Dictionary = expeditions.get("rocket", {})
+	if rocket.get("state", "") == "arrived" or demo_completed:
+		rocket["state"] = "arrived"
+		return
+	rocket["state"] = "arrived"
+	rocket["flight_left"] = 0.0
+	civilization_type = maxi(civilization_type, 1)
+	demo_completed = true
+	playable_content_type = 0
+	expedition_changed.emit("rocket")
+	civilization_reached.emit(1)
+	save()
 
 ## The colony lander as a real ship in the moon's orbit (OrbitalLayer draws,
 ## spins and lands it). "aim_home" asks the planet view to park it facing the
@@ -607,6 +949,10 @@ func complete_act1() -> void:
 
 func finish_colonization(planet_seed: int) -> void:
 	var pp := get_planet(planet_seed)
+	if expedition_state("lander") == "in_transit" and int(expedition("lander").get("target_seed", -1)) == planet_seed:
+		expeditions["lander"]["state"] = "arrived"
+		expedition_changed.emit("lander")
+		lander_reached_moon.emit.call_deferred(planet_seed)
 	pp.is_colonizing = false
 	pp.colonize_progress = 1.0
 	pp.is_colonized = true
@@ -614,8 +960,9 @@ func finish_colonization(planet_seed: int) -> void:
 	var pd := get_planet_data(planet_seed)
 	if pd != null and pd.planet_type == PlanetData.Type.MOON:
 		pp.lander_state = 1   # parked in orbit; the player picks the landing site
-		if moon_lander(planet_seed) == null:
-			spawn_moon_lander(planet_seed)   # no flight (older saves): appear in orbit
+		# first part: the lander turns into the Moon's Central Orbit (one
+		# structure up there; the landing module undocks from it later)
+		deploy_central_orbit(planet_seed)
 		pd = null
 	if pd != null:
 		var has_poi := false
@@ -659,20 +1006,29 @@ func save() -> void:
 		return
 	var data := {
 		"save_version":         SAVE_VERSION,
+		"saved_at":             Time.get_unix_time_from_system(),
+		"world_gen":            world_gen,
+		"scanned_bodies":       scanned_bodies,
+		"landing_paid":         landing_paid,
 		"balance_profile":      Balance.profile_name,
 		"credits":              credits,
 		"science_points":       science_points,
 		"solar_unlocked":       solar_unlocked,
 		"moon_unlocked":        moon_unlocked,
 		"act1_complete":        act1_complete,
+		"demo_completed":       demo_completed,
+		"playable_content_type": playable_content_type,
+		"expeditions":          expeditions,
 		"galaxy_unlocked":      galaxy_unlocked,
 		"discovered_asteroids": discovered_asteroids,
 		"asteroid_scan_counts": asteroid_scan_counts,
 		"home_planet_seed":     home_planet_seed,
 		"home_star_idx":        home_star_idx,
 		"home_planet_idx":      home_planet_idx,
-		"unlocked_skills":      get_node("/root/SkillTree").unlocked_skills if has_node("/root/SkillTree") else ["root"],
-		"skill_levels":         get_node("/root/SkillTree").skill_levels if has_node("/root/SkillTree") else {},
+		"research":             get_node("/root/SkillTree").get_save_data() if has_node("/root/SkillTree") else {},
+		"moon_local_moonstone": moon_local_moonstone,
+		"trade": {"reserves": trade_reserves, "orders": trade_orders, "log": trade_log,
+			"seq": trade_seq, "overflow_sold": overflow_sold},
 		"ships":                get_node("/root/ShipManager").serialize() if has_node("/root/ShipManager") else [],
 		"planet_progress":      {},
 	}
@@ -700,6 +1056,7 @@ func save() -> void:
 					"parent_city":        poi.parent_city,
 					"resource_tags":      poi.resource_tags,
 					"site_features":      poi.site_features,
+					"paid_credits":       poi.paid_credits,
 					"spoke_birth":        poi.spoke_birth,
 					"constructing":       poi.constructing,
 					"construct_progress": poi.construct_progress,
@@ -721,6 +1078,7 @@ func save() -> void:
 			"is_colonized":      pp.is_colonized,
 			"districts_used":    pp.districts_used,
 			"district_levels":   pp.district_levels,
+			"level_paid":        pp.level_paid,
 			"city_levels":       pp.city_levels,
 			"city_upgrading":    pp.city_upgrading,
 			"district_upgrading": pp.district_upgrading,
@@ -747,6 +1105,7 @@ func save() -> void:
 	data["tutorial_guided_step"] = TutorialManager._guided_step
 	data["tutorial_action_sub"]  = TutorialManager._action_sub
 	data["tutorial_quest_step"]  = TutorialManager._quest_step
+	data["objectives_collapsed"] = TutorialManager._collapsed
 	data["tutorial_quest_sub"]   = TutorialManager._quest_sub
 	data["tutorial_solar_count"] = TutorialManager._solar_count
 	data["tutorial_inv_shown"]   = TutorialManager._inventory_shown
@@ -777,12 +1136,27 @@ func load_save() -> bool:
 	if profile != "" and profile != Balance.profile_name and not Balance.load_profile(profile):
 		push_warning("[GameState] Save's balance profile '%s' not found — using '%s'." % [profile, Balance.profile_name])
 	_loaded_from_save = true
+	world_gen = int(data.get("world_gen", 1))
+	scanned_bodies = data.get("scanned_bodies", {})
+	landing_paid = data.get("landing_paid", {})
+	# time away (KARARLAR §4): only measured and shown — no offline economy yet.
+	# A clock that went backwards counts as no time away (GDD §19.27).
+	var saved_at := float(data.get("saved_at", 0.0))
+	if not _offline_measured:
+		_offline_measured = true
+		offline_seconds = maxf(Time.get_unix_time_from_system() - saved_at, 0.0) if saved_at > 0.0 else 0.0
+		offline_pending = offline_seconds >= OFFLINE_MIN_SECONDS
 	ProductionManager.load_save_data(data.get("production", {}))
 	credits                  = data.get("credits",              500.0)
 	science_points           = data.get("science_points",       0.0)
 	solar_unlocked           = data.get("solar_unlocked",       false)
 	moon_unlocked            = data.get("moon_unlocked",        false)
 	act1_complete            = data.get("act1_complete",        false)
+	demo_completed           = bool(data.get("demo_completed", false))
+	playable_content_type    = int(data.get("playable_content_type", 0))
+	expeditions              = data.get("expeditions", {})
+	if expedition_state("lander") == "launching":
+		expeditions["lander"]["animating"] = false   # a lift-off on screen doesn't survive a reload
 	galaxy_unlocked          = data.get("galaxy_unlocked",      false)
 	home_planet_seed         = data.get("home_planet_seed",     -1)
 	home_star_idx            = data.get("home_star_idx",        -1)
@@ -790,24 +1164,19 @@ func load_save() -> bool:
 	discovered_asteroids     = data.get("discovered_asteroids", [])
 	asteroid_scan_counts     = data.get("asteroid_scan_counts", {})
 	
-	var st := get_node("/root/SkillTree")
-	st.unlocked_skills.clear()
-	st.unlocked_skills.append("root")
-	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab", "unlock_commercial"]:
-		if not def_node in st.unlocked_skills:
-			st.unlocked_skills.append(def_node)
-
-	if data.has("unlocked_skills"):
-		for s in data["unlocked_skills"]:
-			if not s in st.unlocked_skills:
-				st.unlocked_skills.append(s)
-		
-	st.skill_levels.clear()
-	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab", "unlock_commercial"]:
-		st.skill_levels[def_node] = 1
-	if data.has("skill_levels"):
-		for k in data["skill_levels"]:
-			st.skill_levels[k] = data["skill_levels"][k]
+	# research: current saves keep it under "research"; older ones (Act I ids)
+	# stored the two lists at the top level — SkillTree converts those ids
+	var research: Dictionary = data.get("research", {})
+	if research.is_empty():
+		research = {"unlocked_skills": data.get("unlocked_skills", []), "skill_levels": data.get("skill_levels", {})}
+	get_node("/root/SkillTree").load_save_data(research)
+	moon_local_moonstone = float(data.get("moon_local_moonstone", 0.0))
+	var trade: Dictionary = data.get("trade", {})
+	trade_reserves = trade.get("reserves", {})
+	trade_orders = trade.get("orders", {})
+	trade_log = trade.get("log", [])
+	trade_seq = int(trade.get("seq", 0))
+	overflow_sold = trade.get("overflow_sold", {})
 
 	global_resources    = data.get("global_resources",   {})
 	global_resources.erase(Economy.ENERGY)   # energy is a flow; older saves stored it
@@ -827,6 +1196,7 @@ func load_save() -> bool:
 	TutorialManager._guided_step      = data.get("tutorial_guided_step", 0)
 	TutorialManager._action_sub       = data.get("tutorial_action_sub",  0)
 	TutorialManager._quest_step       = data.get("tutorial_quest_step",  0)
+	TutorialManager._collapsed        = bool(data.get("objectives_collapsed", false))
 	TutorialManager._quest_sub        = data.get("tutorial_quest_sub",   0)
 	TutorialManager._solar_count      = data.get("tutorial_solar_count", 0)
 	TutorialManager._inventory_shown  = data.get("tutorial_inv_shown",   false)
@@ -848,6 +1218,7 @@ func load_save() -> bool:
 		pp.is_colonized      = d.get("is_colonized",     false)
 		pp.districts_used    = d.get("districts_used",   0)
 		pp.district_levels   = d.get("district_levels",  {})
+		pp.level_paid        = d.get("level_paid",       {})
 		pp.city_levels       = d.get("city_levels",      {})
 		pp.city_upgrading    = d.get("city_upgrading",   {})
 		pp.buildings          = d.get("buildings",          [])
@@ -890,6 +1261,14 @@ func delete_save() -> void:
 	solar_unlocked       = false
 	moon_unlocked        = false
 	act1_complete        = false
+	demo_completed       = false
+	playable_content_type = 0
+	world_gen            = WORLD_GEN
+	scanned_bodies       = {}
+	landing_paid         = {}
+	offline_pending      = false   # a new world has no time away
+	_offline_measured    = true
+	expeditions          = {}
 	galaxy_unlocked      = false
 	discovered_asteroids = []
 	asteroid_scan_counts = {}
@@ -898,14 +1277,13 @@ func delete_save() -> void:
 	home_planet_idx      = -1
 	_home_solar          = null
 	home_galaxy          = null
-	var st := get_node("/root/SkillTree")
-	st.unlocked_skills.clear()
-	st.unlocked_skills.append("root")
-	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab", "unlock_commercial"]:
-		st.unlocked_skills.append(def_node)
-	st.skill_levels.clear()
-	for def_node in ["unlock_solar_panel", "unlock_residential", "unlock_lab", "unlock_commercial"]:
-		st.skill_levels[def_node] = 1
+	get_node("/root/SkillTree").reset_to_defaults()
+	moon_local_moonstone = 0.0
+	trade_reserves.clear()
+	trade_orders.clear()
+	trade_log.clear()
+	trade_seq = 0
+	overflow_sold.clear()
 	unlocked_buildings.clear()
 	revealed_resources.clear()
 	civilization_type = 0

@@ -327,7 +327,7 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]colonize[/color]  [color=#88ddcc]scan asteroid[/color] [color=#aaaaaa][all][/color]")
 			_log_info("  [color=#88ddcc]asteroids[/color]")
 			_log_info("[color=#33cc55]── SKILL TREE ───────────────────────────[/color]")
-			_log_info("  [color=#88ddcc]skilltree unhide -all[/color]  [color=#88ddcc]hide -all[/color]")
+			_log_info("  [color=#88ddcc]skilltree unhide -all[/color]  [color=#88ddcc]hide -all[/color]  [color=#88ddcc]grant <id>|all[/color]")
 			_log_info("[color=#33cc55]── SAVE ──────────────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]save[/color]              — force save now")
 			_log_info("  [color=#88ddcc]clear_save[/color]        — delete save file")
@@ -335,6 +335,7 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]state[/color]  [color=#88ddcc]clear[/color]  [color=#88ddcc]debug coords[/color]")
 			_log_info("  [color=#88ddcc]--seed[/color]            — seed of what you're looking at (copied)")
 			_log_info("  [color=#88ddcc]moonlaunch[/color] [color=#aaaaaa][sec] [reset][/color] — send the Moon lander now (default 15s)")
+			_log_info("  [color=#88ddcc]rocket[/color] [color=#aaaaaa][sec][/color] — launch the final rocket now (completes Civilization 0)")
 			_log_info("  [color=#88ddcc]tutorial complete[/color] — skip/finish tutorial")
 			_log_info("[color=#33cc55]── BALANCE ───────────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]balance[/color]                     — active profile and the ones available")
@@ -398,8 +399,20 @@ func _exec(line: String) -> void:
 				st.set_meta("debug_reveal_all", false)
 				st.skill_unlocked.emit("debug")
 				_log_ok("SkillTree nodes [color=#ee5555]hidden[/color].")
+			elif sub == "grant" and opt != "":
+				var st = get_tree().root.get_node("SkillTree")
+				var ids: Array = st.nodes.keys() if opt == "all" else [parts[2]]
+				var n := 0
+				for nid in ids:
+					var node = st.nodes.get(nid, null)
+					if node == null or node.act2 or nid == "root" or node.civilization > GameState.playable_content_type:
+						continue
+					st.grant(nid, node.max_level)
+					n += 1
+				GameState.save()
+				_log_ok("Granted %d research node%s." % [n, "" if n == 1 else "s"])
 			else:
-				_log_err("Usage: skilltree unhide -all | skilltree hide -all")
+				_log_err("Usage: skilltree unhide -all | skilltree hide -all | skilltree grant <id>|all")
 
 		# ── Unlocks ─────────────────────────────────────────────────────────
 		"unlock":
@@ -529,6 +542,8 @@ func _exec(line: String) -> void:
 		# ── Moon lander test ──────────────────────────────────────────────────
 		"moonlaunch":
 			_cmd_moonlaunch(parts)
+		"rocket":
+			_cmd_rocket(parts)
 
 		# ── Seed of the current view ──────────────────────────────────────────
 		"--seed", "seed":
@@ -691,6 +706,7 @@ func _cmd_moonlaunch(parts: Array) -> void:
 		mp.is_colonizing = false
 		mp.colonize_progress = 0.0
 		mp.lander_state = 0
+		GameState.expeditions.erase("lander")
 		mp.buildings.clear()
 		mp.district_levels.clear()
 		mp.city_levels.clear()
@@ -704,20 +720,14 @@ func _cmd_moonlaunch(parts: Array) -> void:
 			ShipManager.remove_ship(flying_old.orbit_seed, flying_old.ship_id)
 			flying_old = ShipManager.travelling_to(moon.seed, "lander")
 	var st := get_node("/root/SkillTree")
-	if not st.is_unlocked("unlock_moon"):
-		st.unlocked_skills.append("unlock_moon")
-		st.skill_levels["unlock_moon"] = 1
+	if not st.is_unlocked("lunar_program"):
+		st.grant("lunar_program")
 	GameState.moon_unlocked = true
 	GameState.unlock_changed.emit("moon_unlocked", true)
-	GameState.credits = maxf(GameState.credits, GameState.MOON_COLONIZE_CREDITS)
-	if GameState.get_resource(Economy.FUEL) < GameState.MOON_COLONIZE_FUEL:
-		GameState.global_resources[Economy.FUEL] = GameState.MOON_COLONIZE_FUEL
-	if not GameState.start_moon_colonization(moon.seed):
-		_log_err("Couldn't start: %s" % GameState.moon_colonize_block(moon.seed)); return
-	mp.colonize_duration = secs
-	var flying := ShipManager.travelling_to(moon.seed, "lander")
-	if flying != null:
-		flying.travel_duration = secs
+	# cheat: no Spaceport, cost or preparation — the lander leaves right now
+	GameState.expeditions["lander"] = {"state": "preparing", "prep_left": 0.0, "flight_left": secs,
+		"target_seed": moon.seed}
+	GameState._launch_lander(moon.seed, secs)
 	# a lander left in orbit from a previous run would be a second one
 	var old := GameState.moon_lander(moon.seed)
 	if old != null:
@@ -728,6 +738,27 @@ func _cmd_moonlaunch(parts: Array) -> void:
 		scene.call("_set_zoom_target", 0.0, Vector2.INF)
 		scene.call("_refresh_active_panel")
 	_log_ok("Lander launched to [color=#aabbff]%s[/color] — %ds flight." % [moon.planet_name, int(secs)])
+
+## rocket [sec] — launches the final rocket now (no Lunar Spaceport, cost or
+## preparation) at the first valid planet; its arrival completes Civilization 0.
+func _cmd_rocket(parts: Array) -> void:
+	var secs := 10.0
+	if parts.size() > 1 and String(parts[1]).is_valid_float():
+		secs = maxf(1.0, String(parts[1]).to_float())
+	if GameState.demo_completed:
+		_log_err("Civilization 0 is already complete."); return
+	var target := -1
+	var sd := GameState.get_home_solar()
+	if sd != null:
+		for pd: PlanetData in sd.planets:
+			if GameState.rocket_target_block(pd.seed) == "":
+				target = pd.seed
+				break
+	if target < 0:
+		_log_err("No valid target planet."); return
+	GameState.expeditions["rocket"] = {"state": "in_transit", "prep_left": 0.0, "flight_left": secs, "target_seed": target}
+	GameState.expedition_changed.emit("rocket")
+	_log_ok("Rocket launched to [color=#aabbff]%s[/color] — %ds flight." % [GameState.get_planet_data(target).planet_name, int(secs)])
 
 # ── Seed ─────────────────────────────────────────────────────────────────────
 

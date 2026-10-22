@@ -10,6 +10,7 @@ uniform float atmosphere_density : hint_range(0.0, 3.0)    = 1.0;
 uniform float terrain_roughness  : hint_range(0.2, 2.0)    = 1.0;
 uniform float continent_scale    : hint_range(0.2, 3.0)    = 1.0;  // low=big continents, high=islands
 uniform float sea_level          : hint_range(-0.5, 0.5)   = 0.0;
+uniform float continentality     : hint_range(0.0, 1.0)    = 0.0;  // 0 archipelago … 1 big continents
 uniform float specular_strength  : hint_range(0.0, 1.0)    = 1.0;
 uniform float city_lights        : hint_range(0.0, 1.0)    = 0.6;  // night city glow intensity
 uniform float planet_radius      : hint_range(0.1, 0.5)    = 0.42;
@@ -59,6 +60,17 @@ float fbm3(vec3 p, int oct) {
 	for(int i=0;i<oct;i++){v+=a*noise3(p*f);f*=2.0;a*=0.5;}
 	return v;
 }
+// Continentality (0 = the old archipelago look, 1 = a few big continents): a
+// large, slow continent mask pulls the detail noise into big landmasses.
+// MUST stay identical in planet_rocky.gdshader and terrain_map.gdshader.
+float rocky_height(vec3 rn) {
+	float h = fbm3(rn * 3.2 * continent_scale * terrain_roughness, 7);
+	if (continentality > 0.0) {
+		float m = fbm3(rn * 0.9 + vec3(17.3, -4.1, 9.7), 3);
+		h = mix(h, h * 0.55 + m * 0.8, continentality);
+	}
+	return h;
+}
 vec3 rot_y(vec3 p, float a) { float c=cos(a),s=sin(a); return vec3(p.x*c+p.z*s,p.y,-p.x*s+p.z*c); }
 vec3 rot_x(vec3 p, float a) { float c=cos(a),s=sin(a); return vec3(p.x, p.y*c-p.z*s, p.y*s+p.z*c); }
 
@@ -92,7 +104,7 @@ void fragment() {
 		vec3 rn = rot_y(tn, rotation_offset);
 
 		// continent_scale: low = big features (fewer, larger continents)
-		float h = fbm3(rn * 3.2 * continent_scale * terrain_roughness, 7) - sea_level;
+		float h = rocky_height(rn) - sea_level;
 
 		vec3 surf;
 		if      (h < -0.12) { surf = color_deep_ocean; }
@@ -107,7 +119,7 @@ void fragment() {
 		float ice   = smoothstep(0.78, 0.94, polar);
 		surf = mix(surf, color_snow * 0.95, ice);
 		surf += vec3(fbm3(rn * 14.0, 2) * 0.04 - 0.02);
-		surf = apply_features(surf, rn, step(0.10, h), TIME);   // FeatureMap
+		surf = apply_features(surf, rn, smoothstep(0.03, 0.15, h), TIME);   // FeatureMap (soft at the shore)
 
 		// clouds — auto-rotate with TIME (always animating)
 		vec3 crn = rot_y(tn, rotation_offset + TIME * cloud_speed);
@@ -136,6 +148,7 @@ void fragment() {
 			float d_sea = district_sea[d_owner];
 			float site  = mix(on_land, 1.0 - on_land, d_sea);
 			urban = site * step(1.0 - core, blob * 0.8 + ur * 0.35);
+			urban *= 1.0 - river_cover(rn);   // cities grow around rivers, never over them
 			// satellite-style mix: concrete, pale roofs, terracotta — or steel platforms at sea
 			vec3 u_col = ur < 0.45 ? vec3(0.42, 0.41, 0.40)
 			           : ur < 0.80 ? vec3(0.68, 0.63, 0.55)
@@ -194,6 +207,7 @@ void fragment() {
 		}
 
 		surf = apply_lens(surf, rn);
+		surf = apply_wind_lens(surf, rn, TIME);   // Energy lens: wind currents
 
 		// territory border — only while hovered/selected; after lighting so it reads at night
 		if (d_owner >= 0 && territory_border_on(d_owner)

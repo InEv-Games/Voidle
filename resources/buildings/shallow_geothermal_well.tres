@@ -19,6 +19,5 @@ energy_per_tick = 0.0
 pop_cost = 250
 output_tag = "geothermal"
 required_features = Array[String](["terrain_volcanic", "terrain_geothermal"])
-unlock_skill = "unlock_geothermal_plant"
 construct_duration = 4.0
 description = "A small first well on hot ground. Must stand on a volcanic field or a geothermal rift."

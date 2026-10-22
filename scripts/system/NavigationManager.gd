@@ -254,7 +254,18 @@ func _process(_delta: float) -> void:
 	var frac := 1.0 if GameState.showcase_mode else clampf(HUDManager.view_area_fraction, 0.3, 1.0)
 	var cx := vp.x * (1.0 - frac) + vp.x * frac * 0.5
 	_bar.reset_size()
-	_bar.position = Vector2(roundf(cx - _bar.size.x * 0.5), 12.0)
+	var pos := Vector2(roundf(cx - _bar.size.x * 0.5), 12.0)
+	# the resource bar (top-left) grows as resources are found: never sit under
+	# it — step right of it, or below it when there's no room beside it
+	var res := HUDManager.credits_panel
+	if res != null and is_instance_valid(res) and res.is_visible_in_tree():
+		var rr := res.get_global_rect()
+		if pos.x < rr.end.x + 12.0:
+			pos.x = rr.end.x + 12.0
+			if pos.x + _bar.size.x > vp.x - 80.0:   # keep clear of the settings cog
+				pos = Vector2(roundf(cx - _bar.size.x * 0.5), rr.end.y + 8.0)
+				pos.x = maxf(pos.x, rr.position.x + 8.0)
+	_bar.position = pos
 
 ## Unhandled, so typing in text fields (dev console) never triggers navigation.
 func _unhandled_input(event: InputEvent) -> void:

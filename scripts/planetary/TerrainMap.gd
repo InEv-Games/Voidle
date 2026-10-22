@@ -50,6 +50,7 @@ static func bake(data: PlanetData, host: Node) -> void:
 	mat.set_shader_parameter("seed",              data.seed)
 	mat.set_shader_parameter("terrain_roughness", data.terrain_roughness)
 	mat.set_shader_parameter("continent_scale",   data.continent_scale)
+	mat.set_shader_parameter("continentality",    data.effective_continentality())
 	mat.set_shader_parameter("mode",              mode)
 	rect.material = mat
 	vp.add_child(rect)

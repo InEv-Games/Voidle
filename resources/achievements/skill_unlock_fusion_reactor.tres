@@ -11,6 +11,6 @@ icon = "⚛️"
 trigger = 12
 int_value = 0
 float_value = 0.0
-string_value = "unlock_fusion_reactor"
+string_value = "fusion_power"
 steam_id = ""
 secret = false

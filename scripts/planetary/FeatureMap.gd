@@ -65,6 +65,16 @@ static func has_map(planet_seed: int) -> bool:
 static func texture(planet_seed: int) -> ImageTexture:
 	return _maps[planet_seed]["tex"] if _maps.has(planet_seed) else null
 
+## Wind strength (ResourceMap "wind", the "Wind %" of a site) on the feature
+## grid, for the Energy lens's wind currents; null without a wind field.
+static func wind_texture(planet_seed: int) -> ImageTexture:
+	return _maps[planet_seed].get("wind", null) if _maps.has(planet_seed) else null
+
+## Rivers drawn as thin lines at RIVER_SCALE × the grid (R water, G bank);
+## null on worlds without rivers. Only for drawing — the economy reads the grid.
+static func river_texture(planet_seed: int) -> ImageTexture:
+	return _maps[planet_seed].get("river", null) if _maps.has(planet_seed) else null
+
 static func feature_name(id: String) -> String:
 	var i := IDS.find(id)
 	return NAMES[i] if i >= 0 else id
@@ -133,7 +143,7 @@ static func bonus_for(site: Dictionary, family: String) -> float:
 	var total := 0.0
 	for fid: String in site:
 		var row: Dictionary = table.get(fid, {})
-		total += float(row.get(family, 0.0)) * float(site[fid])
+		total += float(row.get(family, 0.0)) * float(site[fid]) * SkillTree.get_feature_mult(fid)   # Geography Specialisation
 	return total
 
 ## A district's site, merged with its City's: each feature counts once at the
@@ -206,15 +216,38 @@ static func role_texture(planet_seed: int, role: String) -> ImageTexture:
 				for f in IDS.size():
 					if mv & (1 << f):
 						site[IDS[f]] = 1.0
-				by_mask[mv] = bonus_for(site, fam)
-			var b: float = by_mask[mv]
+				by_mask[mv] = _role_cell(site, fam, tint)
+			var cell: Array = by_mask[mv]
+			var b: float = cell[0]
+			var col: Color = cell[1]
 			if b >= ROLE_STRONG:
-				img.set_pixel(x, y, Color(tint, 0.85))
+				img.set_pixel(x, y, Color(col, 0.85))
 			elif b >= ROLE_GOOD and (x + y) % 2 == 0:   # dotted, so the levels differ by more than colour
-				img.set_pixel(x, y, Color(tint.darkened(0.15), 0.55))
+				img.set_pixel(x, y, Color(col.darkened(0.15), 0.55))
 	var tex := ImageTexture.create_from_image(img)
 	m["roles"][role] = tex
 	return tex
+
+## Energy sources the Energy lens paints, each in its own colour. Wind isn't
+## painted: windy regions show as drifting wisps under the lens instead (shader).
+const ENERGY_LENS := {
+	"energy_solar":      Color(1.0, 0.85, 0.30),
+	"energy_tidal":      Color(0.35, 0.85, 1.0),
+	"energy_geothermal": Color(1.0, 0.45, 0.25),
+}
+
+## [bonus, colour] a cell shows under a role's lens.
+static func _role_cell(site: Dictionary, fam: String, tint: Color) -> Array:
+	if fam != "energy":
+		return [bonus_for(site, fam), tint]
+	var best := 0.0
+	var col := tint
+	for src: String in ENERGY_LENS:
+		var v := bonus_for(site, src)
+		if v > best:
+			best = v
+			col = ENERGY_LENS[src]
+	return [best, col]
 
 ## Features that help a role, for its button tooltip: "Desert (Solar +30%) …".
 static func role_features_text(role: String) -> String:
@@ -229,6 +262,8 @@ static func role_features_text(role: String) -> String:
 			if k == fam or (fam == "energy" and k.begins_with("energy_")):
 				parts.append("%s +%d%%%s" % [feature_name(fid), int(round(float(row[k]) * 100.0)),
 					" (%s)" % k.trim_prefix("energy_").capitalize() if fam == "energy" else ""])
+	if fam == "energy":
+		parts.append("Lens: yellow solar · blue tidal · orange geothermal · white currents = wind (denser where it blows harder)")
 	return "\n".join(parts)
 
 # ── Build ────────────────────────────────────────────────────────────────────
@@ -283,8 +318,9 @@ static func build(data: PlanetData) -> void:
 			height[i] = h
 			land[i] = 1 if h >= TerrainSampler.SHORE_H else 0
 
+	var river_paths: Array = []
 	if rocky:
-		_build_rocky(data, rng, height, land, cover, lines, mask)
+		river_paths = _build_rocky(data, rng, height, land, cover, lines, mask)
 	# craters: rare on living worlds, common on barren ones and moons
 	var craters := 3
 	if moon or data.planet_type == PlanetData.Type.BARREN:
@@ -297,9 +333,19 @@ static func build(data: PlanetData) -> void:
 	if rocky:
 		_mark_windy(data, land, windy, mask)
 	_store(data.seed, mask, cover, lines, spots, windy)
+	if not river_paths.is_empty():
+		_maps[data.seed]["river"] = _bake_rivers(river_paths, data.seed, land)
+	if ResourceMap.has_map(data.seed) and data.has_atmosphere:
+		var wb := PackedByteArray(); wb.resize(n)
+		for y in HEIGHT:
+			for x in WIDTH:
+				var i := y * WIDTH + x
+				var ll := _cell_lonlat(x, y)
+				wb[i] = int(clampf(ResourceMap.field(data.seed, "wind", ll.x, ll.y), 0.0, 1.0) * 255.0) if land[i] == 1 else 0
+		_maps[data.seed]["wind"] = ImageTexture.create_from_image(Image.create_from_data(WIDTH, HEIGHT, false, Image.FORMAT_R8, wb))
 
 static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: PackedFloat32Array,
-		land: PackedByteArray, cover: PackedByteArray, lines: PackedByteArray, mask: PackedInt32Array) -> void:
+		land: PackedByteArray, cover: PackedByteArray, lines: PackedByteArray, mask: PackedInt32Array) -> Array:
 	var n := WIDTH * HEIGHT
 	var ptype := data.planet_type
 	var forest_n := _noise(data.seed ^ 0xF0E5, 0.035, 4)
@@ -392,37 +438,192 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 			mask[i] = m
 
 	if ptype == PlanetData.Type.TERRAN:
-		_trace_rivers(rng, height, land, lines, mask)
+		return _trace_rivers(rng, height, land, lines, mask)
+	return []
 
-## Rivers: from mountain springs, downhill to the sea.
+## Rivers: every sizeable landmass gets its share (by area), springing from its
+## own highlands (its upper height range, not a planet-wide mountain line),
+## spaced apart, and running downhill to the sea or into another river. A river
+## that gets stuck in a basin climbs out over the lowest unvisited neighbour;
+## one that still can't reach the sea is dropped. Returns each river's cells
+## (spring first; the last one is its mouth or the river it joins).
 static func _trace_rivers(rng: RandomNumberGenerator, height: PackedFloat32Array, land: PackedByteArray,
-		lines: PackedByteArray, mask: PackedInt32Array) -> void:
-	var springs: Array[int] = []
-	for i in WIDTH * HEIGHT:
-		if land[i] == 1 and height[i] >= MOUNTAIN_H and height[i] < SNOW_H:
-			springs.append(i)
-	if springs.is_empty():
-		return
-	var count := mini(14, maxi(4, springs.size() / 60))
-	for _r in count:
-		var i: int = springs[rng.randi() % springs.size()]
-		var steps := 0
-		while land[i] == 1 and steps < 220:
-			steps += 1
-			if lines[i] == LINE_RIVER and steps > 1:
-				break   # joined another river
-			lines[i] = LINE_RIVER
-			mask[i] |= 1 << F.RIVER
-			var best := i
-			var best_h := height[i]
-			for j in _neighbours8(i):
-				if height[j] < best_h:
-					best_h = height[j]
-					best = j
-			if best == i:   # a basin: nudge on to a random neighbour
-				var nb := _neighbours8(i)
-				best = nb[rng.randi() % nb.size()]
-			i = best
+		lines: PackedByteArray, mask: PackedInt32Array) -> Array:
+	var paths: Array = []
+	var n := WIDTH * HEIGHT
+	# landmasses
+	var comp := PackedInt32Array(); comp.resize(n); comp.fill(-1)
+	var masses: Array = []   # Array of PackedInt32Array (cells)
+	for start in n:
+		if land[start] == 0 or comp[start] >= 0:
+			continue
+		var id := masses.size()
+		var cells := PackedInt32Array()
+		var stack: Array[int] = [start]
+		comp[start] = id
+		while not stack.is_empty():
+			var c: int = stack.pop_back()
+			cells.append(c)
+			for j in _neighbours4(c):
+				if land[j] == 1 and comp[j] < 0:
+					comp[j] = id
+					stack.append(j)
+		masses.append(cells)
+	var springs_used: Array[int] = []
+	for cells: PackedInt32Array in masses:
+		if cells.size() < 120:
+			continue   # small islands keep no rivers
+		var want := clampi(floori(float(cells.size()) / 450.0), 1, 9)
+		# its highlands: the top 30% of its own heights, below the snow line
+		var hs := PackedFloat32Array()
+		for c: int in cells:
+			hs.append(height[c])
+		hs.sort()
+		var h_min := hs[int(float(hs.size()) * 0.70)]
+		var cand: Array[int] = []
+		for c: int in cells:
+			if height[c] >= h_min and height[c] < SNOW_H:
+				cand.append(c)
+		if cand.is_empty():
+			continue
+		var made := 0
+		var tries := 0
+		while made < want and tries < want * 12:
+			tries += 1
+			var s: int = cand[rng.randi() % cand.size()]
+			if _near_any(s, springs_used, 9):
+				continue   # keep springs apart: no parallel twin rivers
+			var path := _flow(s, height, land, lines)
+			if path.is_empty():
+				continue
+			springs_used.append(s)
+			for c: int in path:
+				if land[c] == 1:
+					lines[c] = LINE_RIVER
+					mask[c] |= 1 << F.RIVER
+			paths.append(path)
+			made += 1
+	return paths
+
+## One river's cells from a spring to the sea or another river; empty if it
+## can't get there (or is too short to show).
+static func _flow(start: int, height: PackedFloat32Array, land: PackedByteArray, lines: PackedByteArray) -> PackedInt32Array:
+	var path := PackedInt32Array()
+	var seen := {}
+	var i := start
+	while path.size() < 260:
+		path.append(i)
+		seen[i] = true
+		if land[i] == 0 or (lines[i] == LINE_RIVER and path.size() > 1):
+			return path if path.size() >= 6 else PackedInt32Array()   # mouth or confluence
+		var best := -1
+		var best_h := INF
+		for j in _neighbours8(i):
+			if seen.has(j):
+				continue
+			if height[j] < best_h:
+				best_h = height[j]
+				best = j
+		if best < 0:
+			return PackedInt32Array()   # boxed in
+		i = best
+	return PackedInt32Array()
+
+static func _near_any(c: int, others: Array[int], cells: int) -> bool:
+	var cx := c % WIDTH
+	var cy := floori(float(c) / float(WIDTH))
+	for o: int in others:
+		var dx := absi(o % WIDTH - cx)
+		dx = mini(dx, WIDTH - dx)
+		if dx <= cells and absi(floori(float(o) / float(WIDTH)) - cy) <= cells:
+			return true
+	return false
+
+## River drawing resolution (texture pixels per grid cell).
+const RIVER_SCALE := 4
+
+## Draws every river as a smooth, gently meandering line that widens
+## downstream, with a soft bank around it. R = water, G = bank.
+static func _bake_rivers(paths: Array, planet_seed: int, land: PackedByteArray) -> ImageTexture:
+	var rw := WIDTH * RIVER_SCALE
+	var rh := HEIGHT * RIVER_SCALE
+	var water := PackedByteArray(); water.resize(rw * rh)
+	var bank := PackedByteArray(); bank.resize(rw * rh)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = planet_seed ^ 0x51FE
+	var sc := float(RIVER_SCALE)
+	for path: PackedInt32Array in paths:
+		# cell centres in texture pixels, unwrapped across the date line
+		var pts := PackedVector2Array()
+		var prev_x := -1.0
+		for c: int in path:
+			var x := float(c % WIDTH) + 0.5
+			var y := floorf(float(c) / float(WIDTH)) + 0.5
+			if prev_x >= 0.0:
+				while x - prev_x > WIDTH * 0.5: x -= WIDTH
+				while prev_x - x > WIDTH * 0.5: x += WIDTH
+			prev_x = x
+			pts.append(Vector2(x, y) * sc)
+		# meander: push the middle points sideways a little
+		var phase := rng.randf() * TAU
+		for k in range(1, pts.size() - 1):
+			var dir := (pts[k + 1] - pts[k - 1]).normalized()
+			var side := Vector2(-dir.y, dir.x)
+			pts[k] += side * sc * (0.28 * sin(float(k) * 0.7 + phase) + rng.randf_range(-0.10, 0.10))
+		for _it in 3:
+			pts = _chaikin(pts)
+		# a river that reaches the sea runs on a little into it and opens up
+		# into an estuary there (the shader fades it into the water)
+		var to_sea := land[path[path.size() - 1]] == 0
+		if to_sea and pts.size() >= 2:
+			var dir_end := (pts[pts.size() - 1] - pts[maxi(pts.size() - 6, 0)]).normalized()
+			var tip := pts[pts.size() - 1]
+			for e in range(1, 7):
+				pts.append(tip + dir_end * sc * 0.4 * float(e))
+		# stamp a soft disc every ¾ pixel along the line
+		var n := pts.size()
+		for k in n - 1:
+			var a := pts[k]
+			var b := pts[k + 1]
+			var t := float(k) / float(maxi(n - 1, 1))
+			var w := lerpf(0.45, 1.35, t * t)   # a thread at the spring, widest at the mouth
+			if to_sea:
+				w *= 1.0 + 1.8 * smoothstep(0.82, 1.0, t)   # estuary
+			var reach := w + 1.6
+			var seg := b - a
+			var steps := maxi(ceili(seg.length() / 0.75), 1)
+			for st in steps:
+				var p := a + seg * (float(st) / float(steps))
+				var x0 := floori(p.x - reach)
+				var y0 := maxi(floori(p.y - reach), 0)
+				var x1 := ceili(p.x + reach)
+				var y1 := mini(ceili(p.y + reach), rh - 1)
+				for yy in range(y0, y1 + 1):
+					for xx in range(x0, x1 + 1):
+						var d := Vector2(float(xx) + 0.5, float(yy) + 0.5).distance_to(p)
+						if d > reach:
+							continue
+						var idx := yy * rw + posmod(xx, rw)
+						var wv := int(255.0 * (1.0 - smoothstep(w - 0.5, w + 0.5, d)))
+						var bv := int(255.0 * (1.0 - smoothstep(w, reach, d)))
+						if wv > water[idx]: water[idx] = wv
+						if bv > bank[idx]: bank[idx] = bv
+	var bytes := PackedByteArray(); bytes.resize(rw * rh * 2)
+	for i in rw * rh:
+		bytes[i * 2] = water[i]
+		bytes[i * 2 + 1] = bank[i]
+	return ImageTexture.create_from_image(Image.create_from_data(rw, rh, false, Image.FORMAT_RG8, bytes))
+
+## One round of Chaikin corner cutting (ends kept).
+static func _chaikin(pts: PackedVector2Array) -> PackedVector2Array:
+	if pts.size() < 3:
+		return pts
+	var out := PackedVector2Array([pts[0]])
+	for k in pts.size() - 1:
+		out.append(pts[k].lerp(pts[k + 1], 0.25))
+		out.append(pts[k].lerp(pts[k + 1], 0.75))
+	out.append(pts[pts.size() - 1])
+	return out
 
 static func _place_craters(data: PlanetData, rng: RandomNumberGenerator, land: PackedByteArray,
 		spots: PackedByteArray, mask: PackedInt32Array, count: int) -> void:

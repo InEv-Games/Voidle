@@ -193,6 +193,7 @@ func _process(delta: float) -> void:
 		if rv["progress"] < 1.0:
 			rv["progress"] = minf(rv["progress"] + delta * 0.6, 1.0)
 	_tick_rendezvous(delta)
+	_tick_pad_trips(delta)
 	queue_redraw()
 
 func _tick_rendezvous(delta: float) -> void:
@@ -309,6 +310,139 @@ func _draw_pixel_lander(pos: Vector2, col: Color) -> void:
 	draw_rect(Rect2(p + Vector2(4, 2), Vector2(2, 2)), Color(col, col.a * 0.8))
 
 ## Pixel-art ISS: horizontal truss + solar panels + center node.
+## The Central Orbit: an ISS-like truss with two pairs of big solar wings.
+func _draw_pixel_hub(pos: Vector2, col: Color) -> void:
+	var p := (pos - Vector2.ONE).floor()
+	var wing := Color(col.r * 0.75, col.g * 0.85, col.b, col.a)
+	for ox in range(-10, 11, 2):   # main truss
+		draw_rect(Rect2(p + Vector2(ox, 0), Vector2(2, 2)), col)
+	for wx: int in [-10, -6, 6, 10]:   # solar wings above and below the truss
+		draw_rect(Rect2(p + Vector2(wx - 1, -7), Vector2(3, 6)), wing)
+		draw_rect(Rect2(p + Vector2(wx - 1, 3), Vector2(3, 6)), wing)
+	draw_rect(Rect2(p + Vector2(-2, -3), Vector2(6, 8)), col)   # pressurised core
+	draw_rect(Rect2(p + Vector2(0, -1), Vector2(2, 2)), Color(0.05, 0.08, 0.15, col.a))
+
+## An extra station of the Orbit: a small satellite.
+func _draw_pixel_satellite(pos: Vector2, col: Color) -> void:
+	var p := (pos - Vector2.ONE).floor()
+	draw_rect(Rect2(p, Vector2(2, 2)), col)
+	draw_rect(Rect2(p + Vector2(-3, 0), Vector2(2, 2)), Color(col, col.a * 0.8))
+	draw_rect(Rect2(p + Vector2(3, 0), Vector2(2, 2)), Color(col, col.a * 0.8))
+
+# ── Trade network (Central Orbit hub) ────────────────────────────────────────
+# Every Spaceport on the surface links to the world's Central Orbit with a thin
+# arc rising off the ground; the Orbit's other stations link to it with short
+# lines; lights run along the links. Purely visual.
+
+const NET_COL := Color(0.65, 0.85, 1.0, 0.28)
+
+func _draw_network(center: Vector2, pd: PlanetData, hub: POIData) -> void:
+	if hub == null or hub.constructing:
+		return
+	# no standing lines: links show only while a shuttle runs them
+	_draw_pad_trips(center, pd, _project_poi(hub, hub.orbit_angle))
+
+# Shuttle runs between the Spaceports and the Central Orbit: no standing line —
+# a run first throws its dashed line out to where it's going, then the shuttle
+# races along it and the line behind it is gathered up. More runs at a time as
+# the Orbit and the Capital grow.
+var _pad_trips: Array = []   # { label, up: bool, t: 0..1 }
+var _trip_cd := 0.0
+const TRIP_SEC := 4.0
+const TRIP_THROW := 0.25   # share of a run spent throwing the line out
+
+## Surface districts with a finished Spaceport / Lunar Spaceport.
+func _pad_pois(pd: PlanetData) -> Array[POIData]:
+	var out: Array[POIData] = []
+	var pp := GameState.get_planet(_planet_seed)
+	if pd == null or pp == null:
+		return out
+	for poi: POIData in pd.custom_pois:
+		if poi.is_orbital() or poi.constructing:
+			continue
+		for b: Dictionary in pp.buildings_in_district(poi.label):
+			var bid := String(b.get("building_id", ""))
+			if (bid == "spaceport" or bid == "lunar_spaceport") and not b.get("constructing", false):
+				out.append(poi)
+				break
+	return out
+
+func _tick_pad_trips(delta: float) -> void:
+	for tr: Dictionary in _pad_trips:
+		tr["t"] = float(tr["t"]) + delta / TRIP_SEC
+	_pad_trips = _pad_trips.filter(func(tr: Dictionary) -> bool: return float(tr["t"]) < 1.0)
+	var pd := GameState.get_planet_data(_planet_seed)
+	var hub := Leveling.orbit_hub(pd)
+	if hub == null or hub.constructing:
+		return
+	var pads := _pad_pois(pd)
+	if pads.is_empty():
+		return
+	# how busy: the Orbit's size and the Capital's size
+	var pp := GameState.get_planet(_planet_seed)
+	var cap_lv := 1
+	for p: POIData in pd.custom_pois:
+		if p.is_city() and not p.is_orbital():
+			cap_lv = maxi(cap_lv, Leveling.city_level(pp, p))
+	var size := pp.orbit_level + Leveling.orbit_stations(pd).size() + cap_lv
+	var max_trips := clampi(1 + floori(float(size - 3) / 2.0), 1, 8)
+	_trip_cd -= delta
+	if _trip_cd <= 0.0 and _pad_trips.size() < max_trips:
+		_trip_cd = randf_range(3.0, 7.0) / float(max_trips)
+		_pad_trips.append({"label": pads[randi() % pads.size()].label, "up": randf() < 0.5, "t": 0.0})
+
+## The arc from a pad to the hub (25 points, view space): around the globe,
+## climbing up to (not past) the hub's orbit.
+func _pad_arc(poi: POIData, hv: Vector3) -> Array[Vector3]:
+	var pdir := ShipData.frame_dir(deg_to_rad(poi.lon_deg), deg_to_rad(poi.lat_deg))
+	var a_dir := _view(pdir).normalized()
+	var h_len := hv.length()
+	var b_dir := hv / h_len if h_len > 0.001 else a_dir
+	var hub_r := h_len / maxf(_planet_radius, 0.001)
+	var pts: Array[Vector3] = []
+	for i in 25:
+		var t := float(i) / 24.0
+		var lift := lerpf(1.0, hub_r, 1.0 - pow(1.0 - t, 2.5))
+		pts.append(a_dir.slerp(b_dir, t) * lift * _planet_radius)
+	return pts
+
+static func _arc_at(pts: Array[Vector3], f: float) -> Vector3:
+	var x := clampf(f, 0.0, 1.0) * float(pts.size() - 1)
+	var i := mini(int(x), pts.size() - 2)
+	return pts[i].lerp(pts[i + 1], x - float(i))
+
+func _draw_pad_trips(center: Vector2, pd: PlanetData, hv: Vector3) -> void:
+	for tr: Dictionary in _pad_trips:
+		var poi: POIData = null
+		for p: POIData in pd.custom_pois:
+			if p.label == String(tr["label"]):
+				poi = p
+		if poi == null:
+			continue
+		var pts := _pad_arc(poi, hv)
+		if not bool(tr["up"]):
+			pts.reverse()
+		var t: float = tr["t"]
+		var reach := clampf(t / TRIP_THROW, 0.0, 1.0)                                  # line thrown out
+		var at := smoothstep(0.0, 1.0, clampf((t - TRIP_THROW) / (1.0 - TRIP_THROW), 0.0, 1.0))   # shuttle
+		var n := 24
+		var i0 := int(at * float(n))
+		var i1 := int(reach * float(n))
+		for i in range(maxi(i0, 0) + 1, i1 + 1):   # only ahead of the shuttle
+			if i % 2 == 0 and not _is_occluded_r(pts[i - 1]) and not _is_occluded_r(pts[i]):
+				draw_line(center + Vector2(pts[i - 1].x, pts[i - 1].y), center + Vector2(pts[i].x, pts[i].y), NET_COL, 1.0, true)
+		if t >= TRIP_THROW and at < 1.0:
+			var sp := _arc_at(pts, at)
+			if not _is_occluded_r(sp):
+				# flame glued to the hull: one step back along the heading, not along the arc
+				var behind := _arc_at(pts, at - 0.02)
+				var back := Vector2(behind.x - sp.x, behind.y - sp.y)
+				back = back.normalized() if back.length() > 0.001 else Vector2.DOWN
+				var body := (center + Vector2(sp.x, sp.y)).floor()
+				var flame := (body + back * 2.0).floor()
+				draw_rect(Rect2(flame - Vector2(1, 1), Vector2(2, 2)), Color(1.0, 0.65, 0.25, 0.8))
+				draw_rect(Rect2(body - Vector2(1, 1), Vector2(3, 3)), Color(0.92, 0.97, 1.0, 0.95))
+
 func _draw_pixel_station(pos: Vector2, col: Color) -> void:
 	var p  := (pos - Vector2.ONE).floor()
 	var sz := Vector2(2, 2)
@@ -413,6 +547,9 @@ func _draw() -> void:
 	for ship: ShipData in ShipManager.ships_for(_planet_seed):
 		if _landing.has(ship.ship_id) or hidden_ships.has(ship.ship_id):
 			continue  # drawn by its DescentFX / the planet view's flight
+		if ship.traffic_state == "pad":
+			continue  # a freighter waiting on its Spaceport
+		var climbing := ship.traffic_state == "ascend" or ship.traffic_state == "descend"
 
 		var is_selected: bool = ship == _selected_ship
 		var is_hovered:  bool = ship == _hovered_ship
@@ -426,8 +563,12 @@ func _draw() -> void:
 			orbit_col = Color(1.0, 0.95, 0.5, 0.55)    # warm gold
 		elif ship.is_travelling():
 			orbit_col = Color(1, 1, 1, 0.45)
+		elif ship.ship_type == "freighter":
+			orbit_col = Color(0.75, 0.85, 1.0, 0.13)   # traffic: faint, many of them
 		else:
 			orbit_col = Color(1, 1, 1, 0.30)
+		if climbing:
+			orbit_col.a = 0.0   # no ring while lifting off / landing
 
 		var rv: Dictionary = _reveal.get(ship.ship_id, {})
 		var arc_frac:    float = rv.get("progress",    1.0)
@@ -636,6 +777,8 @@ func _draw_station_pois(center: Vector2) -> void:
 	var pd := GameState.get_planet_data(_planet_seed)
 	if pd == null:
 		return
+	var hub := Leveling.orbit_hub(pd)
+	_draw_network(center, pd, hub)
 	for poi: POIData in pd.custom_pois:
 		if not poi.is_orbital():
 			continue
@@ -684,10 +827,12 @@ func _draw_station_pois(center: Vector2) -> void:
 		if _is_occluded_r(sv):
 			continue
 		var spos := center + Vector2(sv.x, sv.y)
-		if _has_module(poi.label, "orbital_shipyard"):
+		if poi == hub:
+			_draw_pixel_hub(spos, col)        # the Central Orbit
+		elif _has_module(poi.label, "orbital_shipyard"):
 			_draw_pixel_shipyard(spos, col)
 		else:
-			_draw_pixel_station(spos, col)
+			_draw_pixel_satellite(spos, col)  # extra stations: small satellites
 		if is_selected:
 			_draw_station_label(spos, poi.shown_name())
 		elif is_hovered and not suppress_label:
@@ -762,7 +907,10 @@ func _ship_at(global_pos: Vector2, include_landers := false) -> ShipData:
 		return null
 	var center := get_global_rect().position + (_planet_center if _planet_center != Vector2.ZERO else size * 0.5)
 	for ship: ShipData in ShipManager.ships_for(_planet_seed):
-		if ship.ship_type == "lander" and not include_landers:
+		if ship.traffic_state == "pad":
+			continue   # on the ground
+		# landers and freighters aren't commanded: hover shows them, clicks don't pick them
+		if (ship.ship_type == "lander" or ship.ship_type == "freighter") and not include_landers:
 			continue
 		var sv := _project(ship, ship.orbit_angle)
 		if _is_occluded(sv):

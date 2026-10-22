@@ -33,6 +33,9 @@ static func get_shader_path(type: Type) -> String:
 @export var terrain_roughness: float = 1.0    # affects fbm scale
 @export var sea_level: float = 0.0
 @export var continent_scale: float = 1.0      # 0.3=huge continents, 2.0=archipelago
+## 0 = archipelago … 1 = a few big continents; rolled per planet (its own RNG,
+## so the other generated values don't shift). Worlds of older saves draw 0.
+@export var continentality: float = 0.0
 @export var specular_strength: float = 1.0    # 0=no ocean glint (barren/arid)
 @export var city_lights: float = 0.6          # night side glow
 @export var irregularity: float = 0.3
@@ -124,7 +127,7 @@ static func make_moon(s: int) -> PlanetData:
 	data.seed        = s
 	data.planet_type = Type.MOON
 	data.planet_name = _generate_name_with_seed(s)
-	data.planet_size = 0.45
+	data.planet_size = 0.30   # smaller next to its world; towns keep their km size
 	data.has_atmosphere   = false
 	data.atmosphere_density = 0.0
 	data.has_clouds       = false
@@ -162,7 +165,18 @@ static func make_gas_giant(s: int) -> PlanetData:
 # -----------------------------------------------------------------------
 # Internal helpers
 # -----------------------------------------------------------------------
+## Continentality used for drawing and terrain: 0 for worlds of saves made
+## before it existed (their coastlines must not move under their cities).
+func effective_continentality() -> float:
+	return continentality if GameState.world_gen >= 2 else 0.0
+
+static func _roll_continentality(data: PlanetData) -> void:
+	var crng := RandomNumberGenerator.new()
+	crng.seed = data.seed ^ 0xC0471E
+	data.continentality = 0.1 + 0.9 * pow(crng.randf(), 0.7)   # leans continental
+
 static func _apply_type_defaults(data: PlanetData, rng: RandomNumberGenerator) -> void:
+	_roll_continentality(data)
 	match data.planet_type:
 		Type.TERRAN:
 			data.planet_size        = rng.randf_range(0.85, 1.15)

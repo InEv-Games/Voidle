@@ -24,3 +24,4 @@ tier = 2
 unlocked_by_default = false
 planet_wide = true
 max_per_district = 1
+max_per_planet = 1

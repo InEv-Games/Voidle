@@ -177,7 +177,7 @@ const GUIDED_STEPS: Array = [
 	{
 		"type":        "action",
 		"instruction": "Open  ✦ Upgrade Tree  →  Research  Mining Operations",
-		"targets":     [{"type": "skill", "id": "unlock_mining"}],
+		"targets":     [{"type": "skill", "id": "start_production"}],
 		"reward_credits": 500.0,
 		"reward_science": 0.0,
 		"reward_text":   "+500 cr",
@@ -262,31 +262,65 @@ const QUESTS := [
 		"id":           "mining_ops",
 		"title":        "Mining Operations",
 		"desc":         "Research Mining Operations in the Upgrade Tree.",
-		"sub_steps":    [{"type": "skill", "target": "unlock_mining"}],
+		"sub_steps":    [{"type": "skill", "target": "start_production"}],
 		"reward_credits": 500.0,
 		"reward_science": 0.0,
 		"reward_text":  "+500 cr",
 	},
-	# ── Post-tutorial quests ────────────────────────────────────────────────────
-	{
-		"id":           "build_solar_2",
-		"title":        "More Power!",
-		"desc":         "Build a second Solar Array.",
-		"sub_steps":    [{"type": "building", "target": "solar_panel"}],
-		"reward_credits": 500.0,
-		"reward_science": 5.0,
-		"reward_text":  "+500 cr  +5 sci",
-	},
-	{
-		"id":           "build_mine",
-		"title":        "Into the Earth",
-		"desc":         "Build a Mine in an Industrial District to dig up raw resources.",
-		"sub_steps":    [{"type": "building", "target": "mine"}],
-		"reward_credits": 400.0,
-		"reward_science": 0.0,
-		"reward_text":  "+400 cr",
-	},
+	# ── The road to Civilization 1 (GDD §16, §20) — no economic rewards ──────────
+	{"id": "fuel", "title": "Fuel for the Journey", "desc": "Research Fuel Processing and make or buy Fuel.",
+		"reward_credits": 300.0, "reward_science": 100.0, "reward_text": "+300 cr  +100 sci",
+		"sub_steps": [{"type": "skill", "target": "fuel_processing"}]},
+	{"id": "rocketry", "title": "Rocketry", "desc": "Research Rocketry and build a Spaceport in your Capital (it needs Capital Lv2 for its two slots).",
+		"reward_credits": 600.0, "reward_science": 150.0, "reward_text": "+600 cr  +150 sci",
+		"sub_steps": [{"type": "skill", "target": "rocketry"}, {"type": "building", "target": "spaceport"}]},
+	{"id": "orbital", "title": "Into Orbit", "desc": "Research Orbital Assembly, then found your Orbit from the planet panel and launch a Space Station from the Spaceport. The Moon needs it.",
+		"reward_credits": 700.0, "reward_science": 150.0, "reward_text": "+700 cr  +150 sci",
+		"sub_steps": [{"type": "skill", "target": "orbital_assembly"}, {"type": "event", "target": "orbit_station"}]},
+	{"id": "lunar_program", "title": "Lunar Program", "desc": "Research Lunar Program.",
+		"reward_credits": 800.0, "reward_science": 200.0, "reward_text": "+800 cr  +200 sci",
+		"sub_steps": [{"type": "skill", "target": "lunar_program"}]},
+	{"id": "lander", "title": "To the Moon", "desc": "Open the Moon and prepare the lander (3,000 cr, 40 Ferrite, 20 Fuel).",
+		"reward_credits": 1000.0, "reward_science": 0.0, "reward_text": "+1000 cr",
+		"sub_steps": [{"type": "event", "target": "lander_arrived"}]},
+	{"id": "moon_city", "title": "First Lunar City", "desc": "The lander set up the Moon's Central Orbit. Scan the surface (free), then initiate colonization and pick the site of the first City.",
+		"reward_credits": 500.0, "reward_science": 150.0, "reward_text": "+500 cr  +150 sci",
+		"sub_steps": [{"type": "event", "target": "moon_city"}]},
+	{"id": "moon_mining", "title": "Lunar Mining", "desc": "Build a Production district on the Moon (300 cr, 30 Ferrite). It finds the Moon's mineral.",
+		"reward_credits": 800.0, "reward_science": 0.0, "reward_text": "+800 cr",
+		"sub_steps": [{"type": "event", "target": "moon_production"}]},
+	{"id": "lunar_materials", "title": "Lunar Materials", "desc": "Research Lunar Materials.",
+		"reward_credits": 1500.0, "reward_science": 300.0, "reward_text": "+1500 cr  +300 sci",
+		"sub_steps": [{"type": "skill", "target": "lunar_materials"}]},
+	{"id": "moonstone_100", "title": "100 Local Moonstone", "desc": "Mine 100 Moonstone on the Moon. Bought Moonstone doesn't count.",
+		"reward_credits": 2000.0, "reward_science": 300.0, "reward_text": "+2000 cr  +300 sci",
+		"sub_steps": [{"type": "event", "target": "moon_moonstone_100"}]},
+	{"id": "lunar_spaceport", "title": "Lunar Spaceport", "desc": "Build the Lunar Spaceport in the Moon's Capital.",
+		"reward_credits": 2500.0, "reward_science": 400.0, "reward_text": "+2500 cr  +400 sci",
+		"sub_steps": [{"type": "building", "target": "lunar_spaceport"}]},
+	{"id": "advanced_rocket", "title": "Advanced Rocket", "desc": "Research Advanced Planetary Rocket, then prepare the rocket on the Moon's page.",
+		"reward_credits": 3000.0, "reward_science": 0.0, "reward_text": "+3000 cr",
+		"sub_steps": [{"type": "skill", "target": "advanced_planet_rocket"}, {"type": "event", "target": "rocket_started"}]},
+	{"id": "civilization_1", "title": "Reach Civilization 1", "desc": "Right-click a planet in the Solar System view to set the rocket's target. Its arrival completes Civilization 0.",
+		"sub_steps": [{"type": "event", "target": "demo_completed"}]},
 ]
+
+## Objective rewards and the tutorial's step top-ups. On: a small new-game
+## budget (Balance.cfg.start_*) plus rewards that pace the road to the Moon.
+const GRANTS_ENABLED := true
+
+## Why an "event" objective step is met (polled once a second).
+static func event_done(key: String) -> bool:
+	match key:
+		"lander_arrived":
+			var moon := GameState.home_moon()
+			return GameState.expedition_state("lander") == "arrived" \
+				or (moon != null and GameState.get_planet(moon.seed).is_colonized)
+		"rocket_started":
+			return GameState.expedition_state("rocket") != ""
+		"demo_completed":
+			return GameState.demo_completed
+	return SkillTree.event_met(key)
 
 const SKIP_MINERAL_AMOUNT := 30.0
 
@@ -303,6 +337,12 @@ var _solar_count:   int  = 0       # solar_panel builds total
 var _active:        bool = false
 
 var _quest_step:    int  = 0
+## Objectives panel folded to a small "OBJECTIVES" tab (O toggles; saved).
+var _collapsed:     bool = false
+var _side_tab:      Button = null
+var _overlay_lbl:   Label = null
+var _quest_body:    Array[Control] = []
+var _event_poll:    float = 0.0
 var _quest_sub:     int  = 0
 
 var _inventory_shown: bool = false
@@ -356,6 +396,9 @@ func _ready() -> void:
 func start() -> void:
 	if not tutorial_enabled or _active: return
 	_active = true
+	# saves from before the road to Civilization 1 existed: show the new objectives
+	if _quest_done and _quest_step < QUESTS.size() and not GameState.demo_completed:
+		_quest_done = false
 	if _tutorial_done:
 		if not _quest_done:
 			_build_quest_ui()
@@ -366,7 +409,7 @@ func start() -> void:
 func _on_root_child_entered(node: Node) -> void:
 	# Hide tutorial UI whenever a new top-level scene is added (scene transition)
 	if node.scene_file_path.ends_with("MainMenu.tscn"):
-		for n in [_dim, _narr_panel, _action_bar, _quest_panel, _pulse_ring, _construction_lbl]:
+		for n in [_dim, _narr_panel, _action_bar, _quest_panel, _pulse_ring, _construction_lbl, _side_tab, _overlay_lbl]:
 			if is_instance_valid(n): (n as CanvasItem).visible = false
 		_active = false
 
@@ -387,7 +430,7 @@ func _on_new_game() -> void:
 	_narr_instant     = false
 	_narr_pages    = []
 	_narr_done_cb  = Callable()
-	for n in [_dim, _narr_panel, _action_bar, _quest_panel, _pulse_ring]:
+	for n in [_dim, _narr_panel, _action_bar, _quest_panel, _pulse_ring, _side_tab, _overlay_lbl]:
 		if is_instance_valid(n): n.queue_free()
 	_dim = null; _narr_panel = null; _action_bar = null; _quest_panel = null; _pulse_ring = null
 
@@ -524,7 +567,8 @@ func _run_guided_step() -> void:
 		if first_tgt["type"] in ["skill", "city_level_up", "district_upgrade"] \
 				or (first_tgt["type"] == "district" and int(first_tgt["id"]) == DISTRICT_CITY):
 			_action_block_on = false
-		_grant_step_needs(step["targets"], "id")
+		if GRANTS_ENABLED:
+			_grant_step_needs(step["targets"], "id")
 		# Immediately advance if condition already met (e.g. player acted during narration)
 		_check_freeform_action_step(step)
 
@@ -584,9 +628,10 @@ func _advance_action() -> void:
 	_action_sub += 1
 	if _action_sub >= step["targets"].size():
 		# Action complete
-		if step.get("reward_credits", 0.0) > 0.0: GameState.credits     += step["reward_credits"]
-		if step.get("reward_science", 0.0) > 0.0: GameState.add_science(step["reward_science"])
-		if step.has("reward_text"): _flash_reward(step["reward_text"])
+		if GRANTS_ENABLED:
+			if step.get("reward_credits", 0.0) > 0.0: GameState.credits     += step["reward_credits"]
+			if step.get("reward_science", 0.0) > 0.0: GameState.add_science(step["reward_science"])
+			if step.has("reward_text"): _flash_reward(step["reward_text"])
 		_hide_action_bar()
 		if step.get("finale", false):
 			_run_finale()
@@ -632,9 +677,16 @@ func set_allowed_rects(rects: Array[Rect2]) -> void:
 	_allowed_rects = rects
 
 ## Input blocker — only clicks inside _allowed_rects pass through.
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if is_instance_valid(_quest_panel):
 		_place_quest_panel()
+		_event_poll += delta
+		if _event_poll >= 1.0:   # "event" objectives have no signal of their own
+			_event_poll = 0.0
+			if not _quest_done and _quest_step < QUESTS.size():
+				var ss: Dictionary = QUESTS[_quest_step]["sub_steps"][_quest_sub]
+				if ss["type"] == "event" and event_done(String(ss["target"])):
+					_advance_quest_sub()
 	if not _active or _tutorial_done or _guided_step >= GUIDED_STEPS.size(): return
 	var step: Dictionary = GUIDED_STEPS[_guided_step]
 	if step["type"] == "action":
@@ -1031,7 +1083,7 @@ func _show_action_bar(step: Dictionary) -> void:
 	_spawn_pulse_ring()
 	highlight_changed.emit(_highlight_id_for(tgt0))
 
-	if step.has("reward_text"):
+	if GRANTS_ENABLED and step.has("reward_text"):
 		var rew := Label.new()
 		rew.text = "Reward: " + step["reward_text"]
 		if _orbitron: rew.add_theme_font_override("font", _orbitron)
@@ -1125,29 +1177,37 @@ func _build_quest_ui() -> void:
 
 	_mk_lbl(hdr, "◈", 10, Color(0.55, 0.75, 1.0))
 	_mk_lbl(hdr, "OBJECTIVES", 9, Color(0.50, 0.65, 0.95))
+	_build_quest_side_ui()
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hdr.add_child(spacer)
+	_quest_body.clear()
 
-	_skip_btn = _mk_btn("skip", Color(0.38, 0.38, 0.50))
+	_skip_btn = _mk_btn("skip tutorial", Color(0.38, 0.38, 0.50))
+	_skip_btn.visible = _quest_step < TUTORIAL_QUEST_COUNT   # hiding is the side tab's job
 	var skip_btn := _skip_btn
 	skip_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	skip_btn.pressed.connect(func() -> void:
-		_give_skip_minerals()
-		_flash_skip_reward(get_viewport().get_mouse_position())
-		_dismiss_quest_panel())
+		# skips the tutorial objectives only; the road to Civilization 1 stays
+		if _quest_step < TUTORIAL_QUEST_COUNT:
+			_quest_step = TUTORIAL_QUEST_COUNT
+			_quest_sub = 0
+			_build_quest_ui()
+			_show_quest_step(_quest_step)
+		else:
+			_dismiss_quest_panel())
 	skip_btn.mouse_entered.connect(func() -> void:
-		var _skip_rd := ResourceData.from_raw(Economy.raw_info(SKIP_REWARD_RAW))
-		var ore_icon := MineralIcon.make(_skip_rd.tier, _skip_rd.display_color)
-		TooltipManager.show_tip("Scrap the tutorial Bot", ["Skip the optional objectives.", "\n+%.0f " % SKIP_MINERAL_AMOUNT, ore_icon], ""))
+		TooltipManager.show_tip("Skip tutorial", "Skip the tutorial objectives; the road to Civilization 1 stays.", ""))
 	skip_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	hdr.add_child(skip_btn)
 
 	var sep_sty := StyleBoxFlat.new()
 	sep_sty.bg_color = Color(0.25, 0.32, 0.55, 0.35)
 	sep_sty.content_margin_top = 1
-	rv.add_child(_hsep(sep_sty))
+	var sep1 := _hsep(sep_sty)
+	rv.add_child(sep1)
+	_quest_body.append(sep1)
 
 	_title_lbl = Label.new()
 	if _orbitron: _title_lbl.add_theme_font_override("font", _orbitron)
@@ -1167,8 +1227,9 @@ func _build_quest_ui() -> void:
 	_reward_lbl.add_theme_font_size_override("font_size", 9)
 	_reward_lbl.add_theme_color_override("font_color", Color(0.38, 0.88, 0.55))
 	rv.add_child(_reward_lbl)
-
-	rv.add_child(_hsep(sep_sty))
+	var sep2 := _hsep(sep_sty)
+	rv.add_child(sep2)
+	_quest_body.append_array([_title_lbl, _desc_lbl, _reward_lbl, sep2])
 
 	for i in QUESTS.size():
 		var row := HBoxContainer.new()
@@ -1194,8 +1255,12 @@ func _build_quest_ui() -> void:
 			(_tracker_items[i]["dot"] as Label).text = "✓"
 			(_tracker_items[i]["dot"] as Label).add_theme_color_override("font_color", Color(0.30, 0.85, 0.50))
 			(_tracker_items[i]["lbl"] as Label).add_theme_color_override("font_color", Color(0.40, 0.72, 0.50))
+	_apply_collapsed()
 
 func _show_quest_step(idx: int) -> void:
+	_refresh_overlay_text()
+	if is_instance_valid(_skip_btn):
+		_skip_btn.visible = idx < TUTORIAL_QUEST_COUNT
 	if not is_instance_valid(_quest_panel) or idx >= QUESTS.size(): return
 	var q: Dictionary = QUESTS[idx]
 	for i in _tracker_items.size():
@@ -1210,11 +1275,18 @@ func _show_quest_step(idx: int) -> void:
 		else:
 			dot.text = "○"; dot.add_theme_color_override("font_color", Color(0.30, 0.36, 0.50))
 			ql.add_theme_color_override("font_color", Color(0.36, 0.42, 0.56))
-	_reward_lbl.text = "Reward: " + q["reward_text"]
+	_reward_lbl.text = ("Reward: " + String(q.get("reward_text", ""))) if GRANTS_ENABLED and q.has("reward_text") \
+		else "Main goal: reach Civilization 1"
+	if idx >= TUTORIAL_QUEST_COUNT and GRANTS_ENABLED and q.has("reward_text"):
+		_reward_lbl.text += "   ·   Main goal: Civilization 1"
+	# keep the list short: the previous one, the current one and the next four
+	for i in _tracker_items.size():
+		var row := (_tracker_items[i]["dot"] as Label).get_parent() as Control
+		row.visible = i >= idx - 1 and i <= idx + 4
 	_tw_label(_title_lbl, q["title"].to_upper(), 0.022)
 	await get_tree().create_timer(0.022 * q["title"].length() + 0.1).timeout
 	_tw_label(_desc_lbl, q["desc"], 0.022)
-	if idx < TUTORIAL_QUEST_COUNT:
+	if idx < TUTORIAL_QUEST_COUNT and GRANTS_ENABLED:
 		_grant_step_needs(q["sub_steps"], "target")
 	# Immediately check if current sub-step is already satisfied
 	_check_quest_sub_already_done()
@@ -1244,7 +1316,9 @@ func _check_quest_sub_already_done() -> void:
 						satisfied = true; break
 				if satisfied: break
 		"skill":
-			satisfied = get_node("/root/SkillTree").unlocked_skills.has(ss["target"])
+			satisfied = get_node("/root/SkillTree").is_unlocked(String(ss["target"]))
+		"event":
+			satisfied = event_done(String(ss["target"]))
 		"city_level_up":
 			for pp: PlanetProgress in GameState._planet_progress.values():
 				if _city_any_leveled(pp):
@@ -1263,9 +1337,12 @@ func _advance_quest_sub() -> void:
 	var q: Dictionary = QUESTS[_quest_step]
 	_quest_sub += 1
 	if _quest_sub >= q["sub_steps"].size():
-		if q.get("reward_credits", 0.0) > 0.0: GameState.credits     += q["reward_credits"]
-		if q.get("reward_science", 0.0) > 0.0: GameState.add_science(q["reward_science"])
-		_flash_reward(q["reward_text"])
+		if GRANTS_ENABLED:
+			if q.get("reward_credits", 0.0) > 0.0: GameState.credits     += q["reward_credits"]
+			if q.get("reward_science", 0.0) > 0.0: GameState.add_science(q["reward_science"])
+			_flash_reward(q.get("reward_text", ""))
+		else:
+			_flash_reward("✓ " + String(q["title"]))
 		if _quest_step < _tracker_items.size():
 			(_tracker_items[_quest_step]["dot"] as Label).text = "✓"
 			(_tracker_items[_quest_step]["dot"] as Label).add_theme_color_override("font_color", Color(0.30, 0.85, 0.50))
@@ -1281,13 +1358,110 @@ func _advance_quest_sub() -> void:
 		# More sub-steps remain — check if the next one is already done too
 		_check_quest_sub_already_done()
 
+## Slides the objectives off to the right (like the left side panel); only the
+## current objective stays, as a small outlined line of text. O toggles; saved.
+func toggle_objectives() -> void:
+	_collapsed = not _collapsed
+	_apply_collapsed()
+	GameState.save()
+
+func _apply_collapsed() -> void:
+	if is_instance_valid(_side_tab):
+		_side_tab.text = "‹" if _collapsed else "›"
+	if is_instance_valid(_overlay_lbl):
+		var tw := _overlay_lbl.create_tween()
+		tw.tween_property(_overlay_lbl, "modulate:a", 1.0 if _collapsed else 0.0, 0.25)
+
+## The edge tab (hide / show) and the outlined current-objective line.
+func _build_quest_side_ui() -> void:
+	for n: Node in [_side_tab, _overlay_lbl]:
+		if is_instance_valid(n):
+			n.queue_free()
+	_side_tab = Button.new()
+	_side_tab.focus_mode = Control.FOCUS_NONE
+	if _orbitron: _side_tab.add_theme_font_override("font", _orbitron)
+	_side_tab.add_theme_font_size_override("font_size", 11)
+	_side_tab.add_theme_color_override("font_color", Color(0.65, 0.78, 1.0))
+	var ts := _panel_style(Color(0.04, 0.05, 0.10, 0.90), Color(0.28, 0.38, 0.72, 0.55))
+	ts.content_margin_left = 5
+	ts.content_margin_right = 5
+	ts.content_margin_top = 14
+	ts.content_margin_bottom = 14
+	_side_tab.add_theme_stylebox_override("normal", ts)
+	var th := ts.duplicate() as StyleBoxFlat
+	th.bg_color = Color(0.10, 0.14, 0.26, 0.95)
+	_side_tab.add_theme_stylebox_override("hover", th)
+	_side_tab.pressed.connect(toggle_objectives)
+	_side_tab.mouse_entered.connect(func() -> void:
+		TooltipManager.show_tip("Objectives", ("Show" if _collapsed else "Hide") + " the objectives (O).", ""))
+	_side_tab.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	add_child(_side_tab)
+
+	_overlay_lbl = Label.new()
+	if _orbitron: _overlay_lbl.add_theme_font_override("font", _orbitron)
+	_overlay_lbl.add_theme_font_size_override("font_size", 11)
+	_overlay_lbl.add_theme_color_override("font_color", Color(0.98, 0.86, 0.35))
+	_overlay_lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
+	_overlay_lbl.add_theme_constant_override("outline_size", 6)
+	_overlay_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_overlay_lbl.mouse_filter = Control.MOUSE_FILTER_STOP
+	_overlay_lbl.modulate.a = 1.0 if _collapsed else 0.0
+	_overlay_lbl.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
+				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and _collapsed:
+			toggle_objectives())
+	add_child(_overlay_lbl)
+	_refresh_overlay_text()
+
+func _refresh_overlay_text() -> void:
+	if not is_instance_valid(_overlay_lbl):
+		return
+	if _quest_done or _quest_step >= QUESTS.size():
+		_overlay_lbl.text = ""
+		return
+	_overlay_lbl.text = "◈  " + String(QUESTS[_quest_step]["title"])
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var k := event as InputEventKey
+	if k == null or not k.pressed or k.echo or k.keycode != KEY_O or k.ctrl_pressed or k.meta_pressed:
+		return
+	if is_instance_valid(_quest_panel) and _quest_panel.visible and not _quest_done:
+		get_viewport().set_input_as_handled()
+		toggle_objectives()
+
 ## Objectives sit at the top-right, below the settings button and clear of the map's middle.
 func _place_quest_panel() -> void:
 	var vp := get_viewport().get_visible_rect().size
-	_quest_panel.position = Vector2(vp.x - maxf(_quest_panel.size.x, 260.0) - 24.0, 72.0)
+	var y := 72.0
+	# the planet view's neighbouring bodies take the same corner when zoomed
+	# out — step below them so they stay clickable
+	for n in get_tree().get_nodes_in_group("companion_bodies"):
+		var bottom: float = n.call("occupied_bottom")
+		if bottom > 0.0:
+			y = maxf(y, bottom + 12.0)
+	var w := maxf(_quest_panel.size.x, 260.0)
+	# hidden: slid off past the right edge (the tab and overlay stay)
+	var target := Vector2(vp.x + 8.0 if _collapsed else vp.x - w - 24.0, y)
+	# glide rather than jump (sliding away, bodies moving in and out)
+	_quest_panel.position = target if _quest_panel.position == Vector2.ZERO \
+		else _quest_panel.position.lerp(target, 0.2)
+	var live := not _quest_done and _active
+	if is_instance_valid(_side_tab):
+		_side_tab.visible = live
+		_side_tab.reset_size()
+		var tab_x := vp.x - _side_tab.size.x if _collapsed else _quest_panel.position.x - _side_tab.size.x + 1.0
+		_side_tab.position = Vector2(tab_x, y + 18.0)
+	if is_instance_valid(_overlay_lbl):
+		_overlay_lbl.visible = live
+		_overlay_lbl.reset_size()
+		var tab_w := _side_tab.size.x if is_instance_valid(_side_tab) else 0.0
+		_overlay_lbl.position = Vector2(vp.x - tab_w - _overlay_lbl.size.x - 10.0, y + 22.0)
 
 func _dismiss_quest_panel() -> void:
 	_quest_done = true
+	for n: Node in [_side_tab, _overlay_lbl]:
+		if is_instance_valid(n):
+			n.queue_free()
 	if is_instance_valid(_quest_panel):
 		var tw := create_tween()
 		tw.tween_property(_quest_panel, "modulate:a", 0.0, 0.5)

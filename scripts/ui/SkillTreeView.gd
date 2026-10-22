@@ -9,6 +9,8 @@ signal tree_closed
 static var is_open: bool = false
 static var _saved_position: Vector2 = Vector2.ZERO
 static var _saved_zoom:     float   = 1.0
+## Which civilization's tree is shown (fractal: each tree's centre opens the one before).
+static var _view_civ: int = -1
 
 var _font: Font
 var _nodes_container: Control
@@ -89,11 +91,14 @@ func _ready() -> void:
 		_center_ctrl.scale = Vector2(_zoom, _zoom)
 
 	# Build all nodes and position them
+	if SkillTreeView._view_civ < 0:
+		SkillTreeView._view_civ = GameState.civilization_type
 	_build_tree_graph()
 
 	# Title at the top center
 	var title := Label.new()
-	title.text = "✦ TECHNOLOGY ARCHITECTURE ✦"
+	_title = title
+	title.text = _title_text()
 	if _font: title.add_theme_font_override("font", _font)
 	title.add_theme_font_size_override("font_size", 16)
 	title.add_theme_color_override("font_color", Color(0.65, 0.85, 1.0))
@@ -104,7 +109,7 @@ func _ready() -> void:
 
 	# Subtitle
 	var sub := Label.new()
-	sub.text = "Spend Science to research new technology"
+	sub.text = "Spend Science to research new technology · double-click a centre node to move between civilizations"
 	if _font: sub.add_theme_font_override("font", _font)
 	sub.add_theme_font_size_override("font_size", 9)
 	sub.add_theme_color_override("font_color", Color(0.4, 0.48, 0.65))
@@ -157,8 +162,36 @@ func _ready() -> void:
 	# Listen to skill unlocks to redraw connections & button states
 	get_node("/root/SkillTree").skill_unlocked.connect(_on_skill_unlocked)
 
+var _title: Label
+
+func _title_text() -> String:
+	var t := "✦ CIVILIZATION %d RESEARCH ✦" % SkillTreeView._view_civ
+	if SkillTreeView._view_civ > GameState.playable_content_type:
+		t += "  (preview)"
+	return t
+
+## Shows another civilization's tree (fractal descent / ascent).
+func _show_civ(civ: int) -> void:
+	SkillTreeView._view_civ = clampi(civ, 0, 1)
+	TooltipManager.hide_tip()
+	AudioManager.play("click")
+	_center_ctrl.position = get_viewport_rect().size * 0.5
+	if _title != null:
+		_title.text = _title_text()
+	_build_tree_graph()
+	_connections_draw.queue_redraw()
+	_bg.queue_redraw()
+
+## Nodes of the tree on screen. Later trees show whole (as previews).
+func _in_view(st: Node, id: String) -> bool:
+	var node = st.get("nodes")[id]
+	if int(node.civilization) != SkillTreeView._view_civ:
+		return false
+	if SkillTreeView._view_civ > 0:
+		return true
+	return st.call("is_visible", id)
+
 func _build_tree_graph() -> void:
-	print("DEBUG SkillTree: BuildingDef.all().size() = ", BuildingDef.all().size())
 	for c in _nodes_container.get_children():
 		c.queue_free()
 	_ui_nodes.clear()
@@ -168,7 +201,7 @@ func _build_tree_graph() -> void:
 		var node = st.get("nodes")[id]
 		
 		# Kilitli ve görünmezse hiç oluşturma (açıldıkça etrafı görünür)
-		if not st.call("is_visible", id):
+		if not _in_view(st, id):
 			continue
 
 		var cur_lv: int = st.call("get_skill_level", id)
@@ -277,15 +310,21 @@ func _build_tree_graph() -> void:
 		var icon_tier := 1
 		
 		# Colour and glyph per branch
-		var branch: String = node.branch if "branch" in node else "core"
+		var branch: String = node.branch if "branch" in node else "common"
 		match branch:
-			"core":       icon_col = Color(0.9, 0.8, 0.4);   icon_tier = 5
-			"ascent":     icon_col = Color(0.75, 0.7, 1.0);  icon_tier = 5
+			"common":     icon_col = Color(0.75, 0.7, 1.0);  icon_tier = 5
+			"orbital":    icon_col = Color(0.6, 0.75, 0.95); icon_tier = 5
 			"energy":     icon_col = Color(1.0, 0.75, 0.25); icon_tier = 3
-			"industry":   icon_col = Color(0.95, 0.5, 0.3);  icon_tier = 2
+			"production": icon_col = Color(0.95, 0.5, 0.3);  icon_tier = 2
+			"processing": icon_col = Color(0.95, 0.62, 0.45); icon_tier = 2
 			"science":    icon_col = Color(0.35, 0.7, 1.0);  icon_tier = 1
-			"habitation": icon_col = Color(0.45, 0.95, 0.55); icon_tier = 1
-			"commerce":   icon_col = Color(1.0, 0.88, 0.3);  icon_tier = 4
+			"population": icon_col = Color(0.45, 0.95, 0.55); icon_tier = 1
+			"trade":      icon_col = Color(1.0, 0.88, 0.3);  icon_tier = 4
+			"public":     icon_col = Color(0.8, 0.8, 0.85);  icon_tier = 5
+			"proximity", "distance": icon_col = Color(0.55, 0.9, 0.9); icon_tier = 4
+			"geography":  icon_col = Color(0.65, 0.85, 0.5); icon_tier = 4
+		if id == "root":
+			icon_col = Color(0.9, 0.8, 0.4)
 		if shape_type == 1:
 			icon_tier = 4   # bonus diamonds share the grid glyph
 		var teaser: bool = node.act2 if "act2" in node else false
@@ -322,6 +361,27 @@ func _build_tree_graph() -> void:
 			lv_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			wrapper.add_child(lv_badge)
 
+		# Buyout under the previous tree's centre node (KARARLAR §8)
+		if id == "civilization_0_tree":
+			var bo := Button.new()
+			var bo_cost: float = st.call("buyout_cost", 0)
+			var bo_block: String = st.call("buyout_block", 0)
+			bo.text = "Buyout  %s Science" % Economy.fmt(bo_cost)
+			if bo_block != "":
+				bo.text += "\n" + bo_block
+			bo.disabled = bo_block != ""
+			bo.focus_mode = Control.FOCUS_NONE
+			if _font: bo.add_theme_font_override("font", _font)
+			bo.add_theme_font_size_override("font_size", 9)
+			bo.position = Vector2(-80, card_size + 4)
+			bo.custom_minimum_size = Vector2(card_size + 160, 0)
+			bo.pressed.connect(func() -> void:
+				if st.call("buyout", 0):
+					AudioManager.play("skill_buy")
+				else:
+					AudioManager.play("error"))
+			wrapper.add_child(bo)
+
 		# Position absolute coordinate
 		card.position = node.pos - Vector2(card_size * 0.5, card_size * 0.5)
 		_nodes_container.add_child(card)
@@ -341,7 +401,7 @@ func _build_tree_graph() -> void:
 		if id == "root":
 			tip_body.append(node.description)
 		elif node.act2:
-			tip_body.append(node.description + "\n\n[color=#9d8cff]✦ Coming in Act II ✦[/color]")
+			tip_body.append(node.description + "\n\n[color=#9d8cff]✦ Later civilization ✦[/color]")
 		else:
 			var body_str := ""
 			# Format level information to show at the right top of the tooltip body
@@ -354,7 +414,7 @@ func _build_tree_graph() -> void:
 			# Normal nodes
 			body_str += node.description
 			
-			var effect_text: String = node.effect_desc
+			var effect_text: String = st.call("effect_text", id)
 			for bid: String in node.grants:
 				var def: BuildingDef = BuildingDef.find(bid)
 				if def:
@@ -385,23 +445,25 @@ func _build_tree_graph() -> void:
 				if unlocked:
 					body_str += "\n\n[color=#55f58c]✦ UNLOCKED ✦[/color]"
 			
-			# Cost handling
+			# Cost handling: base × target level × cross-branch factor
 			if cur_lv < max_lv:
 				var next_cost: float = st.call("get_next_cost", id)
-				tip_cost = "%.0f Science" % next_cost
-			
-			# Requirements checking
+				tip_cost = "%s Science" % Economy.fmt(next_cost)
+				var cross: int = st.call("cross_branch_count", id)
+				if cross > 0:
+					body_str += "\n[color=#8899bb]+%d%% — %d research%s in other branches[/color]" % [
+						int(round(float(st.call("cross_branch_mult", id)) * 100.0 - 100.0)), cross, "" if cross == 1 else "es"]
+			if node.common and id != "root":
+				body_str += "\n[color=#b9a8ff]Common path — no cross-branch surcharge[/color]"
+
+			# Requirements checking (ANY parent; every extra condition)
 			if cur_lv == 0:
-				var missing_parents: Array[String] = []
-				for p in node.parents:
-					if st.call("get_skill_level", p) == 0:
+				if not st.call("parent_ok", id):
+					var names: Array[String] = []
+					for p in node.parents:
 						if st.get("nodes").has(p):
-							missing_parents.append(st.get("nodes")[p].name)
-						else:
-							missing_parents.append("???")
-				
-				if missing_parents.size() > 0:
-					body_str += "\n\n[color=#ff5544]Requires: " + ", ".join(missing_parents) + "[/color]"
+							names.append(st.get("nodes")[p].name)
+					body_str += "\n\n[color=#ff5544]Requires one of: " + ", ".join(names) + "[/color]"
 				var gate_txt: String = st.call("gate_block", id)
 				if gate_txt != "":
 					body_str += "\n\n[color=#ffaa44]" + gate_txt + "[/color]"
@@ -440,16 +502,27 @@ func _build_tree_graph() -> void:
 		card.gui_input.connect(func(e: InputEvent) -> void:
 			if e is InputEventMouseButton and (e as InputEventMouseButton).pressed and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 				card.accept_event() # Stop propagation to canvas drag
+				# fractal doors: the next tree's root, or this tree's centre (the tree before)
+				if (e as InputEventMouseButton).double_click:
+					if cap_id == "civilization_1_root":
+						_show_civ(1)
+						return
+					if cap_id == "civilization_0_tree":
+						_show_civ(0)
+						return
+				if cap_id == "civilization_0_tree" or cap_id == "civilization_1_root":
+					return   # single click on a door does nothing; buyout has its own button
 				# During tutorial skill step, only unlock_mining is allowed
 				var tm := get_node_or_null("/root/TutorialManager")
 				if tm != null and tm._active and not tm._tutorial_done \
-						and tm.get_action_step_type() == "skill" and cap_id != "unlock_mining":
+						and tm.get_action_step_type() == "skill" and cap_id != "start_production":
 					AudioManager.play("error")
 					return
-				if st.call("can_purchase", cap_id):
+				var cmd: GameCommand = st.call("research_command", cap_id)
+				if cmd.can_execute() == "":
 					TooltipManager.hide_tip()
 					AudioManager.play("skill_buy")
-					st.call("purchase_skill", cap_id)
+					cmd.execute()
 				else:
 					AudioManager.play("error"))
 
@@ -459,7 +532,7 @@ func _apply_tutorial_skill_overlay() -> void:
 	var tm := get_node_or_null("/root/TutorialManager")
 	if tm == null or not tm._active or tm._tutorial_done or tm.get_action_step_type() != "skill":
 		return
-	var target_id := "unlock_mining"
+	var target_id := "start_production"
 	for nid in _ui_nodes:
 		var card: PanelContainer = _ui_nodes[nid]
 		if not is_instance_valid(card): continue
@@ -478,13 +551,16 @@ func _draw_connections() -> void:
 	for id in st.get("nodes").keys():
 		var node = st.get("nodes")[id]
 		# Only draw if child node is visible
-		if not st.call("is_visible", id):
+		if not _in_view(st, id):
 			continue
 			
+		var parent_idx := -1
 		for parent_id in node.parents:
-			if not st.call("is_visible", parent_id):
+			parent_idx += 1
+			if not st.get("nodes").has(parent_id) or not _in_view(st, parent_id):
 				continue
-			if not st.get("nodes").has(parent_id):
+			# nodes open from the start hang off the root only when they sit next to it
+			if parent_id == "root" and (node.pos as Vector2).length() > 330.0:
 				continue
 				
 			# Offset drawing coordinates to account for _connections_draw's -10000 position shift
@@ -492,17 +568,18 @@ func _draw_connections() -> void:
 			var end_pos: Vector2 = node.pos + draw_offset
 
 			# Determine line color
-			var is_active: bool = parent_id in (st.get("unlocked_skills") as Array) and id in (st.get("unlocked_skills") as Array)
-			var line_col := Color(0.15, 0.9, 0.85, 0.9) if is_active else Color(0.15, 0.2, 0.3, 0.5)
-			if is_active and id in (st.get("unlocked_skills") as Array):
-				# If both are fully upgraded, maybe make it green? Nah, Cyan is very cyberpunk.
-				line_col = Color(0.15, 0.85, 0.95, 0.9) # Cyan active circuit
+			var is_active: bool = st.call("is_unlocked", parent_id) and st.call("is_unlocked", id)
+			var line_col := Color(0.15, 0.85, 0.95, 0.9) if is_active else Color(0.15, 0.2, 0.3, 0.5)
+			if parent_idx > 0:   # alternative (ANY) parent: a thinner, fainter trace
+				line_col.a *= 0.45
 			
 			var p_shape: int = st.get("nodes")[parent_id].get("shape") if "shape" in st.get("nodes")[parent_id] else 0
 			var c_shape: int = node.get("shape") if "shape" in node else 0
 			var is_main_path: bool = p_shape != 1 and c_shape != 1 # 1 is DIAMOND
 
 			var line_width := (8.0 if is_main_path else 4.0) if is_active else (4.0 if is_main_path else 2.0)
+			if parent_idx > 0:
+				line_width *= 0.5
 
 			# Circuit Board 45-Degree Chamfer Routing
 			var dx = end_pos.x - start_pos.x

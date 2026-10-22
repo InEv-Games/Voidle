@@ -147,11 +147,23 @@ static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: Stri
 		for poi: POIData in data.custom_pois:
 			if poi.is_city() and not poi.is_orbital():
 				cities += 1
-		if cities > 0 and GameState.get_planet(data.seed).orbit_level > 0:
-			cities += 1   # the Orbit takes a City slot
 		return 0.0 if cities == 0 else roundf(Balance.geometric(Balance.cfg.city_base_cost, Balance.cfg.city_cost_growth, cities - 1))
 	return roundf(Balance.geometric(Balance.cfg.district_base_cost, Balance.cfg.district_cost_growth,
 		districts_in_city(data, parent_city)))
+
+## Named materials a district costs on top of credits (GDD §20.6): a Production
+## district on the Moon asks for 30 Ferrite and no Moonstone.
+static func placement_materials(def: DistrictDef, data: PlanetData) -> Dictionary:
+	if def != null and data != null and not def.is_orbital and data.planet_type == PlanetData.Type.MOON \
+			and def.base_outputs.has(Economy.RAW):
+		return {"ferrite": 30.0}
+	return {}
+
+## Full placement price: { credits, material: amount }.
+static func placement_full_cost(def: DistrictDef, data: PlanetData, parent_city: String = "") -> Dictionary:
+	var out := {Economy.CREDITS: placement_cost(def, data, parent_city)}
+	out.merge(placement_materials(def, data))
+	return out
 
 ## Districts already built under a City (orbital ones not counted).
 static func districts_in_city(data: PlanetData, parent_city: String) -> int:

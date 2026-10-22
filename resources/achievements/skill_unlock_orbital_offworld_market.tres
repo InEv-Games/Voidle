@@ -11,6 +11,6 @@ icon = "🪐"
 trigger = 12
 int_value = 0
 float_value = 0.0
-string_value = "unlock_orbital_offworld_market"
+string_value = "orbital_offworld_market"
 steam_id = ""
 secret = false

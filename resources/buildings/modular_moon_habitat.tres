@@ -18,6 +18,5 @@ inputs = {"goods": 0.666667}
 energy_per_tick = -3.0
 pop_cost = 0
 build_materials = {"moonstone": 50.0, "goods": 10.0}
-unlock_skill = "unlock_moon"
 construct_duration = 4.0
 description = "Pressurised modules built from regolith. Moon only."

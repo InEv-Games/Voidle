@@ -98,6 +98,7 @@ func _build() -> void:
 		PlanetData.ShaderType.ROCKY:
 			mat.set_shader_parameter("sea_level",          planet_data.sea_level)
 			mat.set_shader_parameter("continent_scale",    planet_data.continent_scale)
+			mat.set_shader_parameter("continentality", planet_data.effective_continentality())
 			mat.set_shader_parameter("has_clouds",         0.0)
 			mat.set_shader_parameter("atmosphere_density",
 				planet_data.atmosphere_density if planet_data.has_atmosphere else 0.0)

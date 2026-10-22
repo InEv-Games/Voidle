@@ -288,6 +288,10 @@ func _draw_ghost_info(font: Font, sp: Vector2, ok: bool, target: CanvasItem) -> 
 
 ## Little construction bar over a district being built: black/yellow hazard
 ## stripes that fill left to right and crawl while work goes on.
+## Extra work shown as a construction bar on a district's marker, e.g. the Moon
+## lander being built at the Spaceport: { district label: progress 0..1 }.
+var extra_progress: Dictionary = {}
+
 func _draw_construct_bar(sp: Vector2, px: float, progress: float, alpha: float) -> void:
 	const W := 11   # in pixel blocks
 	const H := 2
@@ -1038,6 +1042,8 @@ func _draw_scene(font: Font) -> void:
 				and (cpp as PlanetProgress).district_upgrading.has((cpoi as POIData).label):
 			_draw_construct_bar(sp, line_px,
 				float((cpp as PlanetProgress).district_upgrading[(cpoi as POIData).label]), alpha)
+		elif cpoi is POIData and extra_progress.has((cpoi as POIData).label):
+			_draw_construct_bar(sp, line_px, float(extra_progress[(cpoi as POIData).label]), alpha)
 		if active:
 			var frame_col := Color(1.0, 0.95, 0.5, alpha * (0.9 if selected else 0.6))
 			_draw_pixel_brackets(sp, line_px * (6.0 if is_city else 4.5), line_px, frame_col)

@@ -6,11 +6,11 @@
 script = ExtResource("1_def")
 achievement_id = "skill_unlock_lab"
 title = "Basic Research"
-description = "Unlock Research Lab."
+description = "Research Field Research."
 icon = "🧫"
 trigger = 12
 int_value = 0
 float_value = 0.0
-string_value = "unlock_lab"
+string_value = "field_research"
 steam_id = ""
 secret = false

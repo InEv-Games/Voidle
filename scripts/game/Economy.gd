@@ -70,7 +70,7 @@ static func mineral_civ(r: Dictionary) -> int:
 	return int(floor((float(r["rarity"]) - 1.0) / 2.0))
 
 ## Raw resources a body yields to the current civilization (its mineral set by
-## body type, gated by GameState.civilization_type), lowest rarity first.
+## body type, gated by GameState.playable_content_type), lowest rarity first.
 ## Every one is extracted from anywhere on the body — no deposits or densities.
 static func raw_for_body(pd: PlanetData) -> Array:
 	var out: Array = []
@@ -78,7 +78,7 @@ static func raw_for_body(pd: PlanetData) -> Array:
 		var bodies: Array = r["bodies"]
 		if not bodies.is_empty() and not (int(pd.planet_type) in bodies):
 			continue
-		if mineral_civ(r) > GameState.civilization_type:
+		if mineral_civ(r) > GameState.playable_content_type:
 			continue
 		out.append(r)
 	return out
@@ -299,6 +299,8 @@ static func max_buildable(pp: PlanetProgress, def: BuildingDef, poi: POIData, ca
 			if String(b.get("building_id", "")) == def.building_id:
 				have += int(b.get("amount", 1))
 		n = mini(n, def.max_per_district - have)
+	if def.max_per_planet > 0:
+		n = mini(n, def.max_per_planet - def.count_on_planet(pp))
 	while n > 0 and not can_pay(building_full_cost(pp, def, poi.label, n)):
 		n -= 1
 	return maxi(n, 0)

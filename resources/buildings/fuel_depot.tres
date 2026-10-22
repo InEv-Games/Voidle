@@ -18,6 +18,5 @@ inputs = {}
 energy_per_tick = -0.5
 pop_cost = 125
 storage = {"fuel": 300.0}
-unlock_skill = "unlock_plasma_smelter"
 construct_duration = 2.0
 description = "+300 Fuel storage."

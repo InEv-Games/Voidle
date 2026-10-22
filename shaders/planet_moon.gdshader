@@ -107,14 +107,41 @@ void fragment() {
 		float d_score = 2.0;
 		int d_owner = territory_uv_to_world(uv, d_rn) ? district_owner(d_rn, d_score) : -1;
 		vec3 d_col = d_owner >= 0 ? district_col[d_owner].rgb : vec3(0.0);
-		if (d_owner >= 0)
+		// lunar base sprawl: packed regolith pads, habitat domes and steel
+		// modules, dense at the core and breaking into patches toward the edge
+		float urban = 0.0;
+		float core  = 0.0;
+		float ur    = 0.0;
+		if (d_owner >= 0) {
 			surf = mix(surf, vec3(0.55, 0.53, 0.50), 0.18 * smoothstep(1.0, 0.3, d_score));
+			core = smoothstep(1.0, 0.15, d_score) * 0.92;
+			float blob = fbm3(d_rn * 55.0 + vec3(11.0), 3) * 0.5 + 0.5;
+			vec3  ucell = floor(d_rn * 140.0);
+			ur = fract(sin(dot(ucell, vec3(41.3, 289.1, 97.7))) * 15731.743);
+			urban = step(1.0 - core, blob * 0.8 + ur * 0.35);
+			vec3 u_col = ur < 0.40 ? vec3(0.50, 0.52, 0.56)    // steel modules
+			           : ur < 0.78 ? vec3(0.80, 0.80, 0.78)    // white habitat domes
+			           :             vec3(0.70, 0.58, 0.36);   // gold-foil roofs
+			u_col = mix(u_col, d_col, 0.12);
+			surf = mix(surf, u_col, urban * 0.9);
+		}
 
 		// lighting — no atmosphere, sharp terminator
 		vec3  ld   = normalize(light_direction);
 		float diff = max(dot(n, ld), 0.0);
 		float lit  = smoothstep(0.0, 0.25, diff);
 		surf *= mix(1.0, 0.04 + 0.96 * lit, night_shadow);
+
+		// base lights on the night side: cool white habitat glow
+		if (d_owner >= 0) {
+			float night = smoothstep(0.15, 0.0, diff) * night_shadow;
+			float lvl   = district_col[d_owner].a;
+			float vary  = 0.55 + 0.45 * fract(ur * 7.31 + 0.13);
+			float hot   = urban * step(0.86, fract(ur * 3.17 + 0.41)) * core;
+			vec3 glow = vec3(0.75, 0.85, 1.0) * urban * (0.30 + 0.70 * core) * vary * 0.8
+			          + vec3(1.0, 0.85, 0.6) * hot * 0.6;
+			surf += glow * max(lvl, 0.35) * night * 1.6;
+		}
 
 		surf = apply_lens(surf, d_rn);
 

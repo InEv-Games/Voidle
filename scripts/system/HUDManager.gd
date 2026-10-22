@@ -246,6 +246,7 @@ func _ready() -> void:
 	_science_lbl = _res_lbls[Economy.SCIENCE]
 
 	sci_vbox.add_child(skill_btn)
+	sci_vbox.add_child(_make_trade_button(skill_s, skill_h))
 	_build_resource_cells(hbox)
 
 	sci_panel.anchor_left   = 1.0
@@ -263,9 +264,48 @@ func _ready() -> void:
 	_science_display = GameState.science_points
 
 	GameState.credits_changed.connect(_on_credits_changed)
-	GameState.act1_completed.connect(_show_act1_complete)
+	GameState.civilization_reached.connect(func(_civ: int) -> void: _show_act1_complete())
+	GameState.lander_reached_moon.connect(_show_lander_notice)
 	GameState.science_changed.connect(_on_science_changed)
 	AchievementManager.achievement_unlocked.connect(_on_achievement_unlocked)
+
+## Trade button under the Upgrade Tree button (opens TradePanel).
+func _make_trade_button(normal: StyleBoxFlat, hover: StyleBoxFlat) -> Button:
+	var b := Button.new()
+	b.text = "⇄ Trade"
+	if _orbitron: b.add_theme_font_override("font", _orbitron)
+	b.add_theme_font_size_override("font_size", 10)
+	b.add_theme_color_override("font_color", Color(0.65, 1.0, 0.75))
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		toggle_trade_panel())
+	b.mouse_entered.connect(func() -> void:
+		AudioManager.play("hover")
+		CursorManager.set_state(CursorManager.State.POINTER)
+		TooltipManager.show_tip("Trade", "Buy and sell at fixed prices, keep reserves and set standing orders." \
+			if Trade.has_access() else "Research Trade Access to buy and sell."))
+	b.mouse_exited.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		TooltipManager.hide_tip())
+	return b
+
+var _trade_layer: CanvasLayer = null
+
+func toggle_trade_panel() -> void:
+	if _trade_layer != null and is_instance_valid(_trade_layer):
+		_trade_layer.queue_free()
+		_trade_layer = null
+		TradePanel.is_open = false
+		return
+	_trade_layer = CanvasLayer.new()
+	_trade_layer.layer = 225
+	var panel := TradePanel.new()
+	_trade_layer.add_child(panel)
+	get_tree().root.add_child(_trade_layer)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
@@ -623,6 +663,88 @@ func _process(delta: float) -> void:
 	if _res_poll >= 0.25:
 		_res_poll = 0.0
 		_refresh_resource_cells()
+		_maybe_show_offline()
+
+## The lander parked in the Moon's orbit: a notice that flies the camera there
+## (the Moon, its orbit and the lander's INITIATE COLONIZATION card).
+func _show_lander_notice(moon_seed: int) -> void:
+	if _top_layer == null or not is_instance_valid(_top_layer):
+		return
+	var btn := Button.new()
+	btn.text = "◆  The lander reached the Moon's orbit  —  click to go there"
+	if _orbitron: btn.add_theme_font_override("font", _orbitron)
+	btn.add_theme_font_size_override("font_size", 11)
+	btn.add_theme_color_override("font_color", Color(0.80, 1.0, 0.85))
+	btn.focus_mode = Control.FOCUS_NONE
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.06, 0.14, 0.10, 0.95)
+	st.border_color = Color(0.30, 0.85, 0.45, 0.8)
+	st.set_border_width_all(1)
+	st.set_corner_radius_all(6)
+	st.content_margin_left = 16
+	st.content_margin_right = 16
+	st.content_margin_top = 8
+	st.content_margin_bottom = 8
+	btn.add_theme_stylebox_override("normal", st)
+	var sh := st.duplicate() as StyleBoxFlat
+	sh.bg_color = Color(0.10, 0.22, 0.14, 1.0)
+	btn.add_theme_stylebox_override("hover", sh)
+	btn.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	btn.offset_top = 132.0
+	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
+	btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
+	btn.pressed.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		btn.queue_free()
+		AudioManager.play("click")
+		go_to_lander(moon_seed))
+	_top_layer.add_child(btn)
+	AudioManager.play("building_done")
+	# stays a while, then fades away
+	var tw := btn.create_tween()
+	tw.tween_interval(20.0)
+	tw.tween_property(btn, "modulate:a", 0.0, 1.0)
+	tw.tween_callback(btn.queue_free)
+
+## Shows the Moon with the lander: in place when the planet view is open,
+## otherwise through a scene change (PlanetaryView picks up the request).
+func go_to_lander(moon_seed: int) -> void:
+	var scene := get_tree().current_scene
+	if scene != null and scene.has_method("focus_lander_at"):
+		scene.call("focus_lander_at", moon_seed)
+		return
+	var moon := GameState.get_planet_data(moon_seed)
+	if moon == null:
+		return
+	GameState.set_meta("focus_lander", moon_seed)
+	moon.set_meta("__solar_data", GameState.get_home_solar())
+	SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", moon)
+
+## "While you were away" (PLAN M8): once after loading, in a gameplay scene.
+func _maybe_show_offline() -> void:
+	if not GameState.offline_pending or GameState.showcase_mode:
+		return
+	var scene := get_tree().current_scene
+	if scene == null or scene.scene_file_path.ends_with("MainMenu.tscn"):
+		return
+	GameState.offline_pending = false
+	var body := "You were away for [b]%s[/b]." % _duration_text(GameState.offline_seconds)
+	if GameState.offline_progress_enabled():
+		body += "\n\nOffline progress is switched on in this profile, but it isn't implemented yet — nothing was produced."
+	else:
+		body += "\n\nNothing was produced while the game was closed. Your economy picks up where you left it."
+	ConfirmPanel.ask(self, "WELCOME BACK", body, "CONTINUE", Callable(), false)
+
+static func _duration_text(sec: float) -> String:
+	var d := floori(sec / 86400.0)
+	var h := floori(fmod(sec, 86400.0) / 3600.0)
+	var m := floori(fmod(sec, 3600.0) / 60.0)
+	if d > 0:
+		return "%d day%s %d h" % [d, "" if d == 1 else "s", h]
+	if h > 0:
+		return "%d h %d min" % [h, m]
+	return "%d min" % maxi(m, 1)
 
 ## Spawn a small "+X" chip that floats upward from the given HUD panel then fades.
 func _spawn_hud_chip(text: String, color: Color, panel: PanelContainer) -> void:
@@ -1038,10 +1160,25 @@ func _cell_tip(id: String, base: String) -> String:
 				if spd < 0.999:
 					penalty = "\n\n[color=#ff6a5c]Overcrowded — every building and district on this planet makes %d%% of its output.[/color]" % int(round(spd * 100.0))
 			return head + "Shown as available / max.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, every finished cycle on the planet makes less (down to %d%% at worst) until you build homes." % [
-				Economy.fmt(Balance.cfg.city_base_pop), Economy.fmt(Economy.district_found_pop(0)), int(round((1.0 - Balance.cfg.pop_max_slowdown) * 100.0))] + penalty
+				Economy.fmt(Balance.cfg.city_base_pop), Economy.fmt(Economy.district_found_pop(0)), int(round((1.0 - Balance.cfg.pop_max_slowdown) * 100.0))] + penalty + _idle_pop_text()
 	var r: float = ProductionManager.resource_rates().get(id, 0.0)
 	return "%s\n\nStored  %s  (max %s)\nPer second  %s%s" % [base, Economy.fmt(Economy.amount(id)),
 		Economy.fmt(Economy.cap(id)), "+" if r >= 0.0 else "", Economy.fmt(r)]
+
+## Idle housing across the empire and what research turns it into.
+func _idle_pop_text() -> String:
+	var idle := ProductionManager.empire_idle()
+	var out := "\n\nIdle across all worlds  %s (%d%%)" % [Economy.fmt(idle.x),
+		int(round(ProductionManager.idle_ratio() * 100.0))]
+	var r := ProductionManager.idle_income_rates()
+	if float(r[Economy.CREDITS]) > 0.0:
+		out += "\n  +%s Credits / min  (Civic Enterprise)" % Economy.fmt(float(r[Economy.CREDITS]) * 60.0)
+	if float(r[Economy.SCIENCE]) > 0.0:
+		out += "\n  +%s Science / min  (Free Research)" % Economy.fmt(float(r[Economy.SCIENCE]) * 60.0)
+	var reserve: float = SkillTree.reserve_mult(ProductionManager.idle_ratio())
+	if reserve > 1.0:
+		out += "\n  +%d%% Raw and processed output  (Production Reserve)" % int(round((reserve - 1.0) * 100.0))
+	return out
 
 ## Resources show up in the bar as the player meets them (credits and
 ## population always). Revealed ids persist in GameState.revealed_resources.
@@ -1224,7 +1361,7 @@ func _input(event: InputEvent) -> void:
 
 # ── End of Act I (demo) ──────────────────────────────────────────────────────
 
-## Shown once the first City on the Moon is finished.
+## Shown once, when the final rocket arrives: Civilization 0 is complete.
 func _show_act1_complete() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 240
@@ -1250,9 +1387,10 @@ func _show_act1_complete() -> void:
 		l.add_theme_color_override("font_color", col)
 		box.add_child(l)
 		return l
-	mk.call("ACT I COMPLETE", 34, Color(1.0, 0.90, 0.55))
-	mk.call("From a single settlement to a city on the Moon.", 13, Color(0.75, 0.82, 1.0))
-	mk.call("Thank you for playing the Voidle demo.", 11, Color(0.55, 0.62, 0.80))
+	var tgt := GameState.get_planet_data(int(GameState.expedition("rocket").get("target_seed", -1)))
+	mk.call("CIVILIZATION 0 COMPLETE", 34, Color(1.0, 0.90, 0.55))
+	mk.call("Your rocket reached %s. Civilization 1 begins." % (tgt.planet_name if tgt != null else "a new world"), 13, Color(0.75, 0.82, 1.0))
+	mk.call("Thank you for playing the Voidle demo. Earth and the Moon keep running, and every map is open to explore.", 11, Color(0.55, 0.62, 0.80))
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_child(row)
@@ -1265,7 +1403,33 @@ func _show_act1_complete() -> void:
 		AudioManager.play("click")
 		layer.queue_free())
 	row.add_child(btn)
+	# fractal collapse: nested hexagon rings fold into one point — the whole
+	# Civilization 0 tree becoming the centre node of Civilization 1's tree
+	var rings := Control.new()
+	rings.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	rings.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rings.set_meta("t", 0.0)
+	rings.draw.connect(func() -> void:
+		var t: float = rings.get_meta("t")
+		var c := rings.size * 0.5
+		var base := minf(rings.size.x, rings.size.y) * 0.45
+		for i in 7:
+			var k := float(i) / 7.0
+			var r := base * (1.0 - k * 0.8) * (1.0 - t)
+			if r < 1.0:
+				continue
+			var pts := PackedVector2Array()
+			for j in 7:
+				var a := float(j) * TAU / 6.0 + t * PI * (1.0 + k)
+				pts.append(c + Vector2(cos(a), sin(a)) * r)
+			rings.draw_polyline(pts, Color(1.0, 0.85, 0.5, 0.65 * (1.0 - t) + 0.1), 2.0, true)
+		rings.draw_circle(c, 4.0 + 10.0 * t, Color(1.0, 0.92, 0.6, t)))
+	shade.add_child(rings)
+	shade.move_child(rings, 0)
 	var tw := shade.create_tween().set_parallel(true)
 	tw.tween_property(shade, "color:a", 0.72, 1.2)
-	tw.tween_property(box, "modulate:a", 1.0, 1.6).set_delay(0.6)
+	tw.tween_method(func(v: float) -> void:
+		rings.set_meta("t", v)
+		rings.queue_redraw(), 0.0, 1.0, 2.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tw.tween_property(box, "modulate:a", 1.0, 1.6).set_delay(1.8)
 	AudioManager.play("building_done")

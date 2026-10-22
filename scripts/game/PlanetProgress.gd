@@ -159,13 +159,17 @@ func slots_used_in_district(district_label: String) -> int:
 			total += def.slot_cost * b.get("amount", 1)
 	return total
 
+## `paid` = credits really paid for this one building (the refund ledger's C,
+## GDD §15.6); merged stacks add their C together.
 func build_in_district(district: POIData, building_id: String,
-		target_mineral: String = "") -> bool:
+		target_mineral: String = "", paid: float = 0.0) -> bool:
 	var def := BuildingDef.find(building_id)
 	if def == null:
 		return false
 	if slots_used_in_district(district.label) + def.slot_cost > district_slots(district):
 		return false
+	if def.planet_limit_reached(self):
+		return false   # unique on the planet
 	
 	# Try to find an identical existing building to merge into
 	var merge_idx := -1
@@ -177,7 +181,7 @@ func build_in_district(district: POIData, building_id: String,
 				merge_idx = i
 				break
 	
-	var entry := { "district_id": district.label, "building_id": building_id, "amount": 1, "constructing": true, "uid": str(randi()) }
+	var entry := { "district_id": district.label, "building_id": building_id, "amount": 1, "constructing": true, "uid": str(randi()), "paid": paid }
 	if merge_idx != -1:
 		entry["merge_into"] = merge_idx
 		
@@ -233,12 +237,15 @@ func split_building(entry: Dictionary, split_amount: int) -> bool:
 	if split_amount <= 0 or split_amount >= current_amt:
 		return false
 		
+	var c := stack_paid(b)
 	# Reduce current stack
 	b["amount"] = current_amt - split_amount
 	
-	# Create new stack
+	# Create new stack (the paid credits split by count)
 	var new_stack := b.duplicate(true)
 	new_stack["amount"] = split_amount
+	new_stack["paid"] = c * float(split_amount) / float(current_amt)
+	b["paid"] = c - float(new_stack["paid"])
 	new_stack["uid"] = str(randi())
 	buildings.append(new_stack)
 	return true
@@ -268,6 +275,7 @@ func merge_identical(entry: Dictionary) -> bool:
 				and b.get("building_id") == entry.get("building_id") \
 				and b.get("target_mineral", "") == entry.get("target_mineral", "") \
 				and int(b.get("level", 1)) == int(entry.get("level", 1)):
+			b["paid"] = stack_paid(b) + stack_paid(entry)
 			b["amount"] = int(b.get("amount", 1)) + int(entry.get("amount", 1))
 			remove_building_stack(entry)
 			return true
@@ -282,6 +290,17 @@ func consolidate_buildings() -> void:
 
 func add_resource(resource_id: String, amount: float) -> void:
 	GameState.add_resource(resource_id, amount)
+
+## Credits really paid for a stack and not refunded yet (C). Stacks from older
+## saves have no record: their model's base price per building is assumed.
+static func stack_paid(entry: Dictionary) -> float:
+	if entry.has("paid"):
+		return float(entry["paid"])
+	var def := BuildingDef.find(entry.get("building_id", ""))
+	return (def.base_cost if def != null else 0.0) * float(entry.get("amount", 1))
+
+## Credits really paid for district levels above Lv1 ({label: credits}).
+var level_paid: Dictionary = {}
 
 ## Returns the true array index of an entry using reference equality.
 ## Avoids the value-equality bug with pp.buildings.find(entry) when two

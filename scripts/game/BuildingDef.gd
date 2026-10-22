@@ -16,6 +16,21 @@ enum OutputType { NONE, ENERGY, CREDITS, RAW_MINERAL, REFINED_MINERAL, SCIENCE, 
 @export var min_planet_lv:     int      = 1
 ## If > 0, restricts how many of this building can be built in a single district.
 @export var max_per_district:  int      = 0
+## At most this many on one planet (0 = no limit) — unique facilities such as
+## the Spaceport. Buildings under construction count.
+@export var max_per_planet:    int      = 0
+
+## How many of this model stand (or are being built) on the planet.
+func count_on_planet(pp: PlanetProgress) -> int:
+	var n := 0
+	for b: Dictionary in pp.buildings:
+		if String(b.get("building_id", "")) == building_id:
+			n += int(b.get("amount", 1))
+	return n
+
+## True when the planet already has as many as it may.
+func planet_limit_reached(pp: PlanetProgress) -> bool:
+	return max_per_planet > 0 and count_on_planet(pp) >= max_per_planet
 ## Required skill node to unlock this building. Empty = unlocked by default.
 @export var unlock_skill:      String   = ""
 ## Lowest civilization type (0–5) that can build it. Tier 4 models belong to
@@ -283,7 +298,7 @@ static func available_buildings() -> Array[BuildingDef]:
 	for b in all():
 		if b.unlock_skill != "" and (st == null or not st.is_unlocked(b.unlock_skill)):
 			continue
-		if b.min_civilization > GameState.civilization_type:
+		if b.min_civilization > GameState.playable_content_type:   # Civ 1 content stays closed in the demo
 			continue
 		if not b.minerals_known():
 			continue   # never show a model whose recipe or cost names an undiscovered mineral

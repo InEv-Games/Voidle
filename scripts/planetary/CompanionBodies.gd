@@ -33,6 +33,20 @@ var _spin := 0.0
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_to_group("companion_bodies")
+
+## Lowest screen y the bodies take up while shown (0 when hidden), so other
+## top-right UI (the objectives panel) can sit below them.
+func occupied_bottom() -> float:
+	if not is_visible_in_tree() or fade < 0.05:
+		return 0.0
+	var bottom := 0.0
+	for v in _views:
+		if v.visible:
+			bottom = maxf(bottom, v.get_global_rect().end.y)
+	if _prev_btn != null and _prev_btn.visible:
+		bottom = maxf(bottom, _prev_btn.get_global_rect().end.y)
+	return bottom
 
 ## `main` is the body being viewed; `parent` its planet when it's a moon.
 func setup(list: Array[PlanetData], parent: PlanetData) -> void:
@@ -140,6 +154,7 @@ static func _material_for(pd: PlanetData, px: float) -> ShaderMaterial:
 		PlanetData.ShaderType.ROCKY:
 			mat.set_shader_parameter("sea_level", pd.sea_level)
 			mat.set_shader_parameter("continent_scale", pd.continent_scale)
+			mat.set_shader_parameter("continentality", pd.effective_continentality())
 			mat.set_shader_parameter("has_clouds", 0.0)
 			mat.set_shader_parameter("atmosphere_density", pd.atmosphere_density if pd.has_atmosphere else 0.0)
 			mat.set_shader_parameter("specular_strength", pd.specular_strength)

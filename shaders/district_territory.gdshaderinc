@@ -164,43 +164,122 @@ float feature_hash(vec3 cell, vec3 k) {
 	return fract(sin(dot(cell, k)) * 43758.5453);
 }
 
-// Paints the features onto the (unlit) surface. `land` is 1 where land shows;
-// `t` is TIME (wind streaks drift).
+// How strongly features are painted (PlanetaryView: soft by default, stronger
+// while a role lens is on). 0 hides them.
+uniform float feature_strength = 0.5;
+uniform sampler2D river_tex : filter_linear, repeat_enable;
+uniform float river_on = 0.0;
+// 0 when zoomed out (rivers hidden) … 1 close up (PlanetaryView, by zoom).
+uniform float river_vis = 1.0;
+// 1 while the Energy role lens is on: windy regions are drawn only then.
+uniform float wind_vis = 0.0;
+// Wind strength per cell (FeatureMap.wind_texture, the sites' "Wind %").
+uniform sampler2D wind_tex : filter_linear, repeat_enable;
+uniform float wind_on = 0.0;
+
+// How much river (water and the bank right next to it) covers a point,
+// whatever the zoom — settlements leave it free (planet_rocky.gdshader).
+float river_cover(vec3 rn) {
+	if (river_on <= 0.0) return 0.0;
+	float lon = atan(rn.x, rn.z);
+	float lat = asin(clamp(-rn.y, -1.0, 1.0));
+	vec2 rv = texture(river_tex, vec2(fract(lon / TAU), 0.5 - lat / PI)).rg;
+	return max(smoothstep(0.15, 0.6, rv.r), smoothstep(0.55, 0.9, rv.g));
+}
+
+// Soft coverage of every feature around a point: a jittered 3×3 tap average of
+// the grid, so edges fade over about a cell instead of stepping.
+//   cover  forest, desert, tundra, volcanic · lines river, rift
+//   spots  crater floor, crater rim, ruins  · wind
+void feature_cover(vec3 rn, out vec4 cover, out vec2 lines, out vec3 spots, out float wind) {
+	float lon = atan(rn.x, rn.z);
+	float lat = asin(clamp(-rn.y, -1.0, 1.0));
+	vec2 uv = vec2(fract(lon / TAU), 0.5 - lat / PI);
+	vec2 px = 1.0 / vec2(textureSize(feature_tex, 0));
+	vec3 cell = floor(rn * 300.0);
+	vec2 jit = (vec2(feature_hash(cell, vec3(1.3, 7.7, 4.1)), feature_hash(cell, vec3(9.1, 2.3, 6.7))) - 0.5) * px;
+	cover = vec4(0.0);
+	lines = vec2(0.0);
+	spots = vec3(0.0);
+	wind = 0.0;
+	for (int dy = -1; dy <= 1; dy++) {
+		for (int dx = -1; dx <= 1; dx++) {
+			vec2 o = vec2(float(dx), float(dy)) * px * 1.25 + jit;
+			ivec4 f = ivec4(round(texture(feature_tex, uv + o) * 255.0));
+			float w = (dx == 0 && dy == 0) ? 2.0 : 1.0;   // weights add up to 10
+			cover += w * vec4(f.r == 1 ? 1.0 : 0.0, f.r == 2 ? 1.0 : 0.0, f.r == 3 ? 1.0 : 0.0, f.r == 4 ? 1.0 : 0.0);
+			lines += w * vec2(f.g == 1 ? 1.0 : 0.0, f.g == 2 ? 1.0 : 0.0);
+			spots += w * vec3(f.b == 1 ? 1.0 : 0.0, f.b == 2 ? 1.0 : 0.0, f.b == 3 ? 1.0 : 0.0);
+			wind += w * (f.a > 127 ? 1.0 : 0.0);
+		}
+	}
+	cover /= 10.0;
+	lines /= 10.0;
+	spots /= 10.0;
+	wind /= 10.0;
+}
+
+// Paints the features onto the (unlit) surface — muted tints that blend into
+// the terrain. `land` is 1 where land shows; `t` is TIME (wind streaks drift).
 vec3 apply_features(vec3 surf, vec3 rn, float land, float t) {
-	if (feature_on <= 0.0) return surf;
-	ivec4 f = feature_sample(rn);
-	if (f.r == 1) {          // forest: dark canopy in clumps
-		float clump = feature_hash(floor(rn * 220.0), vec3(12.9898, 78.233, 37.719));
-		surf = mix(surf, vec3(0.07, 0.22, 0.09) * (0.8 + 0.4 * clump), 0.80 * land);
-	} else if (f.r == 2) {   // desert: sand with dune bands
-		float dune = 0.5 + 0.5 * sin(dot(rn, vec3(90.0, 30.0, 60.0)));
-		surf = mix(surf, mix(vec3(0.74, 0.62, 0.38), vec3(0.84, 0.72, 0.46), dune), 0.85 * land);
-	} else if (f.r == 3) {   // tundra: pale grey-green
-		surf = mix(surf, vec3(0.52, 0.56, 0.50), 0.70 * land);
-	} else if (f.r == 4) {   // volcanic field: dark basalt with glowing cracks
-		float crack = smoothstep(0.92, 1.0, feature_hash(floor(rn * 180.0), vec3(7.1, 113.3, 41.9)));
-		surf = mix(surf, vec3(0.16, 0.13, 0.12), 0.85 * land);
-		surf += vec3(0.9, 0.25, 0.05) * crack * 0.6 * land;
+	if (feature_on <= 0.0 || feature_strength <= 0.0) return surf;
+	vec4 cover; vec2 lines; vec3 spots; float wind;
+	feature_cover(rn, cover, lines, spots, wind);
+	float k = feature_strength * land;
+	vec4 c = smoothstep(vec4(0.05), vec4(0.85), cover);
+	// forest: a darker green, in clumps
+	float clump = feature_hash(floor(rn * 220.0), vec3(12.9898, 78.233, 37.719));
+	surf = mix(surf, surf * vec3(0.55, 0.80, 0.55) * (0.9 + 0.2 * clump), c.x * 0.8 * k);
+	// desert: warm sand, gentle dune bands
+	float dune = 0.5 + 0.5 * sin(dot(rn, vec3(90.0, 30.0, 60.0)));
+	surf = mix(surf, mix(vec3(0.62, 0.56, 0.42), vec3(0.70, 0.63, 0.47), dune), c.y * 0.7 * k);
+	// tundra: paler, cooler
+	surf = mix(surf, mix(surf, vec3(0.55, 0.58, 0.54), 0.6), c.z * k);
+	// volcanic field: dark basalt, a few faint glowing cracks
+	float crack = smoothstep(0.94, 1.0, feature_hash(floor(rn * 180.0), vec3(7.1, 113.3, 41.9)));
+	surf = mix(surf, vec3(0.20, 0.17, 0.16), c.w * 0.75 * k);
+	surf += vec3(0.8, 0.25, 0.05) * crack * c.w * 0.35 * k;
+	// rivers: their own finer texture (FeatureMap.river_texture), smooth lines
+	// with a soft water edge and a greener bank; clear even at the soft strength
+	if (river_on > 0.0 && river_vis > 0.0) {
+		float rlon = atan(rn.x, rn.z);
+		float rlat = asin(clamp(-rn.y, -1.0, 1.0));
+		vec2 rv = texture(river_tex, vec2(fract(rlon / TAU), 0.5 - rlat / PI)).rg;
+		float rs = max(feature_strength, 0.75);
+		rs *= river_vis;
+		surf = mix(surf, surf * vec3(0.84, 1.02, 0.82) + vec3(0.0, 0.02, 0.0), rv.g * 0.4 * rs * land);
+		float shimmer = 0.03 * sin(t * 1.6 + dot(rn, vec3(140.0, 60.0, 95.0)));
+		// across the beach the river thins out into the sea's own colour
+		float inland = smoothstep(0.0, 1.0, land);
+		surf = mix(surf, vec3(0.20, 0.42, 0.62) + shimmer, smoothstep(0.30, 0.80, rv.r) * 0.9 * rs * inland);
 	}
-	if (f.g == 1) {
-		surf = mix(surf, vec3(0.13, 0.36, 0.58), 0.85);   // river
-	} else if (f.g == 2) {
-		surf = mix(surf, vec3(1.0, 0.42, 0.10), 0.75);    // geothermal rift
-	}
-	if (f.b == 1) {
-		surf *= 0.62;                                       // crater floor
-	} else if (f.b == 2) {
-		surf = mix(surf, vec3(0.70, 0.66, 0.60), 0.55);    // crater rim
-	} else if (f.b == 3) {                                  // old ruins: broken blocks
-		float blk = step(0.45, feature_hash(floor(rn * 260.0), vec3(3.7, 91.1, 17.3)));
-		surf = mix(surf, vec3(0.58, 0.54, 0.46), 0.75 * blk);
-	}
-	if (f.a > 127) {         // windy region: pale streaks drifting east
-		float lon = atan(rn.x, rn.z);
-		float lat = asin(clamp(-rn.y, -1.0, 1.0));
-		float s = fract(lon * 18.0 + lat * 4.0 - t * 0.35 + sin(lat * 40.0) * 0.15);
-		float streak = smoothstep(0.80, 0.97, s) * (1.0 - smoothstep(0.97, 1.0, s));
-		surf = mix(surf, vec3(0.92, 0.95, 1.0), streak * 0.45 * land);
-	}
+	surf = mix(surf, vec3(0.85, 0.40, 0.15), smoothstep(0.25, 0.7, lines.y) * 0.6 * feature_strength);
+	// spots
+	surf *= 1.0 - smoothstep(0.2, 0.8, spots.x) * 0.3 * feature_strength;
+	surf = mix(surf, vec3(0.66, 0.63, 0.58), smoothstep(0.2, 0.8, spots.y) * 0.4 * feature_strength);
+	float blk = step(0.45, feature_hash(floor(rn * 260.0), vec3(3.7, 91.1, 17.3)));
+	surf = mix(surf, vec3(0.58, 0.54, 0.46), smoothstep(0.2, 0.8, spots.z) * 0.6 * blk * feature_strength);
+	return surf;
+}
+
+// Energy lens: windy regions as bright wind lines flowing east, drawn on top
+// of the lens (after its dimming) so they read clearly. Only while wind_vis is on.
+vec3 apply_wind_lens(vec3 surf, vec3 rn, float t) {
+	if (wind_vis <= 0.0 || wind_on <= 0.0) return surf;
+	float lon = atan(rn.x, rn.z);
+	float lat = asin(clamp(-rn.y, -1.0, 1.0));
+	// stronger wind → denser, brighter currents (from about 35% up; full at 75%)
+	float wind = texture(wind_tex, vec2(fract(lon / TAU), 0.5 - lat / PI)).r;
+	float region = smoothstep(0.35, 0.75, wind);
+	if (region <= 0.0) return surf;
+	// long, gently wavy currents moving east; noise breaks them into gusts
+	float wave = lat * 26.0 + sin(lon * 7.0 + t * 0.4) * 0.6;
+	float band = 1.0 - abs(fract(wave) * 2.0 - 1.0);
+	band = smoothstep(0.80, 0.97, band);
+	float gust = fbm3(vec3(lon * 6.0 - t * 0.9, lat * 10.0, 3.7), 3);
+	gust = smoothstep(-0.05, 0.25, gust);
+	// a faint tint marks the whole region, the currents sit on top
+	surf = mix(surf, vec3(0.70, 0.86, 0.95), 0.12 * region * wind_vis);
+	surf = mix(surf, vec3(0.90, 0.97, 1.0), band * gust * 0.75 * region * wind_vis);
 	return surf;
 }

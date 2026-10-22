@@ -11,6 +11,6 @@ icon = "🐪"
 trigger = 12
 int_value = 0
 float_value = 0.0
-string_value = "unlock_trading_post"
+string_value = "trade_networks"
 steam_id = ""
 secret = false

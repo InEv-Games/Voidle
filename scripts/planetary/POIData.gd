@@ -51,6 +51,9 @@ static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⚗", "�
 ## "terrain_seacoast": 0.5, … } (FeatureMap.shares). Stored so the economy works
 ## for bodies that aren't on screen.
 @export var site_features: Dictionary = {}
+## Credits really paid for this settlement's shell (GDD §15.6; the first,
+## free City paid 0). −1 = unknown (older saves): treated as 0.
+@export var paid_credits: float = -1.0
 
 ## Settlement growth along roads: for each road (keyed by the district at its
 ## other end) the settlement size this district had when the road appeared.

@@ -131,18 +131,22 @@ extends Resource
 @export var base_cap_fuel: float = 200.0
 @export var base_cap_rare: float = 100.0
 
-@export_group("Idle population (not used yet)")
+@export_group("Idle population")
+## Per minute per 1,000 idle housing, once Civic Enterprise / Free Research is researched.
 @export var idle_pop_credits_per_1000: float = 10.0
 @export var idle_pop_science_per_1000: float = 2.0
 @export var idle_pop_counts_city_base: bool = true
+## (not used yet)
 @export var idle_pop_uses_level_mult: bool = false
 
 @export_group("Trade (not used yet)")
 @export var trade_sell_ratio: float = 0.9
 @export var trade_buy_ratio: float = 1.1
 
-@export_group("Research (not used yet)")
+@export_group("Research")
+## Price surcharge per distinct strategy node bought in another branch (GDD §17.5).
 @export var research_cross_branch: float = 0.02
 
-@export_group("Offline (not used yet)")
+@export_group("Offline")
+## Kill switch for offline gains (KARARLAR §4). Off: only the time away is shown.
 @export var offline_progress_enabled: bool = false

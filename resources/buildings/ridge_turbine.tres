@@ -19,6 +19,5 @@ energy_per_tick = 0.0
 pop_cost = 750
 output_tag = "wind"
 required_features = Array[String](["terrain_wind"])
-unlock_skill = "unlock_wind_turbine"
 construct_duration = 4.0
 description = "Tall turbines on windy ground: four Wind Turbines' worth in two slots. Must stand on a windy region; best on mountains."

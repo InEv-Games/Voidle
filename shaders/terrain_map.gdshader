@@ -14,6 +14,7 @@ shader_type canvas_item;
 uniform int   seed              = 12345;
 uniform float terrain_roughness = 1.0;
 uniform float continent_scale   = 1.0;
+uniform float continentality    = 0.0;
 uniform int   mode              = 0;
 
 vec3 hash3(vec3 p) {
@@ -40,6 +41,18 @@ float fbm3(vec3 p, int oct) {
 	return v;
 }
 
+// Continentality (0 = the old archipelago look, 1 = a few big continents): a
+// large, slow continent mask pulls the detail noise into big landmasses.
+// MUST stay identical in planet_rocky.gdshader and terrain_map.gdshader.
+float rocky_height(vec3 rn) {
+	float h = fbm3(rn * 3.2 * continent_scale * terrain_roughness, 7);
+	if (continentality > 0.0) {
+		float m = fbm3(rn * 0.9 + vec3(17.3, -4.1, 9.7), 3);
+		h = mix(h, h * 0.55 + m * 0.8, continentality);
+	}
+	return h;
+}
+
 void fragment() {
 	float lon = UV.x * TAU;
 	float lat = (0.5 - UV.y) * PI;
@@ -50,7 +63,7 @@ void fragment() {
 		vec3 rp = rn * terrain_roughness;
 		v = fbm3(rp * 1.8, 4);
 	} else {
-		v = fbm3(rn * 3.2 * continent_scale * terrain_roughness, 7);
+		v = rocky_height(rn);
 	}
 	float e  = clamp((v + 2.0) / 4.0, 0.0, 1.0) * 65535.0;
 	float hi = floor(e / 256.0);

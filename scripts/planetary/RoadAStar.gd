@@ -20,6 +20,13 @@ var port_reach := 0.0
 var port_end_a := Vector3.ZERO
 var port_end_b := Vector3.ZERO
 const PORT_FAR_PENALTY: float = 2.0
+## Ports already in use (id -> unit position). A used harbour serves any town
+## (no far penalty), and opening a new port within PORT_MERGE_CHORD of one costs
+## PORT_NEW_NEAR_PENALTY — so neighbouring routes share one harbour instead of
+## putting a second port right next to it.
+var used_ports: Dictionary = {}
+const PORT_MERGE_CHORD: float = 0.09     # ≈ 5° on the unit sphere
+const PORT_NEW_NEAR_PENALTY: float = 1.5
 
 static func _key(a: int, b: int) -> int:
 	return mini(a, b) * 4294967296 + maxi(a, b)
@@ -34,8 +41,15 @@ func _compute_cost(from_id: int, to_id: int) -> float:
 		return d * 1.0e6
 	if to_id >= cell_count and port_reach > 0.0:
 		var p := get_point_position(to_id).normalized()
-		if p.distance_to(port_end_a) > port_reach and p.distance_to(port_end_b) > port_reach:
-			d += PORT_FAR_PENALTY
+		if used_ports.has(to_id):
+			pass   # an existing harbour serves every town around it
+		else:
+			if p.distance_to(port_end_a) > port_reach and p.distance_to(port_end_b) > port_reach:
+				d += PORT_FAR_PENALTY
+			for q: Vector3 in used_ports.values():
+				if p.distance_to(q) < PORT_MERGE_CHORD:
+					d += PORT_NEW_NEAR_PENALTY   # one is right there — use it
+					break
 	return d * BRIDGE_COST if _bridges.has(_key(from_id, to_id)) else d
 
 func _estimate_cost(from_id: int, end_id: int) -> float:

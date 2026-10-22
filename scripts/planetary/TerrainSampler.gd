@@ -31,6 +31,16 @@ const MAX_PLACE_LAT_DEG: float = 70.0
 const MIN_SPACING_DEG: float = 4.0
 ## Districts whose settlements are within this gap of each other are neighbours.
 const NEIGHBOR_GAP_DEG: float = 9.0
+
+## Settlements keep their real size in km: on a small body (the Moon) the same
+## town covers more degrees. 1 for Earth-sized worlds (planet_size ≥ 0.8).
+static func body_scale(data: PlanetData) -> float:
+	if data == null:
+		return 1.0
+	return clampf(0.8 / maxf(data.planet_size, 0.05), 1.0, 3.5)
+
+static func min_spacing_deg(data: PlanetData) -> float:
+	return MIN_SPACING_DEG * body_scale(data)
 ## How far to look for water when deciding if a land point is coastal.
 const COAST_PROBE_DEG: float = 4.0
 
@@ -171,7 +181,8 @@ static func city_spacing_deg(data: PlanetData) -> float:
 
 ## Full placement check for a surface district at (lon, lat).
 ## Returns { ok: bool, reason: String, terrain: Dictionary }.
-static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: float) -> Dictionary:
+## `ignore`: settlements left out of the spacing check (a subtree being moved).
+static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: float, ignore: Array = []) -> Dictionary:
 	var t := sample(data, lon, lat)
 	var result := {"ok": true, "reason": "", "terrain": t}
 	if absf(rad_to_deg(lat)) > MAX_PLACE_LAT_DEG:
@@ -182,10 +193,10 @@ static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: floa
 		result.ok = false
 		result.reason = "%s must be built on %s" % [def.display_name, placement_label(def.placement)]
 		return result
-	var min_d := deg_to_rad(MIN_SPACING_DEG)
+	var min_d := deg_to_rad(min_spacing_deg(data))
 	var city_d := deg_to_rad(city_spacing_deg(data))
 	for p: POIData in data.custom_pois:
-		if p.is_orbital():
+		if p.is_orbital() or ignore.has(p):
 			continue
 		var d := angular_distance(lon, lat, deg_to_rad(p.lon_deg), deg_to_rad(p.lat_deg))
 		if d < min_d:

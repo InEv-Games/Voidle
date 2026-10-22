@@ -3,6 +3,8 @@
 ## what lies in between play no part — only physical distance.
 ##
 ## A district's location multiplier = 1 + proximity + centres + distance bonus.
+## Research: Cluster Planning scales proximity and centres, Independent Centres
+## adds to a distance bonus, Mixed Networks lets linked families count at half.
 ## It applies once to the district's base income and to every building in it.
 ##   proximity  every other finished district of the same family:
 ##              very near +proximity_very_near, near +proximity_near (no
@@ -51,6 +53,17 @@ static func _counts(p: POIData) -> bool:
 static func family(p: POIData) -> String:
 	return p.type_tag
 
+## Output family of a district (science, commercial, residential, energy,
+## production) — what Mixed Networks links.
+static func output_family(p: POIData) -> String:
+	match p.poi_type:
+		POIData.POIType.MINING:      return "production"
+		POIData.POIType.ENERGY:      return "energy"
+		POIData.POIType.SCIENCE:     return "science"
+		POIData.POIType.RESIDENTIAL: return "residential"
+		POIData.POIType.COMMERCIAL:  return "commercial"
+	return ""
+
 ## Full breakdown for a district (or a placement probe with label ""):
 ## { "mult": float, "proximity": float, "centre": float, "distance": float,
 ##   "nearest_km": float, "band": Band, "sources": [{ "poi", "km", "share", "kind" }] }
@@ -63,6 +76,8 @@ static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 		if not cached.is_empty():
 			return cached
 	var c: BalanceConfig = Balance.cfg
+	var cluster: float = SkillTree.get_proximity_mult()
+	var linked: Array = SkillTree.cross_families(output_family(poi))
 	var prox := 0.0
 	var centre := 0.0
 	var nearest := INF
@@ -76,17 +91,25 @@ static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 		if b != Band.VERY_NEAR and b != Band.NEAR:
 			continue
 		if p.is_city():   # a centre supports every family in reach
-			var cs := c.centre_very_near if b == Band.VERY_NEAR else c.centre_near
+			var cs := (c.centre_very_near if b == Band.VERY_NEAR else c.centre_near) * cluster
 			centre += cs
 			sources.append({"poi": p, "km": km, "share": cs, "kind": "centre"})
-		elif family(p) == family(poi) and not poi.is_city():
-			var ps := c.proximity_very_near if b == Band.VERY_NEAR else c.proximity_near
+		elif poi.is_city():
+			continue
+		elif family(p) == family(poi):
+			var ps := (c.proximity_very_near if b == Band.VERY_NEAR else c.proximity_near) * cluster
 			prox += ps
 			sources.append({"poi": p, "km": km, "share": ps, "kind": "family"})
+		elif linked.has(output_family(p)):   # Mixed Networks: half of a family source
+			var xs := (c.proximity_very_near if b == Band.VERY_NEAR else c.proximity_near) * 0.5 * cluster
+			prox += xs
+			sources.append({"poi": p, "km": km, "share": xs, "kind": "cross"})
 	if c.proximity_cap > 0.0:
 		prox = minf(prox, c.proximity_cap)
 	var nb := band(nearest) if nearest != INF else Band.VERY_FAR
 	var dist := band_bonus(nb)
+	if dist > 0.0:   # Independent Centres never turns near into far
+		dist += SkillTree.get_distance_bonus_add()
 	var out := {"mult": 1.0 + prox + centre + dist, "proximity": prox, "centre": centre,
 		"distance": dist, "nearest_km": nearest, "band": nb, "sources": sources}
 	if poi.label != "":
@@ -109,7 +132,7 @@ static func _signature(pd: PlanetData) -> String:
 	for p: POIData in pd.custom_pois:
 		if _counts(p):
 			built += 1
-	return "%d|%d|%s" % [pd.custom_pois.size(), built, Balance.profile_name]
+	return "%d|%d|%s|%d" % [pd.custom_pois.size(), built, Balance.profile_name, SkillTree.version]
 
 static func _cached(pd: PlanetData, label: String) -> Dictionary:
 	var entry: Dictionary = _cache.get(pd.seed, {})

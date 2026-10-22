@@ -17,6 +17,5 @@ outputs = {"fuel": 2.0}
 inputs = {"ferrite": 8.0}
 energy_per_tick = -2.0
 pop_cost = 250
-unlock_skill = "unlock_plasma_smelter"
 construct_duration = 4.0
 description = "A small first Fuel line: 8 Ferrite into 2 Fuel."

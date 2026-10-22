@@ -18,6 +18,5 @@ inputs = {"goods": 1.0, "fuel": 0.333333}
 energy_per_tick = -4.0
 pop_cost = 750
 build_materials = {"moonstone": 75.0, "goods": 20.0, "fuel": 10.0}
-unlock_skill = "unlock_moon"
 construct_duration = 4.0
 description = "Supplies the lunar settlements. Moon only."

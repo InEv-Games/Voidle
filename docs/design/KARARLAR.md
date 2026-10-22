@@ -41,7 +41,9 @@ Burada korunan şey **sayacın mantığıdır** (City'deki district'lerin türü
 
 **Kabul:** Orbital Shipyard'ın zorunlu kapı olması kalkar. Ay'a Dünya Spaceport'tan atılan lander ile gidilir. Ay'daki 100 yerel Moonstone, Ay'dan ayrılan son roketin şartıdır.
 
-**Ek:** Şu anki oyunda orbital yerleştirmeye aktif oynanıştan ulaşılamıyor. Bu, büyük güncellemeden önce düzeltilecek. Orbital, ana yoldan ayrı ama çalışan isteğe bağlı içerik olarak kalır.
+**Ek:** Şu anki oyunda orbital yerleştirmeye aktif oynanıştan ulaşılamıyor. Bu, büyük güncellemeden önce düzeltilecek.
+
+**Güncelleme (22 Ekim 2026):** Orbital ana yolun parçasıdır. Ay'a gitmeden önce yörüngede bitmiş bir Space Station şarttır: Orbital Assembly ortak yola girer (Rocketry → Orbital Assembly → Lunar Program), Lunar Program araştırması ve lander hazırlığı bitmiş bir istasyon ister. Shipyard yine şart değildir; Zero-G, Mirrors, Shipyard ve Offworld Trade isteğe bağlı kalır.
 
 ## 6. Yerleşim işlemleri sağ tık menüsünden
 
@@ -64,3 +66,9 @@ GDD'nin geri kalanı kabul edildi. Derinliğin idle oyun için fazla olabileceğ
 - Satın alınmış seviyeler fiyattan düşülür ve iki kez sayılmaz: etkin seviye = max(kendi alınan, buyout ile gelen).
 - GDD'nin "mirasın vermedikleri" listesi (bina, district, keşif, Spaceport, bedava Güncelle yok) geçerlidir. Demoda buyout yalnız önizlemedir.
 - *Açık:* Çapraz dal zammının buyout toplamına dahil edilip edilmeyeceği denge ekibine sorulacak.
+
+## 9. District seviyelerinde yol komşusu kuralı kalır
+
+**GDD'de:** District seviyesi yalnız kredi ve nüfusla alınır; yol şartı yoktur.
+
+**Kararımız:** Capital District serbestçe seviye atlar. Diğer district'ler, yolla bağlı bir komşusu hedef seviyeye ulaşmadan seviye atlayamaz; seviyeler Capital'dan dışarıya yayılır. Yollar ekonomide konum bonusu vermez, ama bu seviye kuralını taşır.

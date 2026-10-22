@@ -181,8 +181,18 @@ func _open_context_menu(global_pos: Vector2) -> void:
 		ContextMenu.open(self, _current.system_name, "Star system", cmds, global_pos)
 
 func _planet_commands(pd: PlanetData) -> Array:
-	return [GameCommand.make("view_planet", "View planet", planet_selected.emit.bind(pd),
+	var out: Array = [GameCommand.make("view_planet", "View planet", planet_selected.emit.bind(pd),
 		_planet_access_block.bind(pd), {"icon": "◉", "color": Color(0.60, 0.75, 1.0)})]
+	# the final rocket's destination (GDD §20.15–§20.17): pick or change it until launch
+	var rs := GameState.expedition_state("rocket")
+	if (rs == "preparing" or rs == "ready") and pd.seed != GameState.home_planet_seed:
+		var current := int(GameState.expedition("rocket").get("target_seed", -1)) == pd.seed
+		out.append(GameCommand.make("rocket_target", "Final rocket target" + ("  ✓" if current else ""),
+			func() -> void: GameState.set_rocket_target(pd.seed),
+			func() -> String: return "Already the target" if current else GameState.rocket_target_block(pd.seed),
+			{"icon": "▲", "color": Color(1.0, 0.85, 0.5),
+			 "tooltip": "The rocket leaves the Moon for this planet once it is ready. Arriving completes Civilization 0."}))
+	return out
 
 func _system_commands(_sd: SolarData) -> Array:
 	return [GameCommand.make("galaxy_view", "Galaxy view", _go_to_galaxy, _galaxy_access_block,

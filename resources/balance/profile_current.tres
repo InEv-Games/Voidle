@@ -5,3 +5,5 @@
 [resource]
 script = ExtResource("1_cfg")
 profile_name = "current"
+start_credits = 1000.0
+start_science = 50.0

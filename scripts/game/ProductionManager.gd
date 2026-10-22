@@ -43,6 +43,8 @@ func _process(delta: float) -> void:
 		_randomize_tries += 1
 		_randomize_missing = not _randomize_cycles() and _randomize_tries < 600   # retry until planets load
 	_tick_all(delta)
+	_tick_idle_income(delta)
+	GameState.tick_expeditions(delta)
 
 # ── Save / load ───────────────────────────────────────────────────────────────
 
@@ -198,9 +200,6 @@ func _tick_all(delta: float) -> void:
 						var built_def := district_def(poi)
 						if built_def != null and built_def.base_outputs.has(Economy.RAW):
 							GameState.discover_body_minerals(planet_seed)
-						# the first City on another world ends Act I (the demo)
-						if poi.is_city() and planet_seed != GameState.home_planet_seed:
-							GameState.complete_act1.call_deferred()
 					building_progress_changed.emit(planet_seed, poi.label, poi.construct_progress)
 			if district_changed:
 				GameState.planet_progress_changed.emit(planet_seed)
@@ -227,13 +226,14 @@ func _tick_all(delta: float) -> void:
 				entry["uid"] = str(randi())
 			var key: String        = _key(planet_seed, poi_label, entry["uid"])
 			var def := BuildingDef.find(bid)
-			if def == null or def.tick_duration <= 0.0:
+			if def == null:
 				continue
 
 			# ── Construction phase ────────────────────────────────────────────
+			# (runs before the zero-tick skip — passive buildings still get built)
 			if entry.get("constructing", false):
 				var ck: String = "construct:" + key
-				var cdur: float = def.construct_duration if def.construct_duration > 0.0 else def.tick_duration
+				var cdur: float = def.construct_duration if def.construct_duration > 0.0 else maxf(def.tick_duration, 1.0)
 				var cp: float  = _construct.get(ck, 0.0) + delta / cdur
 				if cp >= 1.0:
 					_construct.erase(ck)
@@ -248,6 +248,9 @@ func _tick_all(delta: float) -> void:
 					_construct[ck] = cp
 					building_progress_changed.emit(planet_seed, key, cp)
 				continue
+
+			if def.tick_duration <= 0.0:
+				continue   # passive building — no production cycle
 
 			# ── User-toggled off ──────────────────────────────────────────────
 			if _user_paused.get(key, false):
@@ -507,6 +510,10 @@ func resource_rates() -> Dictionary:
 				rates[id] = float(rates.get(id, 0.0)) + output_per_cycle(pp, entry, def, id) * eff * per_s
 			for id: String in def.inputs:
 				rates[id] = float(rates.get(id, 0.0)) - float(def.inputs[id]) * float(entry.get("amount", 1)) * per_s
+	var idle := idle_income_rates()
+	for id: String in idle:
+		if float(idle[id]) > 0.0:
+			rates[id] = float(rates.get(id, 0.0)) + float(idle[id])
 	return rates
 
 ## Pays a building's per-cycle inputs from the global stock. Returns false (and
@@ -575,7 +582,11 @@ func _produce_raw(pp: PlanetProgress, poi_lbl: String, total: float) -> void:
 		if share <= 0.0:
 			continue
 		var rid: String = raws[k]["id"]
+		var before := GameState.get_resource(rid)
 		GameState.add_resource(rid, share)
+		if rid == "moonstone" and pd.planet_type == PlanetData.Type.MOON:
+			# only Moonstone really mined on the Moon counts towards the final rocket
+			GameState.moon_local_moonstone += maxf(GameState.get_resource(rid) - before, 0.0)
 		if share >= 0.05 and poi_lbl != "":
 			var col: Color = raws[k]["color"]
 			var txt := "+%.1f" % share if share < 1.0 else "+%.0f" % share
@@ -600,12 +611,78 @@ func _skill_mods(pp: PlanetProgress, id: String, v: float, output_tag: String) -
 		Economy.RAW:
 			v *= st.get_mine_output_mult() * PlanetModifier.combined(
 				PlanetModifier.for_planet(_planet_type(pp.planet_seed)), PlanetModifier.Effect.MINE_OUTPUT_MULT)
+			v *= st.reserve_mult(idle_ratio())
+		Economy.GOODS, Economy.RARE:
+			v *= st.reserve_mult(idle_ratio())
+		Economy.FUEL:
+			v *= st.get_fuel_mult() * st.reserve_mult(idle_ratio())
 		Economy.SCIENCE:
 			v *= st.get_science_mult()
 		Economy.ENERGY:
 			if output_tag == "solar":
 				v *= st.get_solar_mult()
 	return v
+
+# ── Idle population (GDD §9.7, §17.20) ────────────────────────────────────────
+# Housing nobody works in. Counted over the whole empire, free City housing
+# included (Balance.cfg.idle_pop_counts_city_base). Civic Enterprise turns it
+# into Credits, Free Research into Science (per minute, paid every cycle) and
+# Production Reserve into a small output bonus. The income never adds housing.
+
+const IDLE_CYCLE := 20.0
+const IDLE_CACHE_MS := 500
+var _idle_timer: float = 0.0
+var _idle_cache: Array = [-100000, 0.0, 0.0]   # [time_ms, idle, capacity]
+var _idle_computing: bool = false
+
+## Empire idle population and housing capacity: Vector2(idle, capacity).
+func empire_idle() -> Vector2:
+	var now := Time.get_ticks_msec()
+	# housing totals run district income, whose Production Reserve asks for the
+	# idle ratio again: answer that inner call from the last value, never recurse
+	if _idle_computing:
+		return Vector2(float(_idle_cache[1]), float(_idle_cache[2]))
+	if now - int(_idle_cache[0]) > IDLE_CACHE_MS:
+		_idle_computing = true
+		var cap := 0.0
+		var used := 0.0
+		for pp: PlanetProgress in _all_colonies():
+			var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+			if pd == null:
+				continue
+			cap += float(Economy.max_population(pd, pp))
+			used += float(Economy.used_population(pd, pp))
+			if not Balance.cfg.idle_pop_counts_city_base:
+				for poi: POIData in pd.custom_pois:
+					if poi.is_city() and not poi.is_orbital():
+						cap -= Balance.cfg.city_base_pop
+		_idle_cache = [now, maxf(cap - used, 0.0), maxf(cap, 0.0)]
+		_idle_computing = false
+	return Vector2(float(_idle_cache[1]), float(_idle_cache[2]))
+
+## Share of the empire's housing that stands idle (0–1).
+func idle_ratio() -> float:
+	var v := empire_idle()
+	return v.x / v.y if v.y > 0.0 else 0.0
+
+## Idle income per second: { credits, science } (0 until researched).
+func idle_income_rates() -> Dictionary:
+	var st := get_node("/root/SkillTree")
+	var k := empire_idle().x / 1000.0 / 60.0
+	return {Economy.CREDITS: k * float(st.idle_credits_per_1000()),
+		Economy.SCIENCE: k * float(st.idle_science_per_1000())}
+
+func _tick_idle_income(delta: float) -> void:
+	_idle_timer += delta
+	if _idle_timer < IDLE_CYCLE:
+		return
+	_idle_timer -= IDLE_CYCLE
+	var r := idle_income_rates()
+	for id: String in r:
+		var v: float = float(r[id]) * IDLE_CYCLE
+		if v > 0.0:
+			Economy.add(id, v)
+	Trade.run_orders()   # automation: sales, then purchases (GDD §18.19)
 
 # ── Building helpers (UI) ─────────────────────────────────────────────────────
 
