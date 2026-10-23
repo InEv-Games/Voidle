@@ -4,7 +4,8 @@
 [ext_resource type="Shader" uid="uid://bqhrljb2f5jv1" path="res://shaders/planet_rocky.gdshader" id="2_5jl86"]
 [ext_resource type="Script" uid="uid://djlsg3p7ukbka" path="res://scripts/planetary/PlanetRenderer.gd" id="2_bbbb"]
 [ext_resource type="Script" uid="uid://iiqjcdhvuo6" path="res://scripts/planetary/POILayer.gd" id="3_cccc"]
-[ext_resource type="FontFile" uid="uid://ddi2q6ifb6h45" path="res://Fonts/Orbitron-VariableFont_wght.ttf" id="4_orbitron"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/HeroHeader.tscn" id="4_hero"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/HeroTag.tscn" id="5_tag"]
 [ext_resource type="Script" uid="uid://b76xs20oqudpd" path="res://scripts/game/DebugGameState.gd" id="7_5jl86"]
 [ext_resource type="Script" uid="uid://cyy0t2bkegr6q" path="res://scripts/game/DebugResourceGen.gd" id="8_o0343"]
 
@@ -41,15 +42,6 @@ shader_parameter/color_mountain = Vector3(0.36, 0.32, 0.26)
 shader_parameter/color_snow = Vector3(0.86, 0.89, 0.93)
 shader_parameter/color_cloud = Vector3(0.86, 0.89, 0.94)
 shader_parameter/color_atmosphere = Vector3(0.26, 0.5, 0.9)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-content_margin_left = 20.0
-content_margin_top = 24.0
-content_margin_right = 20.0
-content_margin_bottom = 24.0
-bg_color = Color(0.07, 0.08, 0.13, 1)
-border_width_right = 1
-border_color = Color(0.2, 0.25, 0.4, 0.5)
 
 [node name="PlanetaryView" type="Control" unique_id=279896849]
 layout_mode = 3
@@ -97,24 +89,23 @@ layout_mode = 1
 anchors_preset = -1
 anchor_right = 0.3
 anchor_bottom = 1.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+theme_type_variation = &"SidePanel"
 
 [node name="PanelContent" type="VBoxContainer" parent="SidePanel" unique_id=1853658727]
 layout_mode = 2
-theme_override_constants/separation = 3
+theme_override_constants/separation = 8
 
-[node name="PlanetName" type="Label" parent="SidePanel/PanelContent" unique_id=1277833476]
+[node name="Hero" parent="SidePanel/PanelContent" instance=ExtResource("4_hero")]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("4_orbitron")
-theme_override_font_sizes/font_size = 18
-text = "PLANET NAME"
 
-[node name="PlanetType" type="Label" parent="SidePanel/PanelContent" unique_id=342667273]
+[node name="Tag4" parent="SidePanel/PanelContent/Hero/Tags" instance=ExtResource("5_tag")]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.6, 0.75, 0.8)
-theme_override_fonts/font = ExtResource("4_orbitron")
-theme_override_font_sizes/font_size = 11
-text = "Terran"
+
+[node name="Tag5" parent="SidePanel/PanelContent/Hero/Tags" instance=ExtResource("5_tag")]
+layout_mode = 2
+
+[node name="Tag6" parent="SidePanel/PanelContent/Hero/Tags" instance=ExtResource("5_tag")]
+layout_mode = 2
 
 [node name="Debuggers" type="Node" parent="." unique_id=1562675153]
 
@@ -123,3 +114,5 @@ script = ExtResource("7_5jl86")
 
 [node name="ResourceGen Debugger" type="Node" parent="Debuggers" unique_id=943477178]
 script = ExtResource("8_o0343")
+
+[editable path="SidePanel/PanelContent/Hero"]

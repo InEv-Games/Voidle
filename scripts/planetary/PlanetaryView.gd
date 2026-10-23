@@ -1715,7 +1715,7 @@ func _add_rocket_section(page: Control, data: PlanetData) -> void:
 	info.add_theme_font_size_override("normal_font_size", 10)
 	box.add_child(info)
 	var btn := Button.new()
-	_apply_orbitron(btn, 10)
+	UIStyle.style_button(btn, UIStyle.POSITIVE)
 	box.add_child(btn)
 	var refresh := func() -> void:
 		if not is_instance_valid(info):
@@ -1804,24 +1804,12 @@ func _add_found_settlement_button(page: Control) -> void:
 	page.add_child(card)
 	var btn := Button.new()
 	btn.text = "INITIATE COLONIZATION"
-	_apply_orbitron(btn, 12)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.10, 0.32, 0.12)
-	sb.content_margin_top = 10; sb.content_margin_bottom = 10
-	sb.set_border_width_all(1)
-	sb.border_color = Color(0.25, 0.75, 0.30, 0.8)
-	sb.set_corner_radius_all(3)
-	btn.add_theme_stylebox_override("normal", sb)
-	var hb := sb.duplicate() as StyleBoxFlat
-	hb.bg_color = Color(0.15, 0.48, 0.18)
-	btn.add_theme_stylebox_override("hover", hb)
-	btn.add_theme_color_override("font_color", Color(0.80, 1.0, 0.82))
 	btn.pressed.connect(_begin_lunar_landing)
 	if not scanned:
 		var scan_btn := Button.new()
 		scan_btn.text = "SCAN SURFACE  ·  free"
-		_apply_orbitron(scan_btn, 11)
 		scan_btn.pressed.connect(func() -> void: _start_surface_scan(current_data))
+		UIStyle.style_button(scan_btn, UIStyle.DEFAULT)
 		page.add_child(scan_btn)
 		btn.disabled = true
 		btn.tooltip_text = "Scan the surface first"
@@ -1830,6 +1818,7 @@ func _add_found_settlement_button(page: Control) -> void:
 		btn.tooltip_text = Economy.cost_block(GameState.LANDING_COST)
 	if not paid:
 		btn.text += "  ·  " + Economy.cost_text(GameState.LANDING_COST)
+	UIStyle.style_button(btn, UIStyle.POSITIVE)
 	page.add_child(btn)
 
 ## The lander leaves the home Spaceport: when the home world is on screen it
@@ -3072,16 +3061,48 @@ func _refresh_poi_lights(data: PlanetData) -> void:
 	_upload_territories(data)
 
 func _update_panel(data: PlanetData) -> void:
-	var name_label  := $SidePanel/PanelContent/PlanetName as Label
-	var type_label  := $SidePanel/PanelContent/PlanetType as Label
-	var type_names  := ["Terran", "Arid", "Ice", "Volcanic", "Barren", "Gas Giant", "Moon", "Asteroid"]
-	if name_label: name_label.text = data.planet_name
-	if type_label:
-		var pp := GameState.get_planet(data.seed)
-		var lv_str := "  ·  Lv %d" % pp.level if pp.is_colonized else ""
-		type_label.text = type_names[data.planet_type] + lv_str
-		type_label.visible = true
+	_set_planet_hero(data)
 	_build_system_panel()
+
+# ── Hero header (scenes/ui/components/HeroHeader.tscn in PlanetaryView.tscn) ──
+## Tags are HeroTag nodes placed in the scene; this fills them in order and
+## hides the rest. Each item: [text, HeroTag.Tone, tooltip].
+func _set_hero(caption: String, title: String, items: Array) -> void:
+	var hero := get_node_or_null("SidePanel/PanelContent/Hero") as HeroHeader
+	if hero == null:
+		return
+	hero.caption = caption
+	hero.title = title.to_upper()
+	var tags := hero.tags()
+	for i in tags.size():
+		var t := tags[i]
+		t.visible = i < items.size()
+		if t.visible:
+			t.text = String(items[i][0])
+			t.tone = int(items[i][1]) as HeroTag.Tone
+			t.tip = String(items[i][2]) if items[i].size() > 2 else ""
+
+const PLANET_TYPE_NAMES := ["Terran", "Arid", "Ice", "Volcanic", "Barren", "Gas Giant", "Moon", "Asteroid"]
+
+## Planet: size, atmosphere and the planet's modifiers (green good, red bad).
+func _set_planet_hero(data: PlanetData) -> void:
+	if data == null:
+		return
+	var pp := GameState.get_planet(data.seed)
+	var size_str := "Small" if data.planet_size < 0.8 else ("Large" if data.planet_size > 1.3 else "Medium")
+	var atm_str := "None"
+	if data.has_atmosphere:
+		atm_str = "Thin" if data.atmosphere_density < 0.4 else ("Dense" if data.atmosphere_density > 0.7 else "Standard")
+	var items: Array = [
+		[size_str, HeroTag.Tone.PLAIN, "%s planet." % size_str],
+		["Atm. " + atm_str, HeroTag.Tone.PLAIN, "No atmosphere." if atm_str == "None" else "%s atmosphere." % atm_str],
+	]
+	for m: PlanetModifier in PlanetModifier.for_planet(data.planet_type):
+		items.append(["%s %s" % [m.display_name, m.value_label()],
+			HeroTag.Tone.GOOD if m.is_positive() else HeroTag.Tone.BAD,
+			m.description + "\n\n" + m.value_label()])
+	var caption: String = PLANET_TYPE_NAMES[data.planet_type] + (" - Level %d" % pp.level if pp.is_colonized else "")
+	_set_hero(caption, data.planet_name, items)
 
 var _name_form_overlay: Control = null
 
@@ -3297,22 +3318,11 @@ func _build_details_panel(data: PlanetData) -> void:
 		ProductionManager.resource_produced.connect(_on_resource_produced)
 
 
-func _make_hud_style(col: Color, radius: int) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = col
-	s.border_width_left   = 1
-	s.border_width_right  = 1
-	s.border_width_top    = 1
-	s.border_width_bottom = 1
-	s.border_color = Color(0.25, 0.30, 0.50, 0.35)
-	s.corner_radius_top_left     = radius
-	s.corner_radius_top_right    = radius
-	s.corner_radius_bottom_left  = radius
-	s.corner_radius_bottom_right = radius
-	s.content_margin_left   = 10.0
-	s.content_margin_right  = 10.0
-	s.content_margin_top    = 8.0
-	s.content_margin_bottom = 8.0
+## Panel look from the theme (PanelContainer/panel); `col` keeps only its alpha,
+## `radius` is ignored — edit the look in voidle_theme.tres.
+func _make_hud_style(col: Color, _radius: int) -> StyleBoxFlat:
+	var s := UIStyle.box(&"PanelContainer").duplicate() as StyleBoxFlat
+	s.bg_color = Color(UIStyle.color(&"panel_bg"), col.a)
 	return s
 
 func _details_row(parent: VBoxContainer, label: String, value: String,
@@ -3672,49 +3682,16 @@ func _fill_modifiers_section(vbox: VBoxContainer, data: PlanetData) -> void:
 	tag_row.add_theme_constant_override("v_separation", 5)
 	tag_row.size_flags_horizontal = Control.SIZE_FILL
 	for m: PlanetModifier in mods:
-		var positive := m.is_positive()
 		var tag := Button.new()
 		tag.text = "%s %s" % [m.display_name, m.value_label()]
-		tag.flat = true
-		_apply_orbitron(tag, 8)
-		# Outer glow/outline wrapper — dark stroke around the pill
-		var outer := PanelContainer.new()
-		var os := StyleBoxFlat.new()
-		os.bg_color    = Color(0.0, 0.0, 0.0, 0.55)
-		os.border_color = Color(0.0, 0.0, 0.0, 0.45)
-		os.border_width_left = 1; os.border_width_right  = 1
-		os.border_width_top  = 1; os.border_width_bottom = 1
-		os.corner_radius_top_left     = 5; os.corner_radius_top_right    = 5
-		os.corner_radius_bottom_left  = 5; os.corner_radius_bottom_right = 5
-		os.content_margin_left   = 1; os.content_margin_right  = 1
-		os.content_margin_top    = 1; os.content_margin_bottom = 1
-		outer.add_theme_stylebox_override("panel", os)
-		outer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-		var border_col := Color(0.35, 0.85, 0.48, 0.90) if positive else Color(0.88, 0.32, 0.32, 0.90)
-		var bg_col     := Color(0.07, 0.18, 0.10, 0.88) if positive else Color(0.18, 0.06, 0.06, 0.88)
-		var s := StyleBoxFlat.new()
-		s.bg_color = bg_col
-		s.border_color = border_col
-		s.border_width_left = 1; s.border_width_right  = 1
-		s.border_width_top  = 1; s.border_width_bottom = 1
-		s.corner_radius_top_left     = 4; s.corner_radius_top_right    = 4
-		s.corner_radius_bottom_left  = 4; s.corner_radius_bottom_right = 4
-		s.content_margin_left = 6; s.content_margin_right  = 6
-		s.content_margin_top  = 2; s.content_margin_bottom = 2
-		tag.add_theme_stylebox_override("normal",  s)
-		tag.add_theme_stylebox_override("hover",   s)
-		tag.add_theme_stylebox_override("pressed", s)
-		tag.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
-		tag.add_theme_color_override("font_color",
-			Color(0.55, 0.96, 0.62) if positive else Color(1.0, 0.58, 0.58))
-		outer.add_child(tag)
+		# good modifiers green, bad ones red (theme button types)
+		UIStyle.style_button(tag, UIStyle.POSITIVE if m.is_positive() else UIStyle.NEGATIVE, 8)
 		var cap_m := m
 		tag.mouse_entered.connect(func() -> void:
 			TooltipManager.show_tip(cap_m.display_name, cap_m.description))
 		tag.mouse_exited.connect(func() -> void:
 			TooltipManager.hide_tip())
-		tag_row.add_child(outer)
+		tag_row.add_child(tag)
 	vbox.add_child(tag_row)
 
 func _build_system_panel() -> void:
@@ -4522,16 +4499,6 @@ func _focus_on_site(lon_deg: float, lat_deg: float, duration: float = 0.45) -> v
 
 # ── Resource lenses ───────────────────────────────────────────────────────────
 
-func _lens_button_style(active: bool, tint: Color = Color(0.55, 0.70, 1.0)) -> StyleBoxFlat:
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.10, 0.13, 0.24, 0.95) if active else Color(0.05, 0.07, 0.13, 0.88)
-	st.border_color = Color(1.0, 0.85, 0.40, 0.9) if active else Color(tint, 0.35)
-	st.set_border_width_all(1)
-	st.set_corner_radius_all(4)
-	st.content_margin_left = 8; st.content_margin_right = 8
-	st.content_margin_top = 4;  st.content_margin_bottom = 4
-	return st
-
 func _make_lens_button(text: String, tint: Color, on_press: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -4647,11 +4614,10 @@ func _draw_surface_scan() -> void:
 		cv.draw_line(c + Vector2(float(gx), -half2), c + Vector2(float(gx), half2), Color(0.55, 1.0, 0.85, 0.07), 1.0)
 
 func _style_lens_bar() -> void:
+	# the lens that's on is Neutral (selection), the rest Default
 	for role: String in _lens_buttons:
 		var b: Button = _lens_buttons[role]
-		var st := _lens_button_style(role == _role, b.get_meta("tint", Color.WHITE))
-		for state: String in ["normal", "hover", "pressed"]:
-			b.add_theme_stylebox_override(state, st)
+		UIStyle.style_button(b, UIStyle.NEUTRAL if role == _role else UIStyle.DEFAULT, 8)
 
 ## Shows one role's overlay ("" = none).
 func _set_role(role: String) -> void:
@@ -4683,26 +4649,12 @@ func _build_panel_toggle() -> void:
 	btn.z_index = 201
 	btn.z_as_relative = false
 	btn.tooltip_text = ""
-	_apply_orbitron(btn, 12)
-	var st := _make_hud_style(Color(0.07, 0.08, 0.13, 0.95), 0)
-	st.corner_radius_top_right = 6
-	st.corner_radius_bottom_right = 6
-	st.border_color = Color(0.2, 0.25, 0.4, 0.5)
-	st.border_width_right = 1; st.border_width_top = 1; st.border_width_bottom = 1
-	st.border_width_left = 0
-	st.content_margin_left = 6; st.content_margin_right = 6
-	var hov := st.duplicate() as StyleBoxFlat
-	hov.bg_color = Color(0.12, 0.16, 0.30, 0.98)
-	btn.add_theme_stylebox_override("normal",  st)
-	btn.add_theme_stylebox_override("hover",   hov)
-	btn.add_theme_stylebox_override("pressed", hov)
-	btn.add_theme_color_override("font_color",       Color(0.55, 0.70, 1.0))
-	btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	btn.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_set_panel_open(not _panel_open))
+	UIStyle.style_button(btn, UIStyle.DEFAULT, 12)
 	add_child(btn)
 	_panel_toggle_btn = btn
 	# If content ever widens the panel past its anchors, keep the tab on its edge
@@ -5288,60 +5240,28 @@ func _prompt_city_name(def: DistrictDef, site: Vector2, cost: float) -> void:
 	if _naming_open:
 		return
 	_naming_open = true
-	var layer := CanvasLayer.new()
-	layer.layer = 210
-	add_child(layer)
-	var shade := ColorRect.new()
-	shade.color = Color(0, 0, 0, 0.45)
-	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.mouse_filter = Control.MOUSE_FILTER_STOP
-	layer.add_child(shade)
-	var box := PanelContainer.new()
-	box.add_theme_stylebox_override("panel", _make_hud_style(Color(0.06, 0.08, 0.16, 0.97), 8))
-	box.custom_minimum_size = Vector2(360, 0)
-	layer.add_child(box)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	box.add_child(v)
-	var title := Label.new()
-	title.text = "NAME YOUR CAPITAL" if _mandatory_city else ("NAME YOUR FIRST %s CITY" % current_data.planet_name.to_upper() if _lunar_landing else "NAME YOUR CITY")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_apply_orbitron(title, 12)
-	title.add_theme_color_override("font_color", Color(1.0, 0.90, 0.55))
-	v.add_child(title)
+	var title := "Name your Capital" if _mandatory_city else ("Name your first %s City" % current_data.planet_name if _lunar_landing else "Name your City")
+	var p := ModalPopup.open(self, title, "city", "", 210)
+	p.dismissable = not _mandatory_city
 	var edit := LineEdit.new()
 	edit.text = def.suggest_name(current_data)
 	edit.max_length = 28
 	edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_apply_orbitron(edit, 11)
-	v.add_child(edit)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	v.add_child(row)
-	var ok_btn := Button.new()
-	ok_btn.text = ("LAND HERE" if _lunar_landing else "FOUND CITY") + ("" if cost <= 0.0 else "  ·  ◈ %s" % HUDManager.fmt_credits(cost))
-	_apply_orbitron(ok_btn, 10)
-	row.add_child(ok_btn)
-	var cancel_btn: Button = null
-	if not _mandatory_city:
-		cancel_btn = Button.new()
-		cancel_btn.text = "CANCEL"
-		_apply_orbitron(cancel_btn, 10)
-		row.add_child(cancel_btn)
-	var close := func() -> void:
-		_naming_open = false
-		if is_instance_valid(layer):
-			layer.queue_free()
+	p.add_content(edit)
+	var ok_btn := p.confirm_button()
+	ok_btn.label_text = "LAND HERE" if _lunar_landing else "FOUND CITY"
+	ok_btn.icon_name = "rocket" if _lunar_landing else "city"
+	ok_btn.counter = "" if cost <= 0.0 else HUDManager.fmt_credits(cost)
+	p.closed.connect(func() -> void: _naming_open = false)
 	var confirm := func() -> void:
 		var nm := edit.text.strip_edges()
 		if nm.is_empty():
 			nm = def.suggest_name(current_data)
 		if current_data == null or not GameState.spend_credits(cost):
 			AudioManager.play("error")
-			close.call()
+			p.close()
 			return
-		close.call()
+		p.close()
 		_mandatory_city = false
 		var landing := _lunar_landing
 		_end_district_placement()
@@ -5352,16 +5272,10 @@ func _prompt_city_name(def: DistrictDef, site: Vector2, cost: float) -> void:
 		_spawn_district(current_data, nm, def, site, "")
 	ok_btn.pressed.connect(confirm)
 	edit.text_submitted.connect(func(_t: String) -> void: confirm.call())
-	if cancel_btn != null:
-		cancel_btn.pressed.connect(func() -> void:
-			AudioManager.play("click")
-			close.call())
 	await get_tree().process_frame
-	if not is_instance_valid(box):
-		return
-	box.position = (get_viewport().get_visible_rect().size - box.size) * 0.5
-	edit.grab_focus()
-	edit.select_all()
+	if is_instance_valid(edit):
+		edit.grab_focus()
+		edit.select_all()
 
 func _on_planet_clicked(_screen_pos: Vector2) -> void:
 	if _naming_open or GameState.showcase_mode:
@@ -5397,71 +5311,19 @@ func _on_planet_clicked(_screen_pos: Vector2) -> void:
 	_build_planet_overview(current_data)
 
 func _show_colonize_popup(data: PlanetData, pp: PlanetProgress) -> void:
-	var overlay := ColorRect.new()
-	overlay.color = Color(0.0, 0.0, 0.0, 0.6)
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.z_index = 250
-	
-	var popup := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.06, 0.09, 0.18, 0.97)
-	ps.border_color = Color(0.25, 0.45, 0.80, 0.55)
-	ps.set_border_width_all(1)
-	ps.set_corner_radius_all(6)
-	ps.content_margin_left = 20; ps.content_margin_right = 20
-	ps.content_margin_top = 20; ps.content_margin_bottom = 20
-	popup.add_theme_stylebox_override("panel", ps)
-	
-	popup.set_anchors_preset(Control.PRESET_CENTER)
-	popup.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	popup.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
-	
-	var title := Label.new()
-	title.text = "Establish Outpost" if data.planet_type == PlanetData.Type.MOON else "Colonize Planet"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_apply_orbitron(title, 14)
-	title.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
-	vbox.add_child(title)
-	
-	var desc := Label.new()
-	desc.text = "Cost: %s Credits\nTime: 30 Seconds" % HUDManager.fmt_credits(1000.0)
-	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_apply_orbitron(desc, 12)
-	desc.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-	vbox.add_child(desc)
-	
-	var btn_row := HBoxContainer.new()
-	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 12)
-	
-	var confirm := Button.new()
-	confirm.text = "CONFIRM"
-	_apply_orbitron(confirm, 12)
-	confirm.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
-	confirm.pressed.connect(func():
-		overlay.queue_free()
+	var moon := data.planet_type == PlanetData.Type.MOON
+	var p := ModalPopup.open(self, "Establish Outpost" if moon else "Colonize Planet", "planet")
+	var cost := 1000.0
+	p.add_row("Cost", HUDManager.fmt_credits(cost),
+		InfoRow.Tone.GOOD if GameState.credits >= cost else InfoRow.Tone.BAD)
+	p.add_row("Time", "30 s")
+	var ok := p.confirm_button()
+	ok.label_text = "CONFIRM"
+	ok.disabled = GameState.credits < cost
+	ok.pressed.connect(func() -> void:
+		p.close()
 		if GameState.colonize_planet(data.seed):
-			_build_planet_overview(data)
-	)
-	if GameState.credits < 1000.0:
-		confirm.disabled = true
-	
-	var cancel := Button.new()
-	cancel.text = "CANCEL"
-	_apply_orbitron(cancel, 12)
-	cancel.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4))
-	cancel.pressed.connect(func(): overlay.queue_free())
-	
-	btn_row.add_child(confirm)
-	btn_row.add_child(cancel)
-	vbox.add_child(btn_row)
-	
-	popup.add_child(vbox)
-	overlay.add_child(popup)
-	get_viewport().add_child(overlay)
+			_build_planet_overview(data))
 
 ## Keeps a cost-gated button's enabled state current: re-checks `can_use`
 ## a few times a second, so it lights up as soon as the resources are there
@@ -5519,163 +5381,32 @@ func _planet_level_tip(data: PlanetData, pp: PlanetProgress) -> String:
 func _show_level_up_popup(pp: PlanetProgress) -> void:
 	if pp.is_upgrading:
 		return
-		
-	# Full-screen dim overlay
-	var overlay := ColorRect.new()
-	overlay.color = Color(0.0, 0.0, 0.0, 0.6)
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.z_index = 250
-	
-	var popup := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.06, 0.09, 0.18, 0.97)
-	ps.border_color = Color(0.25, 0.45, 0.80, 0.55)
-	ps.set_border_width_all(1)
-	ps.set_corner_radius_all(6)
-	ps.content_margin_left = 20; ps.content_margin_right = 20
-	ps.content_margin_top = 20; ps.content_margin_bottom = 20
-	popup.add_theme_stylebox_override("panel", ps)
-	
-	# Center popup inside overlay
-	popup.set_anchors_preset(Control.PRESET_CENTER)
-	popup.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	popup.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
-	
-	var req_title := Label.new()
-	req_title.text = "Level Up to %d" % (pp.level + 1)
-	req_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_apply_orbitron(req_title, 14)
-	req_title.add_theme_color_override("font_color", Color(0.85, 0.90, 1.0))
-	vbox.add_child(req_title)
-	
+	var pd_lv: PlanetData = GameState.get_planet_data(pp.planet_seed)
+	var p := ModalPopup.open(self, "Upgrade Planet", "upgrade",
+		"Raise %s to Lv %d." % [pd_lv.planet_name if pd_lv != null else "the planet", pp.level + 1])
 	var cost := pp.get_upgrade_cost()
-	var can_afford := true
-	
-	if cost.has("credits"):
-		var has_amt: float = GameState.credits
-		var cost_amt: float = cost["credits"]
-		
-		var cred_box := HBoxContainer.new()
-		cred_box.alignment = BoxContainer.ALIGNMENT_CENTER
-		cred_box.add_theme_constant_override("separation", 12)
-		
-		var c_lbl := Label.new()
-		c_lbl.text = "Credits:"
-		_apply_orbitron(c_lbl, 10)
-		c_lbl.add_theme_color_override("font_color", Color(0.9, 0.82, 0.25))
-		
-		var v_lbl := Label.new()
-		v_lbl.text = "%d / %d" % [has_amt, cost_amt]
-		_apply_orbitron(v_lbl, 10)
-		
-		if has_amt >= cost_amt:
-			v_lbl.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
-		else:
-			v_lbl.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4))
-			can_afford = false
-			
-		cred_box.add_child(c_lbl)
-		cred_box.add_child(v_lbl)
-		vbox.add_child(cred_box)
-		
-	var res_flow := HFlowContainer.new()
-	res_flow.alignment = FlowContainer.ALIGNMENT_CENTER
-	res_flow.add_theme_constant_override("h_separation", 8)
-	res_flow.add_theme_constant_override("v_separation", 8)
-	
+	# what the level opens
+	p.add_item("CITIES", "city", "+1", "Room for one more City  (%d → %d)" % [Leveling.max_cities(pp), Leveling.max_cities(pp) + 1])
+	# cost, each line red while short
 	for k in cost.keys():
 		var k_str: String = str(k)
-		if k_str == "credits":
-			continue
-			
-		var cost_amt: float = cost[k]
-		var has_amt: float = 0.0
-		var display_rd: ResourceData = null
-		
+		var need: float = float(cost[k])
+		var have := _level_cost_have(k_str)
+		var label := "Credits"
 		if k_str.begins_with("ANY_T"):
-			var tier := k_str.trim_prefix("ANY_T").to_int()
-			for rid: String in GameState.global_resources:
-				var rd: ResourceData = GameState.known_resources.get(rid) as ResourceData
-				if rd != null and rd.tag == ResourceData.Tag.RAW_MINERAL and rd.tier == tier:
-					has_amt += GameState.global_resources[rid]
-
-			display_rd = ResourceData.new()
-			display_rd.tier = tier
-			display_rd.rarity = 1
-			display_rd.display_color = Color(0.65, 0.65, 0.70)
-			display_rd.unique_name = "Any T%d Mineral" % tier
-		else:
-			has_amt = GameState.global_resources.get(k_str, 0.0)
-			display_rd = GameState.known_resources.get(k_str) as ResourceData
-		
-		if has_amt < cost_amt:
-			can_afford = false
-			
-		if display_rd != null:
-			var card := _mineral_grid_card(display_rd, has_amt, true, "", pp)
-			
-			var card_vbox = card.get_child(0)
-			var lbl = card_vbox.get_child(1) as Label
-			lbl.text = "%d/%d" % [has_amt, cost_amt]
-			if has_amt >= cost_amt:
-				lbl.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
-			else:
-				lbl.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4))
-				
-			res_flow.add_child(card)
-			
-	if res_flow.get_child_count() > 0:
-		vbox.add_child(res_flow)
-	
-	# Planet level follows the cities: needs enough total city levels
-	var pd_lv: PlanetData = GameState.get_planet_data(pp.planet_seed)
+			label = "Any T%d Mineral" % k_str.trim_prefix("ANY_T").to_int()
+		elif k_str != "credits":
+			var rd := GameState.known_resources.get(k_str) as ResourceData
+			label = rd.unique_name if rd != null else k_str.capitalize()
+		p.add_row(label, "%s / %s" % [Economy.fmt(have), Economy.fmt(need)],
+			InfoRow.Tone.GOOD if have >= need else InfoRow.Tone.BAD)
+	# planet level follows the cities: needs enough total city levels
 	var lv_block := Leveling.planet_level_block(pd_lv, pp) if pd_lv != null else ""
-	var req_lbl := Label.new()
-	req_lbl.text = "Requires %d total city levels  (have %d)" % [
-		Leveling.planet_level_req(pp.level + 1), Leveling.planet_city_levels(pd_lv, pp) if pd_lv != null else 0]
-	req_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_apply_orbitron(req_lbl, 9)
-	req_lbl.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4) if lv_block != "" else Color(0.4, 0.9, 0.4))
-	vbox.add_child(req_lbl)
-	if lv_block != "":
-		can_afford = false
-
-	var rew_lbl := Label.new()
-	rew_lbl.text = "Upon Level Up:\n+1 City allowed (%d → %d)" % [Leveling.max_cities(pp), Leveling.max_cities(pp) + 1]
-	rew_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_apply_orbitron(rew_lbl, 9)
-	rew_lbl.add_theme_color_override("font_color", Color(0.8, 0.7, 0.3))
-	vbox.add_child(rew_lbl)
-	
-	var btns := HBoxContainer.new()
-	btns.alignment = BoxContainer.ALIGNMENT_CENTER
-	btns.add_theme_constant_override("separation", 24)
-	
-	var cancel := Button.new()
-	cancel.text = "CANCEL"
-	_apply_orbitron(cancel, 10)
-	var cancel_sb := StyleBoxFlat.new()
-	cancel_sb.bg_color = Color(0.15, 0.15, 0.2)
-	cancel_sb.set_corner_radius_all(4)
-	cancel_sb.content_margin_top = 6; cancel_sb.content_margin_bottom = 6
-	cancel_sb.content_margin_left = 12; cancel_sb.content_margin_right = 12
-	cancel.add_theme_stylebox_override("normal", cancel_sb)
-	cancel.pressed.connect(func(): overlay.queue_free())
-	btns.add_child(cancel)
-	
-	var up_btn := Button.new()
-	up_btn.text = "CONFIRM"
-	_apply_orbitron(up_btn, 10)
-	var btn_sb := StyleBoxFlat.new()
-	btn_sb.bg_color = Color(0.2, 0.45, 0.7) if can_afford else Color(0.2, 0.25, 0.35)
-	btn_sb.set_corner_radius_all(4)
-	btn_sb.content_margin_top = 6; btn_sb.content_margin_bottom = 6
-	btn_sb.content_margin_left = 12; btn_sb.content_margin_right = 12
-	up_btn.add_theme_stylebox_override("normal", btn_sb)
-	up_btn.add_theme_color_override("font_color", Color.WHITE if can_afford else Color(0.5, 0.55, 0.6))
+	p.add_row("City levels", "%d / %d" % [Leveling.planet_city_levels(pd_lv, pp) if pd_lv != null else 0,
+		Leveling.planet_level_req(pp.level + 1)], InfoRow.Tone.BAD if lv_block != "" else InfoRow.Tone.GOOD)
+	var up_btn := p.confirm_button()
+	up_btn.label_text = "UPGRADE"
+	up_btn.icon_name = "upgrade"
 	var lv_ok := lv_block == ""
 	_live_enable(up_btn, func() -> bool:
 		if not lv_ok:
@@ -5714,41 +5445,27 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 		pp.upgrade_duration = 5.0 * pp.level  # Lv2=5s, Lv3=10s, etc.
 		if current_data != null:
 			_build_planet_overview(current_data)
-		overlay.queue_free()
+		p.close()
 	)
-	btns.add_child(up_btn)
-	
-	vbox.add_child(btns)
-	
-	# Close on dim click
-	overlay.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			overlay.queue_free()
-	)
-	# But stop clicks from falling through the popup to the dim background
-	popup.mouse_filter = Control.MOUSE_FILTER_STOP
-	
-	popup.add_child(vbox)
-	
-	var c := CenterContainer.new()
-	c.set_anchors_preset(Control.PRESET_FULL_RECT)
-	c.add_child(popup)
-	overlay.add_child(c)
-	
-	get_viewport().add_child(overlay)
 
 ## Small rounded chip for the planet overview (size, atmosphere, modifiers, deposits).
+## Progress bar in the theme's colours (track = panel, fill = `fill`).
+func _style_progress(bar: ProgressBar, fill: Color) -> void:
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = UIStyle.color(&"panel_bg")
+	bg.border_color = UIStyle.color(&"accent_dim")
+	bg.set_border_width_all(1)
+	bg.set_corner_radius_all(2)
+	var fg := StyleBoxFlat.new()
+	fg.bg_color = Color(fill, 0.85)
+	fg.set_corner_radius_all(2)
+	bar.add_theme_stylebox_override("background", bg)
+	bar.add_theme_stylebox_override("fill", fg)
+
 func _info_chip(text: String, col: Color, tip_title: String, tip_body: String,
 		icon: Texture2D = null) -> PanelContainer:
 	var pc := PanelContainer.new()
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(col.r, col.g, col.b, 0.08)
-	st.border_color = Color(col.r, col.g, col.b, 0.55)
-	st.set_border_width_all(1)
-	st.set_corner_radius_all(4)
-	st.content_margin_left = 6; st.content_margin_right = 6
-	st.content_margin_top = 2;  st.content_margin_bottom = 2
-	pc.add_theme_stylebox_override("panel", st)
+	pc.theme_type_variation = &"Chip"
 	pc.mouse_filter = Control.MOUSE_FILTER_STOP
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
@@ -5759,13 +5476,14 @@ func _info_chip(text: String, col: Color, tip_title: String, tip_body: String,
 		ic.custom_minimum_size = Vector2(10, 10)
 		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		ic.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		ic.self_modulate = col
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(ic)
 	var l := Label.new()
 	l.text = text
-	_apply_orbitron(l, 7)
-	l.add_theme_color_override("font_color", col)
+	l.theme_type_variation = &"StatLabel"
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(l)
 	pc.add_child(row)
@@ -5784,24 +5502,7 @@ func _make_overview_tab_btn(label: String, is_active: bool) -> Button:
 	btn.toggle_mode    = true
 	btn.button_pressed = is_active
 	btn.focus_mode     = Control.FOCUS_NONE
-	_apply_orbitron(btn, 8)
-	var s_on := StyleBoxFlat.new()
-	s_on.bg_color            = Color(0.12, 0.18, 0.35, 0.95)
-	s_on.border_color        = Color(1.0, 0.92, 0.30, 0.55)
-	s_on.border_width_bottom = 2
-	s_on.content_margin_top  = 5; s_on.content_margin_bottom = 5
-	var s_off := StyleBoxFlat.new()
-	s_off.bg_color            = Color(0.06, 0.08, 0.14, 0.0)
-	s_off.border_color        = Color(0.3, 0.35, 0.55, 0.25)
-	s_off.border_width_bottom = 1
-	s_off.content_margin_top  = 5; s_off.content_margin_bottom = 5
-	btn.add_theme_stylebox_override("normal",          s_off)
-	btn.add_theme_stylebox_override("hover",           s_off)
-	btn.add_theme_stylebox_override("pressed",         s_on)
-	btn.add_theme_stylebox_override("hover_pressed",   s_on)
-	btn.add_theme_color_override("font_color",         Color(0.45, 0.52, 0.75))
-	btn.add_theme_color_override("font_pressed_color", Color(1.0, 0.92, 0.30))
-	btn.add_theme_color_override("font_hover_color",   Color(0.75, 0.82, 1.0))
+	UIStyle.style_button(btn, UIStyle.DEFAULT)
 	return btn
 
 func _on_colonize_progress_changed(planet_seed: int, key: String, progress: float, pbar: Variant, bind_seed: int) -> void:
@@ -5820,6 +5521,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 				_build_city_panel(p, data)
 				return
 	_city_panel_poi = null
+	_set_planet_hero(data)
 	_nav_visit(data, {}, "")
 	var panel_content := $SidePanel/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
@@ -5844,9 +5546,6 @@ func _build_planet_overview(data: PlanetData) -> void:
 	var root := VBoxContainer.new()
 	root.name = "DistrictBuildPanel"
 	root.add_theme_constant_override("separation", 8)
-	root.add_child(HSeparator.new())
-
-
 
 	# ── PLANET page (stored resources live in the HUD's top bar) ─────────────
 	var planet_page := VBoxContainer.new()
@@ -5870,20 +5569,11 @@ func _build_planet_overview(data: PlanetData) -> void:
 	info_row.add_theme_constant_override("v_separation", 4)
 	planet_page.add_child(info_row)
 
-	var p_size_str := "Small" if data.planet_size < 0.8 else ("Large" if data.planet_size > 1.3 else "Medium")
-	var p_atm_str: String
-	if data.has_atmosphere:
-		p_atm_str = "Thin" if data.atmosphere_density < 0.4 else ("Dense" if data.atmosphere_density > 0.7 else "Standard")
-	else:
-		p_atm_str = "None"
-	info_row.add_child(_info_chip(p_size_str, Color(0.70, 0.76, 0.95), "Size", "%s planet." % p_size_str))
-	info_row.add_child(_info_chip("Atm. " + p_atm_str, Color(0.70, 0.76, 0.95), "Atmosphere",
-		"No atmosphere." if p_atm_str == "None" else "%s atmosphere." % p_atm_str))
-
-	for m: PlanetModifier in PlanetModifier.for_planet(data.planet_type):
-		info_row.add_child(_info_chip("%s %s" % [m.display_name, m.value_label()],
-			Color(0.55, 0.96, 0.62) if m.is_positive() else Color(1.0, 0.58, 0.58),
-			m.display_name, m.description + "\n\n" + m.value_label()))
+	# size, atmosphere and modifiers are hero tags (_set_planet_hero); minerals stay as chips
+	var min_lbl := Label.new()
+	min_lbl.text = "Minerals"
+	min_lbl.theme_type_variation = &"SubLabel"
+	info_row.add_child(min_lbl)
 
 	# Minerals: a chip per discovered mineral; unknown until the first Production here
 	if not Economy.raw_for_body(data).is_empty() and not GameState.is_body_surveyed(data.seed):
@@ -5892,17 +5582,14 @@ func _build_planet_overview(data: PlanetData) -> void:
 	for r: Dictionary in Economy.discovered_raw_for_body(data):
 		info_row.add_child(_info_chip(r["name"], r["color"], r["name"],
 			"Mined anywhere on this world by Production buildings and districts.\nStock: %s" % Economy.fmt(Economy.amount(r["id"])),
-			MineralIcon.make(1, r["color"])))
+			UIIcons.get_icon(UIIcons.RAW_PLACEHOLDER)))
 
 	if not pp.is_colonized:
 		var unc_spacer := Control.new()
 		unc_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		planet_page.add_child(unc_spacer)
 
-		var col_sep := HSeparator.new()
-		var col_sep_s := StyleBoxFlat.new(); col_sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
-		col_sep.add_theme_stylebox_override("separator", col_sep_s)
-		planet_page.add_child(col_sep)
+		planet_page.add_child(HSeparator.new())
 
 		if pp.is_colonizing:
 			var pbar := ProgressBar.new()
@@ -5910,25 +5597,14 @@ func _build_planet_overview(data: PlanetData) -> void:
 			pbar.value = pp.colonize_progress * 100.0
 			pbar.show_percentage = false
 			
-			var bg := StyleBoxFlat.new()
-			bg.bg_color = Color(0.1, 0.15, 0.25)
-			bg.corner_radius_top_left = 4; bg.corner_radius_top_right = 4
-			bg.corner_radius_bottom_left = 4; bg.corner_radius_bottom_right = 4
-			
-			var fg := StyleBoxFlat.new()
-			fg.bg_color = Color(0.3, 0.8, 0.4)
-			fg.corner_radius_top_left = 4; fg.corner_radius_top_right = 4
-			fg.corner_radius_bottom_left = 4; fg.corner_radius_bottom_right = 4
-			
-			pbar.add_theme_stylebox_override("background", bg)
-			pbar.add_theme_stylebox_override("fill", fg)
+			_style_progress(pbar, UIStyle.color(&"positive_stroke"))
 			
 			var plabel := Label.new()
 			plabel.text = "Lander in transit..." if data.planet_type == PlanetData.Type.MOON else ("Establishing..." if data.planet_type == PlanetData.Type.ASTEROID else "Colonizing...")
 			plabel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			plabel.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 			plabel.set_anchors_preset(Control.PRESET_FULL_RECT)
-			_apply_orbitron(plabel, 12)
+			plabel.theme_type_variation = &"TitleLabel"
 			pbar.add_child(plabel)
 			
 			planet_page.add_child(pbar)
@@ -5943,24 +5619,11 @@ func _build_planet_overview(data: PlanetData) -> void:
 			var note := Label.new()
 			note.text = "Preview — settling new worlds is Civilization 1 content, not playable in the demo."
 			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			_apply_orbitron(note, 9)
-			note.add_theme_color_override("font_color", Color(0.65, 0.6, 0.85))
+			note.theme_type_variation = &"SubLabel"
 			planet_page.add_child(note)
 		else:
-			var col_btn := Button.new()
-			if data.planet_type == PlanetData.Type.MOON or data.planet_type == PlanetData.Type.ASTEROID:
-				col_btn.text = "BUILD OUTPOST"
-			else:
-				col_btn.text = "COLONIZE"
-			_apply_orbitron(col_btn, 12)
-			var col_sb := StyleBoxFlat.new()
-			col_sb.bg_color = Color(0.10, 0.28, 0.45)
-			col_sb.content_margin_top = 10; col_sb.content_margin_bottom = 10
-			col_btn.add_theme_stylebox_override("normal", col_sb)
-			var col_hb := col_sb.duplicate() as StyleBoxFlat
-			col_hb.bg_color = Color(0.15, 0.42, 0.65)
-			col_btn.add_theme_stylebox_override("hover", col_hb)
-			col_btn.add_theme_color_override("font_color", Color.WHITE)
+			var outpost := data.planet_type == PlanetData.Type.MOON or data.planet_type == PlanetData.Type.ASTEROID
+			var col_btn := IconButton.create("BUILD OUTPOST" if outpost else "COLONIZE", "planet", IconButton.Variant.POSITIVE)
 			if data.planet_type == PlanetData.Type.MOON:
 				_setup_moon_colonize_button(col_btn, data)
 			else:
@@ -5988,11 +5651,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 	var p_max_orbital: int = pp.max_orbital_districts
 
 	# ── Tab bar ───────────────────────────────────────────────────────────────
-	var tab_sep := HSeparator.new()
-	var tab_sep_s := StyleBoxFlat.new()
-	tab_sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
-	tab_sep.add_theme_stylebox_override("separator", tab_sep_s)
-	root.add_child(tab_sep)
+	root.add_child(HSeparator.new())
 
 	var tab_row := HBoxContainer.new()
 	tab_row.add_theme_constant_override("separation", 0)
@@ -6002,7 +5661,11 @@ func _build_planet_overview(data: PlanetData) -> void:
 	var dist_btn:    Button = _make_overview_tab_btn("CITIES  %d" % Leveling.cities_used(data, pp), true)
 	var orbital_btn: Button = _make_overview_tab_btn("ORBITAL  %d/%d" % [orbital_pois.size(), p_max_orbital],
 		_inner_tab_active == "ORBITAL")
+	dist_btn.visible = false   # kept for the tab logic below; the section header shows the count
 	tab_row.add_child(dist_btn)
+	var cities_hdr := SectionHeader.create("CITIES", "%d/%d" % [Leveling.cities_used(data, pp), pp.max_cities()])
+	cities_hdr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tab_row.add_child(cities_hdr)
 
 	# ── DISTRICTS scroll + page ───────────────────────────────────────────────
 	var dist_scroll := ScrollContainer.new()
@@ -6083,50 +5746,27 @@ func _build_planet_overview(data: PlanetData) -> void:
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
 	# --- LEVEL UP SECTION ---
-	var lvl_sep := HSeparator.new()
-	var sep_style := StyleBoxFlat.new()
-	sep_style.bg_color = Color(0.2, 0.25, 0.4, 0.35)
-	lvl_sep.add_theme_stylebox_override("separator", sep_style)
-	root.add_child(lvl_sep)
+	root.add_child(HSeparator.new())
 
 	if pp.is_upgrading:
 		var up_lbl := Label.new()
 		up_lbl.text = "UPGRADING TO LV %d..." % (pp.level + 1)
 		up_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_apply_orbitron(up_lbl, 10)
-		up_lbl.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
+		up_lbl.theme_type_variation = &"TitleLabel"
+		up_lbl.add_theme_color_override("font_color", UIStyle.color(&"good"))
 		root.add_child(up_lbl)
 
 		_planet_upgrade_pbar = ProgressBar.new()
 		_planet_upgrade_pbar.custom_minimum_size.y = 12
 		_planet_upgrade_pbar.show_percentage = false
 		_planet_upgrade_pbar.value = pp.upgrade_progress * 100.0
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.1, 0.1, 0.15)
-		var sbf := StyleBoxFlat.new()
-		sbf.bg_color = Color(0.4, 0.9, 0.4)
-		_planet_upgrade_pbar.add_theme_stylebox_override("background", sb)
-		_planet_upgrade_pbar.add_theme_stylebox_override("fill", sbf)
+		_style_progress(_planet_upgrade_pbar, UIStyle.color(&"positive_stroke"))
 		root.add_child(_planet_upgrade_pbar)
 	else:
 		_planet_upgrade_pbar = null
 		
-		var up_btn := Button.new()
-		up_btn.text = "PLANET  Lv %d  →  Lv %d" % [pp.level, pp.level + 1]
-		up_btn.focus_mode = Control.FOCUS_NONE
-		_apply_orbitron(up_btn, 9)
-		var btn_sb := StyleBoxFlat.new()
-		btn_sb.bg_color = Color(0.08, 0.20, 0.12, 0.85)
-		btn_sb.border_color = Color(0.35, 0.80, 0.45, 0.6)
-		btn_sb.set_border_width_all(1)
-		btn_sb.set_corner_radius_all(4)
-		btn_sb.content_margin_top = 6; btn_sb.content_margin_bottom = 6
-		up_btn.add_theme_stylebox_override("normal", btn_sb)
-		var h_sb := btn_sb.duplicate() as StyleBoxFlat
-		h_sb.bg_color = Color(0.12, 0.30, 0.18, 0.95)
-		up_btn.add_theme_stylebox_override("hover", h_sb)
-		up_btn.add_theme_stylebox_override("pressed", h_sb)
-		up_btn.add_theme_color_override("font_color", Color(0.70, 1.0, 0.75))
+		var up_btn := IconButton.create("UPGRADE PLANET", "upgrade", IconButton.Variant.POSITIVE,
+			"Lv %d → %d" % [pp.level, pp.level + 1])
 		up_btn.mouse_entered.connect(func():
 			AudioManager.play("hover")
 			TooltipManager.show_tip("Planet level up", _planet_level_tip(data, pp)))
@@ -6186,18 +5826,6 @@ func _build_orbital_ship_card(ship: ShipData) -> PanelContainer:
 	# Select button
 	var sel_btn := Button.new()
 	sel_btn.text = "Select"
-	_apply_orbitron(sel_btn, 8)
-	var bs := StyleBoxFlat.new()
-	bs.bg_color     = Color(0.10, 0.18, 0.35, 0.85)
-	bs.border_color = Color(1.0, 0.92, 0.30, 0.45)
-	bs.set_border_width_all(1)
-	bs.set_corner_radius_all(3)
-	bs.content_margin_left = 8; bs.content_margin_right  = 8
-	bs.content_margin_top  = 3; bs.content_margin_bottom = 3
-	sel_btn.add_theme_stylebox_override("normal",  bs)
-	sel_btn.add_theme_stylebox_override("hover",   bs)
-	sel_btn.add_theme_stylebox_override("pressed", bs)
-	sel_btn.add_theme_color_override("font_color", Color(1.0, 0.92, 0.30, 0.85))
 	sel_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	sel_btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 
@@ -6212,6 +5840,7 @@ func _build_orbital_ship_card(ship: ShipData) -> PanelContainer:
 			# rot_target such that rx=0 and rz<0: atan2(-px, pz) + PI
 			var rot_target: float = atan2(-px, pz) + PI
 			_rotate_to_lon(rad_to_deg(rot_target - cap_ship.orbit_node)))
+	UIStyle.style_button(sel_btn, UIStyle.DEFAULT, 8)
 	hbox.add_child(sel_btn)
 
 	return card
@@ -6316,167 +5945,145 @@ func _level_badge(lv: int, is_city: bool) -> PanelContainer:
 
 ## `as_capital`: a City shown as its Capital District (inside the City panel);
 ## otherwise a City card opens the City panel.
+## Look and layout: scenes/ui/components/ListItem.tscn.
 func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetProgress,
 		_panel_content: VBoxContainer, _root: VBoxContainer, as_capital: bool = false) -> PanelContainer:
-	var card := PanelContainer.new()
+	var as_city := poi.is_city() and not as_capital
+	var lv: int = Leveling.city_level(pp, poi) if as_city else pp.district_levels.get(poi.label, 1)
+	var title := ("Capital District" if as_capital else poi.shown_name()).to_upper()
+	var card := ListItem.create(title, _district_icon(poi, as_city, as_capital), "" if poi.is_orbital() else "Level %d" % lv)
 	card.set_meta("poi_label", poi.label)
 	_poi_overview_cards[poi.label] = card
-	var s := _card_panel_style()
-	s.bg_color = Color(0.07, 0.09, 0.17, 0.80)
-	card.add_theme_stylebox_override("panel", s)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.custom_minimum_size   = Vector2(0, 48)
 
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   10)
-	margin.add_theme_constant_override("margin_right",   8)
-	margin.add_theme_constant_override("margin_top",     6)
-	margin.add_theme_constant_override("margin_bottom",  6)
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.add_child(margin)
-
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 10)
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(hbox)
-
-	# Big level number on the left
-	var as_city := poi.is_city() and not as_capital
-	var dist_lv_ov: int = Leveling.city_level(pp, poi) if as_city else pp.district_levels.get(poi.label, 1)
-	if poi.is_orbital():
-		hbox.add_child(_station_tile())
-	else:
-		hbox.add_child(_level_badge(dist_lv_ov, as_city))
-
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	info.add_theme_constant_override("separation", 1)
-
-	var n_lbl := Label.new()
-	n_lbl.text = "Capital District" if as_capital else poi.shown_name()
-	n_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_apply_orbitron(n_lbl, 10)
-	n_lbl.add_theme_color_override("font_color", Color(0.82, 0.88, 1.0))
-
-	var t_lbl := Label.new()
 	var district_buildings := pp.buildings_in_district(poi.label)
 	var total_size: int = 0
 	for eb: Dictionary in district_buildings:
 		total_size += eb.get("amount", 1)
-	t_lbl.text = ("Capital" if as_capital else poi.type_label()) + "  ·  Size %d" % total_size
 	if poi.is_orbital():
 		var mod := "no module yet"
 		for eb: Dictionary in district_buildings:
 			var mdef := BuildingDef.find(eb.get("building_id", ""))
 			if mdef != null:
 				mod = mdef.display_name + ("  (building)" if eb.get("constructing", false) else "")
-		t_lbl.text = "Station  ·  " + mod
-	if as_city:
-		var n_children := 0
-		for child: POIData in planet.custom_pois:
-			if child.parent_city == poi.label:
-				n_children += 1
-		t_lbl.text += "  ·  %d district%s" % [n_children, "" if n_children == 1 else "s"]
-	t_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_apply_orbitron(t_lbl, 8)
-	t_lbl.add_theme_color_override("font_color", Color(0.42, 0.48, 0.68))
+		card.description = "Station  ·  " + mod
+	else:
+		var stats := PackedStringArray()
+		if as_city:
+			var n_children := 0
+			for child: POIData in planet.custom_pois:
+				if child.parent_city == poi.label:
+					n_children += 1
+			stats.append("district:%d" % n_children)
+		stats.append("factory:Size %d" % total_size)
+		if not poi.constructing and ProductionManager.district_def(poi) != null:
+			stats.append_array(_income_stats(pp, poi))
+		card.stats = stats
 
-	info.add_child(n_lbl); info.add_child(t_lbl)
-
-	# Base income (own + neighbours) with a thin bar for its cycle
-	if not poi.constructing and not poi.is_orbital() and ProductionManager.district_def(poi) != null:
-		var inc_txt := _district_base_text(pp, poi)
-		if inc_txt != "":
-			var inc_lbl := Label.new()
-			inc_lbl.text = inc_txt
-			inc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			inc_lbl.clip_text = true
-			_apply_orbitron(inc_lbl, 7)
-			inc_lbl.add_theme_color_override("font_color", Color(0.55, 0.95, 0.60, 0.9))
-			info.add_child(inc_lbl)
-			# energy / housing are continuous — only stock income has a cycle
-			var d_inc := ProductionManager.district_income(pp, poi)
-			if ProductionManager._has_stock_income(d_inc):
-				var cyc_col := Color(0.45, 0.85, 0.55)
-				for rid: String in d_inc:
-					if rid != Economy.ENERGY and rid != Economy.POPULATION:
-						cyc_col = Economy.color_of(rid) if rid != Economy.RAW else Color(0.85, 0.78, 0.70)
-						break
-				var p_seed := planet.seed
-				var p_label := poi.label
-				card.add_child(_cycle_fill(func() -> float: return ProductionManager.base_progress(p_seed, p_label), cyc_col))
-
-	# being built / levelled: the shared hazard fill behind the whole card
+	# production cycle (stock income only) / construction / levelling bar
 	var c_poi := poi
+	var p_seed := planet.seed
 	if poi.constructing:
-		card.add_child(_hazard_fill(func() -> float: return c_poi.construct_progress))
-		t_lbl.text = "Constructing..."
+		card.description = "Constructing..."
+		card.stats = PackedStringArray()
+		_poll_progress(card, func() -> float: return c_poi.construct_progress, UIStyle.color(&"neutral_stroke"))
 	elif as_city and pp.city_upgrading.has(poi.label):
-		card.add_child(_hazard_fill(func() -> float: return float(pp.city_upgrading.get(c_poi.label, 1.0))))
-		t_lbl.text = "City levelling up…"
+		card.description = "City levelling up…"
+		card.stats = PackedStringArray()
+		_poll_progress(card, func() -> float: return float(pp.city_upgrading.get(c_poi.label, 1.0)), UIStyle.color(&"neutral_stroke"))
 	elif not as_city and pp.is_district_upgrading(poi.label):
-		card.add_child(_hazard_fill(func() -> float: return float(pp.district_upgrading.get(c_poi.label, 1.0))))
+		_poll_progress(card, func() -> float: return float(pp.district_upgrading.get(c_poi.label, 1.0)), UIStyle.color(&"neutral_stroke"))
+	elif not poi.is_orbital() and ProductionManager.district_def(poi) != null:
+		var d_inc := ProductionManager.district_income(pp, poi)
+		if ProductionManager._has_stock_income(d_inc):
+			var cyc_col := UIStyle.color(&"accent")
+			for rid: String in d_inc:
+				if rid != Economy.ENERGY and rid != Economy.POPULATION:
+					cyc_col = UIStyle.resource_color(rid)
+					break
+			_poll_progress(card, func() -> float: return ProductionManager.base_progress(p_seed, c_poi.label), cyc_col)
 
-	hbox.add_child(info)
-
-	# Whole card clickable — no separate arrow button
 	var cap_poi    := poi
 	var cap_planet := planet
-	var cap_card   := card
-	var norm_s2 := card.get_theme_stylebox("panel") as StyleBoxFlat
-	var hov_s2  := norm_s2.duplicate() as StyleBoxFlat
-	hov_s2.bg_color = Color(0.10, 0.14, 0.28, 0.92)
 	card.mouse_entered.connect(func() -> void:
 		AudioManager.play("district_hover")
-		cap_card.add_theme_stylebox_override("panel", hov_s2)
 		if cap_poi.constructing:
 			TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\nBuild time: %.0fs" % cap_poi.construct_duration)
 		CursorManager.set_state(CursorManager.State.POINTER))
 	card.mouse_exited.connect(func() -> void:
-		cap_card.add_theme_stylebox_override("panel", norm_s2)
 		TooltipManager.hide_tip()
 		CursorManager.set_state(CursorManager.State.NORMAL))
-	card.gui_input.connect(func(e: InputEvent) -> void:
-		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
-				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-			AudioManager.play("click")
-			if cap_poi.is_orbital():
-				# Rotate planet so station faces camera, then highlight.
-				# Derive equatorial longitude by inverting _project_poi: rx=0, rz<0.
-				if _orbital_layer != null and is_instance_valid(_orbital_layer):
-					_orbital_layer.set_selected_station(cap_poi.label)
-				var eq_lon: float = rad_to_deg(
-					atan2(cos(cap_poi.orbit_angle),
-						-sin(cap_poi.orbit_angle) * cos(cap_poi.orbit_inclination))
-					- cap_poi.orbit_node)
-				_rotate_to_lon(eq_lon)
-			else:
-				_select_district_on_planet(cap_poi.label)
-				_focus_on_site(cap_poi.lon_deg, cap_poi.lat_deg)
-			if cap_poi.constructing:
-				TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\nBuild time: %.0fs" % cap_poi.construct_duration)
-				return
-			if as_city:
-				_build_city_panel(cap_poi, cap_planet)
-			else:
-				_build_district_panel(cap_poi, cap_planet))
+	card.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		if cap_poi.is_orbital():
+			# Rotate planet so station faces camera, then highlight.
+			# Derive equatorial longitude by inverting _project_poi: rx=0, rz<0.
+			if _orbital_layer != null and is_instance_valid(_orbital_layer):
+				_orbital_layer.set_selected_station(cap_poi.label)
+			var eq_lon: float = rad_to_deg(
+				atan2(cos(cap_poi.orbit_angle),
+					-sin(cap_poi.orbit_angle) * cos(cap_poi.orbit_inclination))
+				- cap_poi.orbit_node)
+			_rotate_to_lon(eq_lon)
+		else:
+			_select_district_on_planet(cap_poi.label)
+			_focus_on_site(cap_poi.lon_deg, cap_poi.lat_deg)
+		if cap_poi.constructing:
+			TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\nBuild time: %.0fs" % cap_poi.construct_duration)
+			return
+		if as_city:
+			_build_city_panel(cap_poi, cap_planet)
+		else:
+			_build_district_panel(cap_poi, cap_planet))
 	return card
+
+## Icon for a city / district card from its kind (UIIcons names).
+func _district_icon(poi: POIData, as_city: bool, as_capital: bool) -> String:
+	if poi.is_orbital():
+		return "rocket"
+	if as_city:
+		return "city"
+	if as_capital:
+		return "capital"
+	match poi.type_tag:
+		"generator":   return "energy"
+		"mining":      return "production"
+		"residential": return "population"
+		"commercial":  return "credits"
+		"science":     return "science"
+	return "district"
+
+## ListItem stats for a district's own income: "credits:+30/20s", "energy:+6" …
+func _income_stats(pp: PlanetProgress, poi: POIData) -> PackedStringArray:
+	var out := PackedStringArray()
+	var ddef := ProductionManager.district_def(poi)
+	if ddef == null:
+		return out
+	var inc := ProductionManager.district_income(pp, poi) if not poi.constructing and poi.label != "" \
+		else ProductionManager.district_income_raw(current_data, poi)
+	for id: String in inc:
+		var v: float = inc[id]
+		match id:
+			Economy.ENERGY:     out.append("energy:+%s/s" % BuildingDef._num(snappedf(v, 0.1)))
+			Economy.POPULATION: out.append("population:+%s" % Economy.fmt(v))
+			_: out.append("%s:+%s/%ds" % [id, BuildingDef._num(snappedf(v, 0.1)), int(ddef.base_tick)])
+	return out
+
+## Keeps a ListItem's bar on `progress` (0..1), polled a few times a second.
+func _poll_progress(item: ListItem, progress: Callable, col: Color) -> void:
+	item.progress_color = col
+	item.progress = clampf(float(progress.call()), 0.0, 1.0)
+	var t := Timer.new()
+	t.wait_time = 0.1
+	t.autostart = true
+	t.timeout.connect(func() -> void: item.progress = clampf(float(progress.call()), 0.0, 1.0))
+	item.add_child(t)
 
 func _style_scroll(sc: ScrollContainer) -> void:
 	# Thin, non-overlapping scrollbar styled to match the dark UI
+	# look comes from VScrollBar in voidle_theme.tres
 	var vsb := sc.get_v_scroll_bar()
 	vsb.custom_minimum_size = Vector2(4, 0)
-	var norm := StyleBoxFlat.new()
-	norm.bg_color = Color(0.10, 0.12, 0.20, 0.0)
-	vsb.add_theme_stylebox_override("scroll", norm)
-	var grabber := StyleBoxFlat.new()
-	grabber.bg_color        = Color(0.35, 0.45, 0.75, 0.55)
-	grabber.corner_radius_top_left     = 2; grabber.corner_radius_top_right    = 2
-	grabber.corner_radius_bottom_left  = 2; grabber.corner_radius_bottom_right = 2
-	vsb.add_theme_stylebox_override("grabber",       grabber)
-	vsb.add_theme_stylebox_override("grabber_hover",  grabber)
-	vsb.add_theme_stylebox_override("grabber_pressed", grabber)
 
 func _select_district_on_planet(label: String) -> void:
 	if _orbital_layer != null and is_instance_valid(_orbital_layer):
@@ -6503,48 +6110,14 @@ func _build_add_district_card(data: PlanetData, enabled: bool, orbital_only: boo
 				and not _orbit_option_visible(data):
 			return wrapper
 
-	var card := PanelContainer.new()
-	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.08, 0.12, 0.22, 0.55) if enabled else Color(0.05, 0.06, 0.10, 0.35)
-	s.border_color = Color(0.28, 0.40, 0.75, 0.45) if enabled else Color(0.18, 0.22, 0.35, 0.30)
-	s.border_width_left = 1; s.border_width_right  = 1
-	s.border_width_top  = 1; s.border_width_bottom = 1
-	s.corner_radius_top_left     = 5; s.corner_radius_top_right    = 5
-	s.corner_radius_bottom_left  = 5; s.corner_radius_bottom_right = 5
-	s.content_margin_left   = 10; s.content_margin_right  = 10
-	s.content_margin_top    = 8;  s.content_margin_bottom = 8
-	card.add_theme_stylebox_override("panel", s)
+	# NEW CITY / ADD DISTRICT: a Neutral IconButton (scenes/ui/components/IconButton.tscn)
+	var txt := "SLOTS FULL"
+	if enabled:
+		txt = "ADD DISTRICT" if (orbital_only or parent != null) else "NEW CITY"
+	var card := IconButton.create(txt, "new", IconButton.Variant.NEUTRAL)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.disabled = not enabled
 	wrapper.add_child(card)
-
-	var hbox := HBoxContainer.new()
-	card.add_child(hbox)
-
-	var plus_lbl := Label.new()
-	plus_lbl.text = "+"
-	_apply_orbitron(plus_lbl, 14)
-	plus_lbl.add_theme_color_override("font_color",
-		Color(0.45, 0.60, 1.0, 0.9) if enabled else Color(0.30, 0.35, 0.50, 0.5))
-	plus_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(plus_lbl)
-
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(spacer)
-
-	var txt := Label.new()
-	if not enabled:
-		txt.text = "SLOTS FULL"
-	elif orbital_only or parent != null:
-		txt.text = "ADD DISTRICT"
-	else:
-		txt.text = "FOUND CITY"
-	_apply_orbitron(txt, 8)
-	txt.add_theme_color_override("font_color",
-		Color(0.55, 0.70, 1.0, 0.75) if enabled else Color(0.35, 0.38, 0.52, 0.6))
-	txt.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(txt)
 
 	var founds_city := parent == null and not orbital_only
 	if founds_city:   # the cost and what's in the way, before the player tries
@@ -6560,10 +6133,7 @@ func _build_add_district_card(data: PlanetData, enabled: bool, orbital_only: boo
 		var dropdown_ref: Array[Node] = [null]
 		var cap_data  := data
 		var cap_card  := card
-		card.gui_input.connect(func(e: InputEvent) -> void:
-			if not (e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
-					and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT):
-				return
+		card.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			# Toggle
 			if dropdown_ref[0] != null and is_instance_valid(dropdown_ref[0]):
@@ -6649,10 +6219,10 @@ func _district_options(data: PlanetData, orbital_only: bool, parent: POIData) ->
 func _build_district_type_dropdown(data: PlanetData, _anchor: VBoxContainer,
 		dropdown_ref: Array[Node], orbital_only: bool = false, parent: POIData = null) -> PanelContainer:
 	var dd := PanelContainer.new()
-	dd.add_theme_stylebox_override("panel", _make_hud_style(Color(0.06, 0.08, 0.16, 0.97), 6))
+	dd.theme_type_variation = &"TooltipPanel"
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
+	vbox.add_theme_constant_override("separation", 4)
 	dd.add_child(vbox)
 	for def: DistrictDef in _district_options(data, orbital_only, parent):
 		vbox.add_child(_build_district_type_row(data, def, dropdown_ref, parent))
@@ -6662,11 +6232,8 @@ func _build_district_type_dropdown(data: PlanetData, _anchor: VBoxContainer,
 
 func _build_district_type_row(data: PlanetData, def: DistrictDef,
 		dropdown_ref: Array[Node], parent: POIData = null) -> Control:
-	var btn := Button.new()
-	btn.flat = true
-	btn.text = "%s  %s" % [def.icon, def.display_name]
+	var btn := IconButton.create(def.display_name.to_upper(), _district_def_icon(def))
 	btn.set_meta("district_def_id", int(def.id))
-	_apply_orbitron(btn, 9)
 	var parent_label := parent.label if parent != null else ""
 	var cost: float = DistrictDef.placement_cost(def, data, parent_label)
 	var pop_need := Economy.founding_pop(def, data, parent_label)
@@ -6674,8 +6241,7 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 	var has_pop: bool = pop_free >= pop_need
 	var full_cost := DistrictDef.placement_full_cost(def, data, parent_label)
 	var can_afford: bool = Economy.can_pay(full_cost)   # population may go negative (slows work)
-	if pop_need > 0:
-		btn.text += "   ☺%s" % Economy.fmt(pop_need)
+	btn.counter = HUDManager.fmt_credits(cost) + ("  ·  %s pop" % Economy.fmt(pop_need) if pop_need > 0 else "")
 	var at_limit: bool
 	if def.is_orbital:
 		var pp2 := GameState.get_planet(data.seed)
@@ -6688,25 +6254,6 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 
 	var cap_limit := at_limit
 	_live_enable(btn, func() -> bool: return Economy.can_pay(full_cost) and not cap_limit)
-	if at_limit:
-		btn.add_theme_color_override("font_disabled_color", Color(0.5, 0.5, 0.6))
-	elif not can_afford:
-		btn.add_theme_color_override("font_disabled_color", Color(0.9, 0.3, 0.3))
-	else:
-		btn.add_theme_color_override("font_color",       Color(0.75, 0.82, 1.0))
-		btn.add_theme_color_override("font_hover_color", Color(1.0,  0.95, 0.55))
-
-	var norm := StyleBoxFlat.new()
-	norm.bg_color = Color(0, 0, 0, 0)
-	norm.content_margin_left = 10; norm.content_margin_right  = 10
-	norm.content_margin_top  = 6;  norm.content_margin_bottom = 6
-	var hov := norm.duplicate() as StyleBoxFlat
-	hov.bg_color = Color(0.12, 0.18, 0.35, 0.60)
-	btn.add_theme_stylebox_override("normal",  norm)
-	btn.add_theme_stylebox_override("hover",   hov)
-	btn.add_theme_stylebox_override("pressed", hov)
-	btn.add_theme_stylebox_override("disabled", norm)
-	btn.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
 
 	var cost_str := HUDManager.fmt_credits(cost)
 	btn.mouse_entered.connect(func() -> void:
@@ -6873,23 +6420,25 @@ func _on_production_update(_planet_seed: int, key: String, progress: float) -> v
 	if not _bar_meta.has(key):
 		return
 	var m: Dictionary = _bar_meta[key]
+	var item: ListItem = m.get("item", null)
+	if is_instance_valid(item):
+		item.progress = progress
+		# construction: the percentage — the status line otherwise updates via building_ticked
+		if m.get("construction", false):
+			item.description = "Constructing...  %d%%" % int(progress * 100)
+		return
 	if m.has("prog"):
 		(m["prog"] as Array)[0] = progress
 	var fc: Control = m.get("fill", null)
 	if is_instance_valid(fc):
 		fc.queue_redraw()
-	# Update percent label on construction bars only — status label updates via building_ticked
-	if m.get("construction", false) and m.has("pct"):
-		var pct: Label = m["pct"]
-		if is_instance_valid(pct):
-			pct.text = "%d%%" % int(progress * 100)
 
 func _on_building_ticked_night(planet_seed: int, key: String) -> void:
 	if current_data != null and current_data.seed == planet_seed:
 		_update_poi_night_sizes(current_data)
 		_refresh_poi_lights(current_data)
 	if _bar_meta.has(key):
-		var fc: Control = _bar_meta[key]["fill"]
+		var fc: Control = _bar_meta[key].get("fill", null)
 		if is_instance_valid(fc):
 			fc.queue_redraw()
 		_refresh_bar_label_status(key)
@@ -6912,6 +6461,34 @@ func _on_building_ticked_night(planet_seed: int, key: String) -> void:
 
 var _active_district_energy_lbl: Label = null
 
+## A building card's state line: what it makes, or why it's idle; dimmed when
+## switched off, with the energy-crisis slowdown when it applies.
+func _refresh_building_item(key: String, m: Dictionary, item: ListItem) -> void:
+	var def: BuildingDef = m.get("def", null)
+	if def == null:
+		return
+	var user_off := ProductionManager.is_user_paused(key)
+	var paused := ProductionManager.is_paused(key)
+	item.modulate.a = 0.55 if user_off else 1.0
+	if user_off:
+		item.stats = PackedStringArray()
+		item.description = "Switched off  —  click to resume"
+	elif ProductionManager.is_storage_full(key):
+		item.stats = PackedStringArray()
+		item.description = "Storage full"
+	elif paused:
+		item.stats = PackedStringArray()
+		item.description = "Waiting"
+	else:
+		var r_pp: PlanetProgress = GameState.get_planet(m.get("planet_seed", -1))
+		if r_pp == null:
+			return
+		var stats := _building_stats(r_pp, m.get("entry", {}), def, int(m.get("count", 1)))
+		var er := ProductionManager.get_energy_ratio(m.get("planet_seed", -1))
+		if def.energy_per_tick < 0.0 and er < 0.999:
+			stats.append("warning:Slowed %d%%" % int((1.0 - er) * 100))
+		item.stats = stats
+
 func _fmt_energy(val: float) -> String:
 	var s := "+" if val >= 0.0 else ""
 	if absf(val - roundf(val)) > 0.01:
@@ -6928,7 +6505,7 @@ func _refresh_district_energy_lbl() -> void:
 	var d_energy: float = breakdown.get(_active_district_poi.label, 0.0)
 	_active_district_energy_lbl.text = _fmt_energy(d_energy)
 	_active_district_energy_lbl.add_theme_color_override("font_color",
-		Color(0.85, 0.78, 0.22) if d_energy >= 0.0 else Color(0.85, 0.38, 0.25))
+		UIStyle.color(&"good") if d_energy >= 0.0 else UIStyle.color(&"bad"))
 
 func _on_building_toggled(key: String, _paused: bool) -> void:
 	if not _bar_meta.has(key):
@@ -6943,6 +6520,10 @@ func _refresh_bar_label_status(key: String) -> void:
 		return
 	var m: Dictionary = _bar_meta[key]
 	if m.get("construction", false):
+		return
+	var item: ListItem = m.get("item", null)
+	if is_instance_valid(item):
+		_refresh_building_item(key, m, item)
 		return
 	# Spaceport stub — no live labels to refresh
 	if not m.has("out_lbl"):
@@ -7821,81 +7402,56 @@ func _show_construction_toast(building_name: String, district_label: String) -> 
 	tw.tween_property(panel, "modulate:a", 0.0, 0.75)
 	tw.tween_callback(panel.queue_free)
 
+## Card look from the theme (ItemPanel/panel), as an editable copy.
 func _card_panel_style() -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color           = Color(0.07, 0.09, 0.16, 0.92)
-	s.border_width_left  = 1; s.border_width_right  = 1
-	s.border_width_top   = 1; s.border_width_bottom = 1
-	s.border_color       = Color(0.22, 0.28, 0.50, 0.45)
-	s.corner_radius_top_left     = 5
-	s.corner_radius_top_right    = 5
-	s.corner_radius_bottom_left  = 5
-	s.corner_radius_bottom_right = 5
-	return s
+	return UIStyle.box(&"ItemPanel").duplicate() as StyleBoxFlat
 
 ## Orb-of-Creation style: card whose background fills left→right as production ticks.
 ## count = number of this building type in this POI (for ×N badge)
 ## poi/planet/pp needed for "+" stacking button
 func _build_construction_bar(def: BuildingDef, pm_key: String) -> PanelContainer:
-	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", _card_panel_style())
+	# ListItem look (scenes/ui/components/ListItem.tscn); the bar is the build progress
+	var card := ListItem.create(def.display_name.to_upper(), _building_icon(def), "", [], "Constructing...  0%")
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.clip_contents = true
-
-	var body := MarginContainer.new()
-	body.custom_minimum_size   = Vector2(0, 50)
-	card.add_child(body)
-
-	var fill_ctrl := Control.new()
-	fill_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var prog_ref: Array = [ProductionManager.get_construct_progress(pm_key)]
-	fill_ctrl.draw.connect(func() -> void: _paint_hazard(fill_ctrl, float((prog_ref as Array)[0])))
-	body.add_child(fill_ctrl)
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",  10)
-	margin.add_theme_constant_override("margin_right",  8)
-	margin.add_theme_constant_override("margin_top",    7)
-	margin.add_theme_constant_override("margin_bottom", 7)
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	body.add_child(margin)
-
-	var hbox := HBoxContainer.new()
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(hbox)
-
-	var name_col := VBoxContainer.new()
-	name_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var name_lbl := Label.new()
-	name_lbl.text = def.display_name
-	_apply_orbitron(name_lbl, 10)
-	name_lbl.add_theme_color_override("font_color", Color(0.85, 0.72, 0.35))
-	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var status_lbl := Label.new()
-	status_lbl.text = "CONSTRUCTING..."
-	_apply_orbitron(status_lbl, 8)
-	status_lbl.add_theme_color_override("font_color", Color(0.65, 0.50, 0.20))
-	status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	name_col.add_child(name_lbl)
-	name_col.add_child(status_lbl)
-	hbox.add_child(name_col)
-
-	# Percent label on right
-	var pct_lbl := Label.new()
-	pct_lbl.text = "0%"
-	_apply_orbitron(pct_lbl, 9)
-	pct_lbl.add_theme_color_override("font_color", Color(0.70, 0.58, 0.25))
-	pct_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(pct_lbl)
-
-	# Wire live updates via _bar_meta
-	_bar_meta[pm_key] = {"fill": fill_ctrl, "prog": prog_ref, "pct": pct_lbl, "construction": true}
-
+	card.clickable = false
+	card.icon_color = UIStyle.color(&"neutral_stroke")
+	card.progress_color = UIStyle.color(&"neutral_stroke")
+	card.progress = ProductionManager.get_construct_progress(pm_key)
+	_bar_meta[pm_key] = {"item": card, "construction": true}
 	return card
+
+## Icon for a building: its first output's resource icon, else a factory.
+func _building_icon(def: BuildingDef) -> String:
+	for id: String in def.outputs:
+		return id if Economy.INFO.has(id) else UIIcons.RAW_PLACEHOLDER
+	return "factory"
+
+## ListItem stats for a building entry: outputs, energy use, upkeep.
+func _building_stats(pp: PlanetProgress, entry: Dictionary, def: BuildingDef, count: int) -> PackedStringArray:
+	var out := PackedStringArray()
+	var eff := ProductionManager.output_efficiency(pp, def)   # population / energy deficit
+	for id: String in def.outputs:
+		var v := ProductionManager.output_per_cycle(pp, entry, def, id)
+		if id != Economy.ENERGY and id != Economy.POPULATION:
+			v *= eff
+		match id:
+			Economy.ENERGY:     out.append("energy:+%s/s" % BuildingDef._num(snappedf(v, 0.1)))
+			Economy.POPULATION: out.append("population:+%s" % Economy.fmt(v))
+			Economy.RAW:        out.append("%s:+%s" % [UIIcons.RAW_PLACEHOLDER, BuildingDef._num(snappedf(v, 0.1))])
+			_: out.append("%s:+%s" % [id, BuildingDef._num(snappedf(v, 0.1))])
+	var n := float(entry.get("amount", 1))
+	for id: String in def.storage:
+		out.append("warehouse:+%s %s" % [Economy.fmt(float(def.storage[id]) * n), Economy.INFO.get(id, {}).get("short", id)])
+	for id: String in def.planet_bonus:
+		out.append(":+%d%% %s" % [int(round(float(def.planet_bonus[id]) * n * 100.0)), Economy.INFO.get(id, {}).get("short", id)])
+	if def.energy_per_tick < 0.0:
+		var etick := def.energy_per_tick * float(count) * float(get_node("/root/SkillTree").get_energy_consume_mult())
+		out.append("energy:%.0f" % etick)
+	for id: String in def.inputs:
+		var nm: String = Economy.INFO.get(id, {}).get("short", Economy.display_name(id))
+		var icon_id := id if Economy.INFO.has(id) else UIIcons.RAW_PLACEHOLDER
+		out.append("%s:−%s %s" % [icon_id, BuildingDef._num(float(def.inputs[id]) * n), nm])
+	return out
 
 ## Output line of a building entry, from the production engine's own numbers.
 func _entry_output_text(pp: PlanetProgress, entry: Dictionary, def: BuildingDef) -> String:
@@ -8048,8 +7604,7 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	var k := Label.new()
 	k.text = "Base Income"
-	_apply_orbitron(k, 8)
-	k.add_theme_color_override("font_color", Color(0.45, 0.50, 0.65))
+	k.theme_type_variation = &"SubLabel"
 	k.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var v := Label.new()
 	var tb := _terrain_bonus_text(poi, ddef.base_outputs)
@@ -8059,8 +7614,8 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	v.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.custom_minimum_size = Vector2(60, 0)
-	_apply_orbitron(v, 8)
-	v.add_theme_color_override("font_color", Color(0.55, 0.95, 0.60))
+	v.theme_type_variation = &"CounterLabel"
+	v.add_theme_color_override("font_color", UIStyle.color(&"good"))
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(k); row.add_child(v)
 	box.add_child(row)
@@ -8111,10 +7666,9 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 
 ## "LEVEL UP" row of the district panel: population pays for each new level.
 func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgress, lv: int) -> Control:
-	var btn := Button.new()
-	btn.focus_mode = Control.FOCUS_NONE
+	# scenes/ui/components/IconButton.tscn, Positive
+	var btn := IconButton.create("LEVEL UP  LV %d → %d" % [lv, lv + 1], "upgrade", IconButton.Variant.POSITIVE)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_apply_orbitron(btn, 9)
 	var need := Economy.level_up_pop_for(poi, lv)
 	var credits := Leveling.district_level_credits(lv)
 	var free := Economy.free_population(planet, pp)
@@ -8122,18 +7676,16 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 	var block := Leveling.district_level_block(planet, pp, poi)
 	var tip := ""
 	if pp.is_district_upgrading(poi.label):
-		btn.text = "Lv %d  →  Lv %d  ·  UPGRADING…" % [lv, lv + 1]
+		btn.label_text = "UPGRADING…"
+		btn.counter = "Lv %d → %d" % [lv, lv + 1]
 		btn.disabled = true
 		btn.add_child(_hazard_fill(func() -> float: return float(pp.district_upgrading.get(poi.label, 1.0))))
-		btn.add_theme_color_override("font_disabled_color", Color(1.0, 0.92, 0.60))
-		btn.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-		btn.add_theme_constant_override("outline_size", 5)
 	elif lv >= Balance.cfg.max_district_level:
-		btn.text = "Lv %d  ·  MAX LEVEL" % lv
+		btn.label_text = "MAX LEVEL"
+		btn.counter = "Lv %d" % lv
 		btn.disabled = true
 	else:
-		btn.text = "Lv %d  ·  LEVEL UP  ◈ %s" % [lv, HUDManager.fmt_credits(credits)] \
-			+ ("  ☺ %s" % Economy.fmt(need) if need > 0 else "")
+		btn.counter = HUDManager.fmt_credits(credits) + ("  ·  %s pop" % Economy.fmt(need) if need > 0 else "")
 		_live_enable(btn, func() -> bool:
 			return Leveling.district_level_block(planet, pp, poi) == "" and GameState.credits >= credits)
 		var add_slots := PlanetProgress.slots_per_level(poi)
@@ -8145,27 +7697,6 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 			tip += "\n\n" + _bb("➡ " + block, BB_BAD)
 		elif free < need:
 			tip += "\n\n" + _bb("Population will exceed housing — output drops until you build more homes.", BB_WARN)
-	var norm := StyleBoxFlat.new()
-	norm.bg_color = Color(0.10, 0.16, 0.30, 0.85)
-	norm.border_color = Color(0.35, 0.55, 0.95, 0.6)
-	norm.set_border_width_all(1)
-	norm.set_corner_radius_all(4)
-	norm.content_margin_top = 6; norm.content_margin_bottom = 6
-	var hov := norm.duplicate() as StyleBoxFlat
-	hov.bg_color = Color(0.16, 0.24, 0.45, 0.95)
-	var dis := norm.duplicate() as StyleBoxFlat
-	dis.bg_color = Color(0.08, 0.09, 0.14, 0.7)
-	dis.border_color = Color(0.25, 0.28, 0.40, 0.5)
-	if pp.is_district_upgrading(poi.label):
-		dis.bg_color = Color(0, 0, 0, 0)   # let the hazard fill behind it show
-		dis.border_color = Color(1.0, 0.82, 0.15, 0.6)
-	btn.add_theme_stylebox_override("normal", norm)
-	btn.add_theme_stylebox_override("hover", hov)
-	btn.add_theme_stylebox_override("pressed", hov)
-	btn.add_theme_stylebox_override("disabled", dis)
-	btn.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
-	if not pp.is_district_upgrading(poi.label):
-		btn.add_theme_color_override("font_disabled_color", Color(0.45, 0.48, 0.60))
 	if tip != "":
 		btn.mouse_entered.connect(func() -> void:
 			# a City's own district is its Capital District — not the City (that
@@ -8182,140 +7713,24 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		count: int, poi: POIData, planet: PlanetData, pp: PlanetProgress,
 		entry: Dictionary = {}) -> PanelContainer:
 	var paused := ProductionManager.is_paused(pm_key)
-	var prog   := ProductionManager.get_progress(pm_key)
 	var fc     := def.output_color()
 
 	# ── Spaceport: custom launch card ────────────────────────────────────────────
 	if def.building_id == "spaceport":
 		return _build_spaceport_card(def, pm_key, pp, poi, entry)
 
-	# Outer card
-	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", _card_panel_style())
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.clip_contents = true
-
-	# Inner layer control — fill draws here, content sits on top
-	var body := MarginContainer.new()
-	body.custom_minimum_size   = Vector2(0, 54)
-	card.add_child(body)
-
-	# Fill control — redraws each production tick
-	var fill_ctrl := Control.new()
-	fill_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var prog_ref: Array = [prog]
-	var cap_fill_key := pm_key
-	fill_ctrl.draw.connect(func() -> void:
-		var p: float = (prog_ref as Array)[0]
-		var user_off: bool  = ProductionManager.is_user_paused(cap_fill_key)
-		var auto_off: bool  = ProductionManager.is_paused(cap_fill_key)
-		var w: float = fill_ctrl.size.x * p
-		if user_off:
-			fill_ctrl.draw_rect(Rect2(0, 0, fill_ctrl.size.x, fill_ctrl.size.y),
-				Color(0.08, 0.08, 0.14, 0.72))
-			# Diagonal hatch
-			for xi: int in range(0, int(fill_ctrl.size.x) + int(fill_ctrl.size.y), 14):
-				var x0: float = float(xi)
-				fill_ctrl.draw_line(Vector2(x0, 0),
-					Vector2(x0 - fill_ctrl.size.y, fill_ctrl.size.y),
-					Color(0.25, 0.28, 0.42, 0.30), 1.0)
-		elif auto_off:
-			fill_ctrl.draw_rect(Rect2(0, 0, w, fill_ctrl.size.y),
-				Color(0.35, 0.38, 0.55, 0.22))
-		else:
-			_paint_cycle(fill_ctrl, p, fc))
-	body.add_child(fill_ctrl)
-
-	# Content layout on top of fill
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   10)
-	margin.add_theme_constant_override("margin_right",   8)
-	margin.add_theme_constant_override("margin_top",     7)
-	margin.add_theme_constant_override("margin_bottom",  7)
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	body.add_child(margin)
-
-	var hbox := HBoxContainer.new()
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_theme_constant_override("separation", 6)
-	margin.add_child(hbox)
-
-	# Left: name column
-	var vbox := VBoxContainer.new()
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 2)
-	hbox.add_child(vbox)
-
-	# Name row: "Hab Block" + "×2" count badge
-	var name_row := HBoxContainer.new()
-	name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	name_row.add_theme_constant_override("separation", 5)
-	var name_lbl := Label.new()
-	name_lbl.text = def.display_name
-	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_apply_orbitron(name_lbl, 10)
-	name_lbl.add_theme_color_override("font_color", Color(0.85, 0.92, 1.0))
-	name_row.add_child(name_lbl)
-	if def.slot_cost > 1:   # large model: one card, one count, two slots each
-		var slot_tag := Label.new()
-		slot_tag.text = "%d SLOTS" % def.slot_cost
-		slot_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_apply_orbitron(slot_tag, 7)
-		slot_tag.add_theme_color_override("font_color", Color(0.65, 0.72, 0.95, 0.8))
-		name_row.add_child(slot_tag)
+	# ListItem look (scenes/ui/components/ListItem.tscn): icon │ NAME [xN] / stats / [-][+] / cycle bar
+	var badges: Array[String] = []
+	if count > 1: badges.append("X%d" % count)
+	if def.slot_cost > 1: badges.append("%d SLOTS" % def.slot_cost)   # large model: two slots each
 	var b_lv: int = entry.get("level", 1)
-	if count > 1 or b_lv > 1:
-		var cnt_lbl := Label.new()
-		var txt := ""
-		if count > 1: txt += "×%d" % count
-		if b_lv > 1: txt += (" " if txt != "" else "") + "Lv%d" % b_lv
-		cnt_lbl.text = txt
-		cnt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_apply_orbitron(cnt_lbl, 8)
-		cnt_lbl.add_theme_color_override("font_color", Color(0.55, 0.65, 1.0, 0.8))
-		name_row.add_child(cnt_lbl)
-	vbox.add_child(name_row)
-
-	# Energy + output info row
-	var info_row := HBoxContainer.new()
-	info_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	info_row.add_theme_constant_override("separation", 8)
-	
-	var out_text := "⏸ waiting" if paused else _entry_output_text(pp, entry, def)
-	if ProductionManager.is_storage_full(pm_key):
-		out_text = "▣ storage full"
-
-	var out_lbl := Label.new()
-	out_lbl.text = out_text
-	out_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	out_lbl.custom_minimum_size = Vector2(60, 0)
-	_apply_orbitron(out_lbl, 8)
-	out_lbl.add_theme_color_override("font_color",
-		Color(0.45, 0.48, 0.60) if paused else fc)
-	info_row.add_child(out_lbl)
-	
-	if def.energy_per_tick < 0.0:
-		var etick := def.energy_per_tick * float(count) \
-			* float(get_node("/root/SkillTree").get_energy_consume_mult())
-		var e_lbl := Label.new()
-		var sign := "+" if etick > 0.0 else ""
-		e_lbl.text = sign + "%.0f ⚡" % etick
-		e_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_apply_orbitron(e_lbl, 8)
-		e_lbl.add_theme_color_override("font_color",
-			Color(0.9, 0.82, 0.25, 0.55) if etick > 0 else Color(0.75, 0.48, 0.28, 0.55))
-		info_row.add_child(e_lbl)
-
-	# Upkeep paid each cycle; raw inputs show the resource being burned.
-	if not def.inputs.is_empty():
-		var in_lbl := Label.new()
-		in_lbl.text = _entry_input_text(entry, def)
-		in_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_apply_orbitron(in_lbl, 8)
-		in_lbl.add_theme_color_override("font_color", Color(0.85, 0.45, 0.45, 0.8))
-		info_row.add_child(in_lbl)
-	vbox.add_child(info_row)
+	if b_lv > 1: badges.append("Lv%d" % b_lv)
+	var card := ListItem.create(def.display_name.to_upper(), _building_icon(def), "  ".join(badges))
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.icon_color = fc
+	card.progress_color = fc
+	card.progress = ProductionManager.get_progress(pm_key)
+	card.show_stepper = true
 
 	var tip_str := def.description + "\n\n"
 	if not paused:
@@ -8340,62 +7755,26 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		TooltipManager.show_tip(def.display_name, tip_str.strip_edges()))
 	card.mouse_exited.connect(func() -> void:
 		TooltipManager.hide_tip())
-	# Energy-crisis "Slowed" label — shown below info row for energy consumers
-	var slowed_lbl: Label = null
-	if def.energy_per_tick < 0.0:
-		slowed_lbl = Label.new()
-		slowed_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_apply_orbitron(slowed_lbl, 7)
-		slowed_lbl.add_theme_color_override("font_color", Color(0.90, 0.55, 0.20))
-		var er := ProductionManager.get_energy_ratio(pp.planet_seed)
-		slowed_lbl.text    = "⚡ Slowed %d%% — Energy Crisis" % [int((1.0 - er) * 100)]
-		slowed_lbl.visible = er < 0.999
-		vbox.add_child(slowed_lbl)
+	# Click the card (not the [-][+]) to switch the building on / off
+	var cap_toggle_key := pm_key
+	card.pressed.connect(func() -> void: ProductionManager.toggle_user_pause(cap_toggle_key))
 
-	# Right: "+" stacking and "−" demolish buttons
+	# [-] demolish one / [+] stack one more
 	var cap_poi    := poi
 	var cap_def    := def
 	var cap_planet := planet
 	var cap_entry  := entry  # dict reference for demolish
-
-	var btn_vbox := VBoxContainer.new()
-	btn_vbox.add_theme_constant_override("separation", 2)
-	btn_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-
-	var add_btn := Button.new()
-	add_btn.text     = "+"
-	add_btn.flat     = false
-	_apply_orbitron(add_btn, 10)
-	add_btn.custom_minimum_size = Vector2(30, 22)
-	add_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var add_btn := card.get_node("Row/Body/Bottom/Stepper/Plus") as Button
+	var rem_btn := card.get_node("Row/Body/Bottom/Stepper/Minus") as Button
 	# Re-checked live: credits / slots / workers change while the panel is open
 	var stack_state := func() -> Dictionary:
 		var free_slots: int = pp.district_slots(cap_poi) - pp.slots_used_in_district(cap_poi.label)
 		var cost := Economy.building_full_cost(pp, cap_def, cap_poi.label)
 		return {"slots": free_slots >= cap_def.slot_cost, "credits": Economy.can_pay(cost), "cost": cost,
 			"block": Economy.cost_block(cost), "pop": Economy.free_population(cap_planet, pp) >= cap_def.pop_use()}
-	var restyle := func() -> void:
+	_live_enable(add_btn, func() -> bool:
 		var st: Dictionary = stack_state.call()
-		var ok: bool = st["slots"] and st["credits"]
-		if add_btn.has_meta("ok") and bool(add_btn.get_meta("ok")) == ok:
-			return
-		add_btn.set_meta("ok", ok)
-		add_btn.disabled = not ok
-		var sb := StyleBoxFlat.new()
-		sb.bg_color     = Color(0.12, 0.30, 0.15, 1.0) if ok else Color(0.10, 0.10, 0.16, 1.0)
-		sb.border_color = Color(0.35, 0.75, 0.40, 1.0) if ok else Color(0.22, 0.25, 0.38, 1.0)
-		sb.set_border_width_all(1)
-		sb.set_corner_radius_all(3)
-		sb.content_margin_left = 3; sb.content_margin_right = 3
-		add_btn.add_theme_stylebox_override("normal",   sb)
-		add_btn.add_theme_stylebox_override("disabled", sb)
-		add_btn.add_theme_color_override("font_color", Color(0.60, 0.95, 0.65) if ok else Color(0.30, 0.33, 0.45))
-	restyle.call()
-	var poll := Timer.new()
-	poll.wait_time = 0.25
-	poll.autostart = true
-	poll.timeout.connect(restyle)
-	add_btn.add_child(poll)
+		return st["slots"] and st["credits"])
 	add_btn.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
 		var st: Dictionary = stack_state.call()
@@ -8417,22 +7796,6 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		if _buy_buildings(cap_poi, cap_planet, cap_def, _bulk_count()) > 0:
 			_build_district_panel(cap_poi, cap_planet))
 
-	var rem_btn := Button.new()
-	rem_btn.text = "-"
-	rem_btn.flat = false
-	_apply_orbitron(rem_btn, 10)
-	rem_btn.custom_minimum_size = Vector2(30, 22)
-	var rem_s := StyleBoxFlat.new()
-	rem_s.bg_color     = Color(0.28, 0.10, 0.10, 1.0)
-	rem_s.border_color  = Color(0.65, 0.28, 0.28, 1.0)
-	rem_s.border_width_left = 1; rem_s.border_width_right  = 1
-	rem_s.border_width_top  = 1; rem_s.border_width_bottom = 1
-	rem_s.corner_radius_top_left     = 3; rem_s.corner_radius_top_right    = 3
-	rem_s.corner_radius_bottom_left  = 3; rem_s.corner_radius_bottom_right = 3
-	rem_s.content_margin_left = 3; rem_s.content_margin_right = 3
-	rem_btn.add_theme_stylebox_override("normal", rem_s)
-	rem_btn.add_theme_stylebox_override("focus",  StyleBoxEmpty.new())
-	rem_btn.add_theme_color_override("font_color", Color(0.90, 0.45, 0.45))
 	var tip_rem_title := "Remove one %s" % def.display_name if count > 1 else "Demolish %s" % def.display_name
 	var _cap_pp := pp
 	var _cap_planet2 := planet
@@ -8462,75 +7825,15 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		GameState.planet_progress_changed.emit(cap_planet.seed)
 		_build_district_panel(cap_poi, cap_planet))
 
-	btn_vbox.add_child(add_btn)
-	btn_vbox.add_child(rem_btn)
-	
-	var st = null
-	if Engine.has_singleton("SceneTree") and Engine.get_main_loop():
-		st = Engine.get_main_loop().root.get_node_or_null("SkillTree")
-	var max_b_lv = 1
-	if st and st.has_method("get_building_max_level"):
-		max_b_lv = st.get_building_max_level(def.building_id)
-		
-	var cur_lv = entry.get("level", 1)
-	# Buildings work as upgrades with a count only — no per-building levels.
-	if BUILDING_LEVELS_ENABLED and cur_lv < max_b_lv:
-		var b_upg_cost = def.get_upgrade_cost(cur_lv, cap_entry.get("amount", 1))
-		var can_afford_b_upg = GameState.credits >= b_upg_cost
-		var b_upg_btn := Button.new()
-		b_upg_btn.text = "^"
-		b_upg_btn.flat = false
-		_apply_orbitron(b_upg_btn, 10)
-		b_upg_btn.custom_minimum_size = Vector2(30, 22)
-		var up_s := StyleBoxFlat.new()
-		up_s.bg_color = Color(0.2, 0.4, 0.8, 1.0) if can_afford_b_upg else Color(0.1, 0.15, 0.25, 1.0)
-		up_s.border_color = Color(0.4, 0.7, 1.0, 1.0) if can_afford_b_upg else Color(0.2, 0.3, 0.4, 1.0)
-		up_s.border_width_all = 1
-		up_s.corner_radius_top_left = 3; up_s.corner_radius_top_right = 3
-		up_s.corner_radius_bottom_left = 3; up_s.corner_radius_bottom_right = 3
-		up_s.content_margin_left = 3; up_s.content_margin_right = 3
-		b_upg_btn.add_theme_stylebox_override("normal", up_s)
-		b_upg_btn.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
-		b_upg_btn.disabled = not can_afford_b_upg
-		
-		b_upg_btn.mouse_entered.connect(func():
-			CursorManager.set_state(CursorManager.State.POINTER)
-			var cost_str = "%.0f cr" % b_upg_cost
-			TooltipManager.show_tip("Upgrade Building", "Upgrade to Level %d.\nIncreases output and consumption." % (cur_lv + 1), cost_str))
-		b_upg_btn.mouse_exited.connect(func():
-			CursorManager.set_state(CursorManager.State.NORMAL)
-			TooltipManager.hide_tip())
-			
-		b_upg_btn.pressed.connect(func():
-			TooltipManager.hide_tip()
-			if pp.upgrade_building(cap_entry):
-				AudioManager.play("building_done")
-				GameState.planet_progress_changed.emit(cap_planet.seed)
-				if _active_district_poi != null and _active_district_poi.label == cap_poi.label:
-					_build_district_panel(cap_poi, cap_planet)
-		)
-		btn_vbox.add_child(b_upg_btn)
-
-	hbox.add_child(btn_vbox)
-
-	# Click card body (not the "+" button) to toggle building on/off
-	var cap_toggle_key := pm_key
-	body.gui_input.connect(func(e: InputEvent) -> void:
-		if e is InputEventMouseButton:
-			var mb := e as InputEventMouseButton
-			if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-				ProductionManager.toggle_user_pause(cap_toggle_key))
-
 	_bar_meta[pm_key] = {
-		"fill":        fill_ctrl,
-		"prog":        prog_ref,
-		"out_lbl":     out_lbl,
-		"slowed_lbl":  slowed_lbl,
+		"item":        card,
 		"planet_seed": pp.planet_seed,
 		"def":         def,
 		"fc":          fc,
-		"entry":       entry
+		"entry":       entry,
+		"count":       count,
 	}
+	_refresh_bar_label_status(pm_key)
 	return card
 
 ## Spaceport card — phase-driven: idle → configuring → preparing → launch_ready → cooldown.
@@ -8658,24 +7961,14 @@ func _register_mission_tasks() -> void:
 				var cap_st: ShipData = st
 				var btn := Button.new()
 				btn.text = st.ship_name
-				btn.add_theme_font_size_override("font_size", 7)
 				var is_sel: bool = e.get("target_id", "") == st.ship_id
-				var bs := StyleBoxFlat.new()
-				bs.bg_color     = Color(0.06, 0.24, 0.18, 0.95) if is_sel else Color(0.05, 0.07, 0.15, 0.75)
-				bs.border_color = Color(0.20, 0.78, 0.52, 0.75) if is_sel else Color(0.28, 0.42, 0.35, 0.35)
-				bs.set_border_width_all(1); bs.set_corner_radius_all(3)
-				bs.content_margin_left = 6; bs.content_margin_right = 6
-				bs.content_margin_top = 3; bs.content_margin_bottom = 3
-				btn.add_theme_stylebox_override("normal", bs)
-				btn.add_theme_stylebox_override("hover",  bs)
-				btn.add_theme_color_override("font_color",
-					Color(0.35, 0.95, 0.65) if is_sel else Color(0.45, 0.62, 0.55))
 				btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 				btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 				btn.pressed.connect(func() -> void:
 					e["target_id"] = cap_st.ship_id
 					on_change.call()
 					rebuild_ms.call())
+				UIStyle.style_button(btn, UIStyle.NEUTRAL if is_sel else UIStyle.DEFAULT, 8)   # selected = Neutral
 				st_row.add_child(btn)
 
 		# ── Rendezvous actions ────────────────────────────────────────────────────
@@ -8720,19 +8013,16 @@ func _register_mission_tasks() -> void:
 			var cap_i: int = i
 			var del_btn := Button.new()
 			del_btn.text = "×"
-			del_btn.add_theme_font_size_override("font_size", 9)
 			var dbs := StyleBoxFlat.new()
 			dbs.bg_color = Color(0,0,0,0); dbs.set_border_width_all(0)
 			dbs.content_margin_left = 4; dbs.content_margin_right = 4
-			del_btn.add_theme_stylebox_override("normal", dbs)
-			del_btn.add_theme_stylebox_override("hover",  dbs)
-			del_btn.add_theme_color_override("font_color", Color(0.70, 0.35, 0.35, 0.80))
 			del_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 			del_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 			del_btn.pressed.connect(func() -> void:
 				rdv_tasks.remove_at(cap_i)
 				on_change.call()
 				rebuild_ms.call())
+			UIStyle.style_button(del_btn, UIStyle.NEGATIVE, 8)
 			rt_row.add_child(del_btn)
 
 		# "+" Add — driven by the registry, same DI pattern as the main chain.
@@ -8918,19 +8208,10 @@ func _build_res_icon_ui(cont: Control, e: Dictionary,
 func _make_mission_add_btn(label_text: String) -> Button:
 	var btn := Button.new()
 	btn.text = label_text
-	btn.add_theme_font_size_override("font_size", 7)
-	var bs := StyleBoxFlat.new()
-	bs.bg_color = Color(0.05, 0.10, 0.22, 0.80)
-	bs.border_color = Color(0.20, 0.38, 0.65, 0.40)
-	bs.set_border_width_all(1); bs.set_corner_radius_all(3)
-	bs.content_margin_left = 5; bs.content_margin_right = 5
-	bs.content_margin_top = 2; bs.content_margin_bottom = 2
-	btn.add_theme_stylebox_override("normal", bs)
-	btn.add_theme_stylebox_override("hover",  bs)
-	btn.add_theme_color_override("font_color", Color(0.55, 0.78, 1.0))
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
+	UIStyle.style_button(btn, UIStyle.NEUTRAL, 8)
 	return btn
 
 ## Dependency-injected dropdown for "On Rendezvous" sub-tasks — lists whatever
@@ -8961,17 +8242,13 @@ func _show_rdv_add_popup(anchor: Control, rdv_tasks: Array, ship_type: String,
 		var cap_def: MissionTaskDef = def
 		var btn := Button.new()
 		btn.text = cap_def.display_name
-		btn.add_theme_font_size_override("font_size", 7)
 		var ibs := StyleBoxFlat.new()
 		ibs.bg_color = Color(0.0, 0.0, 0.0, 0.0)
 		ibs.set_border_width_all(0)
 		ibs.content_margin_left = 6; ibs.content_margin_right = 6
 		ibs.content_margin_top = 3; ibs.content_margin_bottom = 3
-		btn.add_theme_stylebox_override("normal", ibs)
 		var ibs_h := ibs.duplicate()
 		(ibs_h as StyleBoxFlat).bg_color = Color(0.12, 0.22, 0.45, 0.80)
-		btn.add_theme_stylebox_override("hover", ibs_h)
-		btn.add_theme_color_override("font_color", Color(0.80, 0.92, 1.0))
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
@@ -8980,6 +8257,7 @@ func _show_rdv_add_popup(anchor: Control, rdv_tasks: Array, ship_type: String,
 			if is_instance_valid(rdv_backdrop): rdv_backdrop.queue_free()
 			popup.queue_free()
 			on_added.call())
+		UIStyle.style_button(btn, UIStyle.DEFAULT, 8)
 		pvbox.add_child(btn)
 
 	# Add popup inside the Mission Builder overlay so mouse_filter doesn't block it.
@@ -9161,18 +8439,6 @@ func _roman_numeral(n: int) -> String:
 	return r
 
 ## Shared button style for spaceport actions.
-func _sp_btn_style(bg: Color, border: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color     = bg
-	s.border_color = border
-	s.set_border_width_all(1)
-	s.set_corner_radius_all(4)
-	s.content_margin_left   = 10
-	s.content_margin_right  = 10
-	s.content_margin_top    = 4
-	s.content_margin_bottom = 4
-	return s
-
 ## Idle phase: "Prep Launch" button.
 func _sp_build_idle(left_vbox: VBoxContainer, hbox: HBoxContainer,
 		_def: BuildingDef, pm_key: String, pp: PlanetProgress,
@@ -9213,12 +8479,6 @@ func _sp_build_idle(left_vbox: VBoxContainer, hbox: HBoxContainer,
 
 	var btn := Button.new()
 	btn.text = "Prepare Mission"
-	_apply_orbitron(btn, 9)
-	var bs := _sp_btn_style(Color(0.10, 0.22, 0.42, 0.90), Color(0.30, 0.60, 1.0, 0.75))
-	btn.add_theme_stylebox_override("normal",  bs)
-	btn.add_theme_stylebox_override("hover",   bs)
-	btn.add_theme_stylebox_override("pressed", bs)
-	btn.add_theme_color_override("font_color", Color(0.60, 0.88, 1.0))
 	btn.custom_minimum_size = Vector2(100, 0)
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
@@ -9264,6 +8524,7 @@ func _sp_build_idle(left_vbox: VBoxContainer, hbox: HBoxContainer,
 			if ProductionManager.is_user_paused(pm_key):
 				ProductionManager.toggle_user_pause(pm_key)
 			rebuild_sp.call()))
+	UIStyle.style_button(btn, UIStyle.NEUTRAL)
 	hbox.add_child(btn)
 
 ## Config phase: ship name + type selection.
@@ -9362,17 +8623,8 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 	for ttype in ["shuttle", "hauler", "heavy_hauler", "station"]:
 		var tb := Button.new()
 		tb.text = SP_SHIP_LABELS.get(ttype, ttype.capitalize())
-		_apply_orbitron(tb, 7)
 		var is_sel: bool = (entry.get("ship_type", "shuttle") == ttype)
 		var is_locked: bool = (ttype == "station" and station_locked)
-		var tbg := Color(0.10, 0.28, 0.50, 0.95) if is_sel else Color(0.05, 0.07, 0.15, 0.75)
-		if is_locked:
-			tbg = Color(0.08, 0.08, 0.12, 0.60)
-		var tbs := _sp_btn_style(tbg, Color(0.35, 0.65, 1.0, 0.65 if is_sel else (0.15 if is_locked else 0.28)))
-		tb.add_theme_stylebox_override("normal", tbs)
-		tb.add_theme_stylebox_override("hover",  tbs)
-		tb.add_theme_color_override("font_color",
-			Color(0.75, 0.92, 1.0) if is_sel else (Color(0.35, 0.38, 0.45) if is_locked else Color(0.45, 0.60, 0.80)))
 		tb.custom_minimum_size = Vector2(54, 0)
 		tb.disabled = is_locked
 		if not is_locked:
@@ -9383,6 +8635,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 			entry["ship_type"] = cap_t
 			entry.erase("cargo")  # reset cargo when type changes (capacity differs)
 			rebuild_sp.call())
+		UIStyle.style_button(tb, UIStyle.NEUTRAL if is_sel else UIStyle.DEFAULT, 8)   # selected = Neutral
 		type_row.add_child(tb)
 
 	if station_locked:
@@ -9433,11 +8686,6 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 
 		var plan_btn := Button.new()
 		plan_btn.text = "Plan Mission" if mission_tasks.is_empty() else "Edit Mission"
-		_apply_orbitron(plan_btn, 7)
-		var pbs := _sp_btn_style(Color(0.06, 0.14, 0.30, 0.90), Color(0.28, 0.52, 0.90, 0.55))
-		plan_btn.add_theme_stylebox_override("normal", pbs)
-		plan_btn.add_theme_stylebox_override("hover",  pbs)
-		plan_btn.add_theme_color_override("font_color", Color(0.60, 0.82, 1.0))
 		plan_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		plan_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		plan_btn.pressed.connect(func() -> void:
@@ -9456,6 +8704,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 				entry["repeat_cycle"]  = repeat
 				_sp_apply_mission_to_entry(entry, tasks)
 				rebuild_sp.call()))
+		UIStyle.style_button(plan_btn, UIStyle.DEFAULT, 8)
 		left_vbox.add_child(plan_btn)
 
 	# ── Bottom row: cost / Cancel / Start Prep ──────────────────────────────
@@ -9483,11 +8732,6 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 
 	var cancel_btn := Button.new()
 	cancel_btn.text = "Cancel"
-	_apply_orbitron(cancel_btn, 7)
-	var cbs := _sp_btn_style(Color(0.10, 0.07, 0.12, 0.80), Color(0.48, 0.28, 0.32, 0.55))
-	cancel_btn.add_theme_stylebox_override("normal", cbs)
-	cancel_btn.add_theme_stylebox_override("hover",  cbs)
-	cancel_btn.add_theme_color_override("font_color", Color(0.80, 0.50, 0.52))
 	cancel_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	cancel_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	cancel_btn.pressed.connect(func() -> void:
@@ -9496,18 +8740,11 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 		entry.erase("mission_tasks")
 		_bar_meta.erase(pm_key)
 		rebuild_sp.call())
+	UIStyle.style_button(cancel_btn, UIStyle.DEFAULT, 8)
 	bottom_row.add_child(cancel_btn)
 
 	var confirm_btn := Button.new()
 	confirm_btn.text = "Start Prep"
-	_apply_orbitron(confirm_btn, 7)
-	var fbs_col := Color(0.07, 0.28, 0.16, 0.92) if can_afford else Color(0.18, 0.12, 0.12, 0.85)
-	var fbs_brd := Color(0.22, 0.78, 0.42, 0.75) if can_afford else Color(0.48, 0.28, 0.28, 0.55)
-	var fbs := _sp_btn_style(fbs_col, fbs_brd)
-	confirm_btn.add_theme_stylebox_override("normal", fbs)
-	confirm_btn.add_theme_stylebox_override("hover",  fbs)
-	confirm_btn.add_theme_color_override("font_color",
-		Color(0.35, 0.95, 0.58) if can_afford else Color(0.55, 0.40, 0.40))
 	confirm_btn.disabled = not can_afford
 	confirm_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	confirm_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
@@ -9527,6 +8764,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 		if ProductionManager.is_user_paused(pm_key):
 			ProductionManager.toggle_user_pause(pm_key)
 		rebuild_sp.call())
+	UIStyle.style_button(confirm_btn, UIStyle.POSITIVE, 8)
 	bottom_row.add_child(confirm_btn)
 
 ## Progress bar view — used for both "preparing" and "cooldown" phases.
@@ -9567,11 +8805,6 @@ func _sp_build_progress(left_vbox: VBoxContainer, hbox: HBoxContainer,
 	# Queue Mission button
 	var q_btn := Button.new()
 	q_btn.text = "Queue Mission"
-	_apply_orbitron(q_btn, 7)
-	var qbs := _sp_btn_style(Color(0.08, 0.16, 0.32, 0.85), Color(0.25, 0.45, 0.80, 0.55))
-	q_btn.add_theme_stylebox_override("normal", qbs)
-	q_btn.add_theme_stylebox_override("hover",  qbs)
-	q_btn.add_theme_color_override("font_color", Color(0.55, 0.78, 1.0))
 	q_btn.custom_minimum_size = Vector2(100, 0)
 	q_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	q_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
@@ -9600,6 +8833,7 @@ func _sp_build_progress(left_vbox: VBoxContainer, hbox: HBoxContainer,
 			})
 			cap_entry["mission_queue"] = mq
 			cap_rebuild.call()))
+	UIStyle.style_button(q_btn, UIStyle.NEUTRAL, 8)
 	hbox.add_child(q_btn)
 
 ## Launch-ready phase: prominent Launch button.
@@ -9616,12 +8850,6 @@ func _sp_build_launch_ready(left_vbox: VBoxContainer, hbox: HBoxContainer,
 
 	var btn := Button.new()
 	btn.text = "Launch ▶"
-	_apply_orbitron(btn, 9)
-	var bs := _sp_btn_style(Color(0.08, 0.30, 0.15, 0.92), Color(0.20, 0.85, 0.40, 0.80))
-	btn.add_theme_stylebox_override("normal",  bs)
-	btn.add_theme_stylebox_override("hover",   bs)
-	btn.add_theme_stylebox_override("pressed", bs)
-	btn.add_theme_color_override("font_color", Color(0.35, 0.98, 0.55))
 	btn.custom_minimum_size = Vector2(90, 0)
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
@@ -9650,6 +8878,7 @@ func _sp_build_launch_ready(left_vbox: VBoxContainer, hbox: HBoxContainer,
 			cap_entry.get("auto_land", false),
 			cap_entry.get("mission_tasks", [])))
 
+	UIStyle.style_button(btn, UIStyle.POSITIVE)
 	hbox.add_child(btn)
 
 ## Cargo resource selector popup — floating panel over the container.
@@ -9745,7 +8974,6 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 	else:
 		# ── Dropdown ─────────────────────────────────────────────────────────
 		var dropdown := OptionButton.new()
-		_apply_orbitron(dropdown, 8)
 		dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		vbox.add_child(dropdown)
 
@@ -9818,11 +9046,6 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 		# ── Add button ────────────────────────────────────────────────────────
 		var add_btn2 := Button.new()
 		add_btn2.text = "Add to Cargo"
-		_apply_orbitron(add_btn2, 8)
-		var abs3 := _sp_btn_style(Color(0.07, 0.22, 0.12, 0.92), Color(0.22, 0.72, 0.38, 0.75))
-		add_btn2.add_theme_stylebox_override("normal", abs3)
-		add_btn2.add_theme_stylebox_override("hover",  abs3)
-		add_btn2.add_theme_color_override("font_color", Color(0.38, 0.95, 0.55))
 		add_btn2.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		add_btn2.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		add_btn2.pressed.connect(func() -> void:
@@ -9831,6 +9054,7 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 			if not entry.has("cargo"): entry["cargo"] = {}
 			entry["cargo"][rid2] = entry["cargo"].get(rid2, 0) + amt2
 			close_popup.call())
+		UIStyle.style_button(add_btn2, UIStyle.POSITIVE, 8)
 		vbox.add_child(add_btn2)
 
 ## Pick-up resource selector popup — picks what the shuttle should collect from the station.
@@ -9894,7 +9118,6 @@ func _sp_show_pickup_popup(entry: Dictionary, pp: PlanetProgress, rebuild_sp: Ca
 		vbox.add_child(no_lbl)
 	else:
 		var dropdown := OptionButton.new()
-		_apply_orbitron(dropdown, 8)
 		dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		vbox.add_child(dropdown)
 		for res_id: String in all_res:
@@ -9927,61 +9150,33 @@ func _sp_show_pickup_popup(entry: Dictionary, pp: PlanetProgress, rebuild_sp: Ca
 		dropdown.item_selected.connect(func(idx: int) -> void: sel_res[0] = all_res[idx])
 		var confirm_btn := Button.new()
 		confirm_btn.text = "Set Pick-up"
-		_apply_orbitron(confirm_btn, 8)
-		var cbs2 := _sp_btn_style(Color(0.07, 0.22, 0.12, 0.92), Color(0.22, 0.72, 0.38, 0.75))
-		confirm_btn.add_theme_stylebox_override("normal", cbs2)
-		confirm_btn.add_theme_stylebox_override("hover",  cbs2)
-		confirm_btn.add_theme_color_override("font_color", Color(0.38, 0.95, 0.55))
 		confirm_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		confirm_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		confirm_btn.pressed.connect(func() -> void:
 			entry["transfer_resource"] = sel_res[0]
 			entry["transfer_amount"]   = int(slider.value)
 			close_popup.call())
+		UIStyle.style_button(confirm_btn, UIStyle.POSITIVE, 8)
 		vbox.add_child(confirm_btn)
 
 ## Empty slot card — shows "+" and opens a build dropdown on click.
 func _build_slot_card(poi: POIData, planet: PlanetData, pp: PlanetProgress,
 		root: VBoxContainer, slot_idx: int) -> PanelContainer:
-	var card := PanelContainer.new()
+	# a faded ListItem; full strength on hover
+	var card := ListItem.create("EMPTY SLOT", "new", "", [], "Click to build")
 	card.set_meta("is_slot_card", true)
-	var s := StyleBoxFlat.new()
-	s.bg_color      = Color(0.06, 0.08, 0.14, 0.70)
-	s.border_width_left  = 1; s.border_width_right  = 1
-	s.border_width_top   = 1; s.border_width_bottom = 1
-	s.border_color  = Color(0.28, 0.35, 0.60, 0.35)
-	s.corner_radius_top_left     = 5
-	s.corner_radius_top_right    = 5
-	s.corner_radius_bottom_left  = 5
-	s.corner_radius_bottom_right = 5
-	card.add_theme_stylebox_override("panel", s)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.custom_minimum_size   = Vector2(0, 38)
-
-	var margin := MarginContainer.new()
-	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_theme_constant_override("margin_left", 24)
-	card.add_child(margin)
-
-	var plus := Label.new()
-	plus.text = "+ Empty Slot"
-	plus.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_apply_orbitron(plus, 10)
-	plus.add_theme_color_override("font_color", Color(0.30, 0.38, 0.65, 0.70))
-	margin.add_child(plus)
-
+	card.modulate.a = 0.55
 	card.mouse_entered.connect(func() -> void:
 		AudioManager.play("poi_hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
-		plus.add_theme_color_override("font_color", Color(0.55, 0.65, 1.0, 0.9)))
+		card.modulate.a = 1.0)
 	card.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
-		plus.add_theme_color_override("font_color", Color(0.30, 0.38, 0.65, 0.70)))
-	card.gui_input.connect(func(e: InputEvent) -> void:
-		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
-				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-			AudioManager.play("click")
-			_toggle_slot_dropdown(card, poi, planet, pp, root, slot_idx))
+		card.modulate.a = 0.55)
+	card.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		_toggle_slot_dropdown(card, poi, planet, pp, root, slot_idx))
 	return card
 
 ## Open building picker: its arguments and what made its rows enabled, so it
@@ -10054,11 +9249,10 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 
 	var outer := PanelContainer.new()
 	outer.set_meta("slot_card", card)
-	outer.add_theme_stylebox_override("panel",
-		_make_hud_style(Color(0.05, 0.07, 0.14, 0.97), 6))
+	outer.theme_type_variation = &"TooltipPanel"
 
 	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 2)
+	list.add_theme_constant_override("separation", 4)
 	outer.add_child(list)
 
 	for def: BuildingDef in buildable:
@@ -10086,27 +9280,6 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		var has_pop: bool = Economy.free_population(planet, pp) >= pop_need
 		var enabled: bool    = can_afford and has_slots and not at_limit and site_reason == ""
 
-		var row_panel := PanelContainer.new()
-		var norm_s := StyleBoxFlat.new()
-		norm_s.bg_color = Color(0, 0, 0, 0)
-		norm_s.content_margin_left = 10; norm_s.content_margin_right  = 10
-		norm_s.content_margin_top  = 7;  norm_s.content_margin_bottom = 7
-		var hov_s := norm_s.duplicate() as StyleBoxFlat
-		hov_s.bg_color = Color(0.12, 0.18, 0.35, 0.60)
-		row_panel.add_theme_stylebox_override("panel", norm_s)
-		row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-		var vbox := VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 2)
-		vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-		var n_lbl := Label.new()
-		n_lbl.text = def.display_name
-		n_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_apply_orbitron(n_lbl, 10)
-		n_lbl.add_theme_color_override("font_color",
-			Color(0.80, 0.88, 1.0) if enabled else Color(0.38, 0.40, 0.55))
-
 		var reason := ""
 		if site_reason != "": reason = site_reason
 		elif at_limit: reason = "Limit reached"
@@ -10114,44 +9287,22 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		elif not can_afford: reason = Economy.cost_block(full_cost)
 		elif not has_pop: reason = "Population will exceed housing — output drops until you build more homes."
 
-		# Compact sub-line: RichTextLabel so we can embed inline mineral icon
-		var row_color := Color(0.45, 0.72, 0.40) if enabled else Color(0.60, 0.30, 0.28)
-
-		var c_lbl := RichTextLabel.new()
-		c_lbl.bbcode_enabled  = true
-		c_lbl.fit_content     = true
-		c_lbl.scroll_active   = false
-		c_lbl.mouse_filter    = Control.MOUSE_FILTER_IGNORE
-		c_lbl.add_theme_font_size_override("normal_font_size", 8)
-		c_lbl.add_theme_color_override("default_color", row_color)
-		if _orbitron: c_lbl.add_theme_font_override("normal_font", _orbitron)
-		c_lbl.custom_minimum_size = Vector2(0, 14)
-
-		# What one more of these would add here (same numbers the engine uses)
+		# ListItem: name, cost badge, what one more would add here (same numbers the engine uses)
 		var preview_entry := {"amount": 1, "district_id": poi.label, "building_id": def.building_id}
-		var out_preview := _entry_output_text(pp, preview_entry, def)
-		var in_preview := def.input_label()
-		c_lbl.append_text(Economy.cost_text(full_cost))
-		if pop_need > 0:
-			c_lbl.append_text(" · ☺%s" % Economy.fmt(pop_need))
-		if out_preview != "":
-			c_lbl.append_text(" · " + out_preview)
-		if def.energy_per_tick < 0.0:
-			c_lbl.append_text(" · %.0f ⚡" % def.energy_per_tick)
-		if in_preview != "":
-			c_lbl.append_text(" · " + in_preview)
-
-		vbox.add_child(n_lbl); vbox.add_child(c_lbl)
+		var row_panel := ListItem.create(def.display_name.to_upper(), _building_icon(def),
+			Economy.cost_text(full_cost) + ("  ·  %s pop" % Economy.fmt(pop_need) if pop_need > 0 else ""),
+			_building_stats(pp, preview_entry, def, 1))
+		row_panel.icon_color = def.output_color()
+		row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row_panel.clickable = enabled
+		if not enabled:
+			row_panel.modulate.a = 0.45
 		row_panel.set_meta("building_id", def.building_id)
-		row_panel.add_child(vbox)
 		list.add_child(row_panel)
 
 		var cap_poi    := poi
 		var cap_def    := def
 		var cap_planet := planet
-		var cap_row    := row_panel
-		var cap_norm   := norm_s
-		var cap_hov    := hov_s
 		var tip_title := def.display_name
 
 		# ── Dynamic stat calculation ────────────────────────────────
@@ -10195,25 +9346,21 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 
 		row_panel.mouse_entered.connect(func() -> void:
 			AudioManager.play("poi_hover")
-			cap_row.add_theme_stylebox_override("panel", cap_hov)
 			if enabled and not _is_at_edge():
 				CursorManager.set_state(CursorManager.State.POINTER)
 			TooltipManager.show_tip(tip_title, tip_body_parts, tip_cost))
 		row_panel.mouse_exited.connect(func() -> void:
-			cap_row.add_theme_stylebox_override("panel", cap_norm)
 			CursorManager.set_state(CursorManager.State.NORMAL)
 			TooltipManager.hide_tip())
 
 		var cap_overlay := outer
 		if enabled:
-			row_panel.gui_input.connect(func(e: InputEvent) -> void:
-				if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
-						and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-					if _buy_buildings(cap_poi, cap_planet, cap_def, _bulk_count()) > 0:
-						if is_instance_valid(cap_overlay):
-							cap_overlay.queue_free()
-						_active_slot_dropdown = null
-						_build_district_panel(cap_poi, cap_planet))
+			row_panel.pressed.connect(func() -> void:
+				if _buy_buildings(cap_poi, cap_planet, cap_def, _bulk_count()) > 0:
+					if is_instance_valid(cap_overlay):
+						cap_overlay.queue_free()
+					_active_slot_dropdown = null
+					_build_district_panel(cap_poi, cap_planet))
 
 	var bg := ColorRect.new()
 	bg.color = Color(0, 0, 0, 0)
@@ -10288,7 +9435,6 @@ func _toggle_mineral_dropdown(btn: Control, raw_list: Array, target_key: String,
 	for alternative: ResourceData in raw_list:
 		var is_current := alternative.resource_id() == current_tgt
 		var alt_btn := Button.new()
-		alt_btn.flat = true
 		alt_btn.focus_mode = Control.FOCUS_NONE
 		alt_btn.custom_minimum_size = Vector2(28, 28)
 		
@@ -10300,23 +9446,7 @@ func _toggle_mineral_dropdown(btn: Control, raw_list: Array, target_key: String,
 		alt_btn.add_child(alt_icon)
 		alt_icon.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 
-		var alt_style := StyleBoxFlat.new()
-		alt_style.bg_color = Color(0.1, 0.12, 0.2, 0.8)
-		alt_style.border_color = alternative.display_color.darkened(0.3)
-		if is_current:
-			alt_style.bg_color = Color(0.15, 0.25, 0.15, 0.9)
-			alt_style.border_color = Color(0.4, 0.8, 0.4, 0.8)
-		alt_style.set_border_width_all(1)
-		alt_style.corner_radius_top_left = 3
-		alt_style.corner_radius_top_right = 3
-		alt_style.corner_radius_bottom_left = 3
-		alt_style.corner_radius_bottom_right = 3
-		alt_btn.add_theme_stylebox_override("normal", alt_style)
 
-		var alt_hover := alt_style.duplicate() as StyleBoxFlat
-		alt_hover.bg_color = Color(0.15, 0.18, 0.3, 0.95)
-		alt_hover.border_color = alternative.display_color
-		alt_btn.add_theme_stylebox_override("hover", alt_hover)
 		
 		if is_current:
 			alt_btn.disabled = true
@@ -10344,6 +9474,7 @@ func _toggle_mineral_dropdown(btn: Control, raw_list: Array, target_key: String,
 			CursorManager.set_state(CursorManager.State.NORMAL)
 			TooltipManager.hide_tip())
 
+		UIStyle.style_button(alt_btn, UIStyle.DEFAULT, 8)
 		tray_h.add_child(alt_btn)
 
 	var bg := ColorRect.new()
@@ -10380,54 +9511,29 @@ func _migrate_orbit(data: PlanetData) -> void:
 		pp.orbit_level = clampi(n, 1, Leveling.max_orbit_level())
 		pp.recalculate_limits()
 
-func _orbit_card_shell(enabled: bool) -> PanelContainer:
-	var card := PanelContainer.new()
-	var sb := _card_panel_style()
-	sb.bg_color = Color(0.06, 0.08, 0.18, 0.85) if enabled else Color(0.05, 0.06, 0.10, 0.45)
-	sb.border_color = Color(0.55, 0.50, 1.0, 0.55) if enabled else Color(0.25, 0.25, 0.38, 0.4)
-	card.add_theme_stylebox_override("panel", sb)
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.custom_minimum_size = Vector2(0, 48)
-	card.mouse_filter = Control.MOUSE_FILTER_STOP
-	return card
-
-## The Orbit in the Cities list — opens its panel.
+## The Orbit in the Cities list — opens its panel (ListItem look).
 func _build_orbit_card(data: PlanetData, pp: PlanetProgress) -> PanelContainer:
-	var card := _orbit_card_shell(true)
-	var m := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		m.add_theme_constant_override("margin_" + side, 8 if side != "left" else 10)
-	m.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.add_child(m)
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 10)
-	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	m.add_child(h)
-	h.add_child(_level_badge(pp.orbit_level, true))
-	var info := VBoxContainer.new()
-	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.add_child(info)
-	var n := Label.new()
-	n.text = "Orbit"
-	_apply_orbitron(n, 10)
-	n.add_theme_color_override("font_color", Color(0.82, 0.80, 1.0))
-	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	info.add_child(n)
-	var t := Label.new()
-	t.text = "Space Stations  %d / %d" % [Leveling.orbit_stations(data).size(), pp.orbit_level]
-	_apply_orbitron(t, 7)
-	t.add_theme_color_override("font_color", Color(0.50, 0.55, 0.80))
-	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	info.add_child(t)
+	var card := ListItem.create("ORBIT", "rocket", "Level %d" % pp.orbit_level, [],
+		"Space Stations  %d / %d" % [Leveling.orbit_stations(data).size(), pp.orbit_level])
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	card.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
-	card.gui_input.connect(func(e: InputEvent) -> void:
-		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
-				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-			AudioManager.play("click")
-			_build_orbit_panel(data))
+	card.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		_build_orbit_panel(data))
 	return card
+
+## Icon for a district type (UIIcons names).
+func _district_def_icon(def: DistrictDef) -> String:
+	match def.id:
+		DistrictDef.Type.CITY:          return "city"
+		DistrictDef.Type.GENERATOR:     return "energy"
+		DistrictDef.Type.MINING:        return "production"
+		DistrictDef.Type.SPACE_STATION: return "rocket"
+		DistrictDef.Type.RESIDENTIAL:   return "population"
+		DistrictDef.Type.COMMERCIAL:    return "credits"
+		DistrictDef.Type.SCIENCE:       return "science"
+	return "district"
 
 ## The Orbit is offered as a second City type in FOUND CITY — one per planet,
 ## and only beside a surface City. It shows before it can be founded (greyed,
@@ -10457,25 +9563,8 @@ func _orbit_found_block(data: PlanetData) -> String:
 func _build_orbit_type_row(data: PlanetData, dropdown_ref: Array[Node]) -> Control:
 	var cost := DistrictDef.placement_cost(DistrictDef.find(DistrictDef.Type.CITY), data)
 	var block := _orbit_found_block(data)
-	var btn := Button.new()
-	btn.flat = true
-	btn.text = "◈  Orbit"
-	_apply_orbitron(btn, 9)
+	var btn := IconButton.create("ORBIT", "rocket", IconButton.Variant.DEFAULT, HUDManager.fmt_credits(cost))
 	btn.disabled = block != ""
-	btn.add_theme_color_override("font_color", Color(0.78, 0.74, 1.0))
-	btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
-	btn.add_theme_color_override("font_disabled_color", Color(0.5, 0.5, 0.6) if block != "Not enough credits" else Color(0.9, 0.3, 0.3))
-	var norm := StyleBoxFlat.new()
-	norm.bg_color = Color(0, 0, 0, 0)
-	norm.content_margin_left = 10; norm.content_margin_right = 10
-	norm.content_margin_top = 6; norm.content_margin_bottom = 6
-	var hov := norm.duplicate() as StyleBoxFlat
-	hov.bg_color = Color(0.16, 0.14, 0.35, 0.60)
-	btn.add_theme_stylebox_override("normal", norm)
-	btn.add_theme_stylebox_override("hover", hov)
-	btn.add_theme_stylebox_override("pressed", hov)
-	btn.add_theme_stylebox_override("disabled", norm)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	var pp := GameState.get_planet(data.seed)
 	var tip := "The world's Central Orbit — one per planet, it takes no City slot. Its first station is the hub of your trade network; every district you add launches a smaller satellite station (one module each); level the Orbit for more.\n\nCost  " \
 		+ _cost_bb(cost, 0, data, pp) + ("" if block == "" else "\n\n" + _bb("➡ " + block, BB_BAD))
@@ -10537,15 +9626,12 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	root.add_child(HSeparator.new())
 	var back := Button.new()
 	back.text = "‹  " + planet.planet_name
-	back.flat = true
 	back.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	back.focus_mode = Control.FOCUS_NONE
-	_apply_orbitron(back, 9)
-	back.add_theme_color_override("font_color", Color(0.55, 0.70, 1.0))
-	back.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
 	back.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_build_planet_overview(planet))
+	UIStyle.style_button(back, UIStyle.FLAT)
 	root.add_child(back)
 	var header := HBoxContainer.new()
 	var title := Label.new()
@@ -10606,7 +9692,6 @@ func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
 	var btn := Button.new()
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_apply_orbitron(btn, 9)
 	btn.text = "ORBIT  Lv %d → Lv %d  ◈ %s" % [lv, next, HUDManager.fmt_credits(credits)] if lv < Leveling.max_orbit_level() else "ORBIT  MAX LEVEL"
 	_live_enable(btn, func() -> bool:
 		return Leveling.orbit_level_block(planet, pp) == "" and GameState.credits >= credits)
@@ -10628,6 +9713,7 @@ func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
 		pp.recalculate_limits()
 		GameState.planet_progress_changed.emit(planet.seed)
 		_build_orbit_panel(planet))
+	UIStyle.style_button(btn, UIStyle.POSITIVE)
 	return btn
 
 func _build_city_panel(city: POIData, planet: PlanetData) -> void:
@@ -10650,58 +9736,29 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	root.name = "DistrictBuildPanel"
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 8)
-	root.add_child(HSeparator.new())
 
 	if GameState.planet_view_unlocked:
 		var back := Button.new()
 		back.text = "‹  " + planet.planet_name
-		back.flat = true
+		UIStyle.style_button(back, UIStyle.FLAT)
 		back.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		back.focus_mode = Control.FOCUS_NONE
-		_apply_orbitron(back, 9)
-		back.add_theme_color_override("font_color", Color(0.55, 0.70, 1.0))
-		back.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
 		back.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_city_panel_poi = null
 			_build_planet_overview(planet))
 		root.add_child(back)
 
-	var header := HBoxContainer.new()
-	var title := Label.new()
-	title.text = city.shown_name() + "  ·  City"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_apply_orbitron(title, 12)
-	title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-	header.add_child(title)
-	var lv_lbl := Label.new()
-	lv_lbl.text = "Lv %d" % lv
-	_apply_orbitron(lv_lbl, 11)
-	lv_lbl.add_theme_color_override("font_color", Color(0.55, 0.70, 1.0))
-	header.add_child(lv_lbl)
-	root.add_child(header)
-
-	# City stats
+	# Hero: the City, its level and how far it is from the next one
 	var count := Leveling.city_district_count(planet, city)
 	var max_d := Leveling.city_max_districts(lv)
 	var have := Leveling.city_district_levels(planet, pp, city)
 	var need := Leveling.city_level_req(lv + 1)
-	for row: Array in [
-		["Districts", "%d / %d" % [count, max_d], Color(1.0, 0.45, 0.35) if count >= max_d else Color(0.80, 0.85, 1.0)],
-		["District levels", "%d / %d for Lv %d" % [have, need, lv + 1], Color(0.55, 0.95, 0.60) if have >= need else Color(0.80, 0.85, 1.0)],
-	]:
-		var r := HBoxContainer.new()
-		var k := Label.new()
-		k.text = row[0]
-		k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_apply_orbitron(k, 8)
-		k.add_theme_color_override("font_color", Color(0.45, 0.50, 0.65))
-		var v := Label.new()
-		v.text = row[1]
-		_apply_orbitron(v, 8)
-		v.add_theme_color_override("font_color", row[2])
-		r.add_child(k); r.add_child(v)
-		root.add_child(r)
+	_set_hero("City - Level %d" % lv, city.shown_name(), [
+		["Districts %d/%d" % [count, max_d], HeroTag.Tone.BAD if count >= max_d else HeroTag.Tone.PLAIN,
+			"Districts in this City / how many its level allows."],
+		["Levels %d/%d for Lv %d" % [have, need, lv + 1], HeroTag.Tone.GOOD if have >= need else HeroTag.Tone.PLAIN,
+			"Total district levels needed for the next City level."],
+	])
 
 	# Districts
 	var body_scroll := ScrollContainer.new()
@@ -10716,17 +9773,10 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	body.add_theme_constant_override("separation", 8)
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body_scroll.add_child(body)
-	var d_hdr := Label.new()
-	d_hdr.text = "DISTRICTS"
-	_apply_orbitron(d_hdr, 9)
-	d_hdr.add_theme_color_override("font_color", Color(0.50, 0.58, 0.80))
-	body.add_child(d_hdr)
+	body.add_child(SectionHeader.create("DISTRICTS", "%d/%d" % [count, max_d]))
 	var add_card := _build_add_district_card(planet, count < max_d, false, city)
 	if count >= max_d and add_card.get_child_count() > 0:
-		var full_lbl := add_card.find_children("*", "Label", true, false)
-		for l in full_lbl:
-			if (l as Label).text == "SLOTS FULL":
-				(l as Label).text = "CITY FULL — LEVEL UP THE CITY"
+		(add_card.get_child(0) as IconButton).label_text = "CITY FULL — LEVEL UP THE CITY"
 	body.add_child(add_card)
 	_poi_overview_cards.clear()
 	body.add_child(_build_district_overview_card(city, planet, pp, panel_content, body, true))
@@ -10738,10 +9788,7 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 		_start_tut_node_pulse(_tut_highlight_node)
 
 	# City level up
-	var sep := HSeparator.new()
-	var sep_s := StyleBoxFlat.new(); sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
-	sep.add_theme_stylebox_override("separator", sep_s)
-	root.add_child(sep)
+	root.add_child(HSeparator.new())
 	root.add_child(_build_city_level_row(city, planet, pp))
 	panel_content.add_child(root)
 
@@ -10810,37 +9857,16 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 	var credits := Leveling.city_level_credits(next)
 	var pop := Leveling.city_level_pop(next)
 	var block := Leveling.city_level_block(planet, pp, city)
-	var btn := Button.new()
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_apply_orbitron(btn, 9)
 	var upgrading := pp.city_upgrading.has(city.label)
-	btn.text = "CITY  Lv %d → Lv %d  ◈ %s  ☺ %s" % [lv, next, HUDManager.fmt_credits(credits), Economy.fmt(pop)]
+	var btn := IconButton.create("CITY LV %d → %d" % [lv, next], "upgrade", IconButton.Variant.POSITIVE,
+		"%s · %s pop" % [HUDManager.fmt_credits(credits), Economy.fmt(pop)])
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if upgrading:
-		btn.text = "CITY  Lv %d → Lv %d  ·  LEVELLING UP…" % [lv, next]
+		btn.label_text = "LEVELLING UP…"
+		btn.counter = "Lv %d → %d" % [lv, next]
 		btn.add_child(_hazard_fill(func() -> float: return float(pp.city_upgrading.get(city.label, 1.0))))
 	_live_enable(btn, func() -> bool:
 		return Leveling.city_level_block(planet, pp, city) == "" and GameState.credits >= credits)
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.08, 0.20, 0.12, 0.85)
-	st.border_color = Color(0.35, 0.80, 0.45, 0.6)
-	st.set_border_width_all(1)
-	st.set_corner_radius_all(4)
-	st.content_margin_top = 6; st.content_margin_bottom = 6
-	var hov := st.duplicate() as StyleBoxFlat
-	hov.bg_color = Color(0.12, 0.30, 0.18, 0.95)
-	var dis := st.duplicate() as StyleBoxFlat
-	dis.bg_color = Color(0.08, 0.09, 0.14, 0.7)
-	dis.border_color = Color(0.25, 0.28, 0.40, 0.5)
-	if upgrading:
-		dis.bg_color = Color(0, 0, 0, 0)   # let the hazard fill behind it show
-		dis.border_color = Color(1.0, 0.82, 0.15, 0.6)
-	btn.add_theme_stylebox_override("normal", st)
-	btn.add_theme_stylebox_override("hover", hov)
-	btn.add_theme_stylebox_override("pressed", hov)
-	btn.add_theme_stylebox_override("disabled", dis)
-	btn.add_theme_color_override("font_color", Color(0.70, 1.0, 0.75))
-	btn.add_theme_color_override("font_disabled_color", Color(1.0, 0.9, 0.6) if upgrading else Color(0.45, 0.48, 0.60))
 	var tip := "Raise %s to Lv %d:\n%s\n\nCost  %s\n%s" % [city.shown_name(), next,
 		_bb("+%d districts allowed (%d → %d)" % [Leveling.city_max_districts(next) - Leveling.city_max_districts(lv),
 			Leveling.city_max_districts(lv), Leveling.city_max_districts(next)], Economy.color_of(Economy.POPULATION)),
@@ -10944,19 +9970,14 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	root.set_meta("district", poi.label)   # lets a re-click toggle to the City
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 8)
-	root.add_child(HSeparator.new())
 
 	# Districts (and the Capital District) live in a City: offer the way back up.
 	var parent_city := _find_poi(planet, poi.parent_city) if not poi.is_city() else poi
 	if poi.is_orbital():
 		var oback := Button.new()
 		oback.text = "‹  Orbit"
-		oback.flat = true
+		UIStyle.style_button(oback, UIStyle.FLAT)
 		oback.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		oback.focus_mode = Control.FOCUS_NONE
-		_apply_orbitron(oback, 9)
-		oback.add_theme_color_override("font_color",       Color(0.55, 0.70, 1.0))
-		oback.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
 		oback.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_build_orbit_panel(planet))
@@ -10964,12 +9985,8 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	if parent_city != null:
 		var back := Button.new()
 		back.text = "‹  " + parent_city.shown_name()
-		back.flat = true
+		UIStyle.style_button(back, UIStyle.FLAT)
 		back.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		back.focus_mode = Control.FOCUS_NONE
-		_apply_orbitron(back, 9)
-		back.add_theme_color_override("font_color",       Color(0.55, 0.70, 1.0))
-		back.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
 		back.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		back.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		var cap_parent := parent_city
@@ -10980,85 +9997,76 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 			_build_city_panel(cap_parent, planet))
 		root.add_child(back)
 
-	var header := HBoxContainer.new()
+	# Hero: the district, its level and what its site offers (coast, energy potential)
+	var dist_lv: int = pp.district_levels.get(poi.label, 1)
+	var kind := "Capital District" if poi.is_city() else poi.type_label()
+	var site_tags: Array = []
+	if poi.coastal:
+		site_tags.append(["Coastal", HeroTag.Tone.GOOD, "Next to the sea: coastal buildings can be built here."])
+	for key: String in ResourceMap.ENERGY_KEYS:
+		var pct := int(round(float(poi.resource_tags.get(key, 0.0)) * 100.0))
+		if pct > 0:
+			site_tags.append(["%s %d%%" % [BuildingDef.tag_label(key).left(5), pct], HeroTag.Tone.PLAIN,
+				"%s potential at this site." % BuildingDef.tag_label(key)])
+	_set_hero("%s - Level %d" % [kind, dist_lv], poi.shown_name(), site_tags)
 
-	# Inline rename: click label → LineEdit appears
-	var title_stack := Control.new()
-	title_stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_stack.custom_minimum_size    = Vector2(0, 22)
-	header.add_child(title_stack)
-
-	var poi_title := Label.new()
-	poi_title.text = poi.shown_name() + ("  ·  Capital District" if poi.is_city() else "  ·  " + poi.type_label())
-	_apply_orbitron(poi_title, 11)
-	poi_title.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-	poi_title.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	poi_title.mouse_filter = Control.MOUSE_FILTER_STOP
-	title_stack.add_child(poi_title)
-
+	# Rename (opens a small popup)
 	var cap_poi_rename  := poi
 	var cap_planet_ren  := planet
-	poi_title.gui_input.connect(func(ev: InputEvent) -> void:
-		if not (ev is InputEventMouseButton): return
-		var mb := ev as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			poi_title.visible = false
-			var edit := LineEdit.new()
-			edit.text = cap_poi_rename.shown_name()
-			_apply_orbitron(edit, 10)
-			edit.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-			title_stack.add_child(edit)
-			edit.grab_focus()
-			edit.select_all()
-			var _commit := func(new_name: String) -> void:
-				if not is_instance_valid(edit):
-					return
-				var trimmed := new_name.strip_edges()
-				if not trimmed.is_empty():
-					cap_poi_rename.display_name = trimmed   # names may repeat; the id stays
-				edit.queue_free()
-				poi_title.text = cap_poi_rename.shown_name() + ("  ·  Capital District" if cap_poi_rename.is_city() else "  ·  " + cap_poi_rename.type_label())
-				poi_title.visible = true
-				GameState.planet_progress_changed.emit(cap_planet_ren.seed)
-			edit.text_submitted.connect(_commit)
-			edit.focus_exited.connect(func() -> void: _commit.call(edit.text)))
+	var rename_row := HBoxContainer.new()
+	rename_row.alignment = BoxContainer.ALIGNMENT_END
+	var rename_btn := IconButton.create("RENAME", "rename")
+	rename_btn.pressed.connect(func() -> void:
+		var rp := ModalPopup.open(self, "Rename District", "rename")
+		var edit := LineEdit.new()
+		edit.text = cap_poi_rename.shown_name()
+		edit.max_length = 28
+		rp.add_content(edit)
+		var ok := rp.confirm_button()
+		ok.label_text = "RENAME"
+		ok.icon_name = "rename"
+		var commit := func() -> void:
+			var trimmed := edit.text.strip_edges()
+			if not trimmed.is_empty():
+				cap_poi_rename.display_name = trimmed   # names may repeat; the id stays
+			rp.close()
+			GameState.planet_progress_changed.emit(cap_planet_ren.seed)
+			_build_district_panel(cap_poi_rename, cap_planet_ren)
+		ok.pressed.connect(commit)
+		edit.text_submitted.connect(func(_t: String) -> void: commit.call())
+		edit.grab_focus.call_deferred()
+		edit.select_all.call_deferred())
+	rename_row.add_child(rename_btn)
+	root.add_child(rename_row)
 
 	var slots_used  := pp.slots_used_in_district(poi.label)
 	var slots_total := pp.district_slots(poi)
-	var dist_lv: int = pp.district_levels.get(poi.label, 1)
-	var slots_lbl := Label.new()
-	slots_lbl.text = "%d/%d  Lv%d" % [slots_used, slots_total, dist_lv]
-	_apply_orbitron(slots_lbl, 9)
-	slots_lbl.add_theme_color_override("font_color",
-		Color(0.85, 0.55, 0.35) if slots_used >= slots_total else Color(0.5, 0.6, 0.8))
-	header.add_child(slots_lbl)
 
-	root.add_child(header)
-
-	# Natural resources at this district's site
-	if not poi.resource_tags.is_empty() or poi.coastal:
-		var tags_lbl := Label.new()
-		tags_lbl.text = _tags_text(poi.resource_tags, poi.coastal)
-		var mins_txt := _minerals_text(poi.resource_tags)
-		if mins_txt != "":
-			tags_lbl.text += "\n" + mins_txt
-		tags_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-		_apply_orbitron(tags_lbl, 8)
-		tags_lbl.add_theme_color_override("font_color", Color(0.85, 0.78, 0.52))
-		tags_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		root.add_child(tags_lbl)
+	# Minerals at this district's site, as chips
+	var mins_txt := _minerals_text(poi.resource_tags)
+	if mins_txt != "":
+		var min_row := HFlowContainer.new()
+		min_row.add_theme_constant_override("h_separation", 4)
+		min_row.add_theme_constant_override("v_separation", 4)
+		var min_lbl := Label.new()
+		min_lbl.text = "Minerals"
+		min_lbl.theme_type_variation = &"SubLabel"
+		min_row.add_child(min_lbl)
+		for part: String in mins_txt.split("  ·  "):
+			min_row.add_child(_info_chip(part, UIStyle.color(&"icon"), "Minerals", "Share of this site's mining output.",
+				UIIcons.get_icon(UIIcons.RAW_PLACEHOLDER)))
+		root.add_child(min_row)
 
 	# District energy balance row
 	var de_row := HBoxContainer.new()
 	var de_lbl := Label.new()
 	de_lbl.text = "District Energy"
 	de_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_apply_orbitron(de_lbl, 8)
-	de_lbl.add_theme_color_override("font_color", Color(0.45, 0.50, 0.65))
+	de_lbl.theme_type_variation = &"SubLabel"
 	var de_val := Label.new()
 	_active_district_energy_lbl = de_val
+	de_val.theme_type_variation = &"CounterLabel"
 	_refresh_district_energy_lbl()
-	_apply_orbitron(de_val, 8)
 	de_row.add_child(de_lbl); de_row.add_child(de_val)
 	root.add_child(de_row)
 
@@ -11067,16 +10075,14 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	var pk := Label.new()
 	pk.text = "Population"
 	pk.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_apply_orbitron(pk, 8)
-	pk.add_theme_color_override("font_color", Color(0.45, 0.50, 0.65))
+	pk.theme_type_variation = &"SubLabel"
 	var pv_lbl := RichTextLabel.new()
 	pv_lbl.bbcode_enabled = true
 	pv_lbl.fit_content = true
 	pv_lbl.scroll_active = false
 	pv_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	pv_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pv_lbl.add_theme_font_size_override("normal_font_size", 8)
-	if _orbitron: pv_lbl.add_theme_font_override("normal_font", _orbitron)
+	pv_lbl.theme_type_variation = &"TooltipBody"
 	var pop_parts: Array[String] = []
 	var used_here := Economy.district_pop_used(pp, poi)
 	var housed_here := Economy.district_housing(planet, pp, poi)
@@ -11122,8 +10128,9 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	_district_scroll_label = poi.label
 	body_scroll.call_deferred("set", "scroll_vertical", saved_scroll)
 
-	# ── Installed buildings as full-bleed production cards ────────────────────
+	# ── Installed buildings as ListItem cards ─────────────────────────────────
 	# One card per building entry; amount field drives ×N display and output scaling
+	body.add_child(SectionHeader.create("BUILDINGS", "%d/%d" % [slots_used, slots_total]))
 	var installed := pp.buildings_in_district(poi.label)
 	for entry: Dictionary in installed:
 		var bid: String = entry.get("building_id", "")
@@ -11147,10 +10154,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 
 	# ── Level info (bottom, below the scrolling body) ────────────────────────
 
-	var upg_sep := HSeparator.new()
-	var upg_sep_s := StyleBoxFlat.new(); upg_sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
-	upg_sep.add_theme_stylebox_override("separator", upg_sep_s)
-	root.add_child(upg_sep)
+	root.add_child(HSeparator.new())
 
 	# Level up: costs population, raises the district's building slots.
 	var lv_btn := _build_district_level_row(poi, planet, pp, dist_lv) as Button
@@ -11238,16 +10242,6 @@ func _show_rendezvous_picker(ship: ShipData, layer: OrbitalLayer) -> void:
 		var btn := Button.new()
 		var type_icon: String = "◈" if tgt.ship_type == "station" else "▶"
 		btn.text = "%s  %s" % [type_icon, tgt.ship_name]
-		_apply_orbitron(btn, 8)
-		var bs := StyleBoxFlat.new()
-		bs.bg_color = Color(0.08, 0.12, 0.24, 0.90)
-		bs.border_color = Color(0.30, 0.55, 0.90, 0.50)
-		bs.set_border_width_all(1); bs.set_corner_radius_all(5)
-		bs.content_margin_left = 10; bs.content_margin_right = 10
-		bs.content_margin_top = 6; bs.content_margin_bottom = 6
-		btn.add_theme_stylebox_override("normal", bs)
-		btn.add_theme_stylebox_override("hover",  bs)
-		btn.add_theme_color_override("font_color", Color(0.75, 0.90, 1.0))
 		btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		var cap_tgt := tgt
@@ -11256,23 +10250,15 @@ func _show_rendezvous_picker(ship: ShipData, layer: OrbitalLayer) -> void:
 			ship.rendezvous_base_speed = ship.orbit_speed
 			ship.rendezvous_target_id  = cap_tgt.ship_id
 			layer.deselect())
+		UIStyle.style_button(btn, UIStyle.DEFAULT, 8)
 		vbox.add_child(btn)
 
 	var cancel_btn := Button.new()
 	cancel_btn.text = "Cancel"
-	_apply_orbitron(cancel_btn, 7)
-	var cbs := StyleBoxFlat.new()
-	cbs.bg_color = Color(0.10, 0.06, 0.10, 0.80)
-	cbs.border_color = Color(0.45, 0.25, 0.30, 0.50)
-	cbs.set_border_width_all(1); cbs.set_corner_radius_all(5)
-	cbs.content_margin_left = 10; cbs.content_margin_right = 10
-	cbs.content_margin_top = 6; cbs.content_margin_bottom = 6
-	cancel_btn.add_theme_stylebox_override("normal", cbs)
-	cancel_btn.add_theme_stylebox_override("hover",  cbs)
-	cancel_btn.add_theme_color_override("font_color", Color(0.75, 0.45, 0.45))
 	cancel_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	cancel_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	cancel_btn.pressed.connect(func() -> void: overlay.queue_free())
+	UIStyle.style_button(cancel_btn, UIStyle.DEFAULT, 8)
 	vbox.add_child(cancel_btn)
 
 ## Transfer panel — shown when rendezvous is complete. Floating panel next to the ships.
@@ -11384,16 +10370,6 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 					var xfer_btn := Button.new()
 					var arrow: String = "→" if side == 0 else "←"
 					xfer_btn.text = "%s Transfer" % arrow
-					_apply_orbitron(xfer_btn, 6)
-					var xbs := StyleBoxFlat.new()
-					xbs.bg_color = Color(0.06, 0.14, 0.26, 0.90)
-					xbs.border_color = Color(0.25, 0.55, 0.85, 0.50)
-					xbs.set_border_width_all(1); xbs.set_corner_radius_all(4)
-					xbs.content_margin_left = 6; xbs.content_margin_right = 6
-					xbs.content_margin_top = 3; xbs.content_margin_bottom = 3
-					xfer_btn.add_theme_stylebox_override("normal", xbs)
-					xfer_btn.add_theme_stylebox_override("hover",  xbs)
-					xfer_btn.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
 					xfer_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 					xfer_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 					var cap_rid := res_id; var cap_src := src; var cap_dst := dst
@@ -11403,6 +10379,7 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 						cap_src.cargo.erase(cap_rid)
 						cap_dst.cargo[cap_rid] = cap_dst.cargo.get(cap_rid, 0) + move_amt
 						if not rebuild_ref.is_empty(): rebuild_ref[0].call())
+					UIStyle.style_button(xfer_btn, UIStyle.NEUTRAL, 8)
 					col.add_child(xfer_btn)
 
 	rebuild_ref.append(_build_transfer_cols)
@@ -11416,19 +10393,10 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 	close_row.add_child(close_sp)
 	var close_btn := Button.new()
 	close_btn.text = "Done"
-	_apply_orbitron(close_btn, 7)
-	var dbs := StyleBoxFlat.new()
-	dbs.bg_color = Color(0.06, 0.18, 0.08, 0.90)
-	dbs.border_color = Color(0.22, 0.68, 0.35, 0.60)
-	dbs.set_border_width_all(1); dbs.set_corner_radius_all(5)
-	dbs.content_margin_left = 12; dbs.content_margin_right = 12
-	dbs.content_margin_top = 5; dbs.content_margin_bottom = 5
-	close_btn.add_theme_stylebox_override("normal", dbs)
-	close_btn.add_theme_stylebox_override("hover",  dbs)
-	close_btn.add_theme_color_override("font_color", Color(0.40, 0.92, 0.55))
 	close_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	close_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	close_btn.pressed.connect(func() -> void: panel.queue_free())
+	UIStyle.style_button(close_btn, UIStyle.DEFAULT, 8)
 	close_row.add_child(close_btn)
 
 func _sync_station_buildings() -> void:
