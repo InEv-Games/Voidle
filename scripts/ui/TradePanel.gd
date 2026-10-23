@@ -31,16 +31,7 @@ func _ready() -> void:
 	add_child(dim)
 
 	var panel := PanelContainer.new()
-	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.05, 0.06, 0.11, 0.97)
-	s.border_color = Color(0.28, 0.42, 0.72, 0.6)
-	s.set_border_width_all(1)
-	s.set_corner_radius_all(8)
-	s.content_margin_left = 18
-	s.content_margin_right = 18
-	s.content_margin_top = 14
-	s.content_margin_bottom = 14
-	panel.add_theme_stylebox_override("panel", s)
+	panel.theme_type_variation = &"PopupCard"   # voidle_theme.tres
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(900, 560)
 	panel.position = -panel.custom_minimum_size * 0.5
@@ -252,26 +243,16 @@ func _label(t: String, font_size: int, col: Color) -> Label:
 	l.add_theme_color_override("font_color", col)
 	return l
 
-func _button(t: String, col: Color) -> Button:
+## Theme button types: sells Positive, buys Neutral, anything else Default.
+func _button(t: String, _col: Color) -> Button:
 	var b := Button.new()
-	b.text = t
-	b.focus_mode = Control.FOCUS_NONE
-	if _font: b.add_theme_font_override("font", _font)
-	b.add_theme_font_size_override("font_size", 9)
-	b.add_theme_color_override("font_color", col)
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.08, 0.12, 0.22, 0.9)
-	st.border_color = Color(0.28, 0.42, 0.72, 0.5)
-	st.set_border_width_all(1)
-	st.set_corner_radius_all(3)
-	st.content_margin_left = 6
-	st.content_margin_right = 6
-	st.content_margin_top = 2
-	st.content_margin_bottom = 2
-	b.add_theme_stylebox_override("normal", st)
-	var h := st.duplicate() as StyleBoxFlat
-	h.bg_color = Color(0.14, 0.2, 0.36, 1.0)
-	b.add_theme_stylebox_override("hover", h)
+	b.text = t.to_upper()
+	var variation := UIStyle.DEFAULT
+	if t.begins_with("Sell"):
+		variation = UIStyle.POSITIVE
+	elif t.begins_with("Buy"):
+		variation = UIStyle.NEUTRAL
+	UIStyle.style_button(b, variation, 8)
 	b.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	b.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	return b

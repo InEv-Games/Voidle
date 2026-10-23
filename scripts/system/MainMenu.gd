@@ -207,31 +207,14 @@ func _build_menu() -> void:
 func _add_button(parent: Control, label: String, cb: Callable) -> Button:
 	var btn := Button.new()
 	btn.text                    = label
-	btn.flat                    = true
 	btn.alignment               = HORIZONTAL_ALIGNMENT_LEFT
 	btn.size_flags_horizontal   = Control.SIZE_SHRINK_BEGIN
 	btn.custom_minimum_size     = Vector2(260, 36)
-	if _font: btn.add_theme_font_override("font", _font)
-	btn.add_theme_font_size_override("font_size", 14)
-	btn.add_theme_color_override("font_color",        Color(0.78, 0.78, 1.0))
-	btn.add_theme_color_override("font_hover_color",  Color(1.0,  1.0,  1.0))
-	btn.add_theme_color_override("font_focus_color",  Color(1.0,  1.0,  1.0))
-	btn.add_theme_color_override("font_pressed_color",Color(0.55, 0.55, 0.85))
 
 	# Hover: show a dim left-border accent via StyleBoxFlat
-	var sbn := StyleBoxEmpty.new()
-	var sbh := StyleBoxFlat.new()
-	sbh.bg_color              = Color(1, 1, 1, 0.05)
-	sbh.border_width_left     = 3
-	sbh.border_color          = Color(0.6, 0.5, 1.0, 0.9)
-	sbh.corner_radius_top_right    = 3
-	sbh.corner_radius_bottom_right = 3
-	btn.add_theme_stylebox_override("normal",  sbn)
-	btn.add_theme_stylebox_override("hover",   sbh)
-	btn.add_theme_stylebox_override("pressed", sbh)
-	btn.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
 
 	btn.pressed.connect(cb)
+	UIStyle.style_button(btn, UIStyle.DEFAULT, 12)
 	parent.add_child(btn)
 	return btn
 

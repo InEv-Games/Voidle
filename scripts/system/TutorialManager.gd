@@ -1383,22 +1383,16 @@ func _build_quest_side_ui() -> void:
 			n.queue_free()
 	_side_tab = Button.new()
 	_side_tab.focus_mode = Control.FOCUS_NONE
-	if _orbitron: _side_tab.add_theme_font_override("font", _orbitron)
-	_side_tab.add_theme_font_size_override("font_size", 11)
-	_side_tab.add_theme_color_override("font_color", Color(0.65, 0.78, 1.0))
 	var ts := _panel_style(Color(0.04, 0.05, 0.10, 0.90), Color(0.28, 0.38, 0.72, 0.55))
 	ts.content_margin_left = 5
 	ts.content_margin_right = 5
 	ts.content_margin_top = 14
 	ts.content_margin_bottom = 14
-	_side_tab.add_theme_stylebox_override("normal", ts)
-	var th := ts.duplicate() as StyleBoxFlat
-	th.bg_color = Color(0.10, 0.14, 0.26, 0.95)
-	_side_tab.add_theme_stylebox_override("hover", th)
 	_side_tab.pressed.connect(toggle_objectives)
 	_side_tab.mouse_entered.connect(func() -> void:
 		TooltipManager.show_tip("Objectives", ("Show" if _collapsed else "Hide") + " the objectives (O).", ""))
 	_side_tab.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	UIStyle.style_button(_side_tab, UIStyle.DEFAULT)
 	add_child(_side_tab)
 
 	_overlay_lbl = Label.new()
@@ -1590,9 +1584,7 @@ func _mk_lbl(parent: Node, txt: String, sz: int, col: Color) -> Label:
 func _mk_btn(txt: String, col: Color) -> Button:
 	var b := Button.new()
 	b.text = txt; b.flat = true
-	if _orbitron: b.add_theme_font_override("font", _orbitron)
-	b.add_theme_font_size_override("font_size", 9)
-	b.add_theme_color_override("font_color", col)
+	UIStyle.style_button(b, UIStyle.FLAT)
 	return b
 
 func _hsep(sty: StyleBoxFlat) -> HSeparator:

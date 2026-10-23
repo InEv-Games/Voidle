@@ -236,10 +236,6 @@ func _show_explore_bar() -> void:
 	var back := Button.new()
 	back.text = "↩  RETURN TO YOUR WORLD"
 	back.focus_mode = Control.FOCUS_NONE
-	if font:
-		back.add_theme_font_override("font", font)
-	back.add_theme_font_size_override("font_size", 11)
-	back.add_theme_color_override("font_color", Color(0.65, 1.0, 0.75))
 	back.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	back.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	back.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -247,6 +243,7 @@ func _show_explore_bar() -> void:
 	back.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		end_explore())
+	UIStyle.style_button(back, UIStyle.DEFAULT)
 	_explore_layer.add_child(back)
 	var lbl := Label.new()
 	lbl.text = "EXPLORING  ·  look around freely — nothing here can be built  ·  ESC return  ·  H hide navigation"

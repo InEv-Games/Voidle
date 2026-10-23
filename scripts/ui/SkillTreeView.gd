@@ -121,30 +121,13 @@ func _ready() -> void:
 	# Close button at the bottom center
 	_close_btn = Button.new()
 	_close_btn.text = "CLOSE"
-	if _font: _close_btn.add_theme_font_override("font", _font)
-	_close_btn.add_theme_font_size_override("font_size", 10)
-	_close_btn.add_theme_color_override("font_color", Color(0.9, 0.92, 1.0))
 	_close_btn.custom_minimum_size = Vector2(100, 30)
 	_close_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_close_btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_close_btn.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_close_btn.offset_bottom = -20.0
 	
-	var btn_s := StyleBoxFlat.new()
-	btn_s.bg_color = Color(0.12, 0.16, 0.28, 0.9)
-	btn_s.border_color = Color(0.28, 0.42, 0.72, 0.55)
-	btn_s.set_border_width_all(1)
-	btn_s.corner_radius_top_left = 4
-	btn_s.corner_radius_top_right = 4
-	btn_s.corner_radius_bottom_left = 4
-	btn_s.corner_radius_bottom_right = 4
-	_close_btn.add_theme_stylebox_override("normal", btn_s)
 	
-	var btn_h := btn_s.duplicate() as StyleBoxFlat
-	btn_h.bg_color = Color(0.18, 0.24, 0.42, 1.0)
-	btn_h.border_color = Color(0.42, 0.62, 1.0, 0.85)
-	_close_btn.add_theme_stylebox_override("hover", btn_h)
-	_close_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	
 	_close_btn.pressed.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
@@ -157,6 +140,7 @@ func _ready() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER))
 	_close_btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL))
+	UIStyle.style_button(_close_btn, UIStyle.DEFAULT)
 	add_child(_close_btn)
 
 	# Listen to skill unlocks to redraw connections & button states
@@ -371,8 +355,6 @@ func _build_tree_graph() -> void:
 				bo.text += "\n" + bo_block
 			bo.disabled = bo_block != ""
 			bo.focus_mode = Control.FOCUS_NONE
-			if _font: bo.add_theme_font_override("font", _font)
-			bo.add_theme_font_size_override("font_size", 9)
 			bo.position = Vector2(-80, card_size + 4)
 			bo.custom_minimum_size = Vector2(card_size + 160, 0)
 			bo.pressed.connect(func() -> void:
@@ -380,6 +362,7 @@ func _build_tree_graph() -> void:
 					AudioManager.play("skill_buy")
 				else:
 					AudioManager.play("error"))
+			UIStyle.style_button(bo, UIStyle.POSITIVE, 9)
 			wrapper.add_child(bo)
 
 		# Position absolute coordinate

@@ -156,17 +156,11 @@ func _build_ui() -> void:
 func _make_btn(txt: String, tip: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = txt
-	b.flat = true
 	b.focus_mode = Control.FOCUS_NONE
 	b.tooltip_text = tip
 	b.custom_minimum_size = Vector2(26, 0)
-	if _font:
-		b.add_theme_font_override("font", _font)
-	b.add_theme_font_size_override("font_size", 14)
-	b.add_theme_color_override("font_color", Color(0.65, 0.78, 1.0))
-	b.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
-	b.add_theme_color_override("font_disabled_color", Color(0.30, 0.33, 0.45))
 	b.pressed.connect(cb)
+	UIStyle.style_button(b, UIStyle.DEFAULT, 12)
 	return b
 
 func _crumb(txt: String, target: Dictionary, enabled: bool) -> void:
@@ -183,14 +177,9 @@ func _crumb(txt: String, target: Dictionary, enabled: bool) -> void:
 		return
 	var b := Button.new()
 	b.text = txt
-	b.flat = true
 	b.focus_mode = Control.FOCUS_NONE
-	if _font:
-		b.add_theme_font_override("font", _font)
-	b.add_theme_font_size_override("font_size", 9)
-	b.add_theme_color_override("font_color", Color(0.55, 0.68, 0.95))
-	b.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
 	b.pressed.connect(func() -> void: go(target))
+	UIStyle.style_button(b, UIStyle.FLAT)
 	_crumbs.add_child(b)
 
 func _style_lbl(l: Label, col: Color) -> void:

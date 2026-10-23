@@ -48,14 +48,7 @@ func _build(title: String, subtitle: String, commands: Array[GameCommand], scree
 	add_child(backdrop)
 
 	_panel = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.05, 0.06, 0.12, 0.96)
-	sb.border_color = Color(0.30, 0.42, 0.80, 0.55)
-	sb.set_border_width_all(1)
-	sb.set_corner_radius_all(5)
-	sb.content_margin_left = 4; sb.content_margin_right = 4
-	sb.content_margin_top = 6;  sb.content_margin_bottom = 4
-	_panel.add_theme_stylebox_override("panel", sb)
+	_panel.theme_type_variation = &"TooltipPanel"   # voidle_theme.tres
 	_panel.custom_minimum_size = Vector2(200, 0)
 	add_child(_panel)
 
@@ -67,10 +60,6 @@ func _build(title: String, subtitle: String, commands: Array[GameCommand], scree
 	if subtitle != "":
 		box.add_child(_padded(_label(subtitle, 7, Color(0.48, 0.55, 0.78))))
 	var sep := HSeparator.new()
-	var sep_s := StyleBoxFlat.new()
-	sep_s.bg_color = Color(0.25, 0.32, 0.55, 0.45)
-	sep_s.content_margin_top = 1
-	sep.add_theme_stylebox_override("separator", sep_s)
 	box.add_child(sep)
 
 	for c: GameCommand in commands:
@@ -90,14 +79,8 @@ func _build(title: String, subtitle: String, commands: Array[GameCommand], scree
 func _row(c: GameCommand) -> Control:
 	var blocked := c.can_execute()
 	var btn := Button.new()
-	btn.flat = true
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.custom_minimum_size = Vector2(0, 24)
-	var hov := StyleBoxFlat.new()
-	hov.bg_color = Color(0.16, 0.22, 0.42, 0.75) if blocked == "" else Color(0.12, 0.12, 0.18, 0.6)
-	hov.set_corner_radius_all(3)
-	btn.add_theme_stylebox_override("hover", hov)
-	btn.add_theme_stylebox_override("pressed", hov)
 
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -134,6 +117,7 @@ func _row(c: GameCommand) -> Control:
 		AudioManager.play("click")
 		close()
 		c.execute())
+	UIStyle.style_button(btn, UIStyle.DEFAULT)
 	return btn
 
 func _label(txt: String, size: int, col: Color) -> Label:

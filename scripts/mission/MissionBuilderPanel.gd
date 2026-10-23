@@ -143,15 +143,7 @@ func _build_ui() -> void:
 		var is_locked: bool = (ttype == "station" and station_locked)
 		var tb := Button.new()
 		tb.text = SHIP_LABELS.get(ttype, ttype.capitalize())
-		_font_apply(tb, 7)
 		var is_sel: bool = _context.get("entry", {}).get("ship_type", "shuttle") == ttype
-		var tbg := Color(0.10, 0.28, 0.50, 0.95) if is_sel else (Color(0.08, 0.08, 0.12, 0.60) if is_locked else Color(0.05, 0.07, 0.15, 0.75))
-		var tbc := Color(0.35, 0.65, 1.0, 0.65 if is_sel else (0.12 if is_locked else 0.28))
-		var tbs := _btn_style(tbg, tbc)
-		tb.add_theme_stylebox_override("normal", tbs)
-		tb.add_theme_stylebox_override("hover",  tbs)
-		tb.add_theme_color_override("font_color",
-			Color(0.75, 0.92, 1.0) if is_sel else (Color(0.30, 0.32, 0.40) if is_locked else Color(0.45, 0.60, 0.80)))
 		tb.custom_minimum_size = Vector2(70, 0)
 		tb.disabled = is_locked
 		if not is_locked:
@@ -163,6 +155,7 @@ func _build_ui() -> void:
 			# Rebuild whole UI so type buttons reflect new selection
 			for ch in _vbox.get_children(): ch.queue_free()
 			_build_ui())
+		UIStyle.style_button(tb, UIStyle.NEUTRAL if is_sel else UIStyle.DEFAULT, 8)   # selected = Neutral
 		type_row.add_child(tb)
 
 	if station_locked:
@@ -604,13 +597,11 @@ func _make_x_btn(on_press: Callable) -> Button:
 	_font_apply(btn, 9)
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0, 0, 0, 0); s.set_border_width_all(0)
-	btn.add_theme_stylebox_override("normal", s)
-	btn.add_theme_stylebox_override("hover",  s)
-	btn.add_theme_color_override("font_color", Color(0.70, 0.35, 0.35, 0.75))
 	btn.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	btn.pressed.connect(on_press)
+	UIStyle.style_button(btn, UIStyle.NEGATIVE, 8)
 	return btn
 
 
@@ -661,11 +652,8 @@ func _show_add_dropdown(anchor: Control) -> void:
 		ibs.set_border_width_all(0)
 		ibs.content_margin_left = 6; ibs.content_margin_right = 6
 		ibs.content_margin_top  = 3; ibs.content_margin_bottom = 3
-		item_btn.add_theme_stylebox_override("normal", ibs)
 		var ibs_h := ibs.duplicate()
 		(ibs_h as StyleBoxFlat).bg_color = Color(0.12, 0.22, 0.45, 0.80)
-		item_btn.add_theme_stylebox_override("hover", ibs_h)
-		item_btn.add_theme_color_override("font_color", Color(0.80, 0.92, 1.0))
 		item_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		item_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		item_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
@@ -673,6 +661,7 @@ func _show_add_dropdown(anchor: Control) -> void:
 			_tasks.append({"type": cap_def.task_type})
 			_dismiss_add_popup()
 			_rebuild_task_list())
+		UIStyle.style_button(item_btn, UIStyle.DEFAULT, 8)
 		pvbox.add_child(item_btn)
 
 	# Position below anchor, added to overlay so coordinates are consistent
@@ -775,14 +764,17 @@ func _style_lineedit(le: LineEdit) -> void:
 	le.add_theme_color_override("font_color", Color(0.90, 0.92, 1.0))
 
 
-func _make_btn(text_val: String, bg: Color, border: Color, font_color: Color) -> Button:
+## Theme button types: the old colour args only pick one
+## (reddish border = Negative, greenish = Positive, else Default).
+func _make_btn(text_val: String, _bg: Color, border: Color, _font_color: Color) -> Button:
 	var btn := Button.new()
-	btn.text = text_val
-	_font_apply(btn, 7)
-	var s := _btn_style(bg, border)
-	btn.add_theme_stylebox_override("normal", s)
-	btn.add_theme_stylebox_override("hover",  s)
-	btn.add_theme_color_override("font_color", font_color)
+	btn.text = text_val.to_upper()
+	var variation := UIStyle.DEFAULT
+	if border.r > border.g + 0.1:
+		variation = UIStyle.NEGATIVE
+	elif border.g > border.b:
+		variation = UIStyle.POSITIVE
+	UIStyle.style_button(btn, variation, 8)
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	return btn
