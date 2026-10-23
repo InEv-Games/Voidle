@@ -60,17 +60,7 @@ func _ready() -> void:
 	_orbitron = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 
 	var panel := PanelContainer.new()
-	var s := StyleBoxFlat.new()
-	s.bg_color    = Color(0.05, 0.06, 0.11, 0.92)
-	s.border_width_right  = 1
-	s.border_width_bottom = 1
-	s.border_color = Color(0.25, 0.32, 0.55, 0.45)
-	s.corner_radius_bottom_right = 8
-	s.content_margin_left   = 14
-	s.content_margin_right  = 14
-	s.content_margin_top    = 8
-	s.content_margin_bottom = 8
-	panel.add_theme_stylebox_override("panel", s)
+	panel.theme_type_variation = &"ResourceBar"   # voidle_theme.tres
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var vbox := VBoxContainer.new()
@@ -88,32 +78,8 @@ func _ready() -> void:
 	_credits_lbl = _res_lbls[Economy.CREDITS]
 
 	# Skill Tree Button
-	var skill_btn := Button.new()
-	skill_btn.text = "✦ Upgrade Tree"
-	if _orbitron: skill_btn.add_theme_font_override("font", _orbitron)
-	skill_btn.add_theme_font_size_override("font_size", 10)
-	skill_btn.add_theme_color_override("font_color", Color(0.65, 0.85, 1.0))
-	skill_btn.focus_mode = Control.FOCUS_NONE
+	var skill_btn := IconButton.create("UPGRADE TREE", "research", IconButton.Variant.DEFAULT)
 	skill_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	var skill_s := StyleBoxFlat.new()
-	skill_s.bg_color = Color(0.08, 0.16, 0.3, 0.85)
-	skill_s.border_color = Color(0.28, 0.42, 0.72, 0.6)
-	skill_s.set_border_width_all(1)
-	skill_s.corner_radius_top_left = 4
-	skill_s.corner_radius_top_right = 4
-	skill_s.corner_radius_bottom_left = 4
-	skill_s.corner_radius_bottom_right = 4
-	skill_s.content_margin_left = 12
-	skill_s.content_margin_right = 12
-	skill_s.content_margin_top = 4
-	skill_s.content_margin_bottom = 4
-	skill_btn.add_theme_stylebox_override("normal", skill_s)
-
-	var skill_h := skill_s.duplicate() as StyleBoxFlat
-	skill_h.bg_color = Color(0.12, 0.24, 0.45, 0.95)
-	skill_h.border_color = Color(0.42, 0.62, 1.0, 0.85)
-	skill_btn.add_theme_stylebox_override("hover", skill_h)
 
 	_skill_btn = skill_btn
 	TutorialManager.highlight_changed.connect(_on_tut_highlight)
@@ -186,22 +152,7 @@ func _ready() -> void:
 	top_layer.call_deferred("add_child", panel)
 	credits_panel = panel
 
-	var settings_btn := Button.new()
-	settings_btn.text = "⚙" # Cogwheel
-	settings_btn.add_theme_font_size_override("font_size", 20)
-	var sb_style := StyleBoxFlat.new()
-	sb_style.bg_color = Color(0.05, 0.06, 0.11, 0.8)
-	sb_style.border_color = Color(0.25, 0.32, 0.55, 0.45)
-	sb_style.set_border_width_all(1)
-	sb_style.corner_radius_bottom_left = 8
-	sb_style.content_margin_left = 10
-	sb_style.content_margin_right = 10
-	sb_style.content_margin_top = 4
-	sb_style.content_margin_bottom = 4
-	settings_btn.add_theme_stylebox_override("normal", sb_style)
-	var sb_hover := sb_style.duplicate() as StyleBoxFlat
-	sb_hover.bg_color = Color(0.15, 0.16, 0.22, 0.9)
-	settings_btn.add_theme_stylebox_override("hover", sb_hover)
+	var settings_btn := IconButton.create("", "settings", IconButton.Variant.DEFAULT)   # square, icon only
 	settings_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	
 	settings_btn.anchor_left = 1.0
@@ -210,8 +161,8 @@ func _ready() -> void:
 	settings_btn.anchor_bottom = 0.0
 	settings_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	settings_btn.grow_vertical = Control.GROW_DIRECTION_END
-	settings_btn.offset_right = 0
-	settings_btn.offset_top = 0
+	settings_btn.offset_right = -4
+	settings_btn.offset_top = 4
 	
 	settings_btn.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
@@ -223,18 +174,7 @@ func _ready() -> void:
 
 
 	# Upgrade Tree panel — bottom-right (the side panel holds the left)
-	var sci_panel := PanelContainer.new()
-	var ss := StyleBoxFlat.new()
-	ss.bg_color    = Color(0.05, 0.06, 0.11, 0.82)
-	ss.border_width_top  = 1
-	ss.border_width_left = 1
-	ss.border_color = Color(0.25, 0.32, 0.55, 0.45)
-	ss.corner_radius_top_left = 8
-	ss.content_margin_left   = 14
-	ss.content_margin_right  = 14
-	ss.content_margin_top    = 8
-	ss.content_margin_bottom = 8
-	sci_panel.add_theme_stylebox_override("panel", ss)
+	var sci_panel := PanelContainer.new()   # default PanelContainer look from the theme
 	sci_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var sci_vbox := VBoxContainer.new()
@@ -246,8 +186,8 @@ func _ready() -> void:
 	_science_lbl = _res_lbls[Economy.SCIENCE]
 
 	sci_vbox.add_child(skill_btn)
-	sci_vbox.add_child(_make_trade_button(skill_s, skill_h))
-	_explore_btn = _make_explore_button(skill_s, skill_h)
+	sci_vbox.add_child(_make_trade_button())
+	_explore_btn = _make_explore_button()
 	sci_vbox.add_child(_explore_btn)
 	_build_resource_cells(hbox)
 
@@ -257,8 +197,8 @@ func _ready() -> void:
 	sci_panel.anchor_bottom = 1.0
 	sci_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	sci_panel.grow_vertical   = Control.GROW_DIRECTION_BEGIN
-	sci_panel.offset_right  = 0.0
-	sci_panel.offset_bottom = 0.0
+	sci_panel.offset_right  = -4.0
+	sci_panel.offset_bottom = -4.0
 	science_panel = sci_panel
 	top_layer.call_deferred("add_child", sci_panel)
 
@@ -272,16 +212,9 @@ func _ready() -> void:
 	AchievementManager.achievement_unlocked.connect(_on_achievement_unlocked)
 
 ## Trade button under the Upgrade Tree button (opens TradePanel).
-func _make_trade_button(normal: StyleBoxFlat, hover: StyleBoxFlat) -> Button:
-	var b := Button.new()
-	b.text = "⇄ Trade"
-	if _orbitron: b.add_theme_font_override("font", _orbitron)
-	b.add_theme_font_size_override("font_size", 10)
-	b.add_theme_color_override("font_color", Color(0.65, 1.0, 0.75))
-	b.focus_mode = Control.FOCUS_NONE
+func _make_trade_button() -> Button:
+	var b := IconButton.create("TRADE", "trade", IconButton.Variant.NEUTRAL)
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
-	b.add_theme_stylebox_override("normal", normal)
-	b.add_theme_stylebox_override("hover", hover)
 	b.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		toggle_trade_panel())
@@ -298,16 +231,9 @@ func _make_trade_button(normal: StyleBoxFlat, hover: StyleBoxFlat) -> Button:
 ## Explore: a read-only look at every map from inside the game, once the
 ## tutorial is done (GameState.start_explore). Hidden until then.
 var _explore_btn: Button = null
-func _make_explore_button(normal: StyleBoxFlat, hover: StyleBoxFlat) -> Button:
-	var b := Button.new()
-	b.text = "◎ Explore"
-	if _orbitron: b.add_theme_font_override("font", _orbitron)
-	b.add_theme_font_size_override("font_size", 10)
-	b.add_theme_color_override("font_color", Color(0.75, 0.82, 1.0))
-	b.focus_mode = Control.FOCUS_NONE
+func _make_explore_button() -> Button:
+	var b := IconButton.create("EXPLORE", "explore", IconButton.Variant.DEFAULT)
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
-	b.add_theme_stylebox_override("normal", normal)
-	b.add_theme_stylebox_override("hover", hover)
 	b.visible = false
 	b.pressed.connect(func() -> void:
 		AudioManager.play("click")
@@ -380,306 +306,111 @@ func show_pause_menu() -> void:
 	AudioManager.play("ui_click")
 	if get_tree().paused:
 		return
-	
 	get_tree().paused = true
-	
-	var overlay := CanvasLayer.new()
-	overlay.layer = 250
-	overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-	_pause_overlay = overlay
-	
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.75)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.add_child(dim)
-	
-	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.06, 0.07, 0.12, 0.95)
-	ps.border_color = Color(0.3, 0.4, 0.6, 0.5)
-	ps.set_border_width_all(2)
-	ps.set_corner_radius_all(12)
-	ps.content_margin_left = 60
-	ps.content_margin_right = 60
-	ps.content_margin_top = 40
-	ps.content_margin_bottom = 40
-	panel.add_theme_stylebox_override("panel", ps)
-	
-	panel.anchor_left = 0.5; panel.anchor_right = 0.5
-	panel.anchor_top = 0.5; panel.anchor_bottom = 0.5
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
-	panel.add_child(vbox)
-	
-	var title := Label.new()
-	title.text = "PAUSED"
-	if _orbitron: title.add_theme_font_override("font", _orbitron)
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-	
-	vbox.add_child(HSeparator.new())
-	
-	var _make_btn = func(text: String, action: Callable) -> Button:
-		var btn := Button.new()
-		btn.text = text
-		if _orbitron: btn.add_theme_font_override("font", _orbitron)
-		btn.add_theme_font_size_override("font_size", 16)
-		btn.custom_minimum_size = Vector2(240, 40)
-		
-		var bs := StyleBoxFlat.new()
-		bs.bg_color = Color(0.12, 0.18, 0.28)
-		bs.set_corner_radius_all(6)
-		btn.add_theme_stylebox_override("normal", bs)
-		
-		var bsh := bs.duplicate() as StyleBoxFlat
-		bsh.bg_color = Color(0.2, 0.35, 0.5)
-		btn.add_theme_stylebox_override("hover", bsh)
-		
-		btn.pressed.connect(func():
+	# ModalPopup (scenes/ui/components/ModalPopup.tscn); closing it resumes
+	var p := ModalPopup.open(self, "Paused", "settings", "", 250)
+	_pause_overlay = p.get_parent() as CanvasLayer
+	p.card.get_node("VBox/Buttons").visible = false
+	p.closed.connect(func() -> void:
+		get_tree().paused = false
+		_pause_overlay = null)
+	var add := func(txt: String, icon_id: String, v: IconButton.Variant, action: Callable) -> IconButton:
+		var b := IconButton.create(txt, icon_id, v)
+		b.min_size = Vector2(220, 28)
+		b.pressed.connect(func() -> void:
 			AudioManager.play("ui_click")
-			action.call()
-		)
-		btn.mouse_entered.connect(func():
+			action.call())
+		b.mouse_entered.connect(func() -> void:
 			CursorManager.set_state(CursorManager.State.POINTER)
-			AudioManager.play("hover")
-		)
-		btn.mouse_exited.connect(func(): CursorManager.set_state(CursorManager.State.NORMAL))
-		return btn
-
-	vbox.add_child(_make_btn.call("RESUME", func():
-		get_tree().paused = false
-		_pause_overlay = null
-		overlay.queue_free()
-	))
-	
-	vbox.add_child(_make_btn.call("SETTINGS", func():
-		show_settings_popup()
-	))
-	
-	var save_btn: Button = _make_btn.call("SAVE GAME", func():
-		GameState.save()
-		title.text = "GAME SAVED"
-		title.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
-		var tw := create_tween()
-		tw.tween_interval(1.5)
-		tw.tween_callback(func():
-			if is_instance_valid(title):
-				title.text = "PAUSED"
-				title.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
-		)
-	)
+			AudioManager.play("hover"))
+		b.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
+		p.add_content(b)
+		return b
+	add.call("RESUME", "confirm", IconButton.Variant.POSITIVE, p.close)
+	add.call("SETTINGS", "settings", IconButton.Variant.DEFAULT, show_settings_popup)
 	if not GameState.demo_build:   # the browser demo doesn't save
-		vbox.add_child(save_btn)
-	
-	vbox.add_child(HSeparator.new())
-	
-	var mm_btn: Button = _make_btn.call("MAIN MENU  (ends this run)" if GameState.demo_build else "MAIN MENU", func():
-		get_tree().paused = false
-		_pause_overlay = null
-		overlay.queue_free()
+		add.call("SAVE GAME", "save", IconButton.Variant.DEFAULT, func() -> void:
+			GameState.save()
+			p.card.title = "GAME SAVED"
+			var tw := create_tween()
+			tw.tween_interval(1.5)
+			tw.tween_callback(func() -> void:
+				if is_instance_valid(p):
+					p.card.title = "PAUSED"))
+	p.add_content(HSeparator.new())
+	add.call("MAIN MENU  (ENDS THIS RUN)" if GameState.demo_build else "MAIN MENU", "map", IconButton.Variant.NEUTRAL, func() -> void:
+		p.close()
 		set_game_hud(false)
 		GameState.save()
-		SceneTransition.go("res://scenes/MainMenu.tscn", null)
-	)
-	var mm_sb := mm_btn.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
-	mm_sb.bg_color = Color(0.4, 0.2, 0.2)
-	mm_btn.add_theme_stylebox_override("normal", mm_sb)
-	vbox.add_child(mm_btn)
-	
-	var quit_btn: Button = _make_btn.call("QUIT TO DESKTOP", func():
-		GameState.save()
-		get_tree().quit()
-	)
-	var quit_sb := quit_btn.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
-	quit_sb.bg_color = Color(0.5, 0.15, 0.15)
-	quit_btn.add_theme_stylebox_override("normal", quit_sb)
+		SceneTransition.go("res://scenes/MainMenu.tscn", null))
 	if not GameState.demo_build:   # a browser tab has nothing to quit to
-		vbox.add_child(quit_btn)
-
-	overlay.add_child(panel)
-	get_tree().root.add_child(overlay)
-
+		add.call("QUIT TO DESKTOP", "close", IconButton.Variant.NEGATIVE, func() -> void:
+			GameState.save()
+			get_tree().quit())
 
 func show_settings_popup() -> void:
 	AudioManager.play("ui_click")
-	var overlay := CanvasLayer.new()
-	overlay.layer = 300 # Above pause menu
-	overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-	
-	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.6)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.add_child(dim)
-	
-	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.08, 0.10, 0.16, 0.98)
-	ps.border_color = Color(0.4, 0.5, 0.7, 0.5)
-	ps.set_border_width_all(2)
-	ps.set_corner_radius_all(12)
-	ps.content_margin_left = 40; ps.content_margin_right = 40
-	ps.content_margin_top = 30; ps.content_margin_bottom = 30
-	panel.add_theme_stylebox_override("panel", ps)
-	
-	panel.anchor_left = 0.5; panel.anchor_right = 0.5
-	panel.anchor_top = 0.5; panel.anchor_bottom = 0.5
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 20)
-	panel.add_child(vbox)
-	
-	var title := Label.new()
-	title.text = "SETTINGS"
-	if _orbitron: title.add_theme_font_override("font", _orbitron)
-	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-	
-	vbox.add_child(HSeparator.new())
-	
-	var mv_lbl := Label.new()
-	mv_lbl.text = "Master Volume"
-	if _orbitron: mv_lbl.add_theme_font_override("font", _orbitron)
-	mv_lbl.add_theme_font_size_override("font_size", 14)
-	mv_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(mv_lbl)
-	
-	var mv_slider := HSlider.new()
-	mv_slider.custom_minimum_size = Vector2(240, 0)
-	mv_slider.min_value = 0.0
-	mv_slider.max_value = 1.0
-	mv_slider.step = 0.05
-	mv_slider.value = SettingsManager.master_volume
-	mv_slider.value_changed.connect(func(v: float): SettingsManager.set_master_volume(v))
-	vbox.add_child(mv_slider)
-
-	# ── Per-category volume sliders ────────────────────────────────────────────
-	var audio_categories := [
-		["Music",    SettingsManager.music_volume,  func(v: float): SettingsManager.set_music_volume(v)],
-		["UI Sounds", SettingsManager.ui_volume,    func(v: float): SettingsManager.set_ui_volume(v)],
-		["Effects",  SettingsManager.sfx_volume,    func(v: float): SettingsManager.set_sfx_volume(v)],
-	]
-	for cat in audio_categories:
+	var p := ModalPopup.open(self, "Settings", "settings", "", 300)   # above the pause menu
+	p.cancel_button().visible = false
+	var done := p.confirm_button()
+	done.label_text = "CLOSE"
+	done.icon_name = "close"
+	done.variant = IconButton.Variant.DEFAULT
+	done.pressed.connect(p.close)
+	var section := func(t: String) -> void:
+		var l := Label.new()
+		l.text = t
+		l.theme_type_variation = &"TitleLabel"
+		p.add_content(l)
+	var slider_row := func(t: String, value: float, on_change: Callable) -> void:
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 12)
-		var lbl := Label.new()
-		lbl.text = cat[0]
-		lbl.custom_minimum_size = Vector2(90, 0)
-		if _orbitron: lbl.add_theme_font_override("font", _orbitron)
-		lbl.add_theme_font_size_override("font_size", 11)
-		lbl.add_theme_color_override("font_color", Color(0.70, 0.78, 0.95))
-		row.add_child(lbl)
+		row.add_theme_constant_override("separation", 8)
+		var l := Label.new()
+		l.text = t
+		l.theme_type_variation = &"SubLabel"
+		l.custom_minimum_size = Vector2(90, 0)
+		row.add_child(l)
 		var sl := HSlider.new()
 		sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		sl.min_value = 0.0; sl.max_value = 1.0; sl.step = 0.05
-		sl.value = cat[1]
-		sl.value_changed.connect(cat[2])
+		sl.value = value
+		sl.value_changed.connect(on_change)
 		row.add_child(sl)
-		vbox.add_child(row)
-
-	vbox.add_child(HSeparator.new())
-
-	var fs_hbox := HBoxContainer.new()
-	fs_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	fs_hbox.add_theme_constant_override("separation", 12)
-	vbox.add_child(fs_hbox)
-	
-	var fs_lbl := Label.new()
-	fs_lbl.text = "Fullscreen"
-	if _orbitron: fs_lbl.add_theme_font_override("font", _orbitron)
-	fs_lbl.add_theme_font_size_override("font_size", 14)
-	fs_hbox.add_child(fs_lbl)
-	
+		p.add_content(row)
+	section.call("AUDIO")
+	slider_row.call("Master Volume", SettingsManager.master_volume, func(v: float): SettingsManager.set_master_volume(v))
+	slider_row.call("Music", SettingsManager.music_volume, func(v: float): SettingsManager.set_music_volume(v))
+	slider_row.call("UI Sounds", SettingsManager.ui_volume, func(v: float): SettingsManager.set_ui_volume(v))
+	slider_row.call("Effects", SettingsManager.sfx_volume, func(v: float): SettingsManager.set_sfx_volume(v))
+	p.add_content(HSeparator.new())
+	section.call("DISPLAY")
 	var fs_chk := CheckButton.new()
+	fs_chk.text = "Fullscreen"
+	fs_chk.focus_mode = Control.FOCUS_NONE
 	fs_chk.button_pressed = SettingsManager.is_fullscreen
 	fs_chk.toggled.connect(func(on: bool): SettingsManager.set_fullscreen(on))
 	fs_chk.mouse_entered.connect(func(): CursorManager.set_state(CursorManager.State.POINTER))
 	fs_chk.mouse_exited.connect(func(): CursorManager.set_state(CursorManager.State.NORMAL))
-	fs_hbox.add_child(fs_chk)
-
-	var ns_row := HBoxContainer.new()
-	ns_row.add_theme_constant_override("separation", 12)
-	var ns_lbl := Label.new()
-	ns_lbl.text = "Night Shadows"
-	ns_lbl.custom_minimum_size = Vector2(90, 0)
-	if _orbitron: ns_lbl.add_theme_font_override("font", _orbitron)
-	ns_lbl.add_theme_font_size_override("font_size", 11)
-	ns_lbl.add_theme_color_override("font_color", Color(0.70, 0.78, 0.95))
-	ns_row.add_child(ns_lbl)
-	var ns_sl := HSlider.new()
-	ns_sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ns_sl.min_value = 0.0; ns_sl.max_value = 1.0; ns_sl.step = 0.05
-	ns_sl.value = SettingsManager.night_shadow
-	ns_sl.value_changed.connect(func(v: float): SettingsManager.set_night_shadow(v))
-	ns_row.add_child(ns_sl)
-	vbox.add_child(ns_row)
-
-	vbox.add_child(HSeparator.new())
-
+	p.add_content(fs_chk)
+	slider_row.call("Night Shadows", SettingsManager.night_shadow, func(v: float): SettingsManager.set_night_shadow(v))
+	p.add_content(HSeparator.new())
 	var tut_row := HBoxContainer.new()
-	tut_row.add_theme_constant_override("separation", 10)
 	var tut_lbl := Label.new()
 	tut_lbl.text = "Tutorial"
+	tut_lbl.theme_type_variation = &"SubLabel"
 	tut_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if _orbitron: tut_lbl.add_theme_font_override("font", _orbitron)
-	tut_lbl.add_theme_font_size_override("font_size", 12)
-	tut_lbl.add_theme_color_override("font_color", Color(0.70, 0.78, 0.95))
 	tut_row.add_child(tut_lbl)
 	var reset_btn := Button.new()
-	reset_btn.text = "Reset Tutorial"
-	if _orbitron: reset_btn.add_theme_font_override("font", _orbitron)
-	reset_btn.add_theme_font_size_override("font_size", 10)
-	var rst_s := StyleBoxFlat.new()
-	rst_s.bg_color = Color(0.18, 0.22, 0.38)
-	rst_s.border_color = Color(0.35, 0.45, 0.75, 0.6)
-	rst_s.set_border_width_all(1); rst_s.set_corner_radius_all(4)
-	rst_s.content_margin_left = 10; rst_s.content_margin_right = 10
-	rst_s.content_margin_top = 5;  rst_s.content_margin_bottom = 5
-	reset_btn.add_theme_stylebox_override("normal", rst_s)
+	reset_btn.text = "RESET TUTORIAL"
+	UIStyle.style_button(reset_btn, UIStyle.DEFAULT, 8)
 	reset_btn.pressed.connect(func() -> void:
 		SettingsManager.tutorial_ever_done = false
 		SettingsManager.save_settings()
 		TutorialManager.tutorial_enabled = true
 		AudioManager.play("ui_click"))
 	tut_row.add_child(reset_btn)
-	vbox.add_child(tut_row)
-
-	vbox.add_child(HSeparator.new())
-
-	var close_btn := Button.new()
-	close_btn.text = "CLOSE"
-	if _orbitron: close_btn.add_theme_font_override("font", _orbitron)
-	close_btn.add_theme_font_size_override("font_size", 16)
-	var bs := StyleBoxFlat.new()
-	bs.bg_color = Color(0.2, 0.25, 0.35)
-	bs.set_corner_radius_all(6)
-	bs.content_margin_top = 10; bs.content_margin_bottom = 10
-	close_btn.add_theme_stylebox_override("normal", bs)
-	var bsh := bs.duplicate() as StyleBoxFlat
-	bsh.bg_color = Color(0.3, 0.4, 0.5)
-	close_btn.add_theme_stylebox_override("hover", bsh)
-	
-	close_btn.pressed.connect(func():
-		AudioManager.play("ui_click")
-		overlay.queue_free()
-	)
-	close_btn.mouse_entered.connect(func():
-		CursorManager.set_state(CursorManager.State.POINTER)
-		AudioManager.play("hover")
-	)
-	close_btn.mouse_exited.connect(func(): CursorManager.set_state(CursorManager.State.NORMAL))
-	
-	vbox.add_child(close_btn)
-	overlay.add_child(panel)
-	get_tree().root.add_child(overlay)
+	p.add_content(tut_row)
 
 ## Credits / science changes show through the top bar's gain animation
 ## (_track_stock), polled from _process.
@@ -718,25 +449,7 @@ func _maybe_celebrate_moon() -> void:
 func _show_lander_notice(moon_seed: int) -> void:
 	if _top_layer == null or not is_instance_valid(_top_layer):
 		return
-	var btn := Button.new()
-	btn.text = "◆  The lander reached the Moon's orbit  —  click to go there"
-	if _orbitron: btn.add_theme_font_override("font", _orbitron)
-	btn.add_theme_font_size_override("font_size", 11)
-	btn.add_theme_color_override("font_color", Color(0.80, 1.0, 0.85))
-	btn.focus_mode = Control.FOCUS_NONE
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.06, 0.14, 0.10, 0.95)
-	st.border_color = Color(0.30, 0.85, 0.45, 0.8)
-	st.set_border_width_all(1)
-	st.set_corner_radius_all(6)
-	st.content_margin_left = 16
-	st.content_margin_right = 16
-	st.content_margin_top = 8
-	st.content_margin_bottom = 8
-	btn.add_theme_stylebox_override("normal", st)
-	var sh := st.duplicate() as StyleBoxFlat
-	sh.bg_color = Color(0.10, 0.22, 0.14, 1.0)
-	btn.add_theme_stylebox_override("hover", sh)
+	var btn := IconButton.create("THE LANDER REACHED THE MOON'S ORBIT  —  CLICK TO GO THERE", "moon", IconButton.Variant.POSITIVE)
 	btn.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	btn.offset_top = 132.0
@@ -1319,14 +1032,7 @@ func _toggle_raw_dropdown() -> void:
 	if not is_instance_valid(_raw_cell) or not is_instance_valid(_top_layer):
 		return
 	var dd := PanelContainer.new()
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.05, 0.06, 0.11, 0.96)
-	st.border_color = Color(0.28, 0.36, 0.62, 0.6)
-	st.set_border_width_all(1)
-	st.corner_radius_bottom_left = 6; st.corner_radius_bottom_right = 6
-	st.content_margin_left = 12; st.content_margin_right = 12
-	st.content_margin_top = 8;   st.content_margin_bottom = 8
-	dd.add_theme_stylebox_override("panel", st)
+	dd.theme_type_variation = &"TooltipPanel"
 	dd.mouse_filter = Control.MOUSE_FILTER_STOP
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 5)
