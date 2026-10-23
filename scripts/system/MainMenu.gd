@@ -2,7 +2,7 @@ extends Control
 
 const PLANET_SIZE   := 680.0
 const ROTATE_SPEED  := 0.018
-const ORBITRON      := "res://Fonts/Orbitron-VariableFont_wght.ttf"
+const ORBITRON      := "res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf"
 
 const CREDITS_LINES := [
 	"Developed by Tufan T. Iskender",

@@ -383,7 +383,7 @@ var _orbitron: Font = null
 func _ready() -> void:
 	layer = 200
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
+	_orbitron = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 	GameState.save_deleted.connect(_on_new_game)
 	ProductionManager.building_queued.connect(_on_building_queued)
 	ProductionManager.building_constructed.connect(_on_building_constructed)

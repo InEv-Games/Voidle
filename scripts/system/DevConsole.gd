@@ -43,7 +43,7 @@ const BOOT_LINES: Array = [
 
 func _ready() -> void:
 	layer = 225
-	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
+	_orbitron = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 	_build_ui()
 	_panel.visible = false
 	# Tab always cycles back to the field (must be set after node is in tree)

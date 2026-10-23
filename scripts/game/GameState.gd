@@ -232,7 +232,7 @@ func _show_explore_bar() -> void:
 	_explore_layer = CanvasLayer.new()
 	_explore_layer.layer = 150
 	add_child(_explore_layer)
-	var font := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	var font := load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf") as Font
 	var back := Button.new()
 	back.text = "↩  RETURN TO YOUR WORLD"
 	back.focus_mode = Control.FOCUS_NONE

@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://c2j74hdpe1s1i"]
 
 [ext_resource type="Script" uid="uid://bntsmx52or47r" path="res://scripts/solar/SolarView.gd" id="1_sv"]
-[ext_resource type="FontFile" path="res://Fonts/Orbitron-VariableFont_wght.ttf" id="2_orbitron"]
+[ext_resource type="FontFile" path="res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf" id="2_orbitron"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 bg_color = Color(0.07, 0.08, 0.13, 1.0)

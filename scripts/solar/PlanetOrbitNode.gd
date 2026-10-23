@@ -139,7 +139,7 @@ func _build() -> void:
 
 	_hover_label = Label.new()
 	_hover_label.text    = planet_data.planet_name
-	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	_orbitron = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf") as Font
 	if _orbitron:
 		_hover_label.add_theme_font_override("font", _orbitron)
 	_hover_label.add_theme_font_size_override("font_size", 13)

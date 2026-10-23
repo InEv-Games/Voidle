@@ -57,7 +57,7 @@ static func fmt_science(val: float) -> String:
 func _ready() -> void:
 	layer = 226  # Energy above DevConsole (225), hidden when SkillTree opens
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
+	_orbitron = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 
 	var panel := PanelContainer.new()
 	var s := StyleBoxFlat.new()

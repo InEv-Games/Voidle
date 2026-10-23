@@ -18,7 +18,7 @@ var _refresh_t: float = 0.0
 
 func _ready() -> void:
 	TradePanel.is_open = true
-	_font = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
+	_font = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 

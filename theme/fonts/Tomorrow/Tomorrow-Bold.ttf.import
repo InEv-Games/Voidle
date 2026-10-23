@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://ddi2q6ifb6h45"
-path="res://.godot/imported/Orbitron-VariableFont_wght.ttf-fa82f1b86d28eca68704dad2cb2faa73.fontdata"
+uid="uid://cgmkkr0pj3coh"
+path="res://.godot/imported/Tomorrow-Bold.ttf-4a6d3d00ace58d4ebff0776c6e87cb10.fontdata"
 
 [deps]
 
-source_file="res://Fonts/Orbitron-VariableFont_wght.ttf"
-dest_files=["res://.godot/imported/Orbitron-VariableFont_wght.ttf-fa82f1b86d28eca68704dad2cb2faa73.fontdata"]
+source_file="res://theme/fonts/Tomorrow/Tomorrow-Bold.ttf"
+dest_files=["res://.godot/imported/Tomorrow-Bold.ttf-4a6d3d00ace58d4ebff0776c6e87cb10.fontdata"]
 
 [params]
 

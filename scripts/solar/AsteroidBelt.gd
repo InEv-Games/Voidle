@@ -32,7 +32,7 @@ func setup(rx: float, seed: int, count: int = 3) -> void:
 	orbit_radius_x = rx
 	z_as_relative  = false
 	z_index        = 10
-	_orbitron      = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
+	_orbitron      = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed ^ 0xA5BE

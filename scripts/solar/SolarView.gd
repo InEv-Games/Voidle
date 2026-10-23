@@ -210,7 +210,7 @@ func _show_access_denied_text(msg: String = "ACCESS DENIED") -> void:
 	lbl.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
 	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	lbl.add_theme_constant_override("outline_size", 4)
-	var orbitron := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	var orbitron := load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf") as Font
 	if orbitron:
 		lbl.add_theme_font_override("font", orbitron)
 		lbl.add_theme_font_size_override("font_size", 14)
@@ -495,7 +495,7 @@ func _update_panel() -> void:
 	const SURVEY_CREDITS: float = 200_000.0
 	const SURVEY_SCIENCE: float = 50_000.0
 
-	var orbitron := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	var orbitron := load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf") as Font
 
 	# Container for the whole survey section (separator + cost + button)
 	var survey_wrap := VBoxContainer.new()
@@ -544,7 +544,7 @@ func _update_panel() -> void:
 const SCAN_SCIENCE: float = 5_000.0
 
 func _build_scan_asteroid_section() -> void:
-	var orbitron := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	var orbitron := load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf") as Font
 
 	_scan_wrap = VBoxContainer.new()
 	_scan_wrap.add_theme_constant_override("separation", 6)

@@ -36,7 +36,7 @@ func close() -> void:
 
 func _build(title: String, subtitle: String, commands: Array[GameCommand], screen_pos: Vector2) -> void:
 	layer = 210
-	_font = load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	_font = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf") as Font
 
 	# click anywhere outside closes the menu
 	var backdrop := Control.new()

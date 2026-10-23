@@ -63,7 +63,7 @@ func _ready() -> void:
 	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_bg)
 
-	_font = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
+	_font = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 
 	# Graph container centered in screen
 	_center_ctrl = Control.new()

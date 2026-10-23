@@ -185,7 +185,7 @@ func _ready() -> void:
 		planet_renderer.mouse_filter = Control.MOUSE_FILTER_PASS
 		if planet_renderer.get_parent() is Control:
 			(planet_renderer.get_parent() as Control).mouse_filter = Control.MOUSE_FILTER_PASS
-	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
+	_orbitron = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 	planet_renderer.planet_clicked.connect(_on_planet_clicked)
 	_setup_lowres_planet()
 	ShipManager.ship_arrived.connect(_on_ship_arrived_here)

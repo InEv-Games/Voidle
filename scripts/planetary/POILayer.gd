@@ -878,7 +878,7 @@ func spawn_floating_text(lon_deg: float, lat_deg: float, text: String, color: Co
 	})
 
 func _ready() -> void:
-	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
+	_orbitron = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 
 ## Neighbouring districts (same "cluster" id) that crowd together on screen show
 ## one label — the biggest settlement's, with a "+N" count. Zooming in spreads

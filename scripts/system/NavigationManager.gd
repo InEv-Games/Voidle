@@ -124,7 +124,7 @@ func _is_transitioning() -> bool:
 
 func _ready() -> void:
 	layer = 120
-	_font = load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	_font = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf") as Font
 	_build_ui()
 	_refresh()
 

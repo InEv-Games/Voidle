@@ -61,7 +61,7 @@ func _ready() -> void:
 	HUDManager.set_game_hud(not GameState.showcase_mode)
 	if not GameState.showcase_mode:
 		TutorialManager.start()
-	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
+	_orbitron = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 	_build_right_panel()
 	CommandRegistry.add_provider("star", self, _star_commands)
 	var gd: GalaxyData = SceneTransition.pending_data as GalaxyData
