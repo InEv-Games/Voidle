@@ -178,8 +178,6 @@ const FREIGHTER_SPEED := 0.22   # rad/s in orbit
 var _traffic_t := 0.0
 
 func _tick_traffic(delta: float) -> void:
-	if GameState.showcase_mode:
-		return
 	for seed_val: int in _ships.keys():
 		for ship: ShipData in (_ships[seed_val] as Array).duplicate():
 			if ship.ship_type == FREIGHTER:

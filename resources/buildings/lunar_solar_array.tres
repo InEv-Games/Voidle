@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_lunar_solar_array"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+pop_cost = 100
+building_id = "lunar_solar_array"
+display_name = "Lunar Solar Array"
+description = "No air, no clouds: panels on the Moon catch the full sun."
+allowed_poi_types = Array[int]([2])
+allowed_planet_types = Array[int]([6])
+base_cost = 200.0
+slot_cost = 1
+min_planet_lv = 1
+construct_duration = 4.0
+tick_duration = 20.0
+energy_per_tick = 0.0
+outputs = {"energy": 4.0}
+inputs = {}
+planet_bonus = {}
+tier = 1
+unlocked_by_default = false
+output_tag = "solar"

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_lunar_research_outpost"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+pop_cost = 100
+building_id = "lunar_research_outpost"
+display_name = "Lunar Research Outpost"
+description = "A small lab that studies the Moon on the spot."
+allowed_poi_types = Array[int]([4])
+allowed_planet_types = Array[int]([6])
+base_cost = 200.0
+slot_cost = 1
+min_planet_lv = 1
+construct_duration = 4.0
+tick_duration = 20.0
+energy_per_tick = -1.0
+outputs = {"science": 4.0}
+inputs = {}
+planet_bonus = {}
+tier = 1
+unlocked_by_default = false

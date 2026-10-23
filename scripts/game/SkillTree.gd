@@ -18,9 +18,12 @@
 ##   levels       bonuses go to Lv3; effective level = max(bought, inherited)
 ## Inherited levels come from the fractal buyout (M6); the field is saved now.
 ##
-## Layout: root in the middle, the common path climbs straight up to the final
-## rocket; Energy right, Production left, Processing and Public up-left,
-## Orbital and Planning up-right, Science down-left, Trade down, Population down-right.
+## Layout: every family leaves the centre as its own line, in its own colour
+## (LINE_DIRS), and forks as it goes (PoE-style). Exploration climbs straight up
+## to the final rocket; Orbital Assembly (Orbit arms) and Lunar Program (one
+## Lunar arm per Moon district) are small round hubs on it, like the centre. Planning
+## up-right, Energy right, Population down-right, Trade down, Science
+## down-left, Industry (extraction + Goods / Fuel / Rare) left, Administration up-left.
 extends Node
 
 signal skill_unlocked(id: String)
@@ -34,6 +37,21 @@ const LEGACY_NODE_1 := "civilization_0_tree"
 
 ## Grid step of the layout (px per unit).
 const GRID := 130.0
+
+## The research lines (direction each leaves the centre in; screen space, y down).
+const LINE_DIRS := {
+	"exploration": Vector2(0, -1),
+	"planning":    Vector2(0.70710678, -0.70710678),
+	"energy":      Vector2(1, 0),
+	"population":  Vector2(0.70710678, 0.70710678),
+	"trade":       Vector2(0, 1),
+	"science":     Vector2(-0.70710678, 0.70710678),
+	"industry":    Vector2(-1, 0),
+	"admin":       Vector2(-0.70710678, -0.70710678),
+	# columns beside the Exploration line: same direction, own colour
+	"orbital":     Vector2(0, -1),
+	"lunar":       Vector2(0, -1),
+}
 
 ## Old Act I id → canonical id(s) (GDD §17.23). Ids missing here were previews
 ## with no real right; they are dropped from old saves.
@@ -143,6 +161,11 @@ class SkillNode:
 	var act2: bool = false
 	## Feature id for geography_specialization:<feature> nodes.
 	var feature: String = ""
+	## The line of the tree it sits on (LINE_DIRS key) — its colour. "bridge"
+	## nodes join two lines and draw each link in that line's colour.
+	var line: String = "exploration"
+	## Small passive bonus per level: { stat: amount } (see _bonus()).
+	var bonus: Dictionary = {}
 
 	func _init(p_id: String, p_name: String, p_desc: String, p_cost: float, p_pos: Vector2, p_parents: Array[String], p_tier: int, p_eff: String, p_max_lv: int = 1, p_shape: NodeShape = NodeShape.HEXAGON) -> void:
 		id = p_id
@@ -169,253 +192,335 @@ func _init() -> void:
 	_add_node("root", "Civilization 0", "The heart of your civilization. In later civilizations this centre stands for the tree before it.",
 		0.0, Vector2.ZERO, [], 1, "Starting technologies", 1, NodeShape.CIRCLE)
 
-	# ── Free roots (GDD §17.11) ──────────────────────────────────────────────
-	_n("start_energy", "Energy Operations", "Energy Districts and Solar Arrays.",
-		0.0, Vector2(2, 0), ["root"], "energy", "Unlocks Energy Districts & Solar Array",
-		{"grants": ["solar_panel"], "common": true})
-	_n("start_production", "Mining Operations", "Production Districts: Mines and Warehouses.",
-		0.0, Vector2(-2, 0), ["root"], "production", "Unlocks Production Districts, Mine & Warehouse",
-		{"grants": ["mine", "warehouse"], "common": true})
-	_n("start_science", "Research Operations", "Science Districts and Research Labs.",
-		0.0, Vector2(-2, 2), ["root"], "science", "Unlocks Science Districts & Research Lab",
-		{"grants": ["lab"], "common": true})
-	_n("start_residential", "Habitation Operations", "Residential Districts and Habitat Blocks.",
-		0.0, Vector2(2, 2), ["root"], "population", "Unlocks Residential Districts & Habitat Block",
-		{"grants": ["residential"], "common": true})
-	_n("start_commercial", "Commerce Operations", "Commercial Districts and Markets.",
-		0.0, Vector2(0, 2), ["root"], "trade", "Unlocks Commercial Districts & Market",
-		{"grants": ["commercial"], "common": true})
+	# Every family leaves the centre as its own line, in its own colour, and
+	# forks as it goes (PoE-style). _at(parent, angle°, step) places a node
+	# `step` grid units from `parent` (screen angle: 0 = right, -90 = up).
+	# Orbital Assembly and Lunar Program are small hubs with lines of their own.
 
-	# ── Common Civilization 0 path (§17.9): 6,500 Science in all ─────────────
-	_n("processing_basics", "Basic Processing", "Turn Ferrite into Goods.",
-		0.0, Vector2(-1, -1), ["start_production"], "common", "Unlocks Goods Factory",
-		{"grants": ["refinery"], "common": true})
-	_n("trade_access", "Trade Access", "Buy and sell at fixed prices. Once researched, storage overflow is sold instead of lost.",
-		150.0, Vector2(1, 1), ["root"], "common", "Manual trade and overflow sales",
-		{"common": true})
-	_n("fuel_processing", "Fuel Processing", "Small-scale Fuel production — the first step towards rockets.",
-		450.0, Vector2(0, -2), ["processing_basics"], "common", "Unlocks Compact Fuel Workshop, Fuel access",
-		{"grants": ["compact_fuel_workshop"], "common": true})
-	_n("rare_processing", "Rare Processing", "Extract rare elements from bulk ore.",
-		900.0, Vector2(-1, -3), ["fuel_processing"], "common", "Unlocks Rare Element Forge, Rare access",
-		{"grants": ["molecular_forge"], "common": true})
+	# ── Exploration (up): the road to the Moon and the next world ────────────
+	_line = "exploration"
 	_n("rocketry", "Rocketry", "Heavy-lift launch technology. Build a Spaceport in a Capital District.",
-		600.0, Vector2(0, -3), ["fuel_processing"], "common", "Unlocks Spaceport",
-		{"grants": ["spaceport"], "common": true})
-	_n("lunar_program", "Lunar Program", "A lander that carries settlers to the Moon. It needs a working station in orbit first. Pick the Moon in the Local System view.",
-		1200.0, Vector2(0, -4), ["orbital_assembly"], "common", "Unlocks the Moon lander",
+		600.0, _at("root", -90, 1.7), ["root"], "common", "Unlocks Spaceport",
+		{"grants": ["spaceport"], "requires": ["fuel_processing"], "common": true})
+	_n("orbital_assembly", "Orbital Assembly", "Assemble modular stations in low orbit from Spaceport launches. The road to the Moon goes through orbit.",
+		1500.0, _at("rocketry", -90, 3.4), ["rocketry"], "common", "Unlocks Space Station Districts",
+		{"events": ["built:spaceport"], "common": true, "shape": NodeShape.CIRCLE})
+	_n("lunar_program", "Lunar Program", "A lander that carries settlers to the Moon. It needs a working station in orbit first. Pick the Moon in the Local System view. Terran buildings can't stand on the Moon: research Lunar ones from here.",
+		1200.0, _at("orbital_assembly", -90, 4.6), ["orbital_assembly"], "common", "Unlocks the Moon lander and the Lunar lines",
 		{"events": ["orbit_station"], "common": true, "shape": NodeShape.CIRCLE})
-	_n("lunar_materials", "Lunar Materials", "Build with what the Moon gives: local plans, habitats and the Lunar Spaceport.",
-		1200.0, Vector2(0, -5), ["lunar_program"], "common", "Unlocks Lunar Spaceport, Modular Moon Habitat, Regolith Goods Plant",
-		{"grants": ["modular_moon_habitat", "regolith_goods_plant", "lunar_spaceport"], "events": ["moon_production"], "common": true})
+	_n("lunar_materials", "Lunar Materials", "Build big with what the Moon gives: the Lunar Spaceport, and the upgrades on the Lunar lines.",
+		1200.0, _at("lunar_program", -90, 2.3), ["lunar_program"], "common", "Unlocks Lunar Spaceport",
+		{"grants": ["lunar_spaceport"], "events": ["moon_production"], "common": true})
 	_n("advanced_planet_rocket", "Advanced Planetary Rocket", "The rocket that leaves the Moon for a new world.",
-		2000.0, Vector2(0, -6.5), ["lunar_materials"], "common", "Unlocks the final rocket",
+		2000.0, _at("lunar_materials", -90, 1.3), ["lunar_materials"], "common", "Unlocks the final rocket",
 		{"requires": ["rare_processing"], "events": ["moon_moonstone_100"], "common": true, "shape": NodeShape.CIRCLE})
 
-	# ── Production (left) §17.12 ─────────────────────────────────────────────
-	_n("surface_excavation", "Surface Excavation", "Shallow pits that need little investment.",
-		75.0, Vector2(-3, -1), ["start_production"], "production", "Unlocks Surface Quarry",
-		{"grants": ["surface_quarry"]})
-	_n("advanced_excavation", "Advanced Excavation", "Heavy excavators — dense extraction anywhere.",
-		450.0, Vector2(-3, 0), ["start_production"], "production", "Unlocks Rich Vein Excavator",
-		{"grants": ["rich_vein_excavator"]})
-	_n("deep_drilling", "Deep Drilling", "Drills that reach through bedrock.",
-		350.0, Vector2(-2, -1.0), ["start_production"], "production", "Unlocks Deep Drill",
-		{"grants": ["deep_drill"]})
-	_n("mantle_cracking", "Mantle Cracking", "Crack the mantle for enormous raw yields.",
-		900.0, Vector2(-4, 0), ["advanced_excavation", "deep_drilling"], "production", "Unlocks Mantle Cracker",
-		{"grants": ["mantle_cracker"], "access": ["fuel", "rare"]})
-	_n("extraction_efficiency", "Extraction Efficiency", "Better drills and sorting at every mine.",
-		150.0, Vector2(-2, 1), ["start_production"], "production", "+10% Raw output per level",
-		{"max": 3, "shape": NodeShape.DIAMOND})
+	# Orbit hub: four arms in an X around Orbital Assembly — optional
+	_line = "orbital"
+	_n("orbital_science", "Zero-G Research", "Microgravity laboratories aboard your stations.",
+		1500.0, _at("orbital_assembly", -30, 1.4), ["orbital_assembly"], "orbital", "Unlocks Zero-G Lab",
+		{"grants": ["zero_g_nexus"], "legacy": false})
+	_n("orbital_mirrors", "Orbital Mirrors", "Station-mounted mirrors that focus sunlight onto the surface.",
+		2500.0, _at("orbital_assembly", -150, 1.4), ["orbital_assembly"], "orbital", "Unlocks Orbital Mirrors",
+		{"grants": ["orbital_mirrors"], "legacy": false})
+	_n("orbital_shipyard", "Orbital Shipyard", "Dry docks in orbit. Not needed for the Moon.",
+		4000.0, _at("orbital_assembly", 30, 1.4), ["orbital_assembly"], "orbital", "Unlocks Orbital Shipyard",
+		{"grants": ["orbital_shipyard"], "legacy": false})
+	_n("orbital_offworld_market", "Offworld Trade", "Trade with passing haulers straight from orbit.",
+		3500.0, _at("orbital_assembly", 150, 1.4), ["orbital_assembly"], "orbital", "Unlocks Offworld Market",
+		{"grants": ["orbital_offworld_market"], "legacy": false})
+	_n("orbital_logistics", "Orbital Logistics", "Planet-wide coordination of orbital trade fleets.",
+		0.0, _at("orbital_offworld_market", 150, 1.1), ["orbital_offworld_market"], "orbital", "Orbital Logistics Hub",
+		{"act2": true, "legacy": false, "min_civ": 1})
 
-	# ── Processing (up-left) ─────────────────────────────────────────────────
-	_n("ore_sorting", "Ore Sorting", "Large-scale sorting lines for Goods.",
-		450.0, Vector2(-2, -2), ["processing_basics"], "processing", "Unlocks Ore Sorting Workshop",
-		{"grants": ["ore_sorting_workshop"]})
+	# Lunar hub: one arm per Moon district all around Lunar Program (the main
+	# line takes up and down). The first node of each arm is the basic Lunar
+	# building; the upgrades also need Lunar Materials.
+	_line = "lunar"
+	_n("lunar_energy", "Lunar Power", "Panels in full, unfiltered sunlight.",
+		60.0, _at("lunar_program", -45, 1.5), ["lunar_program"], "energy", "Unlocks Lunar Solar Array",
+		{"grants": ["lunar_solar_array"], "common": true})
+	_n("lunar_housing", "Lunar Housing", "Buried, pressurised quarters for the first settlers.",
+		60.0, _at("lunar_program", 0, 1.5), ["lunar_program"], "population", "Unlocks Pressurised Habitat",
+		{"grants": ["pressurised_habitat"], "common": true})
+	_n("lunar_modular_habitats", "Modular Habitats", "Large habitats assembled from lunar materials.",
+		600.0, _at("lunar_housing", 0, 1.15), ["lunar_housing"], "population", "Unlocks Modular Moon Habitat",
+		{"grants": ["modular_moon_habitat"], "requires": ["lunar_materials"]})
+	_n("lunar_extraction", "Regolith Extraction", "Scrape and sift the lunar soil for the Moon's mineral.",
+		60.0, _at("lunar_program", 45, 1.5), ["lunar_program"], "production", "Unlocks Regolith Extractor",
+		{"grants": ["regolith_extractor"], "common": true})
+	_n("regolith_processing", "Regolith Processing", "Turn lunar soil into Goods on the spot.",
+		600.0, _at("lunar_extraction", 45, 1.15), ["lunar_extraction"], "processing", "Unlocks Regolith Goods Plant",
+		{"grants": ["regolith_goods_plant"], "requires": ["lunar_materials"], "events": ["moon_production"]})
+	_n("regolith_storage", "Regolith Storage", "Sealed silos for lunar materials.",
+		80.0, _at("lunar_program", -135, 1.5), ["lunar_program"], "production", "Unlocks Regolith Silo",
+		{"grants": ["regolith_silo"]})
+	_n("lunar_field_science", "Lunar Field Science", "Study the Moon from a small outpost.",
+		60.0, _at("lunar_program", 135, 1.5), ["lunar_program"], "science", "Unlocks Lunar Research Outpost",
+		{"grants": ["lunar_research_outpost"], "common": true})
+	_n("lunar_research", "Lunar Research", "Study lunar samples where they are found.",
+		600.0, _at("lunar_field_science", 135, 1.15), ["lunar_field_science"], "science", "Unlocks Lunar Sample Lab",
+		{"grants": ["lunar_sample_lab"], "requires": ["lunar_materials"], "events": ["moon_city"], "access": ["rare"]})
+	_n("lunar_commerce", "Lunar Commerce", "A trading post for settlers and incoming freighters.",
+		60.0, _at("lunar_program", 180, 1.5), ["lunar_program"], "trade", "Unlocks Lunar Trade Post",
+		{"grants": ["lunar_trade_post"], "common": true})
+	_n("lunar_supply", "Lunar Supply Network", "Markets that keep the Moon supplied.",
+		600.0, _at("lunar_commerce", 180, 1.15), ["lunar_commerce"], "trade", "Unlocks Lunar Supply Market",
+		{"grants": ["lunar_supply_market"], "requires": ["lunar_materials", "trade_access"], "events": ["moon_city"], "access": ["fuel"]})
+
+	# ── Industry (left): Goods → Fuel on the line, extraction forking up ─────
+	_line = "industry"
+	_n("start_production", "Mining Operations", "Production Districts: Mines and Warehouses.",
+		0.0, _at("root", 180, 1.6), ["root"], "production", "Unlocks Production Districts, Mine & Warehouse",
+		{"grants": ["mine", "warehouse"], "common": true})
+	_n("processing_basics", "Basic Processing", "Turn Ferrite into Goods.",
+		0.0, _at("start_production", 180, 1.2), ["start_production"], "processing", "Unlocks Goods Factory",
+		{"grants": ["refinery"], "common": true})
+	_n("fuel_processing", "Fuel Processing", "Small-scale Fuel production — the first step towards rockets.",
+		450.0, _at("processing_basics", 180, 1.2), ["processing_basics"], "processing", "Unlocks Compact Fuel Workshop, Fuel access",
+		{"grants": ["compact_fuel_workshop"], "common": true})
 	_n("dense_fuel", "Dense Fuel", "Refineries that turn out Fuel in bulk.",
-		350.0, Vector2(-1, -2), ["fuel_processing"], "processing", "Unlocks Fuel Refinery",
+		350.0, _at("fuel_processing", 180, 1.15), ["fuel_processing"], "processing", "Unlocks Fuel Refinery",
 		{"grants": ["plasma_smelter"]})
 	_n("fuel_process_efficiency", "Fuel Processes", "Tighter refining tolerances.",
-		150.0, Vector2(1, -2), ["fuel_processing"], "processing", "+10% Fuel output per level",
+		150.0, _at("dense_fuel", 180, 1.0), ["dense_fuel"], "processing", "+10% Fuel output per level",
+		{"max": 3, "shape": NodeShape.DIAMOND})
+	_n("fuel_storage", "Fuel Storage", "Tanks that keep Fuel ready for launch.",
+		200.0, _at("dense_fuel", 135, 1.05), ["dense_fuel"], "processing", "Unlocks Fuel Depot",
+		{"grants": ["fuel_depot"]})
+	_n("rare_processing", "Rare Processing", "Extract rare elements from bulk ore.",
+		900.0, _at("fuel_processing", 140, 1.2), ["fuel_processing"], "processing", "Unlocks Rare Element Forge, Rare access",
+		{"grants": ["molecular_forge"], "common": true})
+	_n("ore_sorting", "Ore Sorting", "Large-scale sorting lines for Goods.",
+		450.0, _at("processing_basics", 130, 1.1), ["processing_basics"], "processing", "Unlocks Ore Sorting Workshop",
+		{"grants": ["ore_sorting_workshop"]})
+	_n("surface_excavation", "Surface Excavation", "Shallow pits that need little investment.",
+		75.0, _at("start_production", -128, 1.25), ["start_production"], "production", "Unlocks Surface Quarry",
+		{"grants": ["surface_quarry"]})
+	_n("deep_drilling", "Deep Drilling", "Drills that reach through bedrock.",
+		350.0, _at("surface_excavation", -160, 1.15), ["surface_excavation"], "production", "Unlocks Deep Drill",
+		{"grants": ["deep_drill"]})
+	_n("advanced_excavation", "Advanced Excavation", "Heavy excavators — dense extraction anywhere.",
+		450.0, _at("deep_drilling", -175, 1.15), ["deep_drilling"], "production", "Unlocks Rich Vein Excavator",
+		{"grants": ["rich_vein_excavator"]})
+	_n("mantle_cracking", "Mantle Cracking", "Crack the mantle for enormous raw yields.",
+		900.0, _at("advanced_excavation", -175, 1.1), ["advanced_excavation"], "production", "Unlocks Mantle Cracker",
+		{"grants": ["mantle_cracker"], "access": ["fuel", "rare"]})
+	_n("extraction_efficiency", "Extraction Efficiency", "Better drills and sorting at every mine.",
+		150.0, _at("deep_drilling", 145, 0.95), ["deep_drilling"], "production", "+10% Raw output per level",
 		{"max": 3, "shape": NodeShape.DIAMOND})
 
 	# ── Energy (right) §17.13 ────────────────────────────────────────────────
+	_line = "energy"
+	_n("start_energy", "Energy Operations", "Energy Districts and Solar Arrays.",
+		0.0, _at("root", 0, 1.6), ["root"], "energy", "Unlocks Energy Districts & Solar Array",
+		{"grants": ["solar_panel"], "common": true})
 	_n("wind_power", "Wind Power", "Turbines for windy sites.",
-		150.0, Vector2(3, 0), ["start_energy"], "energy", "Unlocks Wind Turbine",
+		150.0, _at("start_energy", 0, 1.2), ["start_energy"], "energy", "Unlocks Wind Turbine",
 		{"grants": ["wind_turbine"]})
 	_n("tidal_power", "Tidal Power", "Generators along coasts with strong tides. The building still needs a coast.",
-		350.0, Vector2(4, 0), ["wind_power", "start_commercial"], "energy", "Unlocks Tidal Generator",
+		350.0, _at("wind_power", 0, 1.2), ["wind_power"], "energy", "Unlocks Tidal Generator",
 		{"grants": ["tidal_generator"]})
-	_n("shallow_heat", "Shallow Heat", "Small wells on warm ground.",
-		250.0, Vector2(3, 1), ["start_energy"], "geography", "Unlocks Shallow Geothermal Well",
-		{"grants": ["shallow_geothermal_well"]})
 	_n("geothermal_power", "Geothermal Power", "Tap the planet's heat at geothermal sites.",
-		450.0, Vector2(5, 0), ["shallow_heat", "tidal_power"], "energy", "Unlocks Geothermal Plant",
+		450.0, _at("tidal_power", 0, 1.2), ["tidal_power"], "energy", "Unlocks Geothermal Plant",
 		{"grants": ["geothermal_plant"]})
-	_n("ridge_wind", "Ridge Winds", "Large turbines on windswept ridges.",
-		450.0, Vector2(4, -1), ["wind_power"], "geography", "Unlocks Ridge Turbine",
-		{"grants": ["ridge_turbine"]})
-	_n("solar_matrix", "Solar Matrix", "Colossal tracking solar fields.",
-		350.0, Vector2(3, -1), ["start_energy"], "energy", "Unlocks Solar Matrix",
-		{"grants": ["solar_matrix"]})
 	_n("fusion_power", "Fusion Power", "Fuel-burning fusion reactors — huge output.",
-		900.0, Vector2(6, 0), ["solar_matrix", "geothermal_power"], "energy", "Unlocks Fusion Reactor",
-		{"grants": ["fusion_reactor"], "access": ["fuel", "rare"]})
+		900.0, _at("geothermal_power", 0, 1.2), ["geothermal_power"], "energy", "Unlocks Fusion Reactor",
+		{"grants": ["fusion_reactor"], "access": ["fuel", "rare"], "shape": NodeShape.CIRCLE})
+	_n("solar_matrix", "Solar Matrix", "Colossal tracking solar fields.",
+		350.0, _at("start_energy", -50, 1.2), ["start_energy"], "energy", "Unlocks Solar Matrix",
+		{"grants": ["solar_matrix"]})
 	_n("solar_efficiency", "Photovoltaics", "Better solar cells.",
-		150.0, Vector2(2, -1), ["start_energy"], "energy", "+10% Solar output per level",
+		150.0, _at("solar_matrix", -20, 1.05), ["solar_matrix"], "energy", "+10% Solar output per level",
 		{"max": 3, "shape": NodeShape.DIAMOND})
 	_n("grid_efficiency", "Superconducting Grid", "Fewer losses in the power lines.",
-		300.0, Vector2(1, -1), ["start_energy"], "energy", "−5% energy use per level",
+		300.0, _at("solar_efficiency", 15, 1.0), ["solar_efficiency"], "energy", "−5% energy use per level",
+		{"max": 3, "shape": NodeShape.DIAMOND})
+	_n("ridge_wind", "Ridge Winds", "Large turbines on windswept ridges.",
+		450.0, _at("wind_power", 50, 1.1), ["wind_power"], "geography", "Unlocks Ridge Turbine",
+		{"grants": ["ridge_turbine"]})
+	_n("shallow_heat", "Shallow Heat", "Small wells on warm ground.",
+		250.0, _at("tidal_power", 50, 1.1), ["tidal_power"], "geography", "Unlocks Shallow Geothermal Well",
+		{"grants": ["shallow_geothermal_well"]})
+
+	# ── Population (down-right) §17.15 ───────────────────────────────────────
+	_line = "population"
+	_n("start_residential", "Habitation Operations", "Residential Districts and Habitat Blocks.",
+		0.0, _at("root", 45, 1.6), ["root"], "population", "Unlocks Residential Districts & Habitat Block",
+		{"grants": ["residential"], "common": true})
+	_n("neighborhood_building", "Neighbourhood Building", "Cheap low-rise blocks.",
+		75.0, _at("start_residential", 45, 1.2), ["start_residential"], "population", "Unlocks Low-rise Housing",
+		{"grants": ["low_rise_housing"]})
+	_n("high_rise", "High-Rise Housing", "Dense apartment towers.",
+		350.0, _at("neighborhood_building", 45, 1.2), ["neighborhood_building"], "population", "Unlocks Apartment Towers",
+		{"grants": ["apartments"]})
+	_n("luxury_living", "Luxury Living", "Premium spires for the elite.",
+		900.0, _at("high_rise", 45, 1.2), ["high_rise"], "population", "Unlocks Luxury Spires",
+		{"grants": ["luxury_complex"], "access": ["fuel", "rare", "moonstone"]})
+	_n("housing_efficiency", "Housing Efficiency", "Smarter cities house more people.",
+		150.0, _at("luxury_living", 45, 1.0), ["luxury_living"], "population", "+10% housing from buildings per level",
+		{"max": 3, "shape": NodeShape.DIAMOND})
+	_n("coastal_living", "Coastal Living", "Villas for coastal districts.",
+		250.0, _at("neighborhood_building", 10, 1.15), ["neighborhood_building"], "population", "Unlocks Seaside Villas",
+		{"grants": ["seaside_villas"]})
+	_n("coastal_density", "Coastal Density", "Apartment blocks along the shore.",
+		350.0, _at("coastal_living", 30, 1.1), ["coastal_living"], "population", "Unlocks Coastal Apartments",
+		{"grants": ["coastal_apartments"]})
+	_n("civic_enterprise", "Civic Enterprise", "People without a job start small businesses.",
+		150.0, _at("neighborhood_building", 80, 1.15), ["neighborhood_building"], "population", "Idle population earns Credits",
+		{})
+	_n("free_research", "Free Research", "People without a job tinker, study and publish.",
+		150.0, _at("civic_enterprise", 60, 1.1), ["civic_enterprise"], "population", "Idle population earns Science",
+		{})
+	_n("population_reserve", "Production Reserve", "A spare workforce covers shifts and peaks.",
+		300.0, _at("free_research", 60, 1.05), ["free_research"], "population", "Raw and processed output +2% per full 10% idle population (max +20%)",
+		{})
+
+	# ── Trade (down) §17.16 ──────────────────────────────────────────────────
+	_line = "trade"
+	_n("start_commercial", "Commerce Operations", "Commercial Districts and Markets.",
+		0.0, _at("root", 90, 1.6), ["root"], "trade", "Unlocks Commercial Districts & Market",
+		{"grants": ["commercial"], "common": true})
+	_n("trade_access", "Trade Access", "Buy and sell at fixed prices. Once researched, storage overflow is sold instead of lost.",
+		150.0, _at("start_commercial", 90, 1.2), ["start_commercial"], "trade", "Manual trade and overflow sales",
+		{"common": true})
+	_n("consumer_goods", "Consumer Goods", "Bazaars that sell factory Goods.",
+		250.0, _at("trade_access", 90, 1.2), ["trade_access"], "trade", "Unlocks Bazaar",
+		{"grants": ["bazaar"]})
+	_n("trade_networks", "Trade Networks", "Trade Hubs link your Cities' markets.",
+		350.0, _at("consumer_goods", 90, 1.2), ["consumer_goods"], "trade", "Unlocks Trade Hub",
+		{"grants": ["trading_post"]})
+	_n("commodity_markets", "Commodity Markets", "Exchanges that trade Goods in bulk.",
+		900.0, _at("trade_networks", 90, 1.2), ["trade_networks"], "trade", "Unlocks Commodity Exchange",
+		{"grants": ["commodities_exchange"], "access": ["fuel", "rare", "moonstone"], "shape": NodeShape.CIRCLE})
+	_n("local_business", "Local Business", "Neighbourhood trade centres.",
+		150.0, _at("trade_access", 55, 1.1), ["trade_access"], "trade", "Unlocks Local Trade Center",
+		{"grants": ["local_trade_center"]})
+	_n("trade_automation", "Trade Automation", "Standing orders: sell above a reserve, buy up to a target stock.",
+		300.0, _at("trade_access", 125, 1.1), ["trade_access"], "trade", "Trade automation with reserves",
+		{})
+	_n("harbor_trade", "Harbor Trade", "Markets on the waterfront.",
+		450.0, _at("trade_networks", 45, 1.15), ["trade_networks"], "trade", "Unlocks Harbor Market",
+		{"grants": ["harbor_market"]})
+	_n("trade_efficiency", "Trade Efficiency", "Lower tariffs, more business.",
+		150.0, _at("trade_networks", 135, 1.05), ["trade_networks"], "trade", "+10% produced Credits per level",
 		{"max": 3, "shape": NodeShape.DIAMOND})
 
 	# ── Science (down-left) §17.14 ───────────────────────────────────────────
+	_line = "science"
+	_n("start_science", "Research Operations", "Science Districts and Research Labs.",
+		0.0, _at("root", 135, 1.6), ["root"], "science", "Unlocks Science Districts & Research Lab",
+		{"grants": ["lab"], "common": true})
 	_n("field_research", "Field Research", "Small observation posts out in the field.",
-		100.0, Vector2(-3, 2), ["start_science"], "science", "Unlocks Field Observatory",
+		100.0, _at("start_science", 135, 1.2), ["start_science"], "science", "Unlocks Field Observatory",
 		{"grants": ["field_observatory"]})
-	_n("mountain_optics", "Mountain Optics", "Observatories on high peaks.",
-		450.0, Vector2(-3, 3), ["start_science"], "science", "Unlocks Mountain Observatory",
-		{"grants": ["mountain_observatory"]})
+	_n("science_efficiency", "Science Efficiency", "Fund the universities.",
+		150.0, _at("field_research", 105, 1.05), ["field_research"], "science", "+10% Science per level",
+		{"max": 3, "shape": NodeShape.DIAMOND})
 	_n("advanced_research", "Advanced Research", "Dedicated research institutes.",
-		350.0, Vector2(-3, 1), ["start_science"], "science", "Unlocks Research Institute",
+		350.0, _at("field_research", 135, 1.2), ["field_research"], "science", "Unlocks Research Institute",
 		{"grants": ["advanced_lab"]})
 	_n("particle_physics", "Particle Physics", "Accelerators fed with rare elements.",
-		900.0, Vector2(-4, 1), ["advanced_research", "rare_processing"], "science", "Unlocks Particle Accelerator",
-		{"grants": ["particle_accelerator"], "access": ["rare", "moonstone"]})
-	_n("science_efficiency", "Science Efficiency", "Fund the universities.",
-		150.0, Vector2(-2, 3), ["start_science"], "science", "+10% Science per level",
-		{"max": 3, "shape": NodeShape.DIAMOND})
-	_n("lunar_research", "Lunar Research", "Study lunar samples where they are found.",
-		600.0, Vector2(1, -6), ["lunar_materials"], "science", "Unlocks Lunar Sample Lab",
-		{"grants": ["lunar_sample_lab"], "events": ["moon_city"], "access": ["rare"]})
+		900.0, _at("advanced_research", 135, 1.2), ["advanced_research"], "science", "Unlocks Particle Accelerator",
+		{"grants": ["particle_accelerator"], "requires": ["rare_processing"], "access": ["rare", "moonstone"], "shape": NodeShape.CIRCLE})
+	_n("mountain_optics", "Mountain Optics", "Observatories on high peaks.",
+		450.0, _at("advanced_research", 180, 1.15), ["advanced_research"], "science", "Unlocks Mountain Observatory",
+		{"grants": ["mountain_observatory"]})
 
-	# ── Population (down-right) §17.15 ───────────────────────────────────────
-	_n("neighborhood_building", "Neighbourhood Building", "Cheap low-rise blocks.",
-		75.0, Vector2(3, 2), ["start_residential"], "population", "Unlocks Low-rise Housing",
-		{"grants": ["low_rise_housing"]})
-	_n("coastal_living", "Coastal Living", "Villas for coastal districts.",
-		250.0, Vector2(2, 3), ["start_residential"], "population", "Unlocks Seaside Villas",
-		{"grants": ["seaside_villas"]})
-	_n("coastal_density", "Coastal Density", "Apartment blocks along the shore.",
-		350.0, Vector2(2, 4), ["coastal_living"], "population", "Unlocks Coastal Apartments",
-		{"grants": ["coastal_apartments"]})
-	_n("civic_enterprise", "Civic Enterprise", "People without a job start small businesses.",
-		150.0, Vector2(3, 3), ["start_residential"], "population", "Idle population earns Credits",
-		{})
-	_n("free_research", "Free Research", "People without a job tinker, study and publish.",
-		150.0, Vector2(1, 3), ["start_residential", "start_science"], "population", "Idle population earns Science",
-		{})
-	_n("population_reserve", "Production Reserve", "A spare workforce covers shifts and peaks.",
-		300.0, Vector2(3, 4), ["civic_enterprise", "free_research"], "population", "Raw and processed output +2% per full 10% idle population (max +20%)",
-		{})
-	_n("high_rise", "High-Rise Housing", "Dense apartment towers.",
-		350.0, Vector2(4, 3), ["coastal_living", "civic_enterprise"], "population", "Unlocks Apartment Towers",
-		{"grants": ["apartments"]})
-	_n("luxury_living", "Luxury Living", "Premium spires for the elite.",
-		900.0, Vector2(5, 3), ["high_rise"], "population", "Unlocks Luxury Spires",
-		{"grants": ["luxury_complex"], "access": ["fuel", "rare", "moonstone"]})
-	_n("housing_efficiency", "Housing Efficiency", "Smarter cities house more people.",
-		150.0, Vector2(4, 2), ["start_residential"], "population", "+10% housing from buildings per level",
-		{"max": 3, "shape": NodeShape.DIAMOND})
-
-	# ── Trade (down) §17.16 ──────────────────────────────────────────────────
-	_n("consumer_goods", "Consumer Goods", "Bazaars that sell factory Goods.",
-		250.0, Vector2(0, 3), ["start_commercial"], "trade", "Unlocks Bazaar",
-		{"grants": ["bazaar"]})
-	_n("local_business", "Local Business", "Neighbourhood trade centres.",
-		150.0, Vector2(2, 1), ["trade_access"], "trade", "Unlocks Local Trade Center",
-		{"grants": ["local_trade_center"]})
-	_n("trade_networks", "Trade Networks", "Trade Hubs link your Cities' markets.",
-		350.0, Vector2(0, 4), ["consumer_goods", "local_business"], "trade", "Unlocks Trade Hub",
-		{"grants": ["trading_post"]})
-	_n("harbor_trade", "Harbor Trade", "Markets on the waterfront.",
-		450.0, Vector2(1, 5), ["coastal_living", "trade_networks"], "trade", "Unlocks Harbor Market",
-		{"grants": ["harbor_market"]})
-	_n("commodity_markets", "Commodity Markets", "Exchanges that trade Goods in bulk.",
-		900.0, Vector2(0, 5), ["trade_networks"], "trade", "Unlocks Commodity Exchange",
-		{"grants": ["commodities_exchange"], "access": ["fuel", "rare", "moonstone"]})
-	_n("trade_automation", "Trade Automation", "Standing orders: sell above a reserve, buy up to a target stock.",
-		300.0, Vector2(1, 2), ["trade_access"], "trade", "Trade automation with reserves",
-		{})
-	_n("trade_efficiency", "Trade Efficiency", "Lower tariffs, more business.",
-		150.0, Vector2(-1, 3), ["start_commercial"], "trade", "+10% produced Credits per level",
-		{"max": 3, "shape": NodeShape.DIAMOND})
-	_n("lunar_supply", "Lunar Supply Network", "Markets that keep the Moon supplied.",
-		600.0, Vector2(-1, -6), ["lunar_materials", "trade_networks"], "trade", "Unlocks Lunar Supply Market",
-		{"grants": ["lunar_supply_market"], "requires": ["trade_access"], "events": ["moon_city"], "access": ["fuel"]})
-
-	# ── Public, proximity, distance (up-left / up-right) §17.17 ──────────────
+	# ── Administration (up-left) §17.17 ──────────────────────────────────────
+	_line = "admin"
 	_n("public_administration", "Public Administration", "The root of the Capital's support offices.",
-		350.0, Vector2(-3, -2), ["root"], "public", "Opens public support buildings",
-		{})
-	_n("logistics", "Logistics", "One Logistics Center coordinates the whole planet.",
-		450.0, Vector2(-3, -3), ["ore_sorting", "trade_networks"], "public", "Unlocks Logistics Center",
-		{"grants": ["logistics_center"], "requires": ["public_administration"]})
-	_n("advanced_coordination", "Advanced Coordination", "A single command centre for the whole planet.",
-		900.0, Vector2(-4, -3), ["fusion_power", "advanced_research"], "public", "Unlocks Planetary Command",
-		{"grants": ["command_center"], "requires": ["public_administration"], "access": ["fuel", "rare", "moonstone"]})
-	_n("construction_management", "Construction Management", "A planning office for big builds.",
-		350.0, Vector2(-4, -2), ["public_administration"], "public", "Construction Office (coming later)",
-		{})
-	_n("fuel_storage", "Fuel Storage", "Tanks that keep Fuel ready for launch.",
-		200.0, Vector2(1, -3), ["fuel_processing"], "public", "Unlocks Fuel Depot",
-		{"grants": ["fuel_depot"]})
-	_n("recycling_1", "Recycling I", "Salvage more when you tear something down.",
-		250.0, Vector2(-5, -2), ["root"], "public", "Credit refund on demolition 65%",
-		{})
-	_n("recycling_2", "Recycling II", "Salvage nearly everything.",
-		500.0, Vector2(-5, -3), ["recycling_1"], "public", "Credit refund on demolition 75%",
+		350.0, _at("root", -135, 1.6), ["root"], "public", "Opens public support buildings",
 		{})
 	_n("settlement_layout", "Settlement Layout", "Plan, rearrange and move settlements.",
-		250.0, Vector2(-4, -4), ["root"], "public", "Move districts and buildings",
+		250.0, _at("public_administration", -135, 1.2), ["public_administration"], "public", "Move districts and buildings",
 		{})
+	_n("construction_management", "Construction Management", "A planning office for big builds.",
+		350.0, _at("settlement_layout", -135, 1.15), ["settlement_layout"], "public", "Construction Office (coming later)",
+		{})
+	_n("recycling_1", "Recycling I", "Salvage more when you tear something down.",
+		250.0, _at("public_administration", -100, 1.15), ["public_administration"], "public", "Credit refund on demolition 65%",
+		{})
+	_n("recycling_2", "Recycling II", "Salvage nearly everything.",
+		500.0, _at("recycling_1", -120, 1.05), ["recycling_1"], "public", "Credit refund on demolition 75%",
+		{})
+	_n("logistics", "Logistics", "One Logistics Center coordinates the whole planet.",
+		450.0, _at("settlement_layout", -170, 1.15), ["settlement_layout"], "public", "Unlocks Logistics Center",
+		{"grants": ["logistics_center"], "requires": ["ore_sorting"]})
+	_n("advanced_coordination", "Advanced Coordination", "A single command centre for the whole planet.",
+		900.0, _at("logistics", -150, 1.1), ["logistics"], "public", "Unlocks Planetary Command",
+		{"grants": ["command_center"], "requires": ["advanced_research"], "access": ["fuel", "rare", "moonstone"]})
+
+	# ── Planning (up-right): proximity, distance and terrain ──────────────────
+	_line = "planning"
 	_n("cluster_planning", "Cluster Planning", "Districts that stand together work together.",
-		200.0, Vector2(3, -2), ["root"], "proximity", "Proximity and centre bonuses ×1.1 per level",
+		200.0, _at("root", -45, 1.6), ["root"], "proximity", "Proximity and centre bonuses ×1.1 per level",
 		{"max": 3, "shape": NodeShape.DIAMOND})
 	_n("independent_centers", "Independent Centres", "Remote districts learn to stand on their own.",
-		200.0, Vector2(4, -2), ["root"], "distance", "+10 points to a distance bonus per level",
+		200.0, _at("cluster_planning", -45, 1.05), ["cluster_planning"], "distance", "+10 points to a distance bonus per level",
 		{"max": 3, "shape": NodeShape.DIAMOND})
 	_n("cross_networks", "Mixed Networks", "Science and trade, housing and science, energy and industry help each other.",
-		450.0, Vector2(3, -3), ["cluster_planning", "science_efficiency", "trade_efficiency"], "proximity",
+		450.0, _at("independent_centers", 0, 1.15), ["independent_centers"], "proximity",
 		"Linked families support each other: very near +5%, near +2.5%", {})
-	# one specialisation per visible terrain feature, 3 levels each
-	var gi := 0
+
+	# ── Small passives, terrain specialisations and bridges ──────────────────
+	# Small diamonds hang off the node they relate to (PoE-style minors).
+	_minor("bulk_haulage", "Bulk Haulage", "Bigger carts, fewer trips.", 100.0, "ore_sorting", 0, 1.1,
+		"production", {"mine_output": 0.05}, "+5% Raw output")
+	_minor("heat_recovery", "Heat Recovery", "Reuse the forge's waste heat in the fuel lines.", 150.0, "rare_processing", 50, 1.0,
+		"processing", {"fuel": 0.05}, "+5% Fuel output")
+	_minor("load_balancing", "Load Balancing", "Spread the load, waste less.", 100.0, "wind_power", 150, 0.9,
+		"energy", {"energy_consume": -0.03}, "−3% energy use")
+	_minor("peer_review", "Peer Review", "Better papers, fewer dead ends.", 150.0, "advanced_research", 70, 1.1,
+		"science", {"science": 0.05}, "+5% Science")
+	_minor("market_stalls", "Market Stalls", "Small traders fill every corner.", 100.0, "local_business", 10, 1.0,
+		"trade", {"credits": 0.05}, "+5% produced Credits")
+	_minor("zoning", "Zoning", "Room for everyone, by plan.", 150.0, "high_rise", 20, 0.9,
+		"population", {"housing": 0.05}, "+5% housing from buildings")
+	_minor("district_charter", "District Charter", "The planet may hold one more district.", 500.0, "construction_management", -130, 1.0,
+		"public", {"max_districts": 1.0}, "+1 district slot on every planet")
+	_minor("urban_planning", "Urban Planning", "Plan the neighbourhoods together.", 150.0, "cross_networks", -130, 1.0,
+		"proximity", {"proximity": 0.05}, "Proximity and centre bonuses +5%")
+
+	# one specialisation per terrain feature, 3 levels each, on the line of the
+	# building that uses that terrain
 	for fid: String in FeatureMap.IDS:
+		var host: Array = GEO_HOSTS.get(fid, ["cross_networks", 0.0, 1.0])
 		var gid := "geography_specialization:" + fid
-		var gpos := Vector2(4.0 + 0.8 * float(gi % 5), -3.2 - 0.8 * floorf(float(gi) / 5.0))
+		_line = (nodes[host[0]] as SkillNode).line
 		_n(gid, "%s Specialisation" % FeatureMap.feature_name(fid), "Learn to use this terrain. It doesn't create the terrain.",
-			200.0, gpos, ["root"], "geography", "Bonuses from %s ×1.1 per level" % FeatureMap.feature_name(fid),
+			200.0, _at(host[0], host[1], host[2]), [host[0]], "geography",
+			"Bonuses from %s ×1.1 per level" % FeatureMap.feature_name(fid),
 			{"max": 3, "shape": NodeShape.DIAMOND})
 		(nodes[gid] as SkillNode).feature = fid
-		gi += 1
 
-	# ── Orbital (KARARLAR §5): Orbital Assembly is on the common path — the Moon
-	# needs a station in orbit first. The rest of the orbit stays optional.
-	_n("orbital_assembly", "Orbital Assembly", "Assemble modular stations in low orbit from Spaceport launches. The road to the Moon goes through orbit.",
-		1500.0, Vector2(1, -3.5), ["rocketry"], "common", "Unlocks Space Station Districts",
-		{"events": ["built:spaceport"], "common": true})
-	_n("orbital_science", "Zero-G Research", "Microgravity laboratories aboard your stations.",
-		1500.0, Vector2(2, -4), ["orbital_assembly"], "orbital", "Unlocks Zero-G Lab",
-		{"grants": ["zero_g_nexus"], "legacy": false})
-	_n("orbital_mirrors", "Orbital Mirrors", "Station-mounted mirrors that focus sunlight onto the surface.",
-		2500.0, Vector2(2, -5), ["orbital_assembly"], "orbital", "Unlocks Orbital Mirrors",
-		{"grants": ["orbital_mirrors"], "legacy": false})
-	_n("orbital_shipyard", "Orbital Shipyard", "Dry docks in orbit. Not needed for the Moon.",
-		4000.0, Vector2(1, -5), ["orbital_assembly"], "orbital", "Unlocks Orbital Shipyard",
-		{"grants": ["orbital_shipyard"], "legacy": false})
-	_n("orbital_offworld_market", "Offworld Trade", "Trade with passing haulers straight from orbit.",
-		3500.0, Vector2(2, -6), ["orbital_shipyard"], "orbital", "Unlocks Offworld Market",
-		{"grants": ["orbital_offworld_market"], "legacy": false})
-	_n("orbital_logistics", "Orbital Logistics", "Planet-wide coordination of orbital trade fleets.",
-		0.0, Vector2(3, -6), ["orbital_offworld_market"], "orbital", "Orbital Logistics Hub",
-		{"act2": true, "legacy": false, "min_civ": 1})
+	# Bridges: one per pair of neighbouring lines, all on one outer ring
+	# (BRIDGE_RING) on the bisector between the two lines; either side opens
+	# them, and the links are drawn as arcs along the ring.
+	_bridge("materials_science", "Materials Science", "What the labs learn, the mines use — and the other way round.", 250.0,
+		"rare_processing", "mountain_optics", 157.5, "science", "+3% Raw output, +3% Science",
+		{"bonus": {"mine_output": 0.03, "science": 0.03}})
+	_bridge("research_academy", "Research Academy", "A Capital academy paid for by trade.", 400.0,
+		"particle_physics", "trade_networks", 112.5, "science", "Unlocks Research Academy (+10% Science in its City)",
+		{"grants": ["research_academy"], "requires": ["public_administration"]})
+	_bridge("financial_district", "Financial District", "Where traders and citizens meet money.", 400.0,
+		"harbor_trade", "population_reserve", 67.5, "trade", "Unlocks Financial District (+10% Credits in its City)",
+		{"grants": ["financial_district"], "requires": ["public_administration"]})
+	_bridge("cryo_vault", "Cryo Vaults", "Sleepers kept cold by the grid, room in the streets.", 400.0,
+		"coastal_density", "shallow_heat", 22.5, "population", "Unlocks Cryo Vault (+10% housing in its City)",
+		{"grants": ["cryo_vault"], "requires": ["public_administration"]})
+	_bridge("smart_homes", "Smart Districts", "Districts that plan their power together.", 250.0,
+		"geothermal_power", "cross_networks", -22.5, "proximity", "Proximity and centre bonuses +3%, −2% energy use",
+		{"bonus": {"proximity": 0.03, "energy_consume": -0.02}})
+
+	_line = "exploration"
 
 	# ── Later civilizations ──────────────────────────────────────────────────
 	# Civilization 0's tree shows the next tree's door at its top; double-click
 	# opens it. Every later tree has the previous tree as its centre node
 	# (KARARLAR §8): double-click goes down into it, and buying it is the buyout.
 	_n("civilization_1_root", "Civilization 1", "The next civilization. Reached by the final rocket. Double-click to look at its research.",
-		0.0, Vector2(0, -8), ["advanced_planet_rocket"], "common", "Civilization 1 research",
+		0.0, _at("advanced_planet_rocket", -90, 1.5), ["advanced_planet_rocket"], "common", "Civilization 1 research",
 		{"act2": true, "min_civ": 1, "legacy": false, "shape": NodeShape.CIRCLE})
 	_n(LEGACY_NODE_1, "Civilization 0", "Everything researched in Civilization 0. Double-click to open that tree. Buying it researches every missing node and level there at once.",
 		0.0, Vector2.ZERO, [], "common", "Buyout: all missing Civilization 0 research",
@@ -423,14 +528,61 @@ func _init() -> void:
 	var fams := [["energy", "Energy", Vector2(2, 0)], ["production", "Production", Vector2(-2, 0)],
 		["science", "Science", Vector2(-1.4, 1.8)], ["residential", "Residential", Vector2(1.4, 1.8)],
 		["commercial", "Commercial", Vector2(0, -2)]]
+	var fam_line := {"energy": "energy", "production": "industry", "science": "science",
+		"residential": "population", "commercial": "trade"}
 	for f: Array in fams:
+		_line = fam_line[f[0]]
 		_n("research_t1_subtype_" + String(f[0]), "%s City Roles" % String(f[1]),
 			"Civilization 1: special districts of %s Cities." % String(f[1]),
 			500.0, f[2], [LEGACY_NODE_1], String(f[0]), "Unlocks %s special district types" % String(f[1]),
 			{"max": 3, "min_civ": 1, "civ": 1, "shape": NodeShape.HEXAGON})
+	_line = "exploration"
 	_n("orbital_storage", "Orbital Storage", "Civilization 1: fuel tanks in orbit.",
 		600.0, Vector2(0, -3.2), ["research_t1_subtype_commercial"], "orbital", "Orbital Fuel Tank",
 		{"act2": true, "min_civ": 1, "civ": 1, "legacy": false})
+
+## Line the next _n() calls go on (set before each family in _init).
+var _line := "exploration"
+
+## Where each terrain specialisation hangs: [host node, angle°, step].
+const GEO_HOSTS := {
+	"terrain_desert":     ["solar_matrix", 20.0, 1.1],
+	"terrain_wind":       ["ridge_wind", -180.0, 1.1],
+	"terrain_geothermal": ["shallow_heat", 0.0, 1.0],
+	"terrain_volcanic":   ["geothermal_power", -40.0, 1.0],
+	"terrain_mountain":   ["mountain_optics", -180.0, 1.0],
+	"terrain_ruins":      ["field_research", -170.0, 1.0],
+	"terrain_glacier":    ["particle_physics", -180.0, 1.1],
+	"terrain_plain":      ["neighborhood_building", 130.0, 1.1],
+	"terrain_seacoast":   ["coastal_living", -30.0, 1.0],
+	"terrain_lakeside":   ["coastal_density", 60.0, 1.0],
+	"terrain_river":      ["harbor_trade", -80.0, 1.0],
+	"terrain_forest":     ["surface_excavation", 160.0, 1.1],
+	"terrain_tundra":     ["advanced_excavation", -120.0, 1.0],
+	"terrain_crater":     ["mantle_cracking", -180.0, 1.0],
+}
+
+## A small passive (one level) hanging off `host` on its line.
+func _minor(id: String, name: String, desc: String, cost: float, host: String, deg: float, step: float,
+		branch: String, bonus: Dictionary, eff: String) -> void:
+	_line = (nodes[host] as SkillNode).line
+	_n(id, name, desc, cost, _at(host, deg, step), [host], branch, eff, {"shape": NodeShape.DIAMOND, "bonus": bonus})
+
+## Radius (grid units) of the outer ring the bridges sit on.
+const BRIDGE_RING := 5.4
+
+## A node between two neighbouring lines, opened from either: on the bridge
+## ring at screen angle `deg` (the bisector of the two lines).
+func _bridge(id: String, name: String, desc: String, cost: float, a: String, b: String, deg: float,
+		branch: String, eff: String, opts: Dictionary) -> void:
+	_line = "bridge"
+	_n(id, name, desc, cost, Vector2.from_angle(deg_to_rad(deg)) * BRIDGE_RING, [a, b], branch, eff, opts)
+
+## Grid position `step` units from node `from`, at screen angle `deg`
+## (0 = right, -90 = up). Lines fork by giving siblings different angles.
+func _at(from: String, deg: float, step: float) -> Vector2:
+	var base: Vector2 = Vector2.ZERO if from == "root" else (nodes[from] as SkillNode).pos / GRID
+	return base + Vector2.from_angle(deg_to_rad(deg)) * step
 
 ## Shorthand: opts = {max, shape, grants, requires, access, events, common,
 ## min_civ, civ, legacy, act2}. `pos` is in grid units.
@@ -440,6 +592,8 @@ func _n(id: String, name: String, desc: String, cost: float, pos: Vector2, paren
 	_add_node(id, name, desc, cost, pos * GRID, parents, 1, eff, int(opts.get("max", 1)), opts.get("shape", default_shape))
 	var node: SkillNode = nodes[id]
 	node.branch = branch
+	node.line = _line
+	node.bonus = opts.get("bonus", {})
 	node.act2 = opts.get("act2", false)
 	node.common = opts.get("common", false)
 	node.min_civilization = int(opts.get("min_civ", 0))
@@ -462,9 +616,7 @@ func _add_node(id: String, name: String, desc: String, cost: float, pos: Vector2
 
 ## Capital supports need two rights each (GDD §17.18).
 func _ready() -> void:
-	_also_grant("financial_district", ["public_administration", "trade_networks"])
-	_also_grant("research_academy", ["public_administration", "advanced_research"])
-	_also_grant("cryo_vault", ["public_administration", "high_rise"])
+	pass   # Capital supports are granted by bridge nodes (requires Public Administration)
 
 func _also_grant(building_id: String, ids: Array[String]) -> void:
 	_grant_of[building_id] = ids.duplicate()
@@ -868,35 +1020,53 @@ func load_save_data(data: Dictionary) -> void:
 func _lv(id: String) -> int:
 	return get_skill_level(id)
 
+## Sum of the small-passive bonuses for `stat` (node.bonus × level), cached
+## per research version.
+var _bonus_cache: Dictionary = {}
+var _bonus_ver := -1
+func _bonus(stat: String) -> float:
+	if _bonus_ver != version:
+		_bonus_cache.clear()
+		_bonus_ver = version
+	if _bonus_cache.has(stat):
+		return _bonus_cache[stat]
+	var total := 0.0
+	for id: String in nodes:
+		var n: SkillNode = nodes[id]
+		if n.bonus.has(stat):
+			total += float(n.bonus[stat]) * float(get_skill_level(id))
+	_bonus_cache[stat] = total
+	return total
+
 func get_solar_mult() -> float:
-	return 1.0 + 0.10 * _lv("solar_efficiency")
+	return 1.0 + 0.10 * _lv("solar_efficiency") + _bonus("solar")
 
 ## Mines no longer speed up (Extraction Efficiency raises output instead).
 func get_mine_speed_mult() -> float:
 	return 1.0
 
 func get_mine_output_mult() -> float:
-	return 1.0 + 0.10 * _lv("extraction_efficiency")
+	return 1.0 + 0.10 * _lv("extraction_efficiency") + _bonus("mine_output")
 
 func get_fuel_mult() -> float:
-	return 1.0 + 0.10 * _lv("fuel_process_efficiency")
+	return 1.0 + 0.10 * _lv("fuel_process_efficiency") + _bonus("fuel")
 
 func get_credits_mult() -> float:
-	return 1.0 + 0.10 * _lv("trade_efficiency")
+	return 1.0 + 0.10 * _lv("trade_efficiency") + _bonus("credits")
 
 func get_science_mult() -> float:
-	return 1.0 + 0.10 * _lv("science_efficiency")
+	return 1.0 + 0.10 * _lv("science_efficiency") + _bonus("science")
 
 ## Housing from buildings (population capacity).
 func get_housing_mult() -> float:
-	return 1.0 + 0.10 * _lv("housing_efficiency")
+	return 1.0 + 0.10 * _lv("housing_efficiency") + _bonus("housing")
 
 func get_energy_consume_mult() -> float:
-	return maxf(0.1, 1.0 - 0.05 * _lv("grid_efficiency"))
+	return maxf(0.1, 1.0 - 0.05 * _lv("grid_efficiency") + _bonus("energy_consume"))
 
 ## Cluster Planning: every proximity / centre contribution ×(1 + 0.1·level).
 func get_proximity_mult() -> float:
-	return 1.0 + 0.10 * _lv("cluster_planning")
+	return 1.0 + 0.10 * _lv("cluster_planning") + _bonus("proximity")
 
 ## Independent Centres: points added to a distance bonus that is already > 0.
 func get_distance_bonus_add() -> float:
@@ -938,7 +1108,7 @@ func get_mining_energy_mult() -> float:
 	return 1.0
 
 func get_max_districts_add() -> int:
-	return 0
+	return int(_bonus("max_districts"))
 
 func get_trade_output_mult() -> float:
 	return 1.0

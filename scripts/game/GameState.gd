@@ -137,13 +137,64 @@ var moon_local_moonstone: float = 0.0
 var galaxy_unlocked:   bool = false
 
 # ── Showcase (read-only viewer) ──────────────────────────────────────────────
-## Read-only mode for marketing captures: every map is viewable, gameplay UI is
-## hidden, the economy is paused and nothing is saved. Never saved itself.
-## Toggle availability with the `voidle/showcase/enabled` project setting.
+## Explore mode (internally "showcase"): a read-only look around every map —
+## galaxy, systems, other planets — from inside the player's own game, once the
+## tutorial is done (HUD "◎ Explore" button). Gameplay UI is hidden and nothing
+## can be built there; the player's economy keeps running in the background.
+## ESC or the RETURN button goes back to the home world. Never saved itself.
 var showcase_mode: bool = false
+## Browser demo (itch.io web build, feature tag "demo"): nothing is saved or
+## loaded — a refresh starts over. See docs/design/ITCH_DEMO_PLAN.md.
+var demo_build: bool = is_demo_build()
 
-static func showcase_available() -> bool:
-	return bool(ProjectSettings.get_setting("voidle/showcase/enabled", true))
+static func is_demo_build() -> bool:
+	return OS.has_feature("demo") or OS.has_feature("web")
+
+## Seconds played in this world (unpaused), for the demo's end screen.
+var play_seconds: float = 0.0
+## The "first step on the Moon" banner was shown (once per world).
+var moon_city_celebrated: bool = false
+
+## Numbers for the demo's end screen: minutes played, worlds settled, cities,
+## research bought.
+func demo_stats() -> Dictionary:
+	var worlds := 0
+	var cities := 0
+	for sd in _planet_progress:
+		if (_planet_progress[sd] as PlanetProgress).is_colonized:
+			worlds += 1
+			var pd := get_planet_data(int(sd))
+			if pd != null:
+				for p: POIData in pd.custom_pois:
+					if p.is_city() and not p.constructing:
+						cities += 1
+	var research := 0
+	for id: String in SkillTree.unlocked_skills:
+		if not id in SkillTree.DEFAULT_SKILLS:
+			research += 1
+	return {"minutes": int(play_seconds / 60.0), "worlds": worlds, "cities": cities, "research": research}
+
+## Explore opens once the guided tutorial is done.
+func explore_available() -> bool:
+	return TutorialManager.tutorial_finished() and not showcase_mode
+
+## Leaves the player's world for the read-only map tour (starts at the galaxy).
+func start_explore() -> void:
+	if showcase_mode:
+		return
+	enter_showcase()
+	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
+
+## Back from the tour to the home world.
+func end_explore() -> void:
+	if not showcase_mode:
+		return
+	exit_showcase()
+	var home := get_home_planet()
+	if home != null:
+		SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", home)
+	else:
+		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
 
 ## View access — showcase opens every map without touching the unlock flags;
 ## so does completing the demo (post-demo inspection, PLAN M7). Only viewing
@@ -168,40 +219,57 @@ func can_play_on(planet_seed: int) -> bool:
 	return planet_seed == home_planet_seed or (moon != null and planet_seed == moon.seed)
 
 func enter_showcase() -> void:
-	if has_save():
-		save()   # keep any unsaved progress before freezing the world
+	save()   # keep progress safe before looking around (no-op in the demo)
 	showcase_mode = true
-	ProductionManager.process_mode = Node.PROCESS_MODE_DISABLED
-	ShipManager.process_mode = Node.PROCESS_MODE_DISABLED
 	HUDManager.set_game_hud(false)
-	_show_showcase_hint()
+	_show_explore_bar()
 
-## Brief controls hint that fades out, leaving clean frames for captures.
-func _show_showcase_hint() -> void:
-	var layer := CanvasLayer.new()
-	layer.layer = 150
-	add_child(layer)
-	var lbl := Label.new()
-	lbl.text = "SHOWCASE  ·  ESC exit  ·  H hide navigation  ·  F12 screenshot"
+## RETURN button + a short controls hint that fades (the button stays).
+var _explore_layer: CanvasLayer = null
+func _show_explore_bar() -> void:
+	if _explore_layer != null and is_instance_valid(_explore_layer):
+		_explore_layer.queue_free()
+	_explore_layer = CanvasLayer.new()
+	_explore_layer.layer = 150
+	add_child(_explore_layer)
 	var font := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
+	var back := Button.new()
+	back.text = "↩  RETURN TO YOUR WORLD"
+	back.focus_mode = Control.FOCUS_NONE
+	if font:
+		back.add_theme_font_override("font", font)
+	back.add_theme_font_size_override("font_size", 11)
+	back.add_theme_color_override("font_color", Color(0.65, 1.0, 0.75))
+	back.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	back.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	back.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	back.position -= Vector2(16, 14)
+	back.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		end_explore())
+	_explore_layer.add_child(back)
+	var lbl := Label.new()
+	lbl.text = "EXPLORING  ·  look around freely — nothing here can be built  ·  ESC return  ·  H hide navigation"
 	if font:
 		lbl.add_theme_font_override("font", font)
 	lbl.add_theme_font_size_override("font_size", 10)
 	lbl.add_theme_color_override("font_color", Color(0.75, 0.80, 1.0, 0.85))
-	lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	lbl.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	lbl.position -= Vector2(16, 12)
-	layer.add_child(lbl)
-	var tw := layer.create_tween()
-	tw.tween_interval(4.0)
+	lbl.position += Vector2(16, -18)
+	_explore_layer.add_child(lbl)
+	var tw := lbl.create_tween()
+	tw.tween_interval(5.0)
 	tw.tween_property(lbl, "modulate:a", 0.0, 1.0)
-	tw.tween_callback(layer.queue_free)
 
 func exit_showcase() -> void:
+	var was := showcase_mode
 	showcase_mode = false
-	ProductionManager.process_mode = Node.PROCESS_MODE_INHERIT
-	ShipManager.process_mode = Node.PROCESS_MODE_INHERIT
+	if was:
+		HUDManager.set_game_hud(true)   # the planet view doesn't re-show it itself
+	if _explore_layer != null and is_instance_valid(_explore_layer):
+		_explore_layer.queue_free()
+	_explore_layer = null
 
 ## Seed of the planet currently shown in PlanetaryView. -1 when not in that scene.
 var active_planet_seed: int = -1
@@ -243,6 +311,8 @@ func _ready() -> void:
 	_bootstrap_world()
 
 func _process(delta: float) -> void:
+	if not get_tree().paused:
+		play_seconds += delta
 	_autosave_timer += delta
 	if _autosave_timer >= AUTOSAVE_INTERVAL:
 		_autosave_timer = 0.0
@@ -253,6 +323,8 @@ func _notification(what: int) -> void:
 		save()
 
 static func has_save() -> bool:
+	if is_demo_build():
+		return false
 	return FileAccess.file_exists(SAVE_PATH)
 
 func unlock_building(building_id: String) -> void:
@@ -1002,11 +1074,13 @@ var _loaded_from_save: bool = false
 var incompatible_save_version: int = -1
 
 func save() -> void:
-	if showcase_mode or incompatible_save_version >= 0:
+	if demo_build or incompatible_save_version >= 0:   # exploring changes nothing: saving is safe
 		return
 	var data := {
 		"save_version":         SAVE_VERSION,
 		"saved_at":             Time.get_unix_time_from_system(),
+		"play_seconds":         play_seconds,
+		"moon_city_celebrated": moon_city_celebrated,
 		"world_gen":            world_gen,
 		"scanned_bodies":       scanned_bodies,
 		"landing_paid":         landing_paid,
@@ -1114,6 +1188,8 @@ func save() -> void:
 		file.store_var(data)
 
 func load_save() -> bool:
+	if demo_build:
+		return false
 	if not FileAccess.file_exists(SAVE_PATH):
 		return false
 	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
@@ -1136,6 +1212,8 @@ func load_save() -> bool:
 	if profile != "" and profile != Balance.profile_name and not Balance.load_profile(profile):
 		push_warning("[GameState] Save's balance profile '%s' not found — using '%s'." % [profile, Balance.profile_name])
 	_loaded_from_save = true
+	play_seconds = float(data.get("play_seconds", 0.0))
+	moon_city_celebrated = bool(data.get("moon_city_celebrated", false))
 	world_gen = int(data.get("world_gen", 1))
 	scanned_bodies = data.get("scanned_bodies", {})
 	landing_paid = data.get("landing_paid", {})
@@ -1255,6 +1333,9 @@ func delete_save() -> void:
 			DirAccess.remove_absolute(SAVE_PATH)
 	incompatible_save_version = -1
 	_loaded_from_save = false   # what follows is a brand-new world
+	exit_showcase()
+	play_seconds = 0.0
+	moon_city_celebrated = false
 	save_deleted.emit()
 	credits              = Balance.cfg.start_credits
 	science_points       = Balance.cfg.start_science

@@ -1,0 +1,75 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/DemoSignup.gd" id="1_script"]
+[ext_resource type="FontFile" path="res://Fonts/Orbitron-VariableFont_wght.ttf" id="2_orbitron"]
+
+[node name="DemoSignup" type="VBoxContainer"]
+theme_override_constants/separation = 8
+alignment = 1
+script = ExtResource("1_script")
+
+[node name="WishlistRow" type="HBoxContainer" parent="."]
+layout_mode = 2
+alignment = 1
+
+[node name="WishlistButton" type="Button" parent="WishlistRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 44)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.55, 0.85, 1, 1)
+theme_override_fonts/font = ExtResource("2_orbitron")
+theme_override_font_sizes/font_size = 13
+text = "★  WISHLIST ON STEAM"
+
+[node name="EmailBox" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Hint" type="Label" parent="EmailBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.76, 0.92, 1)
+theme_override_font_sizes/font_size = 11
+text = "Get news about Voidle — the full game, new worlds, the next civilization:"
+horizontal_alignment = 1
+
+[node name="EmailRow" type="HBoxContainer" parent="EmailBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="EmailField" type="LineEdit" parent="EmailBox/EmailRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 36)
+layout_mode = 2
+placeholder_text = "you@example.com"
+max_length = 120
+virtual_keyboard_type = 5
+
+[node name="SendButton" type="Button" parent="EmailBox/EmailRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 36)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.6, 1, 0.7, 1)
+theme_override_fonts/font = ExtResource("2_orbitron")
+theme_override_font_sizes/font_size = 12
+text = "SEND"
+
+[node name="Consent" type="Label" parent="EmailBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.55, 0.7, 1)
+theme_override_font_sizes/font_size = 9
+text = "We'll only use your email to tell you about Voidle. Unsubscribe any time."
+horizontal_alignment = 1
+
+[node name="Status" type="Label" parent="EmailBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+horizontal_alignment = 1
+
+[node name="Http" type="HTTPRequest" parent="."]
+unique_name_in_owner = true
+timeout = 15.0

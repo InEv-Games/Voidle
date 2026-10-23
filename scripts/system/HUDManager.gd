@@ -247,6 +247,8 @@ func _ready() -> void:
 
 	sci_vbox.add_child(skill_btn)
 	sci_vbox.add_child(_make_trade_button(skill_s, skill_h))
+	_explore_btn = _make_explore_button(skill_s, skill_h)
+	sci_vbox.add_child(_explore_btn)
 	_build_resource_cells(hbox)
 
 	sci_panel.anchor_left   = 1.0
@@ -293,6 +295,33 @@ func _make_trade_button(normal: StyleBoxFlat, hover: StyleBoxFlat) -> Button:
 		TooltipManager.hide_tip())
 	return b
 
+## Explore: a read-only look at every map from inside the game, once the
+## tutorial is done (GameState.start_explore). Hidden until then.
+var _explore_btn: Button = null
+func _make_explore_button(normal: StyleBoxFlat, hover: StyleBoxFlat) -> Button:
+	var b := Button.new()
+	b.text = "◎ Explore"
+	if _orbitron: b.add_theme_font_override("font", _orbitron)
+	b.add_theme_font_size_override("font_size", 10)
+	b.add_theme_color_override("font_color", Color(0.75, 0.82, 1.0))
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.visible = false
+	b.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		TooltipManager.hide_tip()
+		GameState.start_explore())
+	b.mouse_entered.connect(func() -> void:
+		AudioManager.play("hover")
+		CursorManager.set_state(CursorManager.State.POINTER)
+		TooltipManager.show_tip("Explore", "Look around the galaxy, other systems and other planets. Nothing there can be built; your world keeps running. ESC returns."))
+	b.mouse_exited.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		TooltipManager.hide_tip())
+	return b
+
 var _trade_layer: CanvasLayer = null
 
 func toggle_trade_panel() -> void:
@@ -313,10 +342,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		var current_scene := get_tree().current_scene
 		if current_scene == null or current_scene.scene_file_path.ends_with("MainMenu.tscn"):
 			return
-		if GameState.showcase_mode:   # ESC leaves the read-only showcase
+		if GameState.showcase_mode:   # ESC leaves Explore, back to the home world
 			get_viewport().set_input_as_handled()
-			GameState.exit_showcase()
-			SceneTransition.go("res://scenes/MainMenu.tscn")
+			GameState.end_explore()
 			return
 		if get_tree().paused:
 			if _pause_overlay != null and is_instance_valid(_pause_overlay):
@@ -433,7 +461,7 @@ func show_pause_menu() -> void:
 		show_settings_popup()
 	))
 	
-	vbox.add_child(_make_btn.call("SAVE GAME", func():
+	var save_btn: Button = _make_btn.call("SAVE GAME", func():
 		GameState.save()
 		title.text = "GAME SAVED"
 		title.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5))
@@ -444,11 +472,13 @@ func show_pause_menu() -> void:
 				title.text = "PAUSED"
 				title.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0))
 		)
-	))
+	)
+	if not GameState.demo_build:   # the browser demo doesn't save
+		vbox.add_child(save_btn)
 	
 	vbox.add_child(HSeparator.new())
 	
-	var mm_btn: Button = _make_btn.call("MAIN MENU", func():
+	var mm_btn: Button = _make_btn.call("MAIN MENU  (ends this run)" if GameState.demo_build else "MAIN MENU", func():
 		get_tree().paused = false
 		_pause_overlay = null
 		overlay.queue_free()
@@ -468,7 +498,8 @@ func show_pause_menu() -> void:
 	var quit_sb := quit_btn.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
 	quit_sb.bg_color = Color(0.5, 0.15, 0.15)
 	quit_btn.add_theme_stylebox_override("normal", quit_sb)
-	vbox.add_child(quit_btn)
+	if not GameState.demo_build:   # a browser tab has nothing to quit to
+		vbox.add_child(quit_btn)
 
 	overlay.add_child(panel)
 	get_tree().root.add_child(overlay)
@@ -664,6 +695,23 @@ func _process(delta: float) -> void:
 		_res_poll = 0.0
 		_refresh_resource_cells()
 		_maybe_show_offline()
+		_maybe_celebrate_moon()
+		if _explore_btn != null and is_instance_valid(_explore_btn):
+			_explore_btn.visible = GameState.explore_available()
+
+## The demo's high point: the first City on the Moon gets a short banner.
+func _maybe_celebrate_moon() -> void:
+	if GameState.moon_city_celebrated or GameState.showcase_mode or not SkillTree.event_met("moon_city"):
+		return
+	var scene := get_tree().current_scene
+	if scene == null or scene.scene_file_path.ends_with("MainMenu.tscn"):
+		return
+	GameState.moon_city_celebrated = true
+	# scenes/ui/MoonBanner.tscn — texts and timing are edited there
+	var layer := CanvasLayer.new()
+	layer.layer = 230
+	get_tree().root.add_child(layer)
+	layer.add_child((load("res://scenes/ui/MoonBanner.tscn") as PackedScene).instantiate())
 
 ## The lander parked in the Moon's orbit: a notice that flies the camera there
 ## (the Moon, its orbit and the lander's INITIATE COLONIZATION card).
@@ -1363,73 +1411,8 @@ func _input(event: InputEvent) -> void:
 
 ## Shown once, when the final rocket arrives: Civilization 0 is complete.
 func _show_act1_complete() -> void:
+	# scenes/ui/DemoEndScreen.tscn — texts and layout are edited in the scene
 	var layer := CanvasLayer.new()
 	layer.layer = 240
 	get_tree().root.add_child(layer)
-	var shade := ColorRect.new()
-	shade.color = Color(0, 0, 0, 0.0)
-	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.mouse_filter = Control.MOUSE_FILTER_STOP
-	layer.add_child(shade)
-	var orbitron := load("res://Fonts/Orbitron-VariableFont_wght.ttf") as Font
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 14)
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	box.modulate.a = 0.0
-	shade.add_child(box)
-	var mk := func(text: String, size: int, col: Color) -> Label:
-		var l := Label.new()
-		l.text = text
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		if orbitron: l.add_theme_font_override("font", orbitron)
-		l.add_theme_font_size_override("font_size", size)
-		l.add_theme_color_override("font_color", col)
-		box.add_child(l)
-		return l
-	var tgt := GameState.get_planet_data(int(GameState.expedition("rocket").get("target_seed", -1)))
-	mk.call("CIVILIZATION 0 COMPLETE", 34, Color(1.0, 0.90, 0.55))
-	mk.call("Your rocket reached %s. Civilization 1 begins." % (tgt.planet_name if tgt != null else "a new world"), 13, Color(0.75, 0.82, 1.0))
-	mk.call("Thank you for playing the Voidle demo. Earth and the Moon keep running, and every map is open to explore.", 11, Color(0.55, 0.62, 0.80))
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_child(row)
-	var btn := Button.new()
-	btn.text = "KEEP PLAYING"
-	if orbitron: btn.add_theme_font_override("font", orbitron)
-	btn.add_theme_font_size_override("font_size", 12)
-	btn.custom_minimum_size = Vector2(220, 40)
-	btn.pressed.connect(func() -> void:
-		AudioManager.play("click")
-		layer.queue_free())
-	row.add_child(btn)
-	# fractal collapse: nested hexagon rings fold into one point — the whole
-	# Civilization 0 tree becoming the centre node of Civilization 1's tree
-	var rings := Control.new()
-	rings.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	rings.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rings.set_meta("t", 0.0)
-	rings.draw.connect(func() -> void:
-		var t: float = rings.get_meta("t")
-		var c := rings.size * 0.5
-		var base := minf(rings.size.x, rings.size.y) * 0.45
-		for i in 7:
-			var k := float(i) / 7.0
-			var r := base * (1.0 - k * 0.8) * (1.0 - t)
-			if r < 1.0:
-				continue
-			var pts := PackedVector2Array()
-			for j in 7:
-				var a := float(j) * TAU / 6.0 + t * PI * (1.0 + k)
-				pts.append(c + Vector2(cos(a), sin(a)) * r)
-			rings.draw_polyline(pts, Color(1.0, 0.85, 0.5, 0.65 * (1.0 - t) + 0.1), 2.0, true)
-		rings.draw_circle(c, 4.0 + 10.0 * t, Color(1.0, 0.92, 0.6, t)))
-	shade.add_child(rings)
-	shade.move_child(rings, 0)
-	var tw := shade.create_tween().set_parallel(true)
-	tw.tween_property(shade, "color:a", 0.72, 1.2)
-	tw.tween_method(func(v: float) -> void:
-		rings.set_meta("t", v)
-		rings.queue_redraw(), 0.0, 1.0, 2.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	tw.tween_property(box, "modulate:a", 1.0, 1.6).set_delay(1.8)
-	AudioManager.play("building_done")
+	layer.add_child((load("res://scenes/ui/DemoEndScreen.tscn") as PackedScene).instantiate())

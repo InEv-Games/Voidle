@@ -21,7 +21,7 @@ Tarih: 21 Ekim 2026
 | KARARLAR.md (girdi, district fiyatı, nüfus, offline, Ay, sağ tık, oranlar, fraktal ağaç) | ✓ |
 | Denge raporu ve denge uygulama planı | ✓ (denge ekibinde inceleniyor) |
 | Orbital'e erişim düzeltmesi (FOUND CITY listesinde gri Orbit satırı ve neden) | ✓ kod, oyunda denenmedi |
-| Showcase modu (ana menü ve cheat console `showcase`) | ✓ kod, oyunda denenmedi |
+| Showcase → **Explore modu**: ana menü tuşu kaldırıldı; tutorial bitince HUD'daki "◎ Explore" ile oyunun içinden salt-okunur harita turu, ESC / RETURN ile ana gezegene dönüş, ekonomi arkada çalışır (cheat console `showcase on/off` duruyor) | ✓ kod, oyunda denenmedi |
 | Navigation HUD (geri/ileri geçmişi, breadcrumb); sağ tık gezinmeden ayrıldı | ✓ kod, oyunda denenmedi |
 | M0.1 Denge profilleri: `BalanceConfig`, `Balance` autoload, `profile_current` / `report_A` / `report_B`, console `balance` | ✓ kod, oyunda denenmedi. Kayda profil adının yazılması M0.2'de |
 | M0.2 Kayıt sürümü: `save_version` (mevcut kayıtlar v1), uyumsuz kayıt yüklenmez/üzerine yazılmaz/NEW GAME'de yedeklenir, kayıt denge profilini taşır, **yüklemede başlangıç bütçesinin krediyi ve kilitleri ezmesi düzeltildi** | ✓ kod, oyunda denenmedi. İşlem kimlikleri ilk ihtiyaç duyan adımda (M4/M5) eklenecek; M1'de `SAVE_VERSION` 2'ye çıkacak |

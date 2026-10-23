@@ -321,7 +321,15 @@ static func find(bid: String) -> BuildingDef:
 static func for_poi_and_planet(poi_type: POIData.POIType, planet_type: PlanetData.Type) -> Array[BuildingDef]:
 	var result: Array[BuildingDef] = []
 	for b in available_buildings():
-		if poi_type in b.allowed_poi_types:
-			if b.allowed_planet_types.is_empty() or planet_type in b.allowed_planet_types:
-				result.append(b)
+		if poi_type in b.allowed_poi_types and b.allows_planet(planet_type, poi_type):
+			result.append(b)
 	return result
+
+## Whether this building may stand on a planet of `planet_type` in a district
+## of `poi_type`. An empty allowed_planet_types means "Terran-planned": any
+## world but the Moon, whose surface has its own Lunar buildings (researched on
+## the Lunar line). Orbit districts aren't on the surface, so they're open.
+func allows_planet(planet_type: PlanetData.Type, poi_type: POIData.POIType) -> bool:
+	if not allowed_planet_types.is_empty():
+		return planet_type in allowed_planet_types
+	return planet_type != PlanetData.Type.MOON or poi_type == POIData.POIType.STATION

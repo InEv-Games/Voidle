@@ -559,18 +559,23 @@ func _draw_connections() -> void:
 			parent_idx += 1
 			if not st.get("nodes").has(parent_id) or not _in_view(st, parent_id):
 				continue
-			# nodes open from the start hang off the root only when they sit next to it
-			if parent_id == "root" and (node.pos as Vector2).length() > 330.0:
+			# lines stay apart: a link to another line's node (an ANY alternative)
+			# isn't drawn — the tooltip still lists it
+			var p_line: String = st.get("nodes")[parent_id].line
+			var is_bridge: bool = node.line == "bridge"   # joins two lines: both links drawn
+			if not is_bridge and parent_id != "root" and parent_id != "civilization_0_tree" \
+					and p_line != node.line and p_line != "exploration":   # Orbit / Moon hang off Exploration
 				continue
-				
+
 			# Offset drawing coordinates to account for _connections_draw's -10000 position shift
 			var start_pos: Vector2 = st.get("nodes")[parent_id].pos + draw_offset
 			var end_pos: Vector2 = node.pos + draw_offset
 
 			# Determine line color
 			var is_active: bool = st.call("is_unlocked", parent_id) and st.call("is_unlocked", id)
-			var line_col := Color(0.15, 0.85, 0.95, 0.9) if is_active else Color(0.15, 0.2, 0.3, 0.5)
-			if parent_idx > 0:   # alternative (ANY) parent: a thinner, fainter trace
+			var fam: Color = LINE_COLORS.get(p_line if is_bridge else node.line, Color(0.15, 0.85, 0.95))
+			var line_col := Color(fam, 0.95) if is_active else Color(fam.darkened(0.55), 0.55)
+			if parent_idx > 0 and not is_bridge:   # alternative (ANY) parent: a thinner, fainter trace
 				line_col.a *= 0.45
 			
 			var p_shape: int = st.get("nodes")[parent_id].get("shape") if "shape" in st.get("nodes")[parent_id] else 0
@@ -578,35 +583,47 @@ func _draw_connections() -> void:
 			var is_main_path: bool = p_shape != 1 and c_shape != 1 # 1 is DIAMOND
 
 			var line_width := (8.0 if is_main_path else 4.0) if is_active else (4.0 if is_main_path else 2.0)
-			if parent_idx > 0:
+			if node.line == "exploration" and node.get("common"):
+				line_width += 2.0   # the road to the next world stands out
+			if parent_idx > 0 and not is_bridge:
 				line_width *= 0.5
 
-			# Circuit Board 45-Degree Chamfer Routing
-			var dx = end_pos.x - start_pos.x
-			var dy = end_pos.y - start_pos.y
-			var pts := PackedVector2Array()
-
-			if absf(dx) < 2.0 or absf(dy) < 2.0 or absf(absf(dx) - absf(dy)) < 2.0:
-				# Zaten tam yatay, tam dikey veya tam 45 dereceyse düz çizgi çek
-				pts.append(start_pos)
-				pts.append(end_pos)
-			else:
-				var p1 = start_pos
-				var p4 = end_pos
-				
-				# 45 Derecelik PCB Traces (Merkezden çapraz çıkıp sonra düze dönen)
-				if absf(dx) > absf(dy):
-					var p2 = p1 + Vector2(signf(dx) * absf(dy), dy)
-					pts.append_array([p1, p2, p4])
-					_connections_draw.draw_circle(p2, line_width * 1.2, line_col)
-				else:
-					var p2 = p1 + Vector2(dx, signf(dy) * absf(dx))
-					pts.append_array([p1, p2, p4])
-					_connections_draw.draw_circle(p2, line_width * 1.2, line_col)
-
+			# straight links: lines fork at any angle (PoE-style), no grid routing.
+			# Bridge links follow the outer ring: an arc around the centre.
+			var pts := PackedVector2Array([start_pos, end_pos])
+			if is_bridge:
+				pts = _ring_arc(start_pos - draw_offset, end_pos - draw_offset, draw_offset)
 			_connections_draw.draw_polyline(pts, line_col, line_width, true)
 
 var _zoom: float = 1.0
+
+## Points of an arc from `a` to `b` around the tree's centre (node space),
+## blending radius and angle — how bridge links run along the outer ring.
+static func _ring_arc(a: Vector2, b: Vector2, offset: Vector2) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	var r0 := a.length()
+	var r1 := b.length()
+	var a0 := a.angle()
+	var da := wrapf(b.angle() - a0, -PI, PI)
+	const STEPS := 24
+	for k in STEPS + 1:
+		var t := float(k) / float(STEPS)
+		pts.append(Vector2.from_angle(a0 + da * t) * lerpf(r0, r1, t) + offset)
+	return pts
+
+## Colour of each research line (SkillTree.LINE_DIRS).
+const LINE_COLORS := {
+	"exploration": Color(0.75, 0.70, 1.0),
+	"planning":    Color(0.55, 0.90, 0.90),
+	"energy":      Color(1.0, 0.75, 0.25),
+	"population":  Color(0.45, 0.95, 0.55),
+	"trade":       Color(1.0, 0.88, 0.30),
+	"science":     Color(0.35, 0.70, 1.0),
+	"industry":    Color(0.95, 0.50, 0.30),
+	"admin":       Color(0.80, 0.80, 0.85),
+	"orbital":     Color(0.55, 0.72, 1.0),
+	"lunar":       Color(0.85, 0.85, 0.72),
+}
 
 func _on_skill_unlocked(_id: String) -> void:
 	# Rebuild tree to show newly unlocked nodes & connections

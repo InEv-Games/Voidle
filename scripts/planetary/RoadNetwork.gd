@@ -87,6 +87,11 @@ static func for_planet(data: PlanetData) -> RoadNetwork:
 	net._sea_level = data.sea_level
 	net._rocky = TerrainMap.has_map(data.seed, TerrainMap.Mode.ROCKY)
 	_nets[data.seed] = net
+	if OS.has_feature("web"):
+		# the web demo is exported without threads: build on the spot
+		net._build()
+		net._ready = true
+		return net
 	net._task_id = WorkerThreadPool.add_task(net._build, false, "RoadNetwork %d" % data.seed)
 	return net
 

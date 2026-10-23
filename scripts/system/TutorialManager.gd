@@ -283,10 +283,10 @@ const QUESTS := [
 	{"id": "lander", "title": "To the Moon", "desc": "Open the Moon and prepare the lander (3,000 cr, 40 Ferrite, 20 Fuel).",
 		"reward_credits": 1000.0, "reward_science": 0.0, "reward_text": "+1000 cr",
 		"sub_steps": [{"type": "event", "target": "lander_arrived"}]},
-	{"id": "moon_city", "title": "First Lunar City", "desc": "The lander set up the Moon's Central Orbit. Scan the surface (free), then initiate colonization and pick the site of the first City.",
+	{"id": "moon_city", "title": "First Lunar City", "desc": "The lander set up the Moon's Central Orbit. Scan the surface (free), then initiate colonization and pick the site of the first City. Terran buildings can't stand on the Moon: research Lunar ones on the lines around Lunar Program.",
 		"reward_credits": 500.0, "reward_science": 150.0, "reward_text": "+500 cr  +150 sci",
 		"sub_steps": [{"type": "event", "target": "moon_city"}]},
-	{"id": "moon_mining", "title": "Lunar Mining", "desc": "Build a Production district on the Moon (300 cr, 30 Ferrite). It finds the Moon's mineral.",
+	{"id": "moon_mining", "title": "Lunar Mining", "desc": "Build a Production district on the Moon (300 cr, 30 Ferrite). It finds the Moon's mineral. Regolith Extraction researches its first building.",
 		"reward_credits": 800.0, "reward_science": 0.0, "reward_text": "+800 cr",
 		"sub_steps": [{"type": "event", "target": "moon_production"}]},
 	{"id": "lunar_materials", "title": "Lunar Materials", "desc": "Research Lunar Materials.",
@@ -840,6 +840,10 @@ func _run_finale() -> void:
 	await tw.finished
 	if is_instance_valid(banner): banner.queue_free()
 	_end_guided_tutorial()
+
+## The guided tutorial is over (this game or ever) — Explore mode opens.
+func tutorial_finished() -> bool:
+	return _tutorial_done
 
 func _end_guided_tutorial() -> void:
 	_tutorial_done = true

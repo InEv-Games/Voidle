@@ -180,22 +180,22 @@ func _build_menu() -> void:
 	gap.custom_minimum_size = Vector2(0, 28)
 	root.add_child(gap)
 
-	# Buttons
-	_cont_btn = _add_button(root, "CONTINUE", _on_continue)
-	_update_continue_btn()
-	GameState.save_deleted.connect(_update_continue_btn)
+	# Buttons — the browser demo has no saves (no CONTINUE), no tour and no QUIT
+	var demo := GameState.demo_build
+	if not demo:
+		_cont_btn = _add_button(root, "CONTINUE", _on_continue)
+		_update_continue_btn()
+		GameState.save_deleted.connect(_update_continue_btn)
 
-	_add_button(root, "NEW GAME",  _on_new_game)
-
-	if GameState.showcase_available():
-		_add_button(root, "SHOWCASE", _on_showcase)
+	_add_button(root, "PLAY DEMO" if demo else "NEW GAME", _on_new_game)
 
 	_add_button(root, "SETTINGS",  _on_settings)
-	_add_button(root, "QUIT",      _on_quit)
+	if not demo:
+		_add_button(root, "QUIT",      _on_quit)
 
 	# Version
 	var ver := Label.new()
-	ver.text = "v0.1  –  Early Access"
+	ver.text = "Demo  –  progress isn't saved" if demo else "v0.1  –  Early Access"
 	if _font: ver.add_theme_font_override("font", _font)
 	ver.add_theme_font_size_override("font_size", 8)
 	ver.add_theme_color_override("font_color", Color(0.35, 0.35, 0.5))
@@ -316,17 +316,18 @@ func _update_continue_btn() -> void:
 
 func _on_new_game() -> void:
 	AudioManager.play("click", 0.0)
-	GameState.delete_save()
-	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
+	# a short goal card before the first scene (scenes/ui/IntroCard.tscn)
+	var layer := CanvasLayer.new()
+	layer.layer = 235
+	add_child(layer)
+	var card: Control = (load("res://scenes/ui/IntroCard.tscn") as PackedScene).instantiate()
+	card.connect("begun", func() -> void:
+		GameState.delete_save()
+		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn"))
+	layer.add_child(card)
 
 func _on_continue() -> void:
 	AudioManager.play("click", 0.0)
-	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
-
-## Read-only tour of the galaxy, systems and planets (see GameState.showcase_mode).
-func _on_showcase() -> void:
-	AudioManager.play("click", 0.0)
-	GameState.enter_showcase()
 	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
 
 func _on_settings() -> void:
