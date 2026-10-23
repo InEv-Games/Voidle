@@ -1,0 +1,55 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/components/IconButton.gd" id="1_script"]
+
+[node name="IconButton" type="Button"]
+custom_minimum_size = Vector2(0, 26)
+offset_right = 200.0
+offset_bottom = 26.0
+size_flags_vertical = 4
+focus_mode = 0
+mouse_default_cursor_shape = 2
+theme_type_variation = &"ButtonDefault"
+script = ExtResource("1_script")
+
+[node name="Row" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 4.0
+offset_right = -8.0
+offset_bottom = -4.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="TextureRect" parent="Row"]
+self_modulate = Color(0.898, 0.831, 0.675, 1)
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+mouse_filter = 2
+texture_filter = 3
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Sep" type="VSeparator" parent="Row"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="Label" type="Label" parent="Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"TitleLabel"
+text = "BUTTON"
+vertical_alignment = 1
+
+[node name="Counter" type="Label" parent="Row"]
+visible = false
+layout_mode = 2
+theme_type_variation = &"CounterLabel"
+horizontal_alignment = 2
+vertical_alignment = 1

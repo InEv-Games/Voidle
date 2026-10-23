@@ -1,0 +1,56 @@
+[gd_scene format=3 uid="uid://dcaw5kheox1ap"]
+
+[ext_resource type="Script" uid="uid://djjt61wm2w208" path="res://scripts/ui/components/HeroHeader.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/HeroTag.tscn" id="2_tag"]
+
+[node name="HeroHeader" type="VBoxContainer" unique_id=1680475258]
+offset_right = 270.0
+offset_bottom = 80.0
+mouse_filter = 2
+theme_override_constants/separation = 0
+script = ExtResource("1_script")
+
+[node name="Caption" type="Label" parent="." unique_id=1021191041]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "Planet - Level 4"
+
+[node name="Title" type="Label" parent="." unique_id=268211507]
+layout_mode = 2
+theme_type_variation = &"HeaderHero"
+theme_override_constants/line_spacing = -16
+text = "LASANDA"
+autowrap_mode = 3
+
+[node name="TitleRule" type="HSeparator" parent="." unique_id=743431748]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="Tags" type="HBoxContainer" parent="." unique_id=945623272]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="LeadBar" type="VSeparator" parent="Tags" unique_id=656408257]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Tag1" parent="Tags" unique_id=761897251 instance=ExtResource("2_tag")]
+layout_mode = 2
+text = "Habitable"
+
+[node name="Tag2" parent="Tags" unique_id=1743016901 instance=ExtResource("2_tag")]
+layout_mode = 2
+text = "Temperate"
+
+[node name="Tag3" parent="Tags" unique_id=1769105143 instance=ExtResource("2_tag")]
+layout_mode = 2
+text = "Ocean"
+
+[node name="TagRule" type="HSeparator" parent="." unique_id=1449964078]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1

@@ -1,0 +1,105 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/components/TooltipCard.gd" id="1_script"]
+
+[node name="TooltipCard" type="PanelContainer"]
+custom_minimum_size = Vector2(200, 0)
+offset_right = 200.0
+offset_bottom = 80.0
+size_flags_horizontal = 0
+size_flags_vertical = 0
+mouse_filter = 2
+theme_type_variation = &"TooltipPanel"
+script = ExtResource("1_script")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="Header" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="Icon" type="TextureRect" parent="VBox/Header"]
+self_modulate = Color(0.137, 0.725, 0.906, 1)
+custom_minimum_size = Vector2(12, 12)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+texture_filter = 3
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"HeaderLabel"
+text = "RESOURCE TOOLTIP"
+
+[node name="Rule" type="VBoxContainer" parent="VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="A" type="HSeparator" parent="VBox/Rule"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DoubleRule"
+
+[node name="B" type="HSeparator" parent="VBox/Rule"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DoubleRule"
+
+[node name="Body" type="RichTextLabel" parent="VBox"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"TooltipBody"
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+
+[node name="Rows" type="VBoxContainer" parent="VBox"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="CostBox" type="VBoxContainer" parent="VBox"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="A" type="HSeparator" parent="VBox/CostBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DoubleRule"
+
+[node name="B" type="HSeparator" parent="VBox/CostBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DoubleRule"
+
+[node name="Cost" type="HBoxContainer" parent="VBox/CostBox"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Key" type="Label" parent="VBox/CostBox/Cost"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SubLabel"
+text = "Cost"
+
+[node name="Value" type="Label" parent="VBox/CostBox/Cost"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+theme_override_colors/font_color = Color(0.8, 0.745, 0.478, 1)
+text = "100 cr"
+
+[node name="Actions" type="HBoxContainer" parent="VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6

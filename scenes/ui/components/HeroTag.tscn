@@ -1,0 +1,24 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/components/HeroTag.gd" id="1_script"]
+
+[node name="HeroTag" type="HBoxContainer"]
+offset_right = 90.0
+offset_bottom = 16.0
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 0
+script = ExtResource("1_script")
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"TagLabel"
+text = "Tag"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Bar" type="VSeparator" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1

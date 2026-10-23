@@ -1,0 +1,2912 @@
+[gd_scene format=3 uid="uid://pc3mglskfpl"]
+
+[ext_resource type="FontFile" uid="uid://dfouygmnxnk6s" path="res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf" id="1_orb"]
+[ext_resource type="Theme" path="res://resources/ui/voidle_theme.tres" id="2_theme"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/IconButton.tscn" id="3_ibtn"]
+[ext_resource type="PackedScene" uid="uid://dcaw5kheox1ap" path="res://scenes/ui/components/HeroHeader.tscn" id="4_hero"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/SectionHeader.tscn" id="5_section"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/ListItem.tscn" id="6_item"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/HeroTag.tscn" id="7_tag"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/InfoRow.tscn" id="8_info"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/TooltipCard.tscn" id="9_tip"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/PopupCard.tscn" id="10_popup"]
+[ext_resource type="Texture2D" uid="uid://cdtbquk0vqqx7" path="res://resources/ui/icons/experiment.svg" id="12_ofvqd"]
+[ext_resource type="Texture2D" uid="uid://cn7gtl3d5v4gw" path="res://resources/ui/icons/dangerous.svg" id="14_d7cf6"]
+[ext_resource type="Texture2D" uid="uid://dbv1pigrg58ke" path="res://resources/ui/icons/keyboard_double_arrow_up.svg" id="15_sacjx"]
+[ext_resource type="Texture2D" uid="uid://dtcc8mc5vnsj6" path="res://resources/ui/icons/sticky_note_2.svg" id="16_kjvak"]
+[ext_resource type="Texture2D" uid="uid://ci45dauvwq5cj" path="res://resources/ui/icons/add_triangle.svg" id="ic_1"]
+[ext_resource type="Texture2D" uid="uid://makdrrey0err" path="res://resources/ui/icons/bolt.svg" id="ic_5"]
+
+[sub_resource type="StyleBoxFlat" id="sb_1"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+bg_color = Color(0.2, 0.45, 0.7, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_2"]
+content_margin_top = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(0.1, 0.28, 0.45, 1)
+
+[sub_resource type="StyleBoxFlat" id="sb_3"]
+content_margin_top = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(0.15, 0.42, 0.65, 1)
+
+[sub_resource type="StyleBoxFlat" id="sb_4"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+bg_color = Color(0.15, 0.15, 0.2, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_5"]
+content_margin_top = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(0.2, 0.25, 0.35, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="sb_6"]
+content_margin_top = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(0.3, 0.4, 0.5, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="sb_7"]
+bg_color = Color(0.4, 0.2, 0.2, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="sb_8"]
+bg_color = Color(0.2, 0.35, 0.5, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="sb_9"]
+bg_color = Color(0.5, 0.15, 0.15, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="sb_10"]
+content_margin_left = 3.0
+content_margin_right = 3.0
+bg_color = Color(0.28, 0.1, 0.1, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.65, 0.28, 0.28, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="sb_11"]
+content_margin_top = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.08, 0.2, 0.12, 0.85)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.8, 0.45, 0.6)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_12"]
+content_margin_top = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.12, 0.3, 0.18, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.8, 0.45, 0.6)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_13"]
+content_margin_top = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.1, 0.16, 0.3, 0.85)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.55, 0.95, 0.6)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_14"]
+content_margin_top = 6.0
+content_margin_bottom = 6.0
+bg_color = Color(0.16, 0.24, 0.45, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.55, 0.95, 0.6)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_15"]
+content_margin_left = 3.0
+content_margin_right = 3.0
+bg_color = Color(0.2, 0.4, 0.8, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.7, 1, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="sb_16"]
+content_margin_left = 3.0
+content_margin_right = 3.0
+bg_color = Color(0.12, 0.3, 0.15, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.75, 0.4, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="sb_17"]
+content_margin_left = 6.0
+content_margin_top = 2.0
+content_margin_right = 6.0
+content_margin_bottom = 2.0
+bg_color = Color(0.08, 0.12, 0.22, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.28, 0.42, 0.72, 0.5)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="sb_18"]
+content_margin_left = 6.0
+content_margin_top = 2.0
+content_margin_right = 6.0
+content_margin_bottom = 2.0
+bg_color = Color(0.14, 0.2, 0.36, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.28, 0.42, 0.72, 0.5)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="sb_19"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(0.05, 0.1, 0.22, 0.8)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.22, 0.42, 0.7, 0.45)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_20"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(0.08, 0.12, 0.22, 0.55)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.28, 0.4, 0.75, 0.45)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="sb_21"]
+content_margin_left = 12.0
+content_margin_top = 4.0
+content_margin_right = 12.0
+content_margin_bottom = 4.0
+bg_color = Color(0.08, 0.16, 0.3, 0.85)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.28, 0.42, 0.72, 0.6)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_22"]
+content_margin_left = 12.0
+content_margin_top = 4.0
+content_margin_right = 12.0
+content_margin_bottom = 4.0
+bg_color = Color(0.12, 0.24, 0.45, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.42, 0.62, 1, 0.85)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_23"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(0.05, 0.06, 0.11, 0.8)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.32, 0.55, 0.45)
+
+[sub_resource type="StyleBoxFlat" id="sb_24"]
+content_margin_left = 10.0
+content_margin_top = 4.0
+content_margin_right = 10.0
+content_margin_bottom = 4.0
+bg_color = Color(0.15, 0.16, 0.22, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.32, 0.55, 0.45)
+
+[sub_resource type="StyleBoxFlat" id="sb_25"]
+content_margin_left = 6.0
+content_margin_right = 6.0
+bg_color = Color(0.07, 0.08, 0.13, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.25, 0.4, 0.5)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="sb_26"]
+content_margin_left = 6.0
+content_margin_right = 6.0
+bg_color = Color(0.12, 0.16, 0.3, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.25, 0.4, 0.5)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="sb_27"]
+content_margin_left = 12.0
+bg_color = Color(1, 1, 1, 0.05)
+border_width_left = 3
+border_color = Color(0.55, 0.55, 1, 0.8)
+
+[sub_resource type="StyleBoxFlat" id="sb_28"]
+bg_color = Color(0.16, 0.22, 0.42, 0.75)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="sb_29"]
+content_margin_top = 5.0
+content_margin_bottom = 5.0
+bg_color = Color(0.12, 0.18, 0.35, 0.95)
+border_width_bottom = 2
+border_color = Color(1, 0.92, 0.3, 0.55)
+
+[sub_resource type="StyleBoxFlat" id="sb_30"]
+content_margin_top = 5.0
+content_margin_bottom = 5.0
+bg_color = Color(0.06, 0.08, 0.14, 0)
+border_width_bottom = 1
+border_color = Color(0.3, 0.35, 0.55, 0.25)
+
+[sub_resource type="StyleBoxFlat" id="sb_31"]
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1, 0.13, 0.24, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1, 0.85, 0.4, 0.9)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_33"]
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
+bg_color = Color(0.05, 0.07, 0.13, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.6, 0.95, 0.6, 0.35)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_34"]
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
+bg_color = Color(0.05, 0.07, 0.13, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.95, 0.6, 0.35, 0.35)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_35"]
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
+bg_color = Color(0.05, 0.07, 0.13, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.65, 1, 0.35)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_36"]
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
+bg_color = Color(0.05, 0.07, 0.13, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.55, 0.95, 0.6, 0.35)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="sb_37"]
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+bg_color = Color(0.06, 0.14, 0.1, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.85, 0.45, 0.8)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="sb_38"]
+content_margin_left = 16.0
+content_margin_top = 8.0
+content_margin_right = 16.0
+content_margin_bottom = 8.0
+bg_color = Color(0.1, 0.22, 0.14, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.85, 0.45, 0.8)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="UI_Work" type="Control" unique_id=1764312015]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Bg" type="ColorRect" parent="." unique_id=2010080573]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.05, 0.1, 1)
+
+[node name="Scroll" type="ScrollContainer" parent="." unique_id=193884014]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="Scroll" unique_id=1330532924]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="P01_PlanetPanel" type="VBoxContainer" parent="Scroll/Content" unique_id=1477839654]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/P01_PlanetPanel" unique_id=1035115612]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "PANELLER · Planet / City / District"
+
+[node name="Note" type="Label" parent="Scroll/Content/P01_PlanetPanel" unique_id=551710069]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "Üçü de aynı iskelet: geri bağlantı · Hero (tip - seviye, isim, tag'ler) · bilgi satırları · bölüm başlığı + liste · ekleme butonu · en altta seviye butonu."
+
+[node name="Row" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel" unique_id=1323018972]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/separation = 16
+
+[node name="SidePanel" type="PanelContainer" parent="Scroll/Content/P01_PlanetPanel/Row" unique_id=88434509]
+custom_minimum_size = Vector2(300, 560)
+layout_mode = 2
+theme_type_variation = &"SidePanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel" unique_id=1040961498]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Hero" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=461574002 instance=ExtResource("4_hero")]
+layout_mode = 2
+caption = "Terran - Level 2"
+title = "VESUNA"
+
+[node name="Tag1" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(461574002, 945623272) index="1" unique_id=761897251]
+text = "Medium"
+tip = "Medium planet."
+
+[node name="Tag2" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(461574002, 945623272) index="2" unique_id=1743016901]
+text = "Dense Atm."
+tip = "Dense atmosphere."
+
+[node name="Tag3" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(461574002, 945623272) index="3" unique_id=1769105143]
+text = "Fertile Soil +2"
+tone = 1
+tip = "Rich biosphere accelerates colonisation."
+
+[node name="Tag4" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(461574002, 945623272) index="4" unique_id=1117565310 instance=ExtResource("7_tag")]
+layout_mode = 2
+text = "Mild Climate −15%"
+tone = 1
+tip = "Reduced infrastructure upkeep."
+
+[node name="Minerals" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=463167819]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Label" type="Label" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals" unique_id=54605360]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "Minerals"
+
+[node name="Chips" type="HFlowContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals" unique_id=955810442]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
+
+[node name="Ferrite" type="PanelContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips" unique_id=487196151]
+layout_mode = 2
+theme_type_variation = &"Chip"
+
+[node name="Row" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips/Ferrite" unique_id=593252611]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Icon" type="TextureRect" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips/Ferrite/Row" unique_id=1716287906]
+self_modulate = Color(0.66, 0.58, 0.52, 1)
+texture_filter = 3
+custom_minimum_size = Vector2(9, 9)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("ic_1")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips/Ferrite/Row" unique_id=2057794418]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "Ferrite"
+
+[node name="Aurorium" type="PanelContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips" unique_id=132691161]
+layout_mode = 2
+theme_type_variation = &"Chip"
+
+[node name="Row" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips/Aurorium" unique_id=815615128]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Icon" type="TextureRect" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips/Aurorium/Row" unique_id=569694774]
+self_modulate = Color(0.4, 1, 0.6, 1)
+texture_filter = 3
+custom_minimum_size = Vector2(9, 9)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("ic_1")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips/Aurorium/Row" unique_id=2080161817]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "Aurorium"
+
+[node name="Unknown" type="PanelContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips" unique_id=595140621]
+layout_mode = 2
+theme_type_variation = &"Chip"
+
+[node name="Row" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips/Unknown" unique_id=1883876448]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Icon" type="TextureRect" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips/Unknown/Row" unique_id=1865160636]
+self_modulate = Color(0.55, 0.6, 0.78, 1)
+texture_filter = 3
+custom_minimum_size = Vector2(9, 9)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("ic_1")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Minerals/Chips/Unknown/Row" unique_id=1893513817]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "?"
+
+[node name="Cities" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=1538424980 instance=ExtResource("5_section")]
+layout_mode = 2
+counter = "2/3"
+
+[node name="Capital" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=1470821333 instance=ExtResource("6_item")]
+layout_mode = 2
+title = "CAPITAL"
+badge = "Level 2"
+icon_name = "capital"
+stats = PackedStringArray("district:3", "factory:Size 4", "credits:+30/20s", "science:+2/20s")
+progress = 0.6
+progress_color = Color(0.95, 0.82, 0.35, 1)
+
+[node name="Riva" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=533238857 instance=ExtResource("6_item")]
+layout_mode = 2
+title = "RIVA"
+badge = "Level 1"
+stats = PackedStringArray("district:1", "factory:Size 1", "energy:+6")
+
+[node name="NewHaven" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=25029064 instance=ExtResource("6_item")]
+layout_mode = 2
+title = "NEW HAVEN"
+description = "Constructing..."
+stats = PackedStringArray()
+progress = 0.3
+progress_color = Color(0.8, 0.745, 0.478, 1)
+
+[node name="Orbit" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=1800202180 instance=ExtResource("6_item")]
+layout_mode = 2
+title = "ORBIT"
+badge = "Level 1"
+description = "Station · no module yet"
+icon_name = "rocket"
+stats = PackedStringArray()
+
+[node name="NewCity" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=1183580064 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(134, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "NEW CITY"
+icon_name = "new"
+variant = 2
+counter = "1.5k cr"
+
+[node name="Spacer" type="Control" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=170904588]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=1302562593]
+layout_mode = 2
+
+[node name="UpgradePlanet" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=394833792 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(189, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "UPGRADE PLANET"
+icon_name = "upgrade"
+variant = 1
+counter = "Lv 2 → 3"
+
+[node name="CityPanel" type="PanelContainer" parent="Scroll/Content/P01_PlanetPanel/Row" unique_id=329658541]
+custom_minimum_size = Vector2(300, 560)
+layout_mode = 2
+theme_type_variation = &"SidePanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel" unique_id=1022055919]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Back" type="Button" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=257409161]
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+theme_type_variation = &"ButtonFlat"
+text = "‹  VESUNA"
+
+[node name="Hero" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=1881790810 instance=ExtResource("4_hero")]
+layout_mode = 2
+caption = "City - Level 2"
+title = "CAPITAL"
+
+[node name="Tag1" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(1881790810, 945623272) index="1" unique_id=761897251]
+text = "Districts 3/5"
+tip = "Districts in this City / how many its level allows."
+
+[node name="Tag2" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(1881790810, 945623272) index="2" unique_id=1743016901]
+text = "Levels 4/6 for Lv 3"
+tip = "Total district levels needed for the next City level."
+
+[node name="Tag3" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(1881790810, 945623272) index="3" unique_id=1769105143]
+visible = false
+
+[node name="Districts" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=256882957 instance=ExtResource("5_section")]
+layout_mode = 2
+title = "DISTRICTS"
+
+[node name="AddDistrict" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=151474330 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(120, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "ADD DISTRICT"
+icon_name = "new"
+variant = 2
+
+[node name="CapitalDistrict" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=1408405070 instance=ExtResource("6_item")]
+layout_mode = 2
+title = "CAPITAL DISTRICT"
+badge = "Level 2"
+icon_name = "capital"
+stats = PackedStringArray("factory:Size 4", "credits:+30/20s", "science:+2/20s")
+progress = 0.6
+progress_color = Color(0.95, 0.82, 0.35, 1)
+
+[node name="ResearchPark" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=1983860249 instance=ExtResource("6_item")]
+layout_mode = 2
+title = "RESEARCH PARK"
+badge = "Level 1"
+icon_name = "science"
+stats = PackedStringArray("factory:Size 3", "science:+2.7/20s")
+progress = 0.25
+progress_color = Color(0.35, 0.65, 1, 1)
+
+[node name="PowerGrid" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=1179987290 instance=ExtResource("6_item")]
+layout_mode = 2
+title = "POWER GRID"
+badge = "Level 1"
+icon_name = "energy"
+stats = PackedStringArray("factory:Size 2", "energy:+6")
+
+[node name="Spacer" type="Control" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=722817360]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=1214753173]
+layout_mode = 2
+
+[node name="CityLevel" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=916396700 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(202, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "CITY LV 2 → 3"
+icon_name = "upgrade"
+variant = 1
+counter = "1.5k cr · 4.0K pop"
+
+[node name="DistrictPanel" type="PanelContainer" parent="Scroll/Content/P01_PlanetPanel/Row" unique_id=1273037867]
+custom_minimum_size = Vector2(300, 560)
+layout_mode = 2
+theme_type_variation = &"SidePanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel" unique_id=692387207]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Back" type="Button" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=928958812]
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+theme_type_variation = &"ButtonFlat"
+text = "‹  CAPITAL"
+
+[node name="Hero" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=274912764 instance=ExtResource("4_hero")]
+layout_mode = 2
+caption = "Science District - Level 1"
+title = "RESEARCH PARK"
+
+[node name="Tag1" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(274912764, 945623272) index="1" unique_id=761897251]
+text = "Coastal"
+tone = 1
+tip = "Next to the sea: coastal buildings can be built here."
+
+[node name="Tag2" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(274912764, 945623272) index="2" unique_id=1743016901]
+text = "Solar 60%"
+tip = "Solar potential at this site."
+
+[node name="Tag3" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(274912764, 945623272) index="3" unique_id=1769105143]
+text = "Wind 30%"
+tip = "Wind potential at this site."
+
+[node name="Tag4" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(274912764, 945623272) index="4" unique_id=717240152 instance=ExtResource("7_tag")]
+layout_mode = 2
+text = "Geoth 10%"
+tip = "Geothermal potential at this site."
+
+[node name="Minerals" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=579420652]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Label" type="Label" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Minerals" unique_id=1238759361]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "Minerals"
+
+[node name="Chips" type="HFlowContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Minerals" unique_id=1595903897]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
+
+[node name="Chip0" type="PanelContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Minerals/Chips" unique_id=1664201288]
+layout_mode = 2
+theme_type_variation = &"Chip"
+
+[node name="Row" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Minerals/Chips/Chip0" unique_id=515136936]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Icon" type="TextureRect" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Minerals/Chips/Chip0/Row" unique_id=308209451]
+self_modulate = Color(0.66, 0.58, 0.52, 1)
+texture_filter = 3
+custom_minimum_size = Vector2(9, 9)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("ic_1")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Minerals/Chips/Chip0/Row" unique_id=1115918261]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "Ferrite 70%"
+
+[node name="Chip1" type="PanelContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Minerals/Chips" unique_id=1338912489]
+layout_mode = 2
+theme_type_variation = &"Chip"
+
+[node name="Row" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Minerals/Chips/Chip1" unique_id=354672573]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Icon" type="TextureRect" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Minerals/Chips/Chip1/Row" unique_id=1443495793]
+self_modulate = Color(0.4, 1, 0.6, 1)
+texture_filter = 3
+custom_minimum_size = Vector2(9, 9)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("ic_1")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Minerals/Chips/Chip1/Row" unique_id=13420890]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "Aurorium 20%"
+
+[node name="Info" type="VBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=2062501415]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="Energy" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Info" unique_id=172537305 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "District Energy"
+value = "−2 ⚡/s"
+tone = 2
+
+[node name="Population" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Info" unique_id=1150323448 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Population"
+value = "1.2K working  ·  +0 housed"
+
+[node name="BaseIncome" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Info" unique_id=19056353 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Base Income"
+value = "+2.7 sci /20s   terrain ×1.2"
+tone = 1
+
+[node name="Buildings" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=1549667262 instance=ExtResource("5_section")]
+layout_mode = 2
+title = "BUILDINGS"
+counter = "3/4"
+
+[node name="ResearchLab" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=1377761950 instance=ExtResource("6_item")]
+layout_mode = 2
+title = "RESEARCH LAB"
+badge = "X2"
+icon_name = "science"
+icon_color = Color(0.35, 0.65, 1, 1)
+stats = PackedStringArray("science:+2.7/20s", "energy:−2")
+show_stepper = true
+progress = 0.45
+progress_color = Color(0.35, 0.65, 1, 1)
+
+[node name="Observatory" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=1521300822 instance=ExtResource("6_item")]
+layout_mode = 2
+title = "FIELD OBSERVATORY"
+icon_name = "science"
+icon_color = Color(0.35, 0.65, 1, 1)
+stats = PackedStringArray("science:+1.2/20s", "raw:−4 Ferrite")
+show_stepper = true
+progress = 0.8
+progress_color = Color(0.35, 0.65, 1, 1)
+
+[node name="Institute" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=1433333211 instance=ExtResource("6_item")]
+layout_mode = 2
+title = "RESEARCH INSTITUTE"
+badge = "2 SLOTS"
+description = "Constructing...  45%"
+icon_name = "science"
+icon_color = Color(0.8, 0.745, 0.478, 1)
+stats = PackedStringArray()
+progress = 0.45
+progress_color = Color(0.8, 0.745, 0.478, 1)
+
+[node name="EmptySlot" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=376779563 instance=ExtResource("6_item")]
+modulate = Color(1, 1, 1, 0.55)
+layout_mode = 2
+title = "EMPTY SLOT"
+description = "Click to build"
+icon_name = "new"
+stats = PackedStringArray()
+
+[node name="Spacer" type="Control" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=151988377]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=599508289]
+layout_mode = 2
+
+[node name="LevelUp" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=1299058380 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(220, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "LEVEL UP  LV 1 → 2"
+icon_name = "upgrade"
+variant = 1
+counter = "500 cr · 2K pop"
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/P01_PlanetPanel" unique_id=1306005135]
+layout_mode = 2
+
+[node name="P02_TooltipPopup" type="VBoxContainer" parent="Scroll/Content" unique_id=1961991447]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/P02_TooltipPopup" unique_id=1476642458]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "TOOLTIP / POPUP"
+
+[node name="Note" type="Label" parent="Scroll/Content/P02_TooltipPopup" unique_id=1550113746]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "Satırlar (InfoRow), içerik ve butonlar sahnedeki node'lar — Editable Children ile düzenlenir."
+
+[node name="Row" type="HFlowContainer" parent="Scroll/Content/P02_TooltipPopup" unique_id=1607954884]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 16
+
+[node name="EnergyTooltip" parent="Scroll/Content/P02_TooltipPopup/Row" unique_id=496571273 instance=ExtResource("9_tip")]
+layout_mode = 2
+title = "ENERGY"
+icon_name = "energy"
+body = "A deficit lowers what energy-using buildings make (down to 50%)."
+
+[node name="Icon" parent="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip/VBox/Header" index="0"]
+texture = ExtResource("ic_5")
+
+[node name="Title" parent="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip/VBox/Header" index="1"]
+text = "ENERGY"
+
+[node name="Body" parent="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip/VBox" index="2"]
+visible = true
+text = "A deficit lowers what energy-using buildings make (down to 50%)."
+
+[node name="Rows" parent="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip/VBox" index="3"]
+visible = true
+
+[node name="Produced" parent="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip/VBox/Rows" index="0" unique_id=905121491 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Produced"
+value = "+12 ⚡/s"
+tone = 1
+
+[node name="Consumed" parent="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip/VBox/Rows" index="1" unique_id=558264659 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Consumed"
+value = "−6 ⚡/s"
+tone = 2
+
+[node name="Balance" parent="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip/VBox/Rows" index="2" unique_id=1181771941 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Balance"
+value = "+6 ⚡/s"
+
+[node name="Value" parent="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip/VBox/CostBox/Cost" index="1"]
+text = ""
+
+[node name="Actions" parent="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip/VBox" index="5"]
+visible = true
+
+[node name="Trade" parent="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip/VBox/Actions" index="0" unique_id=1191112364 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(81, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "TRADE"
+icon_name = "trade"
+variant = 2
+
+[node name="BuildingTooltip" parent="Scroll/Content/P02_TooltipPopup/Row" unique_id=801970889 instance=ExtResource("9_tip")]
+layout_mode = 2
+title = "RESEARCH LAB"
+icon_name = "science"
+body = "Researchers turn credits into Science."
+cost = "1.2k cr  ·  2K workers"
+
+[node name="Icon" parent="Scroll/Content/P02_TooltipPopup/Row/BuildingTooltip/VBox/Header" index="0"]
+texture = ExtResource("12_ofvqd")
+
+[node name="Title" parent="Scroll/Content/P02_TooltipPopup/Row/BuildingTooltip/VBox/Header" index="1"]
+text = "RESEARCH LAB"
+
+[node name="Body" parent="Scroll/Content/P02_TooltipPopup/Row/BuildingTooltip/VBox" index="2"]
+visible = true
+text = "Researchers turn credits into Science."
+
+[node name="Rows" parent="Scroll/Content/P02_TooltipPopup/Row/BuildingTooltip/VBox" index="3"]
+visible = true
+
+[node name="Makes" parent="Scroll/Content/P02_TooltipPopup/Row/BuildingTooltip/VBox/Rows" index="0" unique_id=1199899666 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Makes"
+value = "+2.7 sci /20s"
+tone = 1
+
+[node name="Upkeep" parent="Scroll/Content/P02_TooltipPopup/Row/BuildingTooltip/VBox/Rows" index="1" unique_id=1610882295 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Upkeep"
+value = "−2 ⚡/s"
+tone = 2
+
+[node name="Workers" parent="Scroll/Content/P02_TooltipPopup/Row/BuildingTooltip/VBox/Rows" index="2" unique_id=308072501 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Workers"
+value = "2K"
+
+[node name="CostBox" parent="Scroll/Content/P02_TooltipPopup/Row/BuildingTooltip/VBox" index="4"]
+visible = true
+
+[node name="Value" parent="Scroll/Content/P02_TooltipPopup/Row/BuildingTooltip/VBox/CostBox/Cost" index="1"]
+text = "1.2k cr  ·  2K workers"
+
+[node name="DemolishPopup" parent="Scroll/Content/P02_TooltipPopup/Row" unique_id=1326271499 instance=ExtResource("10_popup")]
+layout_mode = 2
+title = "DEMOLISH RESEARCH PARK?"
+icon_name = "danger"
+body = "Removes the district and its 3 buildings. This cannot be undone."
+
+[node name="Icon" parent="Scroll/Content/P02_TooltipPopup/Row/DemolishPopup/VBox/Header" index="0"]
+texture = ExtResource("14_d7cf6")
+
+[node name="Title" parent="Scroll/Content/P02_TooltipPopup/Row/DemolishPopup/VBox/Header" index="1"]
+text = "DEMOLISH RESEARCH PARK?"
+
+[node name="Close" parent="Scroll/Content/P02_TooltipPopup/Row/DemolishPopup/VBox/Header" index="2"]
+custom_minimum_size = Vector2(24, 24)
+
+[node name="Body" parent="Scroll/Content/P02_TooltipPopup/Row/DemolishPopup/VBox" index="2"]
+visible = true
+text = "Removes the district and its 3 buildings. This cannot be undone."
+
+[node name="Content" parent="Scroll/Content/P02_TooltipPopup/Row/DemolishPopup/VBox" index="3"]
+visible = true
+
+[node name="Refund" parent="Scroll/Content/P02_TooltipPopup/Row/DemolishPopup/VBox/Content" index="0" unique_id=1948129246 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Refund (50%)"
+value = "+1.1k cr"
+tone = 1
+
+[node name="Workers" parent="Scroll/Content/P02_TooltipPopup/Row/DemolishPopup/VBox/Content" index="1" unique_id=1348960875 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Workers freed"
+value = "1.2K"
+
+[node name="Cancel" parent="Scroll/Content/P02_TooltipPopup/Row/DemolishPopup/VBox/Buttons" index="0"]
+custom_minimum_size = Vector2(88, 26)
+
+[node name="Confirm" parent="Scroll/Content/P02_TooltipPopup/Row/DemolishPopup/VBox/Buttons" index="1"]
+custom_minimum_size = Vector2(102, 26)
+theme_type_variation = &"ButtonNegative"
+label_text = "DEMOLISH"
+icon_name = "danger"
+variant = 3
+
+[node name="LevelUpPopup" parent="Scroll/Content/P02_TooltipPopup/Row" unique_id=319906329 instance=ExtResource("10_popup")]
+layout_mode = 2
+title = "UPGRADE PLANET"
+icon_name = "upgrade"
+body = "Raise Vesuna to Lv 3."
+
+[node name="Icon" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox/Header" index="0"]
+texture = ExtResource("15_sacjx")
+
+[node name="Title" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox/Header" index="1"]
+text = "UPGRADE PLANET"
+
+[node name="Close" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox/Header" index="2"]
+custom_minimum_size = Vector2(24, 24)
+
+[node name="Body" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox" index="2"]
+visible = true
+text = "Raise Vesuna to Lv 3."
+
+[node name="Content" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox" index="3"]
+visible = true
+
+[node name="Unlock" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox/Content" index="0" unique_id=1340091317 instance=ExtResource("6_item")]
+layout_mode = 2
+mouse_default_cursor_shape = 0
+title = "CITIES"
+badge = "+1"
+description = "Room for one more City"
+stats = PackedStringArray()
+clickable = false
+
+[node name="Credits" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox/Content" index="1" unique_id=1825917906 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Credits"
+value = "5k cr"
+
+[node name="Population" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox/Content" index="2" unique_id=680317798 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Population"
+value = "10K"
+
+[node name="Ferrite" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox/Content" index="3" unique_id=96140722 instance=ExtResource("8_info")]
+layout_mode = 2
+key = "Ferrite"
+value = "12 / 20"
+tone = 2
+
+[node name="Cancel" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox/Buttons" index="0"]
+custom_minimum_size = Vector2(88, 26)
+
+[node name="Confirm" parent="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup/VBox/Buttons" index="1"]
+custom_minimum_size = Vector2(98, 26)
+theme_type_variation = &"ButtonPositive"
+disabled = true
+label_text = "UPGRADE"
+icon_name = "upgrade"
+
+[node name="WelcomePopup" parent="Scroll/Content/P02_TooltipPopup/Row" unique_id=1476180344 instance=ExtResource("10_popup")]
+layout_mode = 2
+title = "WELCOME BACK"
+icon_name = "notes"
+body = "You were away for [b]21 min[/b].
+Nothing was produced while the game was closed."
+
+[node name="Icon" parent="Scroll/Content/P02_TooltipPopup/Row/WelcomePopup/VBox/Header" index="0"]
+texture = ExtResource("16_kjvak")
+
+[node name="Title" parent="Scroll/Content/P02_TooltipPopup/Row/WelcomePopup/VBox/Header" index="1"]
+text = "WELCOME BACK"
+
+[node name="Close" parent="Scroll/Content/P02_TooltipPopup/Row/WelcomePopup/VBox/Header" index="2"]
+custom_minimum_size = Vector2(24, 24)
+
+[node name="Body" parent="Scroll/Content/P02_TooltipPopup/Row/WelcomePopup/VBox" index="2"]
+visible = true
+text = "You were away for [b]21 min[/b].
+Nothing was produced while the game was closed."
+
+[node name="Cancel" parent="Scroll/Content/P02_TooltipPopup/Row/WelcomePopup/VBox/Buttons" index="0"]
+visible = false
+custom_minimum_size = Vector2(88, 26)
+
+[node name="Confirm" parent="Scroll/Content/P02_TooltipPopup/Row/WelcomePopup/VBox/Buttons" index="1"]
+custom_minimum_size = Vector2(101, 26)
+theme_type_variation = &"ButtonPositive"
+label_text = "CONTINUE"
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/P02_TooltipPopup" unique_id=992363481]
+layout_mode = 2
+
+[node name="S00_System" type="VBoxContainer" parent="Scroll/Content" unique_id=652723224]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S00_System" unique_id=1191346484]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "BUTON SİSTEMİ  ·  4 tip × 2 düzen"
+
+[node name="Note" type="Label" parent="Scroll/Content/S00_System" unique_id=2054456907]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "Default (mavi) · Positive (yeşil) · Neutral (sarı) · Negative (kırmızı)  —  sol: ikonlu, orta: yazı ortada, sağ: disabled"
+
+[node name="Grid" type="GridContainer" parent="Scroll/Content/S00_System" unique_id=722816653]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+columns = 4
+
+[node name="DefaultIcon" parent="Scroll/Content/S00_System/Grid" unique_id=332891929 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+label_text = "DEFAULT"
+min_size = Vector2(180, 26)
+
+[node name="DefaultText" parent="Scroll/Content/S00_System/Grid" unique_id=1244599979 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+label_text = "DEFAULT"
+icon_name = ""
+layout = 1
+min_size = Vector2(180, 26)
+
+[node name="DefaultCounter" parent="Scroll/Content/S00_System/Grid" unique_id=1586111567 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+label_text = "DEFAULT"
+counter = "5/9"
+min_size = Vector2(180, 26)
+
+[node name="DefaultDisabled" parent="Scroll/Content/S00_System/Grid" unique_id=1495464732 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+disabled = true
+label_text = "DEFAULT"
+min_size = Vector2(180, 26)
+
+[node name="PositiveIcon" parent="Scroll/Content/S00_System/Grid" unique_id=252183818 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "POSITIVE"
+icon_name = "positive"
+variant = 1
+min_size = Vector2(180, 26)
+
+[node name="PositiveText" parent="Scroll/Content/S00_System/Grid" unique_id=1107883940 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "POSITIVE"
+icon_name = ""
+variant = 1
+layout = 1
+min_size = Vector2(180, 26)
+
+[node name="PositiveCounter" parent="Scroll/Content/S00_System/Grid" unique_id=2130723310 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "POSITIVE"
+icon_name = "positive"
+variant = 1
+counter = "5/9"
+min_size = Vector2(180, 26)
+
+[node name="PositiveDisabled" parent="Scroll/Content/S00_System/Grid" unique_id=1806430339 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+disabled = true
+label_text = "POSITIVE"
+icon_name = "positive"
+variant = 1
+min_size = Vector2(180, 26)
+
+[node name="NeutralIcon" parent="Scroll/Content/S00_System/Grid" unique_id=1731553527 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "NEUTRAL"
+icon_name = "new"
+variant = 2
+min_size = Vector2(180, 26)
+
+[node name="NeutralText" parent="Scroll/Content/S00_System/Grid" unique_id=548796030 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "NEUTRAL"
+icon_name = ""
+variant = 2
+layout = 1
+min_size = Vector2(180, 26)
+
+[node name="NeutralCounter" parent="Scroll/Content/S00_System/Grid" unique_id=1176024516 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "NEUTRAL"
+icon_name = "new"
+variant = 2
+counter = "5/9"
+min_size = Vector2(180, 26)
+
+[node name="NeutralDisabled" parent="Scroll/Content/S00_System/Grid" unique_id=484038617 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+disabled = true
+label_text = "NEUTRAL"
+icon_name = "new"
+variant = 2
+min_size = Vector2(180, 26)
+
+[node name="NegativeIcon" parent="Scroll/Content/S00_System/Grid" unique_id=712375831 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNegative"
+label_text = "NEGATIVE"
+icon_name = "negative"
+variant = 3
+min_size = Vector2(180, 26)
+
+[node name="NegativeText" parent="Scroll/Content/S00_System/Grid" unique_id=317923020 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNegative"
+label_text = "NEGATIVE"
+icon_name = ""
+variant = 3
+layout = 1
+min_size = Vector2(180, 26)
+
+[node name="NegativeCounter" parent="Scroll/Content/S00_System/Grid" unique_id=7078601 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNegative"
+label_text = "NEGATIVE"
+icon_name = "negative"
+variant = 3
+counter = "5/9"
+min_size = Vector2(180, 26)
+
+[node name="NegativeDisabled" parent="Scroll/Content/S00_System/Grid" unique_id=403424636 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNegative"
+disabled = true
+label_text = "NEGATIVE"
+icon_name = "negative"
+variant = 3
+min_size = Vector2(180, 26)
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S00_System" unique_id=2027209056]
+layout_mode = 2
+
+[node name="S01_Positive" type="VBoxContainer" parent="Scroll/Content" unique_id=1346762287]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S01_Positive" unique_id=1686517435]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "1 · ANA EYLEM / ONAY   →   Positive"
+
+[node name="Note" type="Label" parent="Scroll/Content/S01_Positive" unique_id=477890917]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "CONFIRM, FOUND CITY, PLACE DISTRICT, SURVEY, Launch, Start Prep, Add to Cargo, COLONIZE"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S01_Positive" unique_id=380009421]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S01_Positive" unique_id=228127698]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Confirm_Colonize" type="Button" parent="Scroll/Content/S01_Positive/Current" unique_id=882139280]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.4, 0.9, 0.4, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 12
+text = "CONFIRM"
+
+[node name="Confirm_LevelUp" type="Button" parent="Scroll/Content/S01_Positive/Current" unique_id=1894656769]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+theme_override_styles/normal = SubResource("sb_1")
+text = "CONFIRM"
+
+[node name="PlaceDistrict" type="Button" parent="Scroll/Content/S01_Positive/Current" unique_id=957446434]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.9, 0.82, 0.45, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.6, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+text = "▶  PLACE DISTRICT"
+
+[node name="Colonize" type="Button" parent="Scroll/Content/S01_Positive/Current" unique_id=464914965]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("sb_2")
+theme_override_styles/hover = SubResource("sb_3")
+text = "COLONIZE"
+
+[node name="Survey" type="Button" parent="Scroll/Content/S01_Positive/Current" unique_id=903333497]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 11
+text = "SURVEY"
+
+[node name="Launch" type="Button" parent="Scroll/Content/S01_Positive/Current" unique_id=645888618]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+text = "Launch ▶"
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S01_Positive" unique_id=206620113]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S01_Positive" unique_id=361205450]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Confirm" parent="Scroll/Content/S01_Positive/New" unique_id=1570324008 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(150, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "CONFIRM"
+icon_name = "confirm"
+variant = 1
+min_size = Vector2(150, 26)
+
+[node name="FoundCity" parent="Scroll/Content/S01_Positive/New" unique_id=1441930477 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(200, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "FOUND CITY"
+icon_name = "city"
+variant = 1
+counter = "1.5k cr"
+min_size = Vector2(200, 26)
+
+[node name="PlaceDistrict" parent="Scroll/Content/S01_Positive/New" unique_id=298286891 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(170, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "PLACE DISTRICT"
+icon_name = "district"
+variant = 1
+min_size = Vector2(170, 26)
+
+[node name="Launch" parent="Scroll/Content/S01_Positive/New" unique_id=1116094819 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(140, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "LAUNCH"
+icon_name = "rocket"
+variant = 1
+min_size = Vector2(140, 26)
+
+[node name="ConfirmText" parent="Scroll/Content/S01_Positive/New" unique_id=1191803777 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(130, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "CONFIRM"
+icon_name = ""
+variant = 1
+layout = 1
+min_size = Vector2(130, 26)
+
+[node name="SurveyText" parent="Scroll/Content/S01_Positive/New" unique_id=1924971992 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(130, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "SURVEY"
+icon_name = ""
+variant = 1
+layout = 1
+min_size = Vector2(130, 26)
+
+[node name="ConfirmDisabled" parent="Scroll/Content/S01_Positive/New" unique_id=361857002 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(150, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+disabled = true
+label_text = "CONFIRM"
+icon_name = "confirm"
+variant = 1
+min_size = Vector2(150, 26)
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S01_Positive" unique_id=930172554]
+layout_mode = 2
+
+[node name="S02_Default" type="VBoxContainer" parent="Scroll/Content" unique_id=468485168]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S02_Default" unique_id=1747148430]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "2 · İPTAL / İKİNCİL   →   Default"
+
+[node name="Note" type="Label" parent="Scroll/Content/S02_Default" unique_id=261968372]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "CANCEL, Cancel, Done, CLOSE"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S02_Default" unique_id=80422187]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S02_Default" unique_id=1926638402]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Cancel_LevelUp" type="Button" parent="Scroll/Content/S02_Default/Current" unique_id=92508618]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+theme_override_styles/normal = SubResource("sb_4")
+text = "CANCEL"
+
+[node name="Cancel_Colonize" type="Button" parent="Scroll/Content/S02_Default/Current" unique_id=1211072822]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.9, 0.4, 0.4, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 12
+text = "CANCEL"
+
+[node name="Close_Settings" type="Button" parent="Scroll/Content/S02_Default/Current" unique_id=187276594]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("sb_5")
+theme_override_styles/hover = SubResource("sb_6")
+text = "CLOSE"
+
+[node name="Done" type="Button" parent="Scroll/Content/S02_Default/Current" unique_id=2037821464]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 7
+text = "Done"
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S02_Default" unique_id=2050872756]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S02_Default" unique_id=827188661]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Close" parent="Scroll/Content/S02_Default/New" unique_id=1996340839 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(150, 26)
+layout_mode = 2
+label_text = "CLOSE"
+icon_name = "close"
+min_size = Vector2(150, 26)
+
+[node name="CancelText" parent="Scroll/Content/S02_Default/New" unique_id=1118620043 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(130, 26)
+layout_mode = 2
+label_text = "CANCEL"
+icon_name = ""
+layout = 1
+min_size = Vector2(130, 26)
+
+[node name="DoneText" parent="Scroll/Content/S02_Default/New" unique_id=966866309 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(130, 26)
+layout_mode = 2
+label_text = "DONE"
+icon_name = ""
+layout = 1
+min_size = Vector2(130, 26)
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S02_Default" unique_id=2007048647]
+layout_mode = 2
+
+[node name="S03_Negative" type="VBoxContainer" parent="Scroll/Content" unique_id=510143164]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S03_Negative" unique_id=963822247]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "3 · TEHLİKELİ / YIKICI   →   Negative"
+
+[node name="Note" type="Label" parent="Scroll/Content/S03_Negative" unique_id=1504021749]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "MAIN MENU, QUIT, − (bina kaldır), × (görev sil), Demolish onayı"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S03_Negative" unique_id=1489501641]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S03_Negative" unique_id=139128543]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="MainMenu" type="Button" parent="Scroll/Content/S03_Negative/Current" unique_id=1484873175]
+custom_minimum_size = Vector2(240, 40)
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("sb_7")
+theme_override_styles/hover = SubResource("sb_8")
+text = "MAIN MENU"
+
+[node name="Quit" type="Button" parent="Scroll/Content/S03_Negative/Current" unique_id=4981073]
+custom_minimum_size = Vector2(240, 40)
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("sb_9")
+theme_override_styles/hover = SubResource("sb_8")
+text = "QUIT TO DESKTOP"
+
+[node name="RemoveBuilding" type="Button" parent="Scroll/Content/S03_Negative/Current" unique_id=875505126]
+custom_minimum_size = Vector2(30, 22)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.9, 0.45, 0.45, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+theme_override_styles/normal = SubResource("sb_10")
+text = "-"
+
+[node name="RemoveTask" type="Button" parent="Scroll/Content/S03_Negative/Current" unique_id=82516142]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.9, 0.45, 0.45, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+text = "×"
+
+[node name="Demolish" type="Button" parent="Scroll/Content/S03_Negative/Current" unique_id=496872614]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.55, 0.45, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+text = "DEMOLISH"
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S03_Negative" unique_id=25269733]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S03_Negative" unique_id=806287051]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Demolish" parent="Scroll/Content/S03_Negative/New" unique_id=2092659607 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(150, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNegative"
+label_text = "DEMOLISH"
+icon_name = "danger"
+variant = 3
+min_size = Vector2(150, 26)
+
+[node name="Quit" parent="Scroll/Content/S03_Negative/New" unique_id=110467180 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(200, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNegative"
+label_text = "QUIT TO DESKTOP"
+icon_name = "close"
+variant = 3
+min_size = Vector2(200, 26)
+
+[node name="MainMenuText" parent="Scroll/Content/S03_Negative/New" unique_id=1388144205 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(150, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNegative"
+label_text = "MAIN MENU"
+icon_name = ""
+variant = 3
+layout = 1
+min_size = Vector2(150, 26)
+
+[node name="RemoveBuilding" parent="Scroll/Content/S03_Negative/New" unique_id=1085352144 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(22, 19)
+layout_mode = 2
+theme_type_variation = &"ButtonNegative"
+label_text = "-"
+icon_name = ""
+variant = 3
+layout = 1
+min_size = Vector2(22, 18)
+font_size = 9
+
+[node name="RemoveTask" parent="Scroll/Content/S03_Negative/New" unique_id=1174997918 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNegative"
+label_text = ""
+icon_name = "close"
+variant = 3
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S03_Negative" unique_id=164632953]
+layout_mode = 2
+
+[node name="S04_Upgrade" type="VBoxContainer" parent="Scroll/Content" unique_id=414112140]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S04_Upgrade" unique_id=385962325]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "4 · SEVİYE ATLATMA   →   Positive"
+
+[node name="Note" type="Label" parent="Scroll/Content/S04_Upgrade" unique_id=324210989]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "PLANET / CITY / ORBIT / District Lv X → Y, ^, Buyout"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S04_Upgrade" unique_id=226503574]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S04_Upgrade" unique_id=653488920]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="PlanetLevel" type="Button" parent="Scroll/Content/S04_Upgrade/Current" unique_id=939849782]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.7, 1, 0.75, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+theme_override_styles/normal = SubResource("sb_11")
+theme_override_styles/hover = SubResource("sb_12")
+text = "PLANET  Lv 1  →  Lv 2"
+
+[node name="CityLevel" type="Button" parent="Scroll/Content/S04_Upgrade/Current" unique_id=2109123912]
+custom_minimum_size = Vector2(260, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.7, 1, 0.75, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+theme_override_styles/normal = SubResource("sb_11")
+theme_override_styles/hover = SubResource("sb_12")
+text = "CITY  Lv 1 → Lv 2  ◈ 1.5k cr  ☺ 4.0K"
+
+[node name="DistrictLevel" type="Button" parent="Scroll/Content/S04_Upgrade/Current" unique_id=1915113769]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.75, 0.85, 1, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+theme_override_styles/normal = SubResource("sb_13")
+theme_override_styles/hover = SubResource("sb_14")
+text = "Lv 1  ·  LEVEL UP  ◈ 500 cr"
+
+[node name="BuildingUpgrade" type="Button" parent="Scroll/Content/S04_Upgrade/Current" unique_id=457960449]
+custom_minimum_size = Vector2(30, 22)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+theme_override_styles/normal = SubResource("sb_15")
+text = "^"
+
+[node name="Buyout" type="Button" parent="Scroll/Content/S04_Upgrade/Current" unique_id=1878993237]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+text = "Buyout  120 Science"
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S04_Upgrade" unique_id=940652989]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S04_Upgrade" unique_id=891178821]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="UpgradePlanet" parent="Scroll/Content/S04_Upgrade/New" unique_id=335260114 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(230, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "UPGRADE PLANET"
+icon_name = "upgrade"
+variant = 1
+counter = "Lv 1 → 2"
+min_size = Vector2(230, 26)
+
+[node name="UpgradeCity" parent="Scroll/Content/S04_Upgrade/New" unique_id=690071919 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(270, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "CITY LV 1 → 2"
+icon_name = "upgrade"
+variant = 1
+counter = "1.5k cr · 4.0K pop"
+min_size = Vector2(270, 26)
+
+[node name="BuyoutText" parent="Scroll/Content/S04_Upgrade/New" unique_id=1669259839 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(170, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "BUYOUT"
+icon_name = ""
+variant = 1
+layout = 1
+counter = "120 sci"
+min_size = Vector2(170, 26)
+
+[node name="MaxLevel" parent="Scroll/Content/S04_Upgrade/New" unique_id=1500758393 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+disabled = true
+label_text = "MAX LEVEL"
+icon_name = "upgrade"
+variant = 1
+counter = "9/9"
+min_size = Vector2(180, 26)
+
+[node name="BuildingUpgrade" parent="Scroll/Content/S04_Upgrade/New" unique_id=1636732432 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(22, 19)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "^"
+icon_name = ""
+variant = 1
+layout = 1
+min_size = Vector2(22, 18)
+font_size = 9
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S04_Upgrade" unique_id=1902445908]
+layout_mode = 2
+
+[node name="S05_Neutral" type="VBoxContainer" parent="Scroll/Content" unique_id=88124615]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S05_Neutral" unique_id=883947906]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "5 · YENİ EKLEME / TİCARET   →   Neutral"
+
+[node name="Note" type="Label" parent="Scroll/Content/S05_Neutral" unique_id=2082983553]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "+ bina ekle, + Add District kartı, Prepare / Queue Mission, Sell / Buy"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S05_Neutral" unique_id=1348067080]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S05_Neutral" unique_id=1481480778]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="AddBuilding" type="Button" parent="Scroll/Content/S05_Neutral/Current" unique_id=1418980106]
+custom_minimum_size = Vector2(30, 22)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.6, 0.95, 0.65, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+theme_override_styles/normal = SubResource("sb_16")
+text = "+"
+
+[node name="Sell" type="Button" parent="Scroll/Content/S05_Neutral/Current" unique_id=1227492955]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.55, 0.95, 0.6, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+theme_override_styles/normal = SubResource("sb_17")
+theme_override_styles/hover = SubResource("sb_18")
+text = "Sell 10"
+
+[node name="Buy" type="Button" parent="Scroll/Content/S05_Neutral/Current" unique_id=58417310]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.75, 0.45, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+theme_override_styles/normal = SubResource("sb_17")
+theme_override_styles/hover = SubResource("sb_18")
+text = "Buy 10"
+
+[node name="AddDestination" type="Button" parent="Scroll/Content/S05_Neutral/Current" unique_id=280807441]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.55, 0.78, 1, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 7
+theme_override_styles/normal = SubResource("sb_19")
+theme_override_styles/hover = SubResource("sb_19")
+text = "+ Add Destination"
+
+[node name="PrepareMission" type="Button" parent="Scroll/Content/S05_Neutral/Current" unique_id=1881895493]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+text = "Prepare Mission"
+
+[node name="AddDistrictCard" type="PanelContainer" parent="Scroll/Content/S05_Neutral/Current" unique_id=1629527460]
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("sb_20")
+
+[node name="Row" type="HBoxContainer" parent="Scroll/Content/S05_Neutral/Current/AddDistrictCard" unique_id=1539171874]
+layout_mode = 2
+
+[node name="Plus" type="Label" parent="Scroll/Content/S05_Neutral/Current/AddDistrictCard/Row" unique_id=929503407]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.6, 1, 0.9)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 14
+text = "+"
+
+[node name="Spacer" type="Control" parent="Scroll/Content/S05_Neutral/Current/AddDistrictCard/Row" unique_id=1894134680]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Text" type="Label" parent="Scroll/Content/S05_Neutral/Current/AddDistrictCard/Row" unique_id=128002700]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.7, 1, 0.75)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+text = "FOUND CITY"
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S05_Neutral" unique_id=360679449]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S05_Neutral" unique_id=773669823]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="NewCity" parent="Scroll/Content/S05_Neutral/New" unique_id=1621865759 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(170, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "NEW CITY"
+icon_name = "new"
+variant = 2
+min_size = Vector2(170, 26)
+
+[node name="Trade" parent="Scroll/Content/S05_Neutral/New" unique_id=118012129 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(150, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "TRADE"
+icon_name = "trade"
+variant = 2
+min_size = Vector2(150, 26)
+
+[node name="PrepareMission" parent="Scroll/Content/S05_Neutral/New" unique_id=1310434823 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(200, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "PREPARE MISSION"
+icon_name = "rocket"
+variant = 2
+min_size = Vector2(200, 26)
+
+[node name="SellText" parent="Scroll/Content/S05_Neutral/New" unique_id=447420147 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(49, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "SELL 10"
+icon_name = ""
+variant = 1
+layout = 1
+font_size = 8
+
+[node name="BuyText" parent="Scroll/Content/S05_Neutral/New" unique_id=306681187 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(45, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "BUY 10"
+icon_name = ""
+variant = 2
+layout = 1
+font_size = 8
+
+[node name="AddBuilding" parent="Scroll/Content/S05_Neutral/New" unique_id=1846241540 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(22, 19)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "+"
+icon_name = ""
+variant = 1
+layout = 1
+min_size = Vector2(22, 18)
+font_size = 9
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S05_Neutral" unique_id=544029309]
+layout_mode = 2
+
+[node name="S06_HUD" type="VBoxContainer" parent="Scroll/Content" unique_id=554326113]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S06_HUD" unique_id=836129227]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "6 · HUD KISAYOLLARI   →   Default / Neutral · ikonlu"
+
+[node name="Note" type="Label" parent="Scroll/Content/S06_HUD" unique_id=519871969]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "Upgrade Tree, Trade, Explore (sağ alt panel)"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S06_HUD" unique_id=1845332491]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S06_HUD" unique_id=1833446560]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="UpgradeTree" type="Button" parent="Scroll/Content/S06_HUD/Current" unique_id=618787651]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.65, 0.85, 1, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+theme_override_styles/normal = SubResource("sb_21")
+theme_override_styles/hover = SubResource("sb_22")
+text = "✦ Upgrade Tree"
+
+[node name="Trade" type="Button" parent="Scroll/Content/S06_HUD/Current" unique_id=1504945889]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.65, 1, 0.75, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+theme_override_styles/normal = SubResource("sb_21")
+theme_override_styles/hover = SubResource("sb_22")
+text = "⇄ Trade"
+
+[node name="Explore" type="Button" parent="Scroll/Content/S06_HUD/Current" unique_id=2045485349]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.75, 0.82, 1, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+theme_override_styles/normal = SubResource("sb_21")
+theme_override_styles/hover = SubResource("sb_22")
+text = "◎ Explore"
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S06_HUD" unique_id=101299903]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S06_HUD" unique_id=1881364228]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="UpgradeTree" parent="Scroll/Content/S06_HUD/New" unique_id=775481437 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(170, 26)
+layout_mode = 2
+label_text = "UPGRADE TREE"
+icon_name = "research"
+min_size = Vector2(170, 26)
+
+[node name="Trade" parent="Scroll/Content/S06_HUD/New" unique_id=443652116 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(170, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "TRADE"
+icon_name = "trade"
+variant = 2
+min_size = Vector2(170, 26)
+
+[node name="Explore" parent="Scroll/Content/S06_HUD/New" unique_id=493725912 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(170, 26)
+layout_mode = 2
+label_text = "EXPLORE"
+icon_name = "explore"
+min_size = Vector2(170, 26)
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S06_HUD" unique_id=587787391]
+layout_mode = 2
+
+[node name="S07_IconOnly" type="VBoxContainer" parent="Scroll/Content" unique_id=744629135]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S07_IconOnly" unique_id=1310405417]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "7 · SADECE İKON   →   Default / Negative · sadece ikon"
+
+[node name="Note" type="Label" parent="Scroll/Content/S07_IconOnly" unique_id=1659408154]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "⚙ ayarlar, ✕ kapat, ‹ panel aç/kapa, ‹ › geri/ileri, ay okları"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S07_IconOnly" unique_id=338916075]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S07_IconOnly" unique_id=1584700631]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Settings" type="Button" parent="Scroll/Content/S07_IconOnly/Current" unique_id=406535447]
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 20
+theme_override_styles/normal = SubResource("sb_23")
+theme_override_styles/hover = SubResource("sb_24")
+text = "⚙"
+
+[node name="Close" type="Button" parent="Scroll/Content/S07_IconOnly/Current" unique_id=1408068185]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.6, 0.6, 0.7, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+text = "✕"
+flat = true
+
+[node name="PanelToggle" type="Button" parent="Scroll/Content/S07_IconOnly/Current" unique_id=1060947769]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.55, 0.7, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("sb_25")
+theme_override_styles/hover = SubResource("sb_26")
+text = "‹"
+
+[node name="NavBack" type="Button" parent="Scroll/Content/S07_IconOnly/Current" unique_id=1414752807]
+custom_minimum_size = Vector2(26, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.65, 0.78, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 14
+text = "‹"
+flat = true
+
+[node name="NavForward" type="Button" parent="Scroll/Content/S07_IconOnly/Current" unique_id=1384039074]
+custom_minimum_size = Vector2(26, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.65, 0.78, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 14
+text = "›"
+flat = true
+
+[node name="MoonArrow" type="Button" parent="Scroll/Content/S07_IconOnly/Current" unique_id=1175802395]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 22
+text = "›"
+flat = true
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S07_IconOnly" unique_id=355269832]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S07_IconOnly" unique_id=1904194750]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Settings" parent="Scroll/Content/S07_IconOnly/New" unique_id=717234430 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+label_text = ""
+icon_name = "settings"
+
+[node name="Close" parent="Scroll/Content/S07_IconOnly/New" unique_id=397329280 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNegative"
+label_text = ""
+icon_name = "close"
+variant = 3
+
+[node name="PanelToggle" parent="Scroll/Content/S07_IconOnly/New" unique_id=942279127 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(22, 50)
+layout_mode = 2
+label_text = "‹"
+icon_name = ""
+layout = 1
+min_size = Vector2(0, 50)
+font_size = 12
+
+[node name="NavBack" parent="Scroll/Content/S07_IconOnly/New" unique_id=74478253 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+label_text = "‹"
+icon_name = ""
+layout = 1
+min_size = Vector2(26, 26)
+font_size = 12
+
+[node name="NavForward" parent="Scroll/Content/S07_IconOnly/New" unique_id=1587249434 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 2
+label_text = "›"
+icon_name = ""
+layout = 1
+min_size = Vector2(26, 26)
+font_size = 12
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S07_IconOnly" unique_id=1070510826]
+layout_mode = 2
+
+[node name="S08_FlatLink" type="VBoxContainer" parent="Scroll/Content" unique_id=322009934]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S08_FlatLink" unique_id=2001707312]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "8 · DÜZ METİN BAĞLANTI   →   Default · breadcrumb düz bağlantı olarak kalır"
+
+[node name="Note" type="Label" parent="Scroll/Content/S08_FlatLink" unique_id=1867536963]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "breadcrumb, ‹ Gezegen geri, ana menü öğeleri, solar gezegen listesi"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S08_FlatLink" unique_id=1311547950]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S08_FlatLink" unique_id=1650475896]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Breadcrumb" type="Button" parent="Scroll/Content/S08_FlatLink/Current" unique_id=2090819008]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.55, 0.68, 0.95, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+text = "Galaxy"
+flat = true
+
+[node name="BackToPlanet" type="Button" parent="Scroll/Content/S08_FlatLink/Current" unique_id=326500076]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.55, 0.7, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+text = "‹  Vesuna"
+flat = true
+
+[node name="MainMenuItem" type="Button" parent="Scroll/Content/S08_FlatLink/Current" unique_id=69007076]
+custom_minimum_size = Vector2(260, 36)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.78, 0.78, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 14
+theme_override_styles/hover = SubResource("sb_27")
+text = "NEW GAME"
+flat = true
+
+[node name="SolarPlanet" type="Button" parent="Scroll/Content/S08_FlatLink/Current" unique_id=76374294]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+text = "1. Vesuna"
+flat = true
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S08_FlatLink" unique_id=52273047]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S08_FlatLink" unique_id=1830319082]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Breadcrumb" type="Button" parent="Scroll/Content/S08_FlatLink/New" unique_id=1602144506]
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+theme_type_variation = &"ButtonFlat"
+text = "Galaxy"
+
+[node name="BackToPlanet" parent="Scroll/Content/S08_FlatLink/New" unique_id=1351369857 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(120, 26)
+layout_mode = 2
+label_text = "‹  VESUNA"
+icon_name = ""
+layout = 1
+min_size = Vector2(120, 26)
+
+[node name="MainMenuItem" parent="Scroll/Content/S08_FlatLink/New" unique_id=1564615136 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(260, 32)
+layout_mode = 2
+label_text = "NEW GAME"
+icon_name = "new"
+min_size = Vector2(260, 32)
+
+[node name="SolarPlanet" parent="Scroll/Content/S08_FlatLink/New" unique_id=305733928 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(180, 26)
+layout_mode = 2
+label_text = "1. VESUNA"
+icon_name = "planet"
+min_size = Vector2(180, 26)
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S08_FlatLink" unique_id=1043201612]
+layout_mode = 2
+
+[node name="S09_MenuRow" type="VBoxContainer" parent="Scroll/Content" unique_id=1170226899]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S09_MenuRow" unique_id=875313983]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "9 · LİSTE / MENÜ SATIRI   →   Default · ikonlu"
+
+[node name="Note" type="Label" parent="Scroll/Content/S09_MenuRow" unique_id=1253968853]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "sağ tık menüsü, district / orbit tipi seçimi, mineral dropdown, gemi seçimi"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S09_MenuRow" unique_id=1060427422]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S09_MenuRow" unique_id=517325103]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="ContextRow" type="Button" parent="Scroll/Content/S09_MenuRow/Current" unique_id=416657196]
+custom_minimum_size = Vector2(200, 24)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.6, 0.75, 1, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/hover = SubResource("sb_28")
+text = "▤  Open City"
+flat = true
+
+[node name="DistrictTypeRow" type="Button" parent="Scroll/Content/S09_MenuRow/Current" unique_id=431657115]
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.75, 0.82, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+text = "⚡  Energy District   ☺2K"
+flat = true
+
+[node name="OrbitTypeRow" type="Button" parent="Scroll/Content/S09_MenuRow/Current" unique_id=584278745]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.75, 0.82, 1, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 9
+text = "◈  Orbit"
+flat = true
+
+[node name="ShipRow" type="Button" parent="Scroll/Content/S09_MenuRow/Current" unique_id=990554678]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+text = "▲  Pioneer"
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S09_MenuRow" unique_id=1232835909]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S09_MenuRow" unique_id=1195976146]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="ContextRow" parent="Scroll/Content/S09_MenuRow/New" unique_id=1434497833 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(220, 26)
+layout_mode = 2
+label_text = "OPEN CITY"
+icon_name = "city"
+min_size = Vector2(220, 26)
+
+[node name="DistrictTypeRow" parent="Scroll/Content/S09_MenuRow/New" unique_id=1879592967 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(240, 26)
+layout_mode = 2
+label_text = "ENERGY DISTRICT"
+icon_name = "energy"
+counter = "2K pop"
+min_size = Vector2(240, 26)
+
+[node name="OrbitTypeRow" parent="Scroll/Content/S09_MenuRow/New" unique_id=1939627690 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(220, 26)
+layout_mode = 2
+label_text = "ORBIT"
+icon_name = "rocket"
+min_size = Vector2(220, 26)
+
+[node name="DisabledRow" parent="Scroll/Content/S09_MenuRow/New" unique_id=566032356 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(220, 26)
+layout_mode = 2
+disabled = true
+label_text = "SCIENCE DISTRICT"
+icon_name = "research"
+min_size = Vector2(220, 26)
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S09_MenuRow" unique_id=2070871275]
+layout_mode = 2
+
+[node name="S10_Tab" type="VBoxContainer" parent="Scroll/Content" unique_id=1338621381]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S10_Tab" unique_id=1426354119]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "10 · SEKME / TOGGLE   →   seçili Neutral · diğerleri Default · yazı ortada"
+
+[node name="Note" type="Label" parent="Scroll/Content/S10_Tab" unique_id=386366342]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "overview sekmesi, lens butonları (ENERGY, POPULATION…), gemi tipi seçimi"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S10_Tab" unique_id=820749174]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S10_Tab" unique_id=1308825259]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="TabOn" type="Button" parent="Scroll/Content/S10_Tab/Current" unique_id=1683292285]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.92, 0.3, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("sb_29")
+text = "CITIES  3"
+
+[node name="TabOff" type="Button" parent="Scroll/Content/S10_Tab/Current" unique_id=813848578]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.45, 0.52, 0.75, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("sb_30")
+text = "ORBITAL  0/1"
+
+[node name="Lens_ENERGY" type="Button" parent="Scroll/Content/S10_Tab/Current" unique_id=1017151874]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.95, 0.88, 0.25, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("sb_31")
+text = "ENERGY"
+
+[node name="Lens_POPULATION" type="Button" parent="Scroll/Content/S10_Tab/Current" unique_id=51490956]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.6, 0.95, 0.6, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("sb_33")
+text = "POPULATION"
+
+[node name="Lens_PRODUCTION" type="Button" parent="Scroll/Content/S10_Tab/Current" unique_id=506465169]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.95, 0.6, 0.35, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("sb_34")
+text = "PRODUCTION"
+
+[node name="Lens_SCIENCE" type="Button" parent="Scroll/Content/S10_Tab/Current" unique_id=2077708982]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.35, 0.65, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("sb_35")
+text = "SCIENCE"
+
+[node name="Lens_COMMERCIAL" type="Button" parent="Scroll/Content/S10_Tab/Current" unique_id=76477904]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.55, 0.95, 0.6, 1)
+theme_override_colors/font_hover_color = Color(1, 0.95, 0.55, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+theme_override_styles/normal = SubResource("sb_36")
+text = "COMMERCIAL"
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S10_Tab" unique_id=838107787]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S10_Tab" unique_id=1348201354]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="TabOn" parent="Scroll/Content/S10_Tab/New" unique_id=909777605 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(140, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "CITIES"
+icon_name = ""
+variant = 2
+layout = 1
+counter = "3/5"
+min_size = Vector2(140, 26)
+
+[node name="TabOff" parent="Scroll/Content/S10_Tab/New" unique_id=237684137 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(140, 26)
+layout_mode = 2
+label_text = "ORBITAL"
+icon_name = ""
+layout = 1
+counter = "0/1"
+min_size = Vector2(140, 26)
+
+[node name="Lens_ENERGY" parent="Scroll/Content/S10_Tab/New" unique_id=826875279 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(51, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "ENERGY"
+icon_name = ""
+variant = 2
+layout = 1
+font_size = 8
+
+[node name="Lens_POPULATION" parent="Scroll/Content/S10_Tab/New" unique_id=1733228552 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(70, 26)
+layout_mode = 2
+label_text = "POPULATION"
+icon_name = ""
+layout = 1
+font_size = 8
+
+[node name="Lens_PRODUCTION" parent="Scroll/Content/S10_Tab/New" unique_id=1682591794 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(72, 26)
+layout_mode = 2
+label_text = "PRODUCTION"
+icon_name = ""
+layout = 1
+font_size = 8
+
+[node name="Lens_SCIENCE" parent="Scroll/Content/S10_Tab/New" unique_id=1880889090 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(53, 26)
+layout_mode = 2
+label_text = "SCIENCE"
+icon_name = ""
+layout = 1
+font_size = 8
+
+[node name="Lens_COMMERCIAL" parent="Scroll/Content/S10_Tab/New" unique_id=148471970 instance=ExtResource("3_ibtn")]
+custom_minimum_size = Vector2(73, 26)
+layout_mode = 2
+label_text = "COMMERCIAL"
+icon_name = ""
+layout = 1
+font_size = 8
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S10_Tab" unique_id=672344068]
+layout_mode = 2
+
+[node name="S11_Form" type="VBoxContainer" parent="Scroll/Content" unique_id=782797589]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S11_Form" unique_id=304912797]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "11 · FORM KONTROLLERİ   →   Form kontrolleri (buton sistemi dışında)"
+
+[node name="Note" type="Label" parent="Scroll/Content/S11_Form" unique_id=971800220]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "Fullscreen (CheckButton), Auto (CheckBox), kargo seçimi (OptionButton)"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S11_Form" unique_id=397934510]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S11_Form" unique_id=866996545]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Fullscreen" type="CheckButton" parent="Scroll/Content/S11_Form/Current" unique_id=1103876010]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 12
+text = "Fullscreen"
+
+[node name="Auto" type="CheckBox" parent="Scroll/Content/S11_Form/Current" unique_id=2029670813]
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 10
+text = "Auto"
+
+[node name="Cargo" type="OptionButton" parent="Scroll/Content/S11_Form/Current" unique_id=1711004430]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+focus_mode = 0
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 8
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S11_Form" unique_id=56505102]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S11_Form" unique_id=1904251492]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Fullscreen" type="CheckButton" parent="Scroll/Content/S11_Form/New" unique_id=1962060449]
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+text = "Fullscreen"
+
+[node name="Auto" type="CheckBox" parent="Scroll/Content/S11_Form/New" unique_id=1113145358]
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+text = "Auto"
+
+[node name="Cargo" type="OptionButton" parent="Scroll/Content/S11_Form/New" unique_id=863165401]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+focus_mode = 0
+mouse_default_cursor_shape = 2
+
+[node name="Volume" type="HSlider" parent="Scroll/Content/S11_Form/New" unique_id=914270266]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.05
+value = 0.6
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S11_Form" unique_id=1146339039]
+layout_mode = 2
+
+[node name="S12_Banner" type="VBoxContainer" parent="Scroll/Content" unique_id=1544654938]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/S12_Banner" unique_id=382814579]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "12 · BİLDİRİM / BANNER   →   Positive / Default · ikonlu"
+
+[node name="Note" type="Label" parent="Scroll/Content/S12_Banner" unique_id=2041476843]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "Lander bildirimi, Explore modundan dönüş"
+
+[node name="CurrentCaption" type="Label" parent="Scroll/Content/S12_Banner" unique_id=1537666374]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "MEVCUT"
+
+[node name="Current" type="HFlowContainer" parent="Scroll/Content/S12_Banner" unique_id=1067450405]
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="LanderNotice" type="Button" parent="Scroll/Content/S12_Banner/Current" unique_id=207806246]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.8, 1, 0.85, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 11
+theme_override_styles/normal = SubResource("sb_37")
+theme_override_styles/hover = SubResource("sb_38")
+text = "◆  The lander reached the Moon's orbit  —  click to go there"
+
+[node name="ReturnToWorld" type="Button" parent="Scroll/Content/S12_Banner/Current" unique_id=1096248905]
+layout_mode = 2
+focus_mode = 0
+theme_override_colors/font_color = Color(0.65, 1, 0.75, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 11
+text = "↩  RETURN TO YOUR WORLD"
+
+[node name="NewCaption" type="Label" parent="Scroll/Content/S12_Banner" unique_id=175739923]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.62, 1)
+theme_override_font_sizes/font_size = 8
+text = "YENİ TASARIM"
+
+[node name="New" type="HFlowContainer" parent="Scroll/Content/S12_Banner" unique_id=1788047864]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 8
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/S12_Banner" unique_id=358597024]
+layout_mode = 2
+
+[editable path="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Hero"]
+[editable path="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Hero"]
+[editable path="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Hero"]
+[editable path="Scroll/Content/P02_TooltipPopup/Row/EnergyTooltip"]
+[editable path="Scroll/Content/P02_TooltipPopup/Row/BuildingTooltip"]
+[editable path="Scroll/Content/P02_TooltipPopup/Row/DemolishPopup"]
+[editable path="Scroll/Content/P02_TooltipPopup/Row/LevelUpPopup"]
+[editable path="Scroll/Content/P02_TooltipPopup/Row/WelcomePopup"]

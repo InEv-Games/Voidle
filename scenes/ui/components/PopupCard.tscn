@@ -1,0 +1,90 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/components/PopupCard.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/IconButton.tscn" id="2_btn"]
+
+[node name="PopupCard" type="PanelContainer"]
+custom_minimum_size = Vector2(300, 0)
+offset_right = 300.0
+offset_bottom = 120.0
+size_flags_horizontal = 0
+size_flags_vertical = 0
+theme_type_variation = &"PopupCard"
+script = ExtResource("1_script")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Header" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Icon" type="TextureRect" parent="VBox/Header"]
+self_modulate = Color(0.137, 0.725, 0.906, 1)
+custom_minimum_size = Vector2(14, 14)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+texture_filter = 3
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"HeaderLabel"
+text = "POPUP / PANEL"
+autowrap_mode = 3
+
+[node name="Close" parent="VBox/Header" instance=ExtResource("2_btn")]
+layout_mode = 2
+label_text = ""
+icon_name = "close"
+min_size = Vector2(0, 20)
+
+[node name="Rule" type="VBoxContainer" parent="VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="A" type="HSeparator" parent="VBox/Rule"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DoubleRule"
+
+[node name="B" type="HSeparator" parent="VBox/Rule"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DoubleRule"
+
+[node name="Body" type="RichTextLabel" parent="VBox"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"PopupBody"
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+
+[node name="Content" type="VBoxContainer" parent="VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Buttons" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Cancel" parent="VBox/Buttons" instance=ExtResource("2_btn")]
+layout_mode = 2
+size_flags_horizontal = 3
+label_text = "CANCEL"
+icon_name = "cancel"
+
+[node name="Confirm" parent="VBox/Buttons" instance=ExtResource("2_btn")]
+layout_mode = 2
+size_flags_horizontal = 3
+label_text = "CONFIRM"
+icon_name = "confirm"
+variant = 1
