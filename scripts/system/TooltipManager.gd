@@ -1,132 +1,32 @@
 extends CanvasLayer
 
-var _panel:      PanelContainer
-var _title_lbl:  Label
-var _body_lbl:   RichTextLabel
-var _cost_lbl:   Label
-var _sep:        Control
-var _spacer:     Control
-var _orbitron:   Font
-var _visible:    bool  = false
+## Layout: scenes/ui/components/TooltipView.tscn (a TooltipCard + a side panel).
+## Look: TooltipPanel / TooltipSubPanel / TooltipBody in voidle_theme.tres.
+const VIEW_SCENE := "res://scenes/ui/components/TooltipView.tscn"
 
+var _panel:      TooltipCard
+var _visible:    bool  = false
 var _sub_panel:  PanelContainer
 var _sub_lbl:    RichTextLabel
+var _cost_lbl:   Label
+var _cost_color: Color
 var _hide_timer: float = 0.0
 var _hbox:       HBoxContainer
 var _flipped:    bool = false
 
 func _ready() -> void:
 	layer = 300
-	_orbitron = load("res://Fonts/Orbitron-VariableFont_wght.ttf")
-
-	_panel = PanelContainer.new()
-	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.06, 0.07, 0.13, 0.96)
-	s.border_width_left  = 1; s.border_width_right  = 1
-	s.border_width_top   = 1; s.border_width_bottom = 1
-	s.border_color       = Color(0.28, 0.35, 0.60, 0.55)
-	s.corner_radius_top_left     = 5; s.corner_radius_top_right    = 5
-	s.corner_radius_bottom_left  = 5; s.corner_radius_bottom_right = 5
-	s.content_margin_left   = 12; s.content_margin_right  = 12
-	s.content_margin_top    = 8;  s.content_margin_bottom = 8
-	_panel.add_theme_stylebox_override("panel", s)
-	_panel.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	_panel.custom_minimum_size   = Vector2(0, 0)
-	_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_panel.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
-	_panel.visible = false
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 5)
-	vbox.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	vbox.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_panel.add_child(vbox)
-
-	_title_lbl = Label.new()
-	_title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if _orbitron: _title_lbl.add_theme_font_override("font", _orbitron)
-	_title_lbl.add_theme_font_size_override("font_size", 11)
-	_title_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-	_title_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
-	vbox.add_child(_title_lbl)
-
-	_body_lbl = RichTextLabel.new()
-	_body_lbl.mouse_filter   = Control.MOUSE_FILTER_IGNORE
-	_body_lbl.bbcode_enabled = true
-	_body_lbl.fit_content    = true
-	_body_lbl.scroll_active  = false
-	_body_lbl.add_theme_font_size_override("normal_font_size", 9)
-	_body_lbl.add_theme_color_override("default_color", Color(0.72, 0.78, 0.92))
-	_body_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_body_lbl.custom_minimum_size = Vector2(0, 0)
-	_body_lbl.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	vbox.add_child(_body_lbl)
-
-	# Spacer pushes cost to the bottom
-	_spacer = Control.new()
-	_spacer.custom_minimum_size = Vector2(0, 4)
-	_spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_spacer.visible = false
-	vbox.add_child(_spacer)
-
-	# Cost header row: "COST ————"
-	_sep = HBoxContainer.new()
-	_sep.add_theme_constant_override("separation", 6)
-	_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_sep.visible = false
-	var cost_hdr := Label.new()
-	cost_hdr.text = "COST"
-	if _orbitron: cost_hdr.add_theme_font_override("font", _orbitron)
-	cost_hdr.add_theme_font_size_override("font_size", 7)
-	cost_hdr.add_theme_color_override("font_color", Color(0.45, 0.50, 0.70))
-	cost_hdr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_sep.add_child(cost_hdr)
-	vbox.add_child(_sep)
-
-	_cost_lbl = Label.new()
-	_cost_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	if _orbitron: _cost_lbl.add_theme_font_override("font", _orbitron)
-	_cost_lbl.add_theme_font_size_override("font_size", 11)
-	_cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30))
-	_cost_lbl.autowrap_mode         = TextServer.AUTOWRAP_OFF
-	_cost_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
-	_cost_lbl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_cost_lbl.visible = false
-	vbox.add_child(_cost_lbl)
-
-	# --- Secondary Tooltip Panel ---
-	_sub_panel = PanelContainer.new()
-	var sub_s := StyleBoxFlat.new()
-	sub_s.bg_color = Color(0.12, 0.14, 0.20, 0.95)
-	sub_s.border_width_left = 1; sub_s.border_width_right = 1
-	sub_s.border_width_top = 1; sub_s.border_width_bottom = 1
-	sub_s.border_color = Color(0.4, 0.45, 0.6, 0.6)
-	sub_s.corner_radius_top_left = 4; sub_s.corner_radius_top_right = 4
-	sub_s.corner_radius_bottom_left = 4; sub_s.corner_radius_bottom_right = 4
-	sub_s.content_margin_left = 8; sub_s.content_margin_right = 8
-	sub_s.content_margin_top = 6; sub_s.content_margin_bottom = 6
-	_sub_panel.add_theme_stylebox_override("panel", sub_s)
-	_sub_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_sub_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	_sub_panel.visible = false
-	
-	_sub_lbl = RichTextLabel.new()
-	_sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_sub_lbl.bbcode_enabled = true
-	_sub_lbl.fit_content = true
-	_sub_lbl.scroll_active = false
+	_hbox = (load(VIEW_SCENE) as PackedScene).instantiate() as HBoxContainer
+	_panel     = _hbox.get_node("Card")
+	_sub_panel = _hbox.get_node("SubPanel")
+	_sub_lbl   = _hbox.get_node("SubPanel/Body")
+	_cost_lbl  = _panel.get_node("VBox/CostBox/Cost/Value")
+	_cost_color = _cost_lbl.get_theme_color("font_color")
+	# game tooltips are laid out with explicit line breaks: grow to the text, don't wrap
+	(_panel.get_node("VBox/Body") as RichTextLabel).autowrap_mode = TextServer.AUTOWRAP_OFF
 	_sub_lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
-	_sub_lbl.add_theme_font_size_override("normal_font_size", 9)
-	_sub_lbl.add_theme_color_override("default_color", Color(0.8, 0.85, 0.9))
-	_sub_lbl.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_sub_panel.add_child(_sub_lbl)
-
-	_hbox = HBoxContainer.new()
-	_hbox.add_theme_constant_override("separation", 6)
-	_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hbox.add_child(_panel)
-	_hbox.add_child(_sub_panel)
-
+	_panel.visible = false
+	_hbox.visible = false
 	add_child(_hbox)
 
 func _process(delta: float) -> void:
@@ -171,26 +71,17 @@ func _process(delta: float) -> void:
 ## Show a tooltip.
 ## body: String or Array — Array elements may be String or ImageTexture (rendered inline).
 ## cost: String, Array[String], or Array[Variant] mixing strings and textures.
+## Show a tooltip.
+## body: String or Array — Array elements may be String or Texture2D (rendered inline).
+## cost: String, Array[String], or Array[Variant] mixing strings and textures.
 func show_tip(title: String, body = "", cost = "", sub_body = "") -> void:
-	_title_lbl.text = title
-
-	# ── Body ────────────────────────────────────────────────────────
-	_body_lbl.clear()
-	if body is String:
-		_body_lbl.append_text(body as String)
-		_body_lbl.visible = not (body as String).is_empty()
-	elif body is Array:
-		var arr := body as Array
-		for part in arr:
-			if part is String:
-				_body_lbl.append_text(part as String)
-			elif part is ImageTexture or part is Texture2D:
-				_body_lbl.add_image(part as Texture2D, 13, 13)
-		_body_lbl.visible = not arr.is_empty()
+	_panel.title = title.to_upper()
+	_panel.icon_name = ""
+	if body is Array:
+		_panel.set_body_parts(body as Array)
 	else:
-		_body_lbl.visible = false
+		_panel.set_body_parts([String(body)] if String(body) != "" else [])
 
-	# ── Cost ────────────────────────────────────────────────────────
 	var cost_lines: Array[String] = []
 	if cost is String and (cost as String) != "":
 		cost_lines.append(cost as String)
@@ -198,39 +89,30 @@ func show_tip(title: String, body = "", cost = "", sub_body = "") -> void:
 		for item in (cost as Array):
 			if item is String and (item as String) != "":
 				cost_lines.append(item as String)
-
-	var has_cost := not cost_lines.is_empty()
-	_spacer.visible   = has_cost
-	_sep.visible      = has_cost
-	_cost_lbl.visible = has_cost
-	if has_cost:
-		_cost_lbl.text = "\n".join(cost_lines)
+	_panel.cost = "\n".join(cost_lines)
 
 	_panel.visible = true
-	_panel.get_parent().visible = false
-	
-	# ── Sub Body ────────────────────────────────────────────────────
-	_sub_lbl.clear()
-	if sub_body is String:
-		_sub_lbl.append_text(sub_body as String)
-		_sub_panel.visible = not (sub_body as String).is_empty()
-	elif sub_body is Array:
-		var arr := sub_body as Array
-		for part in arr:
-			if part is String:
-				_sub_lbl.append_text(part as String)
-			elif part is ImageTexture or part is Texture2D:
-				_sub_lbl.add_image(part as Texture2D, 13, 13)
-		_sub_panel.visible = not arr.is_empty()
-	else:
-		_sub_panel.visible = false
+	_hbox.visible = false
 
-	_hide_timer    = 0.0
-	_visible       = true
+	_sub_lbl.clear()
+	var sub_parts: Array = sub_body if sub_body is Array else ([sub_body] if String(sub_body) != "" else [])
+	for part in sub_parts:
+		if part is String:
+			_sub_lbl.append_text(part as String)
+		elif part is Texture2D:
+			_sub_lbl.add_image(part as Texture2D, 13, 13)
+	_sub_panel.visible = not sub_parts.is_empty()
+
+	_hide_timer = 0.0
+	_visible    = true
+
+## Icon before the title (UIIcons name or resource id); call after show_tip.
+func set_title_icon(icon_name: String) -> void:
+	_panel.icon_name = icon_name
 
 func set_cost_color(c: Color) -> void:
 	_cost_lbl.add_theme_color_override("font_color", c)
 
 func hide_tip() -> void:
-	_cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30))  # reset to default gold
+	_cost_lbl.add_theme_color_override("font_color", _cost_color)  # back to the scene's colour
 	_hide_timer = 0.18   # 180 ms grace period before actually hiding
