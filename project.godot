@@ -45,6 +45,10 @@ CommandRegistry="*res://scripts/commands/CommandRegistry.gd"
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[gui]
+
+theme/custom="res://resources/ui/voidle_theme.tres"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"
