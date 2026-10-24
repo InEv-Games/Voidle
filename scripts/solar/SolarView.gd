@@ -54,6 +54,10 @@ const STAR_PX: Dictionary = {
 }
 
 func _process(_delta: float) -> void:
+	# the side panel ends above the HUD's shortcut row (Upgrade Tree / Trade / Explore)
+	var side := $UICanvas/SidePanel as Control
+	if absf(side.offset_bottom + HUDManager.shortcut_bar_height()) > 0.5:
+		side.offset_bottom = -HUDManager.shortcut_bar_height()
 	if _dragging or _right_dragging:
 		CursorManager.set_state(CursorManager.State.GRAB)
 		return
@@ -82,6 +86,7 @@ func _ready() -> void:
 	var bar_h: float = (cp as Control).size.y + 6.0 if cp != null and is_instance_valid(cp as Node) and (cp as Control).size.y > 4.0 else 58.0
 	($UICanvas/SidePanel as Control).offset_top = bar_h
 	($UICanvas/SidePanel as Control).visible = not GameState.showcase_mode
+	HUDManager.set_side_panel($UICanvas/SidePanel)   # Upgrade Tree / Trade / Explore sit along its bottom
 	if GameState.showcase_mode:
 		_space.anchor_left = 0.0   # no side panel: the system fills the screen
 		await get_tree().process_frame

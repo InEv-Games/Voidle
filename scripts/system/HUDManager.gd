@@ -175,12 +175,17 @@ func _ready() -> void:
 	top_layer.call_deferred("add_child", settings_btn)
 
 
-	# Upgrade Tree panel — bottom-right (the side panel holds the left)
-	var sci_panel := PanelContainer.new()   # default PanelContainer look from the theme
+	# Upgrade Tree · Trade · Explore — one row along the bottom of the view's
+	# left panel (_place_shortcuts); bottom-left when the view has none.
+	var sci_panel := PanelContainer.new()
+	var bar_box := UIStyle.box(&"SidePanel").duplicate() as StyleBoxFlat
+	bar_box.content_margin_top = 6.0
+	bar_box.content_margin_bottom = 6.0
+	sci_panel.add_theme_stylebox_override("panel", bar_box)   # SidePanel look, tighter margins
 	sci_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	var sci_vbox := VBoxContainer.new()
-	sci_vbox.add_theme_constant_override("separation", 6)
+	var sci_vbox := HBoxContainer.new()
+	sci_vbox.add_theme_constant_override("separation", 4)
 	sci_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	sci_panel.add_child(sci_vbox)
 
@@ -188,19 +193,14 @@ func _ready() -> void:
 	_science_lbl = _res_lbls[Economy.SCIENCE]
 
 	sci_vbox.add_child(skill_btn)
-	sci_vbox.add_child(_make_trade_button())
+	var trade_btn := _make_trade_button()
+	sci_vbox.add_child(trade_btn)
 	_explore_btn = _make_explore_button()
 	sci_vbox.add_child(_explore_btn)
+	for b: Control in [skill_btn, trade_btn, _explore_btn]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # share the row evenly
 	_build_resource_cells(hbox)
 
-	sci_panel.anchor_left   = 1.0
-	sci_panel.anchor_right  = 1.0
-	sci_panel.anchor_top    = 1.0
-	sci_panel.anchor_bottom = 1.0
-	sci_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	sci_panel.grow_vertical   = Control.GROW_DIRECTION_BEGIN
-	sci_panel.offset_right  = -4.0
-	sci_panel.offset_bottom = -4.0
 	science_panel = sci_panel
 	top_layer.call_deferred("add_child", sci_panel)
 
@@ -423,6 +423,7 @@ func _on_science_changed(_new_val: float) -> void:
 	pass
 
 func _process(delta: float) -> void:
+	_place_shortcuts()
 	_res_poll += delta
 	if _res_poll >= 0.25:
 		_res_poll = 0.0
@@ -535,6 +536,35 @@ func _spawn_hud_chip(text: String, color: Color, panel: PanelContainer) -> void:
 func set_view_area_fraction(f: float) -> void:
 	view_area_fraction = f
 
+## The view's left panel: the shortcut row sits along its bottom edge, and the
+## view keeps its content above it (shortcut_bar_height).
+var _side_panel: Control = null
+
+func set_side_panel(panel: Control) -> void:
+	_side_panel = panel
+
+## Height the shortcut row takes at the bottom of the screen (0 while hidden).
+func shortcut_bar_height() -> float:
+	if science_panel == null or not is_instance_valid(science_panel) or not science_panel.is_visible_in_tree():
+		return 0.0
+	return science_panel.get_combined_minimum_size().y
+
+## Keeps the shortcut row on the bottom of the left panel: same x and width
+## (clamped on screen while the panel slides), natural width when there's none.
+func _place_shortcuts() -> void:
+	if science_panel == null or not is_instance_valid(science_panel) or not science_panel.is_inside_tree():
+		return
+	var vp := get_viewport().get_visible_rect().size
+	var min_size := science_panel.get_combined_minimum_size()
+	var x := 0.0
+	var w := min_size.x
+	if _side_panel != null and is_instance_valid(_side_panel) and _side_panel.is_visible_in_tree():
+		var r := _side_panel.get_global_rect()
+		w = maxf(r.size.x, min_size.x)
+		x = clampf(r.position.x, 0.0, vp.x - w)
+	science_panel.size = Vector2(w, min_size.y)
+	science_panel.position = Vector2(x, vp.y - min_size.y)
+
 func _on_achievement_unlocked(def) -> void:
 	AudioManager.play("achievement", 2.0)
 	# Build a gold-bordered achievement popup anchored bottom-right
@@ -595,10 +625,7 @@ func _on_achievement_unlocked(def) -> void:
 	panel.anchor_top    = 1.0
 	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	panel.grow_vertical   = Control.GROW_DIRECTION_BEGIN
-	# above the Upgrade Tree panel, which holds the bottom-right corner
-	var above := 12.0
-	if science_panel != null and is_instance_valid(science_panel):
-		above += science_panel.size.y + 6.0
+	var above := 12.0   # bottom-right corner (the shortcut row is on the left)
 	panel.offset_right  = -12.0
 	panel.offset_bottom = -above
 	overlay.add_child(panel)

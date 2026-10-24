@@ -187,6 +187,7 @@ func _ready() -> void:
 	ProductionManager.city_leveled.connect(_on_city_leveled)
 	_build_panel_toggle()
 	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - PANEL_FRACTION))
+	HUDManager.set_side_panel($SidePanel)   # Upgrade Tree / Trade / Explore sit along its bottom
 	poi_layer.territory_lookup = _territory_at_screen
 	SettingsManager.night_shadow_changed.connect(func(v: float) -> void:
 		if planet_renderer.material:
@@ -4261,7 +4262,8 @@ func _process(delta: float) -> void:
 	_tick_lander_watch()
 	_tick_departure_fx(delta)
 	_tick_cam_follow(delta)
-	if absf(($SidePanel as Control).offset_top - _hud_bar_height()) > 0.5:
+	if absf(($SidePanel as Control).offset_top - _hud_bar_height()) > 0.5 \
+			or absf(($SidePanel as Control).offset_bottom + HUDManager.shortcut_bar_height()) > 0.5:
 		_apply_panel_t(_panel_t)
 	_update_tutorial_highlight()
 	_update_aspect()
@@ -4651,6 +4653,7 @@ func _apply_panel_t(t: float) -> void:
 	panel.offset_left  = 0.0
 	panel.offset_right = 0.0
 	panel.offset_top   = _hud_bar_height()
+	panel.offset_bottom = -HUDManager.shortcut_bar_height()   # the HUD's shortcut row
 	($PlanetContainer as Control).anchor_left  = PANEL_FRACTION * t
 	($PlanetContainer as Control).anchor_right = 1.0
 	HUDManager.set_view_area_fraction(1.0 - PANEL_FRACTION * t)
