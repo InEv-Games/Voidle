@@ -7352,7 +7352,7 @@ func _entry_input_text(entry: Dictionary, def: BuildingDef) -> String:
 	return " · ".join(parts)
 
 # ── Coloured tooltip text (BBCode) ──────────────────────────────────────────
-const BB_BAD  := "#ff6a5c"
+const BB_BAD  := "#e36a6a"
 const BB_WARN := "#ffb04a"
 const BB_DIM  := "#8a93b0"
 

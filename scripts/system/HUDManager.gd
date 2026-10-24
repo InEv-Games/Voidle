@@ -863,7 +863,7 @@ func _cell_tip(id: String, base: String) -> String:
 					Economy.fmt(Economy.used_population(pd, pp)), Economy.fmt(Economy.max_population(pd, pp))]
 				var spd := Economy.pop_speed(pd, pp)
 				if spd < 0.999:
-					penalty = "\n\n[color=#ff6a5c]Overcrowded — every building and district on this planet makes %d%% of its output.[/color]" % int(round(spd * 100.0))
+					penalty = "\n\n[color=#e36a6a]Overcrowded — every building and district on this planet makes %d%% of its output.[/color]" % int(round(spd * 100.0))
 			return head + "Shown as available / max.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, every finished cycle on the planet makes less (down to %d%% at worst) until you build homes." % [
 				Economy.fmt(Balance.cfg.city_base_pop), Economy.fmt(Economy.district_found_pop(0)), int(round((1.0 - Balance.cfg.pop_max_slowdown) * 100.0))] + penalty + _idle_pop_text()
 	var r: float = ProductionManager.resource_rates().get(id, 0.0)

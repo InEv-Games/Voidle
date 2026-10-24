@@ -61,6 +61,7 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_THEME_CHANGED:
 		_layout_row()
+		_apply_text_color()
 		_update_size.call_deferred()   # child labels pick up the theme first
 	elif what == NOTIFICATION_RESIZED:
 		_layout_row()
@@ -87,7 +88,17 @@ func _sync() -> void:
 			l.remove_theme_font_size_override("font_size")
 	_row.alignment = BoxContainer.ALIGNMENT_CENTER if _icon_only() else BoxContainer.ALIGNMENT_BEGIN
 	_layout_row()
+	_apply_text_color()
 	_update_size()
+
+## Label and counter use the button type's own font colour (theme: font_color of
+## ButtonDefault / ButtonPositive / …), so each type sets its text colour in one place.
+func _apply_text_color() -> void:
+	if not is_node_ready():
+		return
+	var col := get_theme_color(&"font_color")
+	_label.add_theme_color_override("font_color", col)
+	_counter.add_theme_color_override("font_color", col)
 
 ## Just an icon: no label and no counter.
 func _icon_only() -> bool:
