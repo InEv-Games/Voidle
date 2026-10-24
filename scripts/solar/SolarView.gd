@@ -207,7 +207,7 @@ func _galaxy_access_block() -> String:
 func _show_access_denied_text(msg: String = "ACCESS DENIED") -> void:
 	var lbl := Label.new()
 	lbl.text = msg
-	lbl.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	lbl.add_theme_color_override("font_color", UIStyle.color(&"bad"))
 	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	lbl.add_theme_constant_override("outline_size", 4)
 	var orbitron := load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf") as Font
@@ -544,7 +544,7 @@ func _build_scan_asteroid_section() -> void:
 	st_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if orbitron: st_lbl.add_theme_font_override("font", orbitron)
 	st_lbl.add_theme_font_size_override("font_size", 8)
-	st_lbl.add_theme_color_override("font_color", Color(0.55, 0.75, 1.0))
+	st_lbl.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	_scan_wrap.add_child(st_lbl)
 
 	var scan_btn := Button.new()
@@ -574,7 +574,7 @@ func _build_scan_asteroid_section() -> void:
 	if orbitron: cost_lbl.add_theme_font_override("font", orbitron)
 	cost_lbl.add_theme_font_size_override("font_size", 8)
 	cost_lbl.add_theme_color_override("font_color",
-		Color(0.45, 0.78, 1.0) if can_afford else Color(0.80, 0.30, 0.30))
+		UIStyle.color(&"text") if can_afford else UIStyle.color(&"bad"))
 	_scan_wrap.add_child(cost_lbl)
 	UIStyle.style_button(scan_btn, UIStyle.POSITIVE)
 	_scan_wrap.add_child(scan_btn)

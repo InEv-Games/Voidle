@@ -250,7 +250,7 @@ func _show_explore_bar() -> void:
 	if font:
 		lbl.add_theme_font_override("font", font)
 	lbl.add_theme_font_size_override("font_size", 10)
-	lbl.add_theme_color_override("font_color", Color(0.75, 0.80, 1.0, 0.85))
+	lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_subtle"), 0.85))
 	lbl.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	lbl.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	lbl.position += Vector2(16, -18)

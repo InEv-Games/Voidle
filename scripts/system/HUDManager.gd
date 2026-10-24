@@ -555,7 +555,7 @@ func _on_achievement_unlocked(def) -> void:
 	icon_lbl.text = def.icon if def.icon != "" else "★"
 	if _orbitron: icon_lbl.add_theme_font_override("font", _orbitron)
 	icon_lbl.add_theme_font_size_override("font_size", 24)
-	icon_lbl.add_theme_color_override("font_color", Color(0.95, 0.78, 0.15))
+	icon_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(icon_lbl)
 
@@ -568,7 +568,7 @@ func _on_achievement_unlocked(def) -> void:
 	header.text = "Achievement Unlocked"
 	if _orbitron: header.add_theme_font_override("font", _orbitron)
 	header.add_theme_font_size_override("font_size", 9)
-	header.add_theme_color_override("font_color", Color(0.95, 0.78, 0.15, 0.75))
+	header.add_theme_color_override("font_color", Color(UIStyle.color(&"neutral_stroke"), 0.75))
 	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(header)
 
@@ -576,7 +576,7 @@ func _on_achievement_unlocked(def) -> void:
 	title_lbl.text = def.title
 	if _orbitron: title_lbl.add_theme_font_override("font", _orbitron)
 	title_lbl.add_theme_font_size_override("font_size", 13)
-	title_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+	title_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title_lbl)
 
@@ -585,7 +585,7 @@ func _on_achievement_unlocked(def) -> void:
 		desc_lbl.text = def.description
 		if _orbitron: desc_lbl.add_theme_font_override("font", _orbitron)
 		desc_lbl.add_theme_font_size_override("font_size", 9)
-		desc_lbl.add_theme_color_override("font_color", Color(0.75, 0.72, 0.60, 0.85))
+		desc_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_subtle"), 0.85))
 		desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(desc_lbl)
 
@@ -772,7 +772,7 @@ func _spawn_loss(id: String, amount: float, lbl: Label) -> void:
 	chip.text = "−" + (fmt_credits(amount) if id == Economy.CREDITS else Economy.fmt(amount))
 	if _orbitron: chip.add_theme_font_override("font", _orbitron)
 	chip.add_theme_font_size_override("font_size", 10)
-	chip.add_theme_color_override("font_color", Color(1.0, 0.42, 0.36))
+	chip.add_theme_color_override("font_color", UIStyle.color(&"bad"))
 	chip.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	chip.add_theme_constant_override("outline_size", 3)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -94,7 +94,7 @@ func _make_name_label() -> Label:
 	if _orbitron:
 		lbl.add_theme_font_override("font", _orbitron)
 	lbl.add_theme_font_size_override("font_size", 10)
-	lbl.add_theme_color_override("font_color",         Color(0.90, 0.88, 0.55, 1.0))
+	lbl.add_theme_color_override("font_color",         UIStyle.color(&"neutral_stroke"))
 	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
 	lbl.add_theme_constant_override("outline_size",    3)
 	lbl.visible       = false

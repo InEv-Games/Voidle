@@ -143,7 +143,7 @@ func _build() -> void:
 	if _orbitron:
 		_hover_label.add_theme_font_override("font", _orbitron)
 	_hover_label.add_theme_font_size_override("font_size", 13)
-	_hover_label.add_theme_color_override("font_color",         Color(1.0, 1.0, 1.0, 1.0))
+	_hover_label.add_theme_color_override("font_color",         UIStyle.color(&"text_bright"))
 	_hover_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
 	_hover_label.add_theme_constant_override("outline_size",    4)
 	_hover_label.add_theme_color_override("font_shadow_color",  Color(0.0, 0.0, 0.0, 0.8))

@@ -89,7 +89,7 @@ func _build_ui() -> void:
 	var title := Label.new()
 	title.text = "Mission Builder"
 	_font_apply(title, 10)
-	title.add_theme_color_override("font_color", Color(0.70, 0.88, 1.0))
+	title.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title_row.add_child(title)
 
@@ -111,7 +111,7 @@ func _build_ui() -> void:
 	var type_lbl := Label.new()
 	type_lbl.text = "Ship"
 	_font_apply(type_lbl, 7)
-	type_lbl.add_theme_color_override("font_color", Color(0.50, 0.62, 0.82, 0.70))
+	type_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.70))
 	type_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	type_lbl.custom_minimum_size = Vector2(36, 0)
 	type_row.add_child(type_lbl)
@@ -153,7 +153,7 @@ func _build_ui() -> void:
 		var lock_lbl := Label.new()
 		lock_lbl.text = "(limit 1)"
 		_font_apply(lock_lbl, 6)
-		lock_lbl.add_theme_color_override("font_color", Color(0.55, 0.35, 0.35, 0.70))
+		lock_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"bad"), 0.70))
 		lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		type_row.add_child(lock_lbl)
 
@@ -176,7 +176,7 @@ func _build_ui() -> void:
 	var rep_lbl := Label.new()
 	rep_lbl.text = "Repeat"
 	_font_apply(rep_lbl, 7)
-	rep_lbl.add_theme_color_override("font_color", Color(0.50, 0.62, 0.82, 0.70))
+	rep_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.70))
 	rep_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rep_lbl.custom_minimum_size = Vector2(46, 0)
 	rep_row.add_child(rep_lbl)
@@ -193,7 +193,7 @@ func _build_ui() -> void:
 	var rep_hint := Label.new()
 	rep_hint.text = "sec  (- = no repeat)"
 	_font_apply(rep_hint, 6)
-	rep_hint.add_theme_color_override("font_color", Color(0.40, 0.50, 0.65, 0.60))
+	rep_hint.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.60))
 	rep_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rep_row.add_child(rep_hint)
 
@@ -321,7 +321,7 @@ func _build_state_row(state: Dictionary) -> Control:
 	var status_lbl := Label.new()
 	status_lbl.text = _status_label(status)
 	_font_apply(status_lbl, 6)
-	status_lbl.add_theme_color_override("font_color", Color(0.55, 0.70, 0.90, 0.65))
+	status_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.65))
 	status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(status_lbl)
 
@@ -344,7 +344,7 @@ func _build_state_row(state: Dictionary) -> Control:
 		var amt_lbl := Label.new()
 		amt_lbl.text = "×%d" % amt
 		_font_apply(amt_lbl, 6)
-		amt_lbl.add_theme_color_override("font_color", Color(0.82, 0.90, 1.0, 0.75))
+		amt_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_bright"), 0.75))
 		amt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(amt_lbl)
 
@@ -352,7 +352,7 @@ func _build_state_row(state: Dictionary) -> Control:
 		var empty_lbl := Label.new()
 		empty_lbl.text = "· empty"
 		_font_apply(empty_lbl, 6)
-		empty_lbl.add_theme_color_override("font_color", Color(0.40, 0.45, 0.58, 0.50))
+		empty_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.50))
 		empty_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(empty_lbl)
 
@@ -437,12 +437,12 @@ func _build_launch_pad_card(state_before: Dictionary) -> Control:
 	vbox.add_child(hdr_row)
 	var dot := Label.new(); dot.text = "●"
 	_font_apply(dot, 7)
-	dot.add_theme_color_override("font_color", Color(0.40, 0.80, 0.55))
+	dot.add_theme_color_override("font_color", UIStyle.color(&"good"))
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hdr_row.add_child(dot)
 	var hdr_lbl := Label.new(); hdr_lbl.text = "Launch Pad"
 	_font_apply(hdr_lbl, 7)
-	hdr_lbl.add_theme_color_override("font_color", Color(0.65, 0.82, 0.96, 0.90))
+	hdr_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.90))
 	hdr_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hdr_row.add_child(hdr_lbl)
 
@@ -459,7 +459,7 @@ func _build_launch_pad_card(state_before: Dictionary) -> Control:
 	if not has_pick:
 		var empty := Label.new(); empty.text = "No pre-launch cargo"
 		_font_apply(empty, 6)
-		empty.add_theme_color_override("font_color", Color(0.38, 0.44, 0.58, 0.55))
+		empty.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.55))
 		empty.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(empty)
 
@@ -542,13 +542,13 @@ func _build_land_row(index: int) -> Control:
 
 	var dot := Label.new(); dot.text = "●"
 	_font_apply(dot, 7)
-	dot.add_theme_color_override("font_color", Color(0.75, 0.55, 0.30))
+	dot.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(dot)
 
 	var lbl := Label.new(); lbl.text = "Land"
 	_font_apply(lbl, 7)
-	lbl.add_theme_color_override("font_color", Color(0.65, 0.75, 0.90, 0.85))
+	lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_subtle"), 0.85))
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(lbl)
@@ -564,7 +564,7 @@ func _build_chain_arrow() -> Control:
 	var lbl := Label.new()
 	lbl.text = "    │"
 	_font_apply(lbl, 7)
-	lbl.add_theme_color_override("font_color", Color(0.28, 0.42, 0.65, 0.40))
+	lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.40))
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return lbl
 
@@ -707,7 +707,7 @@ func _font_apply(node: CanvasItem, size: int) -> void:
 
 func _style_lineedit(le: LineEdit) -> void:
 	_font_apply(le, 8)
-	le.add_theme_color_override("font_color", Color(0.90, 0.92, 1.0))
+	le.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 
 
 ## Theme button types: the old colour args only pick one

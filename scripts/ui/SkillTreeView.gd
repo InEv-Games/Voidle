@@ -101,7 +101,7 @@ func _ready() -> void:
 	title.text = _title_text()
 	if _font: title.add_theme_font_override("font", _font)
 	title.add_theme_font_size_override("font_size", 16)
-	title.add_theme_color_override("font_color", Color(0.65, 0.85, 1.0))
+	title.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	title.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	title.offset_top = 24.0
@@ -112,7 +112,7 @@ func _ready() -> void:
 	sub.text = "Spend Science to research new technology · double-click a centre node to move between civilizations"
 	if _font: sub.add_theme_font_override("font", _font)
 	sub.add_theme_font_size_override("font_size", 9)
-	sub.add_theme_color_override("font_color", Color(0.4, 0.48, 0.65))
+	sub.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	sub.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	sub.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	sub.offset_top = 48.0
@@ -329,10 +329,10 @@ func _build_tree_graph() -> void:
 			var lv_badge := Label.new()
 			if cur_lv >= max_lv:
 				lv_badge.text = "MAX"
-				lv_badge.add_theme_color_override("font_color", Color(0.35, 0.95, 0.55)) # Green
+				lv_badge.add_theme_color_override("font_color", UIStyle.color(&"good")) # Green
 			else:
 				lv_badge.text = "%d" % cur_lv
-				lv_badge.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3)) # Bright Gold/Amber
+				lv_badge.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke")) # Bright Gold/Amber
 				
 			if _font: lv_badge.add_theme_font_override("font", _font)
 			lv_badge.add_theme_font_size_override("font_size", 12) # Enlarged Level Text (12 pt)

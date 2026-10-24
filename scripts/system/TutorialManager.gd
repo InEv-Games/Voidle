@@ -708,7 +708,7 @@ func _flash_deny(pos: Vector2) -> void:
 	lbl.text = "✗"
 	if _orbitron: lbl.add_theme_font_override("font", _orbitron)
 	lbl.add_theme_font_size_override("font_size", 22)
-	lbl.add_theme_color_override("font_color", Color(1.0, 0.25, 0.25, 1.0))
+	lbl.add_theme_color_override("font_color", UIStyle.color(&"bad"))
 	lbl.position = pos + Vector2(-10, -20)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(lbl)
@@ -810,7 +810,7 @@ func _run_finale() -> void:
 	tag.text = "◈  TUTORIAL COMPLETE  ◈"
 	if _orbitron: tag.add_theme_font_override("font", _orbitron)
 	tag.add_theme_font_size_override("font_size", 9)
-	tag.add_theme_color_override("font_color", Color(0.45, 0.78, 1.0))
+	tag.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(tag)
 
@@ -818,7 +818,7 @@ func _run_finale() -> void:
 	title.text = "The void is no longer empty."
 	if _orbitron: title.add_theme_font_override("font", _orbitron)
 	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", Color(0.92, 0.94, 1.0))
+	title.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
@@ -826,7 +826,7 @@ func _run_finale() -> void:
 	sub.text = "You have shelter. Power. Knowledge. Minerals.\nFrom this foothold, the stars are reachable."
 	if _orbitron: sub.add_theme_font_override("font", _orbitron)
 	sub.add_theme_font_size_override("font_size", 10)
-	sub.add_theme_color_override("font_color", Color(0.60, 0.72, 0.90))
+	sub.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sub.custom_minimum_size = Vector2(460, 0)
@@ -930,7 +930,7 @@ func _build_narr_ui() -> void:
 		_narr_lbl.add_theme_font_override("bold_font",   _orbitron)
 	_narr_lbl.add_theme_font_size_override("normal_font_size", 13)
 	_narr_lbl.add_theme_font_size_override("bold_font_size",   13)
-	_narr_lbl.add_theme_color_override("default_color", Color(0.82, 0.86, 0.95))
+	_narr_lbl.add_theme_color_override("default_color", UIStyle.color(&"text_bright"))
 	vbox.add_child(_narr_lbl)
 
 	var btn_row := HBoxContainer.new()
@@ -941,7 +941,7 @@ func _build_narr_ui() -> void:
 	hint.text = "[ click anywhere to continue ]"
 	if _orbitron: hint.add_theme_font_override("font", _orbitron)
 	hint.add_theme_font_size_override("font_size", 8)
-	hint.add_theme_color_override("font_color", Color(0.35, 0.40, 0.55))
+	hint.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_row.add_child(hint)
 
@@ -1069,14 +1069,14 @@ func _show_action_bar(step: Dictionary) -> void:
 	tag.text = "◈  OBJECTIVE"
 	if _orbitron: tag.add_theme_font_override("font", _orbitron)
 	tag.add_theme_font_size_override("font_size", 8)
-	tag.add_theme_color_override("font_color", Color(0.45, 0.65, 0.90))
+	tag.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	vbox.add_child(tag)
 
 	_action_lbl = Label.new()
 	_action_lbl.text = ""  # set below by _target_hint
 	if _orbitron: _action_lbl.add_theme_font_override("font", _orbitron)
 	_action_lbl.add_theme_font_size_override("font_size", 12)
-	_action_lbl.add_theme_color_override("font_color", Color(0.95, 0.90, 0.60))
+	_action_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	vbox.add_child(_action_lbl)
 
 	var tgt0: Dictionary = step["targets"][0]
@@ -1092,7 +1092,7 @@ func _show_action_bar(step: Dictionary) -> void:
 		rew.text = "Reward: " + step["reward_text"]
 		if _orbitron: rew.add_theme_font_override("font", _orbitron)
 		rew.add_theme_font_size_override("font_size", 8)
-		rew.add_theme_color_override("font_color", Color(0.38, 0.85, 0.55))
+		rew.add_theme_color_override("font_color", UIStyle.color(&"good"))
 		vbox.add_child(rew)
 
 func _hide_action_bar() -> void:
@@ -1131,14 +1131,14 @@ func _show_construction_wait() -> void:
 	tag.text = "⚙  CONSTRUCTION"
 	if _orbitron: tag.add_theme_font_override("font", _orbitron)
 	tag.add_theme_font_size_override("font_size", 8)
-	tag.add_theme_color_override("font_color", Color(0.85, 0.75, 0.45))
+	tag.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	vbox.add_child(tag)
 
 	_construction_lbl = Label.new()
 	_construction_lbl.text = "Building underway — explore freely while you wait."
 	if _orbitron: _construction_lbl.add_theme_font_override("font", _orbitron)
 	_construction_lbl.add_theme_font_size_override("font_size", 12)
-	_construction_lbl.add_theme_color_override("font_color", Color(0.95, 0.88, 0.60))
+	_construction_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	_construction_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(_construction_lbl)
 
@@ -1213,20 +1213,20 @@ func _build_quest_ui() -> void:
 	_title_lbl = Label.new()
 	if _orbitron: _title_lbl.add_theme_font_override("font", _orbitron)
 	_title_lbl.add_theme_font_size_override("font_size", 11)
-	_title_lbl.add_theme_color_override("font_color", Color(0.92, 0.88, 0.55))
+	_title_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	rv.add_child(_title_lbl)
 
 	_desc_lbl = Label.new()
 	_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if _orbitron: _desc_lbl.add_theme_font_override("font", _orbitron)
 	_desc_lbl.add_theme_font_size_override("font_size", 9)
-	_desc_lbl.add_theme_color_override("font_color", Color(0.72, 0.78, 0.90))
+	_desc_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	rv.add_child(_desc_lbl)
 
 	_reward_lbl = Label.new()
 	if _orbitron: _reward_lbl.add_theme_font_override("font", _orbitron)
 	_reward_lbl.add_theme_font_size_override("font_size", 9)
-	_reward_lbl.add_theme_color_override("font_color", Color(0.38, 0.88, 0.55))
+	_reward_lbl.add_theme_color_override("font_color", UIStyle.color(&"good"))
 	rv.add_child(_reward_lbl)
 	var sep2 := _hsep()
 	rv.add_child(sep2)
@@ -1240,13 +1240,13 @@ func _build_quest_ui() -> void:
 		dot.text = "○"
 		if _orbitron: dot.add_theme_font_override("font", _orbitron)
 		dot.add_theme_font_size_override("font_size", 9)
-		dot.add_theme_color_override("font_color", Color(0.30, 0.36, 0.50))
+		dot.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 		row.add_child(dot)
 		var ql := Label.new()
 		ql.text = QUESTS[i]["title"]
 		if _orbitron: ql.add_theme_font_override("font", _orbitron)
 		ql.add_theme_font_size_override("font_size", 9)
-		ql.add_theme_color_override("font_color", Color(0.36, 0.42, 0.56))
+		ql.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 		row.add_child(ql)
 		_tracker_items.append({"dot": dot, "lbl": ql})
 
@@ -1254,8 +1254,8 @@ func _build_quest_ui() -> void:
 	for i in _quest_step:
 		if i < _tracker_items.size():
 			(_tracker_items[i]["dot"] as Label).text = "✓"
-			(_tracker_items[i]["dot"] as Label).add_theme_color_override("font_color", Color(0.30, 0.85, 0.50))
-			(_tracker_items[i]["lbl"] as Label).add_theme_color_override("font_color", Color(0.40, 0.72, 0.50))
+			(_tracker_items[i]["dot"] as Label).add_theme_color_override("font_color", UIStyle.color(&"good"))
+			(_tracker_items[i]["lbl"] as Label).add_theme_color_override("font_color", UIStyle.color(&"good"))
 	_apply_collapsed()
 
 func _show_quest_step(idx: int) -> void:
@@ -1268,14 +1268,14 @@ func _show_quest_step(idx: int) -> void:
 		var dot := _tracker_items[i]["dot"] as Label
 		var ql  := _tracker_items[i]["lbl"] as Label
 		if i < idx:
-			dot.text = "✓"; dot.add_theme_color_override("font_color", Color(0.30, 0.85, 0.50))
-			ql.add_theme_color_override("font_color", Color(0.40, 0.72, 0.50))
+			dot.text = "✓"; dot.add_theme_color_override("font_color", UIStyle.color(&"good"))
+			ql.add_theme_color_override("font_color", UIStyle.color(&"good"))
 		elif i == idx:
-			dot.text = "▶"; dot.add_theme_color_override("font_color", Color(0.92, 0.88, 0.55))
-			ql.add_theme_color_override("font_color", Color(0.92, 0.88, 0.55))
+			dot.text = "▶"; dot.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
+			ql.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 		else:
-			dot.text = "○"; dot.add_theme_color_override("font_color", Color(0.30, 0.36, 0.50))
-			ql.add_theme_color_override("font_color", Color(0.36, 0.42, 0.56))
+			dot.text = "○"; dot.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
+			ql.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	_reward_lbl.text = ("Reward: " + String(q.get("reward_text", ""))) if GRANTS_ENABLED and q.has("reward_text") \
 		else "Main goal: reach Civilization 1"
 	if idx >= TUTORIAL_QUEST_COUNT and GRANTS_ENABLED and q.has("reward_text"):
@@ -1346,8 +1346,8 @@ func _advance_quest_sub() -> void:
 			_flash_reward("✓ " + String(q["title"]))
 		if _quest_step < _tracker_items.size():
 			(_tracker_items[_quest_step]["dot"] as Label).text = "✓"
-			(_tracker_items[_quest_step]["dot"] as Label).add_theme_color_override("font_color", Color(0.30, 0.85, 0.50))
-			(_tracker_items[_quest_step]["lbl"] as Label).add_theme_color_override("font_color", Color(0.40, 0.72, 0.50))
+			(_tracker_items[_quest_step]["dot"] as Label).add_theme_color_override("font_color", UIStyle.color(&"good"))
+			(_tracker_items[_quest_step]["lbl"] as Label).add_theme_color_override("font_color", UIStyle.color(&"good"))
 		_quest_step += 1; _quest_sub = 0
 		if _quest_step >= QUESTS.size():
 			await get_tree().create_timer(1.5).timeout
@@ -1395,7 +1395,7 @@ func _build_quest_side_ui() -> void:
 	_overlay_lbl = Label.new()
 	if _orbitron: _overlay_lbl.add_theme_font_override("font", _orbitron)
 	_overlay_lbl.add_theme_font_size_override("font_size", 11)
-	_overlay_lbl.add_theme_color_override("font_color", Color(0.98, 0.86, 0.35))
+	_overlay_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	_overlay_lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
 	_overlay_lbl.add_theme_constant_override("outline_size", 6)
 	_overlay_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -1519,7 +1519,7 @@ func _flash_reward(text: String) -> void:
 	flash.text = "+ " + text
 	if _orbitron: flash.add_theme_font_override("font", _orbitron)
 	flash.add_theme_font_size_override("font_size", 14)
-	flash.add_theme_color_override("font_color", Color(0.35, 1.0, 0.58))
+	flash.add_theme_color_override("font_color", UIStyle.color(&"good"))
 	flash.position = anchor.position + Vector2(16, -28)
 	add_child(flash)
 	var tw := create_tween()
@@ -1535,7 +1535,7 @@ func _show_inventory_hint() -> void:
 	hint.text = "◈  Your stockpile is in the top bar — hover ⛏ Raw for details"
 	if _orbitron: hint.add_theme_font_override("font", _orbitron)
 	hint.add_theme_font_size_override("font_size", 10)
-	hint.add_theme_color_override("font_color", Color(0.75, 0.90, 1.0))
+	hint.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	hint.add_theme_constant_override("outline_size", 3)
 	hint.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)

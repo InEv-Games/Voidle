@@ -1701,7 +1701,7 @@ func _add_rocket_section(page: Control, data: PlanetData) -> void:
 	var head := Label.new()
 	head.text = "FINAL ROCKET"
 	_apply_orbitron(head, 10)
-	head.add_theme_color_override("font_color", Color(1.0, 0.85, 0.5))
+	head.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	box.add_child(head)
 	var info := RichTextLabel.new()
 	info.bbcode_enabled = true
@@ -1769,7 +1769,7 @@ func _add_found_settlement_button(page: Control) -> void:
 	var head := Label.new()
 	head.text = "ORBIT"
 	_apply_orbitron(head, 9)
-	head.add_theme_color_override("font_color", Color(0.55, 0.65, 0.95))
+	head.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	page.add_child(head)
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", _card_panel_style())
@@ -1779,12 +1779,12 @@ func _add_found_settlement_button(page: Control) -> void:
 	var hub_lbl := Label.new()
 	hub_lbl.text = "◈  Central Orbit — set up by the lander"
 	_apply_orbitron(hub_lbl, 9)
-	hub_lbl.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+	hub_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	row.add_child(hub_lbl)
 	var name_lbl := Label.new()
 	name_lbl.text = "◆  Colony Lander"
 	_apply_orbitron(name_lbl, 10)
-	name_lbl.add_theme_color_override("font_color", Color(0.85, 0.92, 1.0))
+	name_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 	row.add_child(name_lbl)
 	var scanned := GameState.is_scanned(current_data.seed)
 	var paid := GameState.landing_paid.has(current_data.seed)
@@ -1794,7 +1794,7 @@ func _add_found_settlement_button(page: Control) -> void:
 		else "Landing the first City: %s." % Economy.cost_text(GameState.LANDING_COST))
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_apply_orbitron(note, 8)
-	note.add_theme_color_override("font_color", Color(0.65, 0.88, 1.0))
+	note.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	row.add_child(note)
 	page.add_child(card)
 	var btn := Button.new()
@@ -3122,7 +3122,7 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	var type_lbl := Label.new()
 	type_lbl.text = "%s  %s" % [def.icon, def.display_name]
 	_apply_orbitron(type_lbl, 10)
-	type_lbl.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+	type_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	type_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	type_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	header.add_child(type_lbl)
@@ -3130,7 +3130,7 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	close_btn.text = "✕"
 	close_btn.flat = true
 	_apply_orbitron(close_btn, 9)
-	close_btn.add_theme_color_override("font_color", Color(0.6, 0.6, 0.7))
+	close_btn.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	close_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	close_btn.pressed.connect(func() -> void:
 		overlay.queue_free()
@@ -3141,7 +3141,7 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	var desc_lbl := Label.new()
 	desc_lbl.text = def.description
 	_apply_orbitron(desc_lbl, 8)
-	desc_lbl.add_theme_color_override("font_color", Color(0.50, 0.55, 0.72))
+	desc_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
 	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(desc_lbl)
@@ -3152,14 +3152,14 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	var cost_icon := Label.new()
 	cost_icon.text = "◈"
 	_apply_orbitron(cost_icon, 9)
-	cost_icon.add_theme_color_override("font_color", Color(0.95, 0.82, 0.35))
+	cost_icon.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	cost_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_icon)
 	var cost_lbl := Label.new()
 	cost_lbl.text = HUDManager.fmt_credits(cost)
 	_apply_orbitron(cost_lbl, 9)
 	cost_lbl.add_theme_color_override("font_color",
-		Color(0.55, 0.70, 0.40) if GameState.credits >= cost else Color(0.85, 0.32, 0.32))
+		UIStyle.color(&"good") if GameState.credits >= cost else UIStyle.color(&"bad"))
 	cost_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
 	vbox.add_child(cost_row)
@@ -3174,8 +3174,8 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	var confirm := Button.new()
 	confirm.text = "▶  PLACE DISTRICT"
 	_apply_orbitron(confirm, 9)
-	confirm.add_theme_color_override("font_color",       Color(0.90, 0.82, 0.45))
-	confirm.add_theme_color_override("font_hover_color", Color(1.00, 0.95, 0.60))
+	confirm.add_theme_color_override("font_color",       UIStyle.color(&"neutral_stroke"))
+	confirm.add_theme_color_override("font_hover_color", UIStyle.color(&"neutral_stroke"))
 	_live_enable(confirm, func() -> bool: return GameState.credits >= cost)
 	var cap_def  := def
 	var cap_data := data
@@ -3327,7 +3327,7 @@ func _details_row(parent: VBoxContainer, label: String, value: String,
 	lbl.text = label
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_apply_orbitron(lbl, 9)
-	lbl.add_theme_color_override("font_color", Color(0.5, 0.55, 0.7))
+	lbl.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	var val := Label.new()
 	val.text = value
 	_apply_orbitron(val, 9)
@@ -3402,7 +3402,7 @@ func _mineral_icon_cell(rd: ResourceData, show_count: bool, stored: float = 0.0)
 		count_lbl.text = _fmt_amount(stored)
 		_apply_orbitron(count_lbl, 9)
 		count_lbl.add_theme_color_override("font_color",
-			Color(0.95, 0.97, 1.0) if stored > 0.0 else Color(0.42, 0.45, 0.55))
+			UIStyle.color(&"text_bright") if stored > 0.0 else UIStyle.color(&"text_muted"))
 		count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		inner.add_child(count_lbl)
 
@@ -3449,7 +3449,7 @@ func _mineral_grid_card(rd: ResourceData, stored: float, show_count: bool, sub_l
 		count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_apply_orbitron(count_lbl, 10)
 		count_lbl.add_theme_color_override("font_color",
-			Color(0.95, 0.97, 1.0) if stored > 0.0 else Color(0.42, 0.45, 0.55))
+			UIStyle.color(&"text_bright") if stored > 0.0 else UIStyle.color(&"text_muted"))
 		count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(count_lbl)
 	else:
@@ -3469,7 +3469,7 @@ func _mineral_grid_card(rd: ResourceData, stored: float, show_count: bool, sub_l
 			sl.text = sub_label
 			sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			_apply_orbitron(sl, 7)
-			sl.add_theme_color_override("font_color", Color(0.70, 0.75, 0.90))
+			sl.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 			sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			vbox2.add_child(sl)
 
@@ -3541,7 +3541,7 @@ func _details_section(parent: VBoxContainer, title: String) -> void:
 	var lbl := Label.new()
 	lbl.text = title
 	_apply_orbitron(lbl, 8)
-	lbl.add_theme_color_override("font_color", Color(0.4, 0.45, 0.65))
+	lbl.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	parent.add_child(lbl)
 	var sep := HSeparator.new()
 	parent.add_child(sep)
@@ -3897,20 +3897,20 @@ func _show_ship_panel(ship: ShipData, layer: OrbitalLayer) -> void:
 	name_lbl.text = ship.ship_name
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_apply_orbitron(name_lbl, 11)
-	name_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.30))
+	name_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	title_row.add_child(name_lbl)
 
 	var status_lbl := Label.new()
 	status_lbl.text = "In orbit" if not ship.is_travelling() else "En route…"
 	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_apply_orbitron(status_lbl, 9)
-	status_lbl.add_theme_color_override("font_color", Color(0.6, 0.75, 0.95, 0.80))
+	status_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.80))
 	title_row.add_child(status_lbl)
 
 	# Cargo — inventory card style matching PlanetOverview
 	if not ship.cargo.is_empty():
 		var sep := HSeparator.new()
-		sep.add_theme_color_override("color", Color(1, 1, 1, 0.12))
+		sep.add_theme_color_override("color", Color(UIStyle.color(&"text_bright"), 0.12))
 		vbox.add_child(sep)
 		var cargo_grid := GridContainer.new()
 		cargo_grid.columns = 4
@@ -3925,7 +3925,7 @@ func _show_ship_panel(ship: ShipData, layer: OrbitalLayer) -> void:
 
 	# ── Capacity row ─────────────────────────────────────────────────────────
 	var cap_sep := HSeparator.new()
-	cap_sep.add_theme_color_override("color", Color(1, 1, 1, 0.10))
+	cap_sep.add_theme_color_override("color", Color(UIStyle.color(&"text_bright"), 0.10))
 	vbox.add_child(cap_sep)
 
 	var cap_row := HBoxContainer.new()
@@ -3936,7 +3936,7 @@ func _show_ship_panel(ship: ShipData, layer: OrbitalLayer) -> void:
 	cargo_hint.text = "right-click for actions"
 	cargo_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_apply_orbitron(cargo_hint, 7)
-	cargo_hint.add_theme_color_override("font_color", Color(0.4, 0.5, 0.7, 0.5))
+	cargo_hint.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.5))
 	cargo_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cap_row.add_child(cargo_hint)
 
@@ -3951,7 +3951,7 @@ func _show_ship_panel(ship: ShipData, layer: OrbitalLayer) -> void:
 	cap_lbl3.text = "%d / %d" % [ship_used, ship_cap]
 	_apply_orbitron(cap_lbl3, 7)
 	cap_lbl3.add_theme_color_override("font_color",
-		Color(0.42, 0.88, 0.58) if ship_used <= ship_cap else Color(0.95, 0.38, 0.28))
+		UIStyle.color(&"good") if ship_used <= ship_cap else UIStyle.color(&"bad"))
 	cap_lbl3.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	cap_lbl3.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cap_row.add_child(cap_lbl3)
@@ -3988,26 +3988,26 @@ func _show_launch_info_panel(anim_d: Dictionary, container: Control) -> void:
 	name_lbl.text = anim_d.get("ship_name", "Ship")
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_apply_orbitron(name_lbl, 11)
-	name_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.30))
+	name_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	title_row.add_child(name_lbl)
 
 	var type_lbl := Label.new()
 	type_lbl.text = anim_d.get("ship_type", "shuttle").capitalize()
 	_apply_orbitron(type_lbl, 9)
-	type_lbl.add_theme_color_override("font_color", Color(0.55, 0.75, 1.0, 0.75))
+	type_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.75))
 	title_row.add_child(type_lbl)
 
 	var status_lbl := Label.new()
 	status_lbl.text = "launching to orbit"
 	_apply_orbitron(status_lbl, 8)
-	status_lbl.add_theme_color_override("font_color", Color(0.45, 0.90, 0.65, 0.80))
+	status_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"good"), 0.80))
 	vbox.add_child(status_lbl)
 
 	# Cargo
 	var cargo: Dictionary = anim_d.get("ship_cargo", {})
 	if not cargo.is_empty():
 		var sep := HSeparator.new()
-		sep.add_theme_color_override("color", Color(1, 1, 1, 0.12))
+		sep.add_theme_color_override("color", Color(UIStyle.color(&"text_bright"), 0.12))
 		vbox.add_child(sep)
 		var cargo_grid := GridContainer.new()
 		cargo_grid.columns = 4
@@ -4444,7 +4444,7 @@ func _make_lens_button(text: String, tint: Color, on_press: Callable) -> Button:
 	b.focus_mode = Control.FOCUS_NONE
 	_apply_orbitron(b, 8)
 	b.add_theme_color_override("font_color", tint)
-	b.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.55))
+	b.add_theme_color_override("font_hover_color", UIStyle.color(&"neutral_stroke"))
 	b.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	b.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	b.pressed.connect(func() -> void:
@@ -4792,7 +4792,7 @@ func _show_place_hint(def: DistrictDef) -> void:
 	if found_pop > 0:
 		title.text += "   ·   ☺ %s pop" % Economy.fmt(found_pop)
 	_apply_orbitron(title, 10)
-	title.add_theme_color_override("font_color", Color(0.90, 0.82, 0.45))
+	title.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title)
@@ -4806,7 +4806,7 @@ func _show_place_hint(def: DistrictDef) -> void:
 		help.text = "Click a site on %s  ·  Drag to rotate  ·  Scroll to zoom" \
 			% TerrainSampler.placement_label(def.placement)
 	_apply_orbitron(help, 7)
-	help.add_theme_color_override("font_color", Color(0.55, 0.62, 0.80))
+	help.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	help.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(help)
@@ -5705,13 +5705,13 @@ func _build_orbital_ship_card(ship: ShipData) -> PanelContainer:
 	var name_lbl := Label.new()
 	name_lbl.text = ship.ship_name
 	_apply_orbitron(name_lbl, 10)
-	name_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.30))
+	name_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	vbox.add_child(name_lbl)
 
 	var status_lbl := Label.new()
 	status_lbl.text = "En route…" if ship.is_travelling() else "In orbit"
 	_apply_orbitron(status_lbl, 8)
-	status_lbl.add_theme_color_override("font_color", Color(0.50, 0.68, 0.95, 0.75))
+	status_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.75))
 	vbox.add_child(status_lbl)
 
 	# Cargo summary (icon count)
@@ -5753,7 +5753,7 @@ func _build_resources_section(parent: VBoxContainer, data: PlanetData, pp: Plane
 	var title := Label.new()
 	title.text = "RESOURCES"
 	_apply_orbitron(title, 8)
-	title.add_theme_color_override("font_color", Color(0.40, 0.45, 0.65))
+	title.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	parent.add_child(title)
 
 	# Collect global resources with amount > 0, resolved from known_resources
@@ -5773,7 +5773,7 @@ func _build_resources_section(parent: VBoxContainer, data: PlanetData, pp: Plane
 		var none_lbl := Label.new()
 		none_lbl.text = "No resources stored"
 		_apply_orbitron(none_lbl, 8)
-		none_lbl.add_theme_color_override("font_color", Color(0.45, 0.45, 0.55))
+		none_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 		parent.add_child(none_lbl)
 		return
 
@@ -5798,7 +5798,7 @@ func _station_tile() -> PanelContainer:
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.add_theme_font_size_override("font_size", 18)
-	l.add_theme_color_override("font_color", Color(0.75, 0.70, 1.0))
+	l.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	tile.add_child(l)
 	return tile
 
@@ -6419,7 +6419,7 @@ func _refresh_bar_label_status(key: String) -> void:
 				out_text = _entry_output_text(r_pp, m.get("entry", {}), def)
 		out_lbl.text = out_text
 		out_lbl.add_theme_color_override("font_color",
-			Color(0.45, 0.48, 0.60) if paused else fc)
+			UIStyle.color(&"text_muted") if paused else fc)
 
 		var slowed_lbl: Label = m.get("slowed_lbl", null)
 		if is_instance_valid(slowed_lbl):
@@ -6490,7 +6490,7 @@ func _refresh_overview_energy() -> void:
 	var sign := "+" if bal >= 0.0 else ""
 	_overview_energy_val.text = sign + "%.0f ⚡" % bal
 	_overview_energy_val.add_theme_color_override("font_color",
-		Color(0.9, 0.82, 0.25) if bal >= 0.0 else Color(0.9, 0.40, 0.28))
+		UIStyle.color(&"neutral_stroke") if bal >= 0.0 else UIStyle.color(&"bad"))
 
 ## Starts a rocket launch animation. Multiple can run concurrently.
 func _play_rocket_animation(planet_seed: int, poi: POIData, on_complete: Callable,
@@ -6630,7 +6630,7 @@ func _play_rocket_animation(planet_seed: int, poi: POIData, on_complete: Callabl
 	lbl.text = "eta %02d:%02d" % [eta_secs / 60, eta_secs % 60]
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_apply_orbitron(lbl, 7)
-	lbl.add_theme_color_override("font_color", Color(0.65, 0.88, 1.0, 0.80))
+	lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.80))
 	lbl.position = Vector2(6, -5)
 	rocket.add_child(lbl)
 
@@ -7231,7 +7231,7 @@ func _show_construction_toast(building_name: String, district_label: String) -> 
 	icon.text = "✓"
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.add_theme_font_size_override("font_size", 13)
-	icon.add_theme_color_override("font_color", Color(0.28, 0.90, 0.52))
+	icon.add_theme_color_override("font_color", UIStyle.color(&"good"))
 	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	hbox.add_child(icon)
 
@@ -7245,7 +7245,7 @@ func _show_construction_toast(building_name: String, district_label: String) -> 
 	name_lbl.text = building_name
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_apply_orbitron(name_lbl, 9)
-	name_lbl.add_theme_color_override("font_color", Color(0.88, 0.95, 1.0))
+	name_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 	tvbox.add_child(name_lbl)
 
 	if district_label != "":
@@ -7253,7 +7253,7 @@ func _show_construction_toast(building_name: String, district_label: String) -> 
 		sub.text = "Built in " + district_label
 		sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_apply_orbitron(sub, 7)
-		sub.add_theme_color_override("font_color", Color(0.45, 0.58, 0.72))
+		sub.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 		tvbox.add_child(sub)
 
 	tc.add_child(panel)
@@ -7525,7 +7525,7 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 		u.text = "Site unlocks: " + ", ".join(unlocked)
 		u.autowrap_mode = TextServer.AUTOWRAP_WORD
 		_apply_orbitron(u, 8)
-		u.add_theme_color_override("font_color", Color(0.45, 1.0, 0.55, 0.85))
+		u.add_theme_color_override("font_color", Color(UIStyle.color(&"good"), 0.85))
 		u.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(u)
 	return box
@@ -7725,14 +7725,14 @@ func _build_spaceport_card(def: BuildingDef, pm_key: String,
 	var name_lbl := Label.new()
 	name_lbl.text = def.display_name
 	_apply_orbitron(name_lbl, 10)
-	name_lbl.add_theme_color_override("font_color", Color(0.85, 0.92, 1.0))
+	name_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left_vbox.add_child(name_lbl)
 
 	var status_lbl := Label.new()
 	status_lbl.text = "Operational"
 	_apply_orbitron(status_lbl, 8)
-	status_lbl.add_theme_color_override("font_color", Color(0.50, 0.65, 0.90, 0.70))
+	status_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.70))
 	status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left_vbox.add_child(status_lbl)
 
@@ -7811,7 +7811,7 @@ func _register_mission_tasks() -> void:
 			var lbl := Label.new()
 			lbl.text = "No stations in orbit"
 			lbl.add_theme_font_size_override("font_size", 7)
-			lbl.add_theme_color_override("font_color", Color(0.70, 0.35, 0.35, 0.75))
+			lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"bad"), 0.75))
 			lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			st_row.add_child(lbl)
 		else:
@@ -7850,7 +7850,7 @@ func _register_mission_tasks() -> void:
 			var rt_lbl := Label.new()
 			rt_lbl.text = rdef.display_name if rdef != null else rt.get("type", "?")
 			rt_lbl.add_theme_font_size_override("font_size", 7)
-			rt_lbl.add_theme_color_override("font_color", Color(0.75, 0.90, 1.0))
+			rt_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 			rt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			rt_lbl.custom_minimum_size = Vector2(44, 0)
 			rt_row.add_child(rt_lbl)
@@ -8048,7 +8048,7 @@ func _build_res_icon_ui(cont: Control, e: Dictionary,
 	val_lbl.text = str(int(slider.value))
 	val_lbl.custom_minimum_size = Vector2(22, 0)
 	val_lbl.add_theme_font_size_override("font_size", 7)
-	val_lbl.add_theme_color_override("font_color", Color(0.88, 0.92, 1.0))
+	val_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 	val_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cont.add_child(val_lbl)
 
@@ -8153,7 +8153,7 @@ func _mission_show_resource_popup(anchor: Control, entry: Dictionary,
 			var empty_lbl := Label.new()
 			empty_lbl.text = "Station has no cargo"
 			empty_lbl.add_theme_font_size_override("font_size", 7)
-			empty_lbl.add_theme_color_override("font_color", Color(0.70, 0.40, 0.40, 0.75))
+			empty_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"bad"), 0.75))
 			pvbox.add_child(empty_lbl)
 	elif pp_ref != null:
 		resources = GameState.global_resources.keys()
@@ -8312,7 +8312,7 @@ func _sp_build_idle(left_vbox: VBoxContainer, hbox: HBoxContainer,
 	var status := Label.new()
 	status.text = "Ready"
 	_apply_orbitron(status, 8)
-	status.add_theme_color_override("font_color", Color(0.35, 0.90, 0.55, 0.80))
+	status.add_theme_color_override("font_color", Color(UIStyle.color(&"good"), 0.80))
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left_vbox.add_child(status)
 
@@ -8409,7 +8409,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 	var sub := Label.new()
 	sub.text = "Mission Configuration"
 	_apply_orbitron(sub, 7)
-	sub.add_theme_color_override("font_color", Color(0.50, 0.70, 1.0, 0.60))
+	sub.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.60))
 	sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left_vbox.add_child(sub)
 
@@ -8421,7 +8421,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 	var name_hint := Label.new()
 	name_hint.text = "Name"
 	_apply_orbitron(name_hint, 7)
-	name_hint.add_theme_color_override("font_color", Color(0.50, 0.62, 0.82, 0.70))
+	name_hint.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.70))
 	name_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	name_hint.custom_minimum_size = Vector2(32, 0)
 	name_row.add_child(name_hint)
@@ -8430,7 +8430,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 	name_edit.text = entry.get("ship_name", _sp_next_ship_name(pp.planet_seed))
 	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_edit.add_theme_font_size_override("font_size", 9)
-	name_edit.add_theme_color_override("font_color", Color(0.90, 0.92, 1.0))
+	name_edit.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 	name_edit.text_changed.connect(func(t: String) -> void: entry["ship_name"] = t)
 	name_row.add_child(name_edit)
 
@@ -8442,7 +8442,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 	var type_hint := Label.new()
 	type_hint.text = "Type"
 	_apply_orbitron(type_hint, 7)
-	type_hint.add_theme_color_override("font_color", Color(0.50, 0.62, 0.82, 0.70))
+	type_hint.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.70))
 	type_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	type_hint.custom_minimum_size = Vector2(32, 0)
 	type_row.add_child(type_hint)
@@ -8473,7 +8473,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 		var lock_lbl := Label.new()
 		lock_lbl.text = " (limit 1)"
 		_apply_orbitron(lock_lbl, 6)
-		lock_lbl.add_theme_color_override("font_color", Color(0.55, 0.35, 0.35, 0.70))
+		lock_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"bad"), 0.70))
 		lock_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		type_row.add_child(lock_lbl)
 
@@ -8487,7 +8487,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 		var no_cargo_lbl := Label.new()
 		no_cargo_lbl.text = "No cargo — station is too heavy"
 		_apply_orbitron(no_cargo_lbl, 6)
-		no_cargo_lbl.add_theme_color_override("font_color", Color(0.50, 0.55, 0.70, 0.55))
+		no_cargo_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.55))
 		no_cargo_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		left_vbox.add_child(no_cargo_lbl)
 
@@ -8504,14 +8504,14 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 			var sum_lbl := Label.new()
 			sum_lbl.text = "%d step mission planned" % mission_tasks.size()
 			_apply_orbitron(sum_lbl, 7)
-			sum_lbl.add_theme_color_override("font_color", Color(0.50, 0.88, 0.65))
+			sum_lbl.add_theme_color_override("font_color", UIStyle.color(&"good"))
 			sum_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			left_vbox.add_child(sum_lbl)
 		else:
 			var hint_lbl := Label.new()
 			hint_lbl.text = "No mission — plan one below"
 			_apply_orbitron(hint_lbl, 6)
-			hint_lbl.add_theme_color_override("font_color", Color(0.55, 0.45, 0.45, 0.70))
+			hint_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.70))
 			hint_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			left_vbox.add_child(hint_lbl)
 
@@ -8552,7 +8552,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 	cost_lbl.text = "%d cr" % launch_cost
 	_apply_orbitron(cost_lbl, 7)
 	cost_lbl.add_theme_color_override("font_color",
-		Color(0.90, 0.75, 0.20) if can_afford else Color(0.90, 0.35, 0.25))
+		UIStyle.color(&"neutral_stroke") if can_afford else UIStyle.color(&"bad"))
 	cost_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bottom_row.add_child(cost_lbl)
 
@@ -8621,7 +8621,7 @@ func _sp_build_progress(left_vbox: VBoxContainer, hbox: HBoxContainer,
 		var q_lbl := Label.new()
 		q_lbl.text = "Queue: %d" % queue.size()
 		_apply_orbitron(q_lbl, 7)
-		q_lbl.add_theme_color_override("font_color", Color(0.70, 0.75, 1.0, 0.75))
+		q_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.75))
 		q_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		left_vbox.add_child(q_lbl)
 		for i: int in mini(queue.size(), 2):
@@ -8629,7 +8629,7 @@ func _sp_build_progress(left_vbox: VBoxContainer, hbox: HBoxContainer,
 			var qi_lbl := Label.new()
 			qi_lbl.text = "  %d. %s" % [i + 1, qi.get("ship_name", "–")]
 			_apply_orbitron(qi_lbl, 6)
-			qi_lbl.add_theme_color_override("font_color", Color(0.55, 0.65, 0.85, 0.60))
+			qi_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_subtle"), 0.60))
 			qi_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			left_vbox.add_child(qi_lbl)
 
@@ -8675,7 +8675,7 @@ func _sp_build_launch_ready(left_vbox: VBoxContainer, hbox: HBoxContainer,
 	var status := Label.new()
 	status.text = ship_name + " — ready"
 	_apply_orbitron(status, 8)
-	status.add_theme_color_override("font_color", Color(0.35, 0.95, 0.55, 0.90))
+	status.add_theme_color_override("font_color", Color(UIStyle.color(&"good"), 0.90))
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left_vbox.add_child(status)
 
@@ -8768,7 +8768,7 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 	var hdr_lbl := Label.new()
 	hdr_lbl.text = "Add Cargo"
 	_apply_orbitron(hdr_lbl, 9)
-	hdr_lbl.add_theme_color_override("font_color", Color(0.75, 0.88, 1.0))
+	hdr_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	hdr_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hdr_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hdr.add_child(hdr_lbl)
@@ -8778,7 +8778,7 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 	cap_lbl2.text = "%d/%d" % [used_now, capacity]
 	_apply_orbitron(cap_lbl2, 7)
 	cap_lbl2.add_theme_color_override("font_color",
-		Color(0.40, 0.88, 0.55) if used_now <= capacity else Color(0.95, 0.38, 0.28))
+		UIStyle.color(&"good") if used_now <= capacity else UIStyle.color(&"bad"))
 	cap_lbl2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hdr.add_child(cap_lbl2)
 
@@ -8795,7 +8795,7 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 		var no_res := Label.new()
 		no_res.text = "No resources in storage"
 		_apply_orbitron(no_res, 7)
-		no_res.add_theme_color_override("font_color", Color(0.45, 0.50, 0.60, 0.65))
+		no_res.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.65))
 		no_res.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(no_res)
 	else:
@@ -8828,7 +8828,7 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 		_apply_orbitron(amt_lbl3, 9)
 		amt_lbl3.custom_minimum_size = Vector2(28, 0)
 		amt_lbl3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		amt_lbl3.add_theme_color_override("font_color", Color(0.92, 0.95, 1.0))
+		amt_lbl3.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 		amt_lbl3.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slider_row.add_child(amt_lbl3)
 
@@ -8836,7 +8836,7 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 		var info_lbl := Label.new()
 		info_lbl.text = ""
 		_apply_orbitron(info_lbl, 6)
-		info_lbl.add_theme_color_override("font_color", Color(0.42, 0.55, 0.75, 0.65))
+		info_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.65))
 		info_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(info_lbl)
 
@@ -8923,7 +8923,7 @@ func _sp_show_pickup_popup(entry: Dictionary, pp: PlanetProgress, rebuild_sp: Ca
 	var hdr_lbl := Label.new()
 	hdr_lbl.text = "Pick Up From Station"
 	_apply_orbitron(hdr_lbl, 9)
-	hdr_lbl.add_theme_color_override("font_color", Color(0.55, 0.95, 0.70))
+	hdr_lbl.add_theme_color_override("font_color", UIStyle.color(&"good"))
 	hdr_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(hdr_lbl)
 	vbox.add_child(HSeparator.new())
@@ -8936,7 +8936,7 @@ func _sp_show_pickup_popup(entry: Dictionary, pp: PlanetProgress, rebuild_sp: Ca
 		var no_lbl := Label.new()
 		no_lbl.text = "No known resources"
 		_apply_orbitron(no_lbl, 7)
-		no_lbl.add_theme_color_override("font_color", Color(0.45, 0.50, 0.45, 0.65))
+		no_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.65))
 		no_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(no_lbl)
 	else:
@@ -8966,7 +8966,7 @@ func _sp_show_pickup_popup(entry: Dictionary, pp: PlanetProgress, rebuild_sp: Ca
 		_apply_orbitron(amt_lbl, 9)
 		amt_lbl.custom_minimum_size = Vector2(28, 0)
 		amt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		amt_lbl.add_theme_color_override("font_color", Color(0.92, 0.95, 1.0))
+		amt_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 		amt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slider_row.add_child(amt_lbl)
 		slider.value_changed.connect(func(v: float) -> void: amt_lbl.text = str(int(v)))
@@ -9449,14 +9449,14 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	title.text = "Orbit"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_apply_orbitron(title, 12)
-	title.add_theme_color_override("font_color", Color(0.80, 0.76, 1.0))
+	title.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	header.add_child(title)
 	header.add_child(_level_badge(lv, true))
 	root.add_child(header)
 	var info := Label.new()
 	info.text = "Stations  %d / %d   ·   one module each" % [stations.size(), lv]
 	_apply_orbitron(info, 8)
-	info.add_theme_color_override("font_color", Color(0.55, 0.60, 0.85))
+	info.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	root.add_child(info)
 
 	var body_scroll := ScrollContainer.new()
@@ -9475,7 +9475,7 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	var d_hdr := Label.new()
 	d_hdr.text = "DISTRICTS"
 	_apply_orbitron(d_hdr, 9)
-	d_hdr.add_theme_color_override("font_color", Color(0.50, 0.58, 0.80))
+	d_hdr.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	body.add_child(d_hdr)
 	if stations.size() < lv:
 		body.add_child(_build_add_district_card(planet, true, true))
@@ -9484,7 +9484,7 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 		full.text = "ORBIT FULL — LEVEL UP THE ORBIT"
 		full.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_apply_orbitron(full, 8)
-		full.add_theme_color_override("font_color", Color(0.45, 0.48, 0.62))
+		full.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 		body.add_child(full)
 	body.move_child(d_hdr, 0)
 
@@ -9674,13 +9674,13 @@ func _show_unlock_toast(title_txt: String, body_txt: String) -> void:
 	t.text = title_txt
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_apply_orbitron(t, 13)
-	t.add_theme_color_override("font_color", Color(0.65, 1.0, 0.70))
+	t.add_theme_color_override("font_color", UIStyle.color(&"good"))
 	v.add_child(t)
 	var b := Label.new()
 	b.text = body_txt
 	b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_apply_orbitron(b, 8)
-	b.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+	b.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	v.add_child(b)
 	cont.add_child(box)
 	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 140)
@@ -9981,7 +9981,7 @@ func _show_rendezvous_picker(ship: ShipData, layer: OrbitalLayer) -> void:
 	var title := Label.new()
 	title.text = "Select Rendezvous Target"
 	_apply_orbitron(title, 8)
-	title.add_theme_color_override("font_color", Color(0.55, 0.80, 1.0))
+	title.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 
@@ -10030,7 +10030,7 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 	var hdr := Label.new()
 	hdr.text = "⟐  %s  ↔  %s" % [ship.ship_name, target.ship_name]
 	_apply_orbitron(hdr, 7)
-	hdr.add_theme_color_override("font_color", Color(0.40, 0.85, 1.0))
+	hdr.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hdr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(hdr)
@@ -10062,7 +10062,7 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 			var col_lbl := Label.new()
 			col_lbl.text = src.ship_name
 			_apply_orbitron(col_lbl, 7)
-			col_lbl.add_theme_color_override("font_color", Color(0.65, 0.80, 1.0))
+			col_lbl.add_theme_color_override("font_color", UIStyle.color(&"text"))
 			col_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			col_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			col.add_child(col_lbl)
@@ -10071,7 +10071,7 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 				var empty_lbl := Label.new()
 				empty_lbl.text = "(empty)"
 				_apply_orbitron(empty_lbl, 6)
-				empty_lbl.add_theme_color_override("font_color", Color(0.40, 0.45, 0.60, 0.60))
+				empty_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.60))
 				empty_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				col.add_child(empty_lbl)
@@ -10097,14 +10097,14 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 					var res_lbl := Label.new()
 					res_lbl.text = rd.unique_name
 					_apply_orbitron(res_lbl, 6)
-					res_lbl.add_theme_color_override("font_color", Color(0.80, 0.85, 1.0))
+					res_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 					res_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 					info.add_child(res_lbl)
 
 					var amt_lbl := Label.new()
 					amt_lbl.text = "x%d" % amt
 					_apply_orbitron(amt_lbl, 6)
-					amt_lbl.add_theme_color_override("font_color", Color(0.55, 0.65, 0.85, 0.70))
+					amt_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_subtle"), 0.70))
 					amt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 					info.add_child(amt_lbl)
 

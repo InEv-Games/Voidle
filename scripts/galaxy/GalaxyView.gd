@@ -116,7 +116,7 @@ func _build_right_panel() -> void:
 	title.text = "GALAXY MAP"
 	if _orbitron: title.add_theme_font_override("font", _orbitron)
 	title.add_theme_font_size_override("font_size", 11)
-	title.add_theme_color_override("font_color", Color(0.55, 0.70, 1.0))
+	title.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title)
 
@@ -203,13 +203,13 @@ func _update_right_panel() -> void:
 		var unlocked := _galaxy.is_unlocked(_hovered)
 		if is_home:
 			_panel_hov_status.text = "◈ Home System"
-			_panel_hov_status.add_theme_color_override("font_color", Color(0.95, 0.82, 0.35))
+			_panel_hov_status.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 		elif unlocked:
 			_panel_hov_status.text = "✓ Visited"
-			_panel_hov_status.add_theme_color_override("font_color", Color(0.45, 0.85, 0.55))
+			_panel_hov_status.add_theme_color_override("font_color", UIStyle.color(&"good"))
 		else:
 			_panel_hov_status.text = "? Unknown"
-			_panel_hov_status.add_theme_color_override("font_color", Color(0.55, 0.55, 0.60))
+			_panel_hov_status.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 
 	# Stats
 	if _panel_stats != null and is_instance_valid(_panel_stats):

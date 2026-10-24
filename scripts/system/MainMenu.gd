@@ -165,7 +165,7 @@ func _build_menu() -> void:
 	title.text = "VOIDLE"
 	if _font: title.add_theme_font_override("font", _font)
 	title.add_theme_font_size_override("font_size", 54)
-	title.add_theme_color_override("font_color", Color(0.92, 0.88, 1.0))
+	title.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 	root.add_child(title)
 
 	# Subtitle
@@ -173,7 +173,7 @@ func _build_menu() -> void:
 	sub.text = "An idle space empire"
 	if _font: sub.add_theme_font_override("font", _font)
 	sub.add_theme_font_size_override("font_size", 12)
-	sub.add_theme_color_override("font_color", Color(0.55, 0.55, 0.75))
+	sub.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	root.add_child(sub)
 
 	var gap := Control.new()
@@ -198,7 +198,7 @@ func _build_menu() -> void:
 	ver.text = "Demo  –  progress isn't saved" if demo else "v0.1  –  Early Access"
 	if _font: ver.add_theme_font_override("font", _font)
 	ver.add_theme_font_size_override("font_size", 8)
-	ver.add_theme_color_override("font_color", Color(0.35, 0.35, 0.5))
+	ver.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	var vgap := Control.new()
 	vgap.custom_minimum_size = Vector2(0, 32)
 	root.add_child(vgap)
@@ -227,7 +227,7 @@ func _build_credits() -> void:
 	_credits_lbl.text = CREDITS_LINES[0]
 	if _font: _credits_lbl.add_theme_font_override("font", _font)
 	_credits_lbl.add_theme_font_size_override("font_size", 9)
-	_credits_lbl.add_theme_color_override("font_color", Color(0.38, 0.38, 0.55, 0.75))
+	_credits_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.75))
 	_credits_lbl.anchor_left   = 1.0
 	_credits_lbl.anchor_right  = 1.0
 	_credits_lbl.anchor_top    = 1.0

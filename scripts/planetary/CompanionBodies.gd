@@ -88,7 +88,7 @@ func _arrow(txt: String, dir: int) -> Button:
 	b.flat = true
 	b.focus_mode = Control.FOCUS_NONE
 	b.add_theme_font_size_override("font_size", 22)
-	b.add_theme_color_override("font_color", Color(0.65, 0.75, 1.0))
+	b.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	b.pressed.connect(func() -> void:
 		_page = clampi(_page + dir, 0, maxi(0, bodies.size() - VISIBLE))
 		AudioManager.play("click")
