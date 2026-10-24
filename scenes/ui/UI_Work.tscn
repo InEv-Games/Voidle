@@ -474,6 +474,888 @@ corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
 
+[sub_resource type="StyleBoxFlat" id="pal_1"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1373, 0.7255, 0.9059, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_2"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1608, 0.2667, 0.3608, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3529, 0.7922, 0.9294, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_3"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.03137, 0.1176, 0.1922, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1373, 0.7255, 0.9059, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_4"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 0.45)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1373, 0.7255, 0.9059, 0.35)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_5"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1373, 0.7255, 0.9059, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_6"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.06275, 0.2196, 0.3569, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3961, 0.8078, 0.9333, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_7"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.03137, 0.1176, 0.1922, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1373, 0.7255, 0.9059, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_8"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.03922, 0.1294, 0.2157, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.07451, 0.3451, 0.4627, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_9"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1137, 0.298, 0.03922, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4549, 0.698, 0.4941, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_10"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.2196, 0.3804, 0.1529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.5922, 0.7725, 0.6196, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_11"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.07843, 0.2078, 0.02745, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4549, 0.698, 0.4941, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_12"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1137, 0.298, 0.03922, 0.45)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4549, 0.698, 0.4941, 0.35)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_13"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1137, 0.298, 0.03922, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4549, 0.698, 0.4941, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_14"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.149, 0.3882, 0.05098, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.6196, 0.7882, 0.6471, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_15"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.07843, 0.2078, 0.02745, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4549, 0.698, 0.4941, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_16"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.07059, 0.1843, 0.1098, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2039, 0.3373, 0.298, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_17"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.298, 0.2745, 0.03529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.8, 0.7451, 0.4784, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_18"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.3804, 0.3608, 0.1529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.851, 0.8078, 0.6078, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_19"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.2078, 0.1922, 0.02353, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.8, 0.7451, 0.4784, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_20"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.298, 0.2745, 0.03529, 0.45)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.8, 0.7451, 0.4784, 0.35)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_21"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.298, 0.2745, 0.03529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.8, 0.7451, 0.4784, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_22"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.3882, 0.3569, 0.04706, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.8588, 0.8235, 0.6353, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_23"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.2078, 0.1922, 0.02353, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.8, 0.7451, 0.4784, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_24"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1529, 0.1765, 0.1098, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3412, 0.3529, 0.2941, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_25"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.298, 0.03529, 0.03529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7843, 0.3882, 0.6, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_26"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.3804, 0.1529, 0.1529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.8392, 0.5412, 0.698, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_27"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.2078, 0.02353, 0.02353, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7843, 0.3882, 0.6, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_28"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.298, 0.03529, 0.03529, 0.45)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7843, 0.3882, 0.6, 0.35)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_29"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.298, 0.03529, 0.03529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7843, 0.3882, 0.6, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_30"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.3882, 0.04706, 0.04706, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.851, 0.5725, 0.7216, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_31"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.2078, 0.02353, 0.02353, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7843, 0.3882, 0.6, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_32"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1529, 0.06667, 0.1098, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3333, 0.2118, 0.3412, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_33"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.03529, 0.09412, 0.1686, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_34"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_35"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.06275, 0.2196, 0.3569, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_36"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.06667, 0.3569, 0.4471, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_37"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.09412, 0.4549, 0.6, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_38"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1373, 0.7255, 0.9059, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_39"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_40"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_41"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_42"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_43"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_44"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_45"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_46"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_47"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_48"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_49"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_50"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_51"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1373, 0.7255, 0.9059, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_52"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1137, 0.298, 0.03922, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4549, 0.698, 0.4941, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_53"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.298, 0.2745, 0.03529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.8, 0.7451, 0.4784, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_54"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.298, 0.03529, 0.03529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7843, 0.3882, 0.6, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_55"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1373, 0.7255, 0.9059, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_56"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.1137, 0.298, 0.03922, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4549, 0.698, 0.4941, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_57"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.298, 0.2745, 0.03529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.8, 0.7451, 0.4784, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_58"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.298, 0.03529, 0.03529, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7843, 0.3882, 0.6, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_59"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_60"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_61"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[sub_resource type="StyleBoxFlat" id="pal_62"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
 [node name="UI_Work" type="Control" unique_id=1764312015]
 layout_mode = 3
 anchors_preset = 15
@@ -508,6 +1390,1386 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 14
+
+[node name="P00_Palette" type="VBoxContainer" parent="Scroll/Content"]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_type_variation = &"HeaderLabel"
+text = "RENK SKALASI · mevcut ve öneri"
+theme_override_font_sizes/font_size = 13
+
+[node name="Note" type="Label" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "Öneri: her renkte ton ve doygunluk sabit, açıklık oranlanır. Hover L×1.30, pressed L×0.70, disabled panel rengine %55 karışır (saydamlık yok). Çerçeve hover'da beyaza %30 yaklaşır. Değerler kontrast oranıyla (WCAG) verildi; küçük yazı için hedef 4.5."
+
+[node name="H1" type="Label" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "1 · BUTON DURUMLARI"
+
+[node name="DEFAULT_Now" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="L" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_Now"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "DEFAULT · MEVCUT"
+
+[node name="NORMAL" type="PanelContainer" parent="Scroll/Content/P00_Palette/DEFAULT_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_1")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/DEFAULT_Now/NORMAL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_Now/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NORMAL"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_Now/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#0c2b46"
+
+[node name="HOVER" type="PanelContainer" parent="Scroll/Content/P00_Palette/DEFAULT_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_2")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/DEFAULT_Now/HOVER"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_Now/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "HOVER"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_Now/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#29445c"
+
+[node name="PRESSED" type="PanelContainer" parent="Scroll/Content/P00_Palette/DEFAULT_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_3")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/DEFAULT_Now/PRESSED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_Now/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "PRESSED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_Now/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#081e31"
+
+[node name="DISABLED" type="PanelContainer" parent="Scroll/Content/P00_Palette/DEFAULT_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_4")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/DEFAULT_Now/DISABLED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_Now/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DISABLED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_Now/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#0c2b46 45%"
+
+[node name="DEFAULT_New" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="L" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_New"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "DEFAULT · ÖNERİ"
+
+[node name="NORMAL" type="PanelContainer" parent="Scroll/Content/P00_Palette/DEFAULT_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_5")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/DEFAULT_New/NORMAL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_New/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NORMAL"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_New/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#0c2b46"
+
+[node name="HOVER" type="PanelContainer" parent="Scroll/Content/P00_Palette/DEFAULT_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_6")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/DEFAULT_New/HOVER"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_New/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "HOVER"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_New/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#10385b"
+
+[node name="PRESSED" type="PanelContainer" parent="Scroll/Content/P00_Palette/DEFAULT_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_7")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/DEFAULT_New/PRESSED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_New/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "PRESSED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_New/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#081e31"
+
+[node name="DISABLED" type="PanelContainer" parent="Scroll/Content/P00_Palette/DEFAULT_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_8")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/DEFAULT_New/DISABLED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_New/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DISABLED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/DEFAULT_New/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#0a2137"
+
+[node name="POSITIVE_Now" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="L" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_Now"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "POSITIVE · MEVCUT"
+
+[node name="NORMAL" type="PanelContainer" parent="Scroll/Content/P00_Palette/POSITIVE_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_9")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/POSITIVE_Now/NORMAL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_Now/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NORMAL"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_Now/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#1d4c0a"
+
+[node name="HOVER" type="PanelContainer" parent="Scroll/Content/P00_Palette/POSITIVE_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_10")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/POSITIVE_Now/HOVER"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_Now/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "HOVER"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_Now/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#386127"
+
+[node name="PRESSED" type="PanelContainer" parent="Scroll/Content/P00_Palette/POSITIVE_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_11")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/POSITIVE_Now/PRESSED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_Now/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "PRESSED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_Now/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#143507"
+
+[node name="DISABLED" type="PanelContainer" parent="Scroll/Content/P00_Palette/POSITIVE_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_12")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/POSITIVE_Now/DISABLED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_Now/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DISABLED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_Now/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#1d4c0a 45%"
+
+[node name="POSITIVE_New" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="L" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_New"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "POSITIVE · ÖNERİ"
+
+[node name="NORMAL" type="PanelContainer" parent="Scroll/Content/P00_Palette/POSITIVE_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_13")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/POSITIVE_New/NORMAL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_New/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NORMAL"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_New/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#1d4c0a"
+
+[node name="HOVER" type="PanelContainer" parent="Scroll/Content/P00_Palette/POSITIVE_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_14")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/POSITIVE_New/HOVER"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_New/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "HOVER"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_New/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#26630d"
+
+[node name="PRESSED" type="PanelContainer" parent="Scroll/Content/P00_Palette/POSITIVE_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_15")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/POSITIVE_New/PRESSED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_New/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "PRESSED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_New/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#143507"
+
+[node name="DISABLED" type="PanelContainer" parent="Scroll/Content/P00_Palette/POSITIVE_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_16")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/POSITIVE_New/DISABLED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_New/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DISABLED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/POSITIVE_New/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#122f1c"
+
+[node name="NEUTRAL_Now" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="L" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_Now"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "NEUTRAL · MEVCUT"
+
+[node name="NORMAL" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_17")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/NORMAL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NORMAL"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#4c4609"
+
+[node name="HOVER" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_18")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/HOVER"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "HOVER"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#615c27"
+
+[node name="PRESSED" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_19")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/PRESSED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "PRESSED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#353106"
+
+[node name="DISABLED" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_20")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/DISABLED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DISABLED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_Now/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#4c4609 45%"
+
+[node name="NEUTRAL_New" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="L" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_New"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "NEUTRAL · ÖNERİ"
+
+[node name="NORMAL" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_21")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_New/NORMAL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_New/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NORMAL"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_New/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#4c4609"
+
+[node name="HOVER" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_22")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_New/HOVER"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_New/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "HOVER"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_New/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#635b0c"
+
+[node name="PRESSED" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_23")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_New/PRESSED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_New/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "PRESSED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_New/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#353106"
+
+[node name="DISABLED" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_24")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEUTRAL_New/DISABLED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_New/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DISABLED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEUTRAL_New/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#272d1c"
+
+[node name="NEGATIVE_Now" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="L" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_Now"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "NEGATIVE · MEVCUT"
+
+[node name="NORMAL" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_25")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/NORMAL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NORMAL"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#4c0909"
+
+[node name="HOVER" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_26")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/HOVER"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "HOVER"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#612727"
+
+[node name="PRESSED" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_27")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/PRESSED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "PRESSED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#350606"
+
+[node name="DISABLED" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_Now"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_28")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/DISABLED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DISABLED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_Now/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#4c0909 45%"
+
+[node name="NEGATIVE_New" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="L" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_New"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "NEGATIVE · ÖNERİ"
+
+[node name="NORMAL" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_29")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_New/NORMAL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_New/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NORMAL"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_New/NORMAL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#4c0909"
+
+[node name="HOVER" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_30")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_New/HOVER"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_New/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "HOVER"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_New/HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#630c0c"
+
+[node name="PRESSED" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_31")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_New/PRESSED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_New/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "PRESSED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_New/PRESSED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#350606"
+
+[node name="DISABLED" type="PanelContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_New"]
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_32")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/NEGATIVE_New/DISABLED"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_New/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DISABLED"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/NEGATIVE_New/DISABLED/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#27111c"
+
+[node name="H2" type="Label" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "2 · YÜZEY KADEMELERİ (açıklık L) — bugünkü oranlar korunuyor"
+
+[node name="Surfaces" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="PANEL" type="PanelContainer" parent="Scroll/Content/P00_Palette/Surfaces"]
+custom_minimum_size = Vector2(104, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_33")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/Surfaces/PANEL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/PANEL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "PANEL"
+theme_override_colors/font_color = Color(0.9098, 0.9647, 1, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/PANEL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#09182b  L=0.10"
+
+[node name="ITEM" type="PanelContainer" parent="Scroll/Content/P00_Palette/Surfaces"]
+custom_minimum_size = Vector2(104, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_34")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/Surfaces/ITEM"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/ITEM/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "ITEM"
+theme_override_colors/font_color = Color(0.9098, 0.9647, 1, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/ITEM/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#0c2b46  L=0.16"
+
+[node name="ITEM_HOVER" type="PanelContainer" parent="Scroll/Content/P00_Palette/Surfaces"]
+custom_minimum_size = Vector2(104, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_35")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/Surfaces/ITEM_HOVER"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/ITEM_HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "ITEM HOVER"
+theme_override_colors/font_color = Color(0.9098, 0.9647, 1, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/ITEM_HOVER/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#10385b  L=0.21"
+
+[node name="BADGE" type="PanelContainer" parent="Scroll/Content/P00_Palette/Surfaces"]
+custom_minimum_size = Vector2(104, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_36")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/Surfaces/BADGE"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/BADGE/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "BADGE"
+theme_override_colors/font_color = Color(0.9098, 0.9647, 1, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/BADGE/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#115b72  L=0.26"
+
+[node name="ACCENT_DIM" type="PanelContainer" parent="Scroll/Content/P00_Palette/Surfaces"]
+custom_minimum_size = Vector2(104, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_37")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/Surfaces/ACCENT_DIM"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/ACCENT_DIM/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "ACCENT DIM"
+theme_override_colors/font_color = Color(0.9098, 0.9647, 1, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/ACCENT_DIM/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#187499  L=0.35"
+
+[node name="ACCENT" type="PanelContainer" parent="Scroll/Content/P00_Palette/Surfaces"]
+custom_minimum_size = Vector2(104, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_38")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/Surfaces/ACCENT"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/ACCENT/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "ACCENT"
+theme_override_colors/font_color = Color(0.9098, 0.9647, 1, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/Surfaces/ACCENT/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#23b9e7  L=0.52"
+
+[node name="H3" type="Label" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "3 · YAZI KADEMELERİ (item zemininde kontrast)"
+
+[node name="TextNow" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="T0" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNow"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_39")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNow/T0"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T0/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "TEXT_BRIGHT"
+theme_override_colors/font_color = Color(0.9098, 0.9647, 1, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T0/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#e8f6ff  13.15:1"
+
+[node name="T1" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNow"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_40")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNow/T1"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T1/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "TEXT_SUBTLE"
+theme_override_colors/font_color = Color(0.7373, 0.8549, 0.9176, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T1/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#bcdaea  9.90:1"
+
+[node name="T2" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNow"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_41")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNow/T2"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T2/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "TEXT_MUTED"
+theme_override_colors/font_color = Color(0.5412, 0.6471, 0.7412, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T2/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#8aa5bd  5.65:1"
+
+[node name="T3" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNow"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_42")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNow/T3"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T3/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "ACCENT"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T3/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#23b9e7  6.32:1"
+
+[node name="T4" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNow"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_43")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNow/T4"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T4/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DEĞER (ACCENT_DIM)"
+theme_override_colors/font_color = Color(0.09412, 0.4549, 0.6, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T4/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#187499  2.76:1"
+
+[node name="T5" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNow"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_44")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNow/T5"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T5/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "TEXT_INACTIVE"
+theme_override_colors/font_color = Color(0.1059, 0.3529, 0.4627, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNow/T5/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#1b5a76  1.91:1"
+
+[node name="TextNew" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="T0" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNew"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_45")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNew/T0"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T0/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "TEXT_BRIGHT"
+theme_override_colors/font_color = Color(0.9098, 0.9647, 1, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T0/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#e8f6ff  13.15:1"
+
+[node name="T1" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNew"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_46")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNew/T1"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T1/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "TEXT_SUBTLE"
+theme_override_colors/font_color = Color(0.7373, 0.8549, 0.9176, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T1/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#bcdaea  9.90:1"
+
+[node name="T2" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNew"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_47")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNew/T2"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T2/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "TEXT_MUTED"
+theme_override_colors/font_color = Color(0.5412, 0.6471, 0.7412, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T2/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#8aa5bd  5.65:1"
+
+[node name="T3" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNew"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_48")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNew/T3"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T3/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "ACCENT"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T3/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#23b9e7  6.32:1"
+
+[node name="T4" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNew"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_49")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNew/T4"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T4/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DEĞER → #159CC5"
+theme_override_colors/font_color = Color(0.08235, 0.6118, 0.7725, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T4/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#159cc5  4.55:1"
+
+[node name="T5" type="PanelContainer" parent="Scroll/Content/P00_Palette/TextNew"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_50")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/TextNew/T5"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T5/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "TEXT_INACTIVE → #247A9F"
+theme_override_colors/font_color = Color(0.1412, 0.4784, 0.6235, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/TextNew/T5/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#247a9f  3.01:1"
+
+[node name="H4" type="Label" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "4 · RENKLİ BUTONLARDA YAZI — cyan yeşil/sarıda sınırda (4.2–4.4)"
+
+[node name="BtnTextNow" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="DEFAULT" type="PanelContainer" parent="Scroll/Content/P00_Palette/BtnTextNow"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_51")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/BtnTextNow/DEFAULT"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNow/DEFAULT/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DEFAULT"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNow/DEFAULT/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "cyan  6.32:1"
+
+[node name="POSITIVE" type="PanelContainer" parent="Scroll/Content/P00_Palette/BtnTextNow"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_52")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/BtnTextNow/POSITIVE"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNow/POSITIVE/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "POSITIVE"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNow/POSITIVE/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "cyan  4.38:1"
+
+[node name="NEUTRAL" type="PanelContainer" parent="Scroll/Content/P00_Palette/BtnTextNow"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_53")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/BtnTextNow/NEUTRAL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNow/NEUTRAL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NEUTRAL"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNow/NEUTRAL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "cyan  4.19:1"
+
+[node name="NEGATIVE" type="PanelContainer" parent="Scroll/Content/P00_Palette/BtnTextNow"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_54")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/BtnTextNow/NEGATIVE"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNow/NEGATIVE/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NEGATIVE"
+theme_override_colors/font_color = Color(0.1373, 0.7255, 0.9059, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNow/NEGATIVE/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "cyan  6.79:1"
+
+[node name="BtnTextNew" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="DEFAULT" type="PanelContainer" parent="Scroll/Content/P00_Palette/BtnTextNew"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_55")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/BtnTextNew/DEFAULT"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNew/DEFAULT/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "DEFAULT"
+theme_override_colors/font_color = Color(0.7373, 0.8549, 0.9176, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNew/DEFAULT/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "text_subtle  9.90:1"
+
+[node name="POSITIVE" type="PanelContainer" parent="Scroll/Content/P00_Palette/BtnTextNew"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_56")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/BtnTextNew/POSITIVE"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNew/POSITIVE/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "POSITIVE"
+theme_override_colors/font_color = Color(0.7373, 0.8549, 0.9176, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNew/POSITIVE/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "text_subtle  6.87:1"
+
+[node name="NEUTRAL" type="PanelContainer" parent="Scroll/Content/P00_Palette/BtnTextNew"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_57")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/BtnTextNew/NEUTRAL"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNew/NEUTRAL/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NEUTRAL"
+theme_override_colors/font_color = Color(0.7373, 0.8549, 0.9176, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNew/NEUTRAL/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "text_subtle  6.56:1"
+
+[node name="NEGATIVE" type="PanelContainer" parent="Scroll/Content/P00_Palette/BtnTextNew"]
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_58")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/BtnTextNew/NEGATIVE"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNew/NEGATIVE/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "NEGATIVE"
+theme_override_colors/font_color = Color(0.7373, 0.8549, 0.9176, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/BtnTextNew/NEGATIVE/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "text_subtle  10.63:1"
+
+[node name="H5" type="Label" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "5 · DURUM RENKLERİ (good / bad) — bad bugün negative ailesinden farklı tonda"
+
+[node name="Status" type="HBoxContainer" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="S0" type="PanelContainer" parent="Scroll/Content/P00_Palette/Status"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_59")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/Status/S0"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/Status/S0/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "GOOD BUGÜN"
+theme_override_colors/font_color = Color(0.4549, 0.8392, 0.4941, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/Status/S0/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#74d67e  8.05:1"
+
+[node name="S1" type="PanelContainer" parent="Scroll/Content/P00_Palette/Status"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_60")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/Status/S1"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/Status/S1/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "BAD BUGÜN (MERCAN)"
+theme_override_colors/font_color = Color(1, 0.4157, 0.3608, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/Status/S1/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#ff6a5c  5.15:1"
+
+[node name="S2" type="PanelContainer" parent="Scroll/Content/P00_Palette/Status"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_61")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/Status/S2"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/Status/S2/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "BAD ÖNERI: KIRMIZI"
+theme_override_colors/font_color = Color(0.8902, 0.4157, 0.4157, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/Status/S2/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#e36a6a  4.51:1"
+
+[node name="S3" type="PanelContainer" parent="Scroll/Content/P00_Palette/Status"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("pal_62")
+
+[node name="V" type="VBoxContainer" parent="Scroll/Content/P00_Palette/Status/S3"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="T" type="Label" parent="Scroll/Content/P00_Palette/Status/S3/V"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "BAD ÖNERI: NEGATIVE TONU"
+theme_override_colors/font_color = Color(0.8039, 0.4471, 0.6392, 1)
+
+[node name="S" type="Label" parent="Scroll/Content/P00_Palette/Status/S3/V"]
+layout_mode = 2
+theme_type_variation = &"StatLabel"
+text = "#cd72a3  4.51:1"
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/P00_Palette"]
+layout_mode = 2
 
 [node name="P01_PlanetPanel" type="VBoxContainer" parent="Scroll/Content" unique_id=1477839654]
 layout_mode = 2
