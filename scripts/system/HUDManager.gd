@@ -19,8 +19,10 @@ var _orbitron: Font
 ## Top resource bar cells (Stellaris-style): id -> Label
 var _res_lbls: Dictionary = {}
 var _res_poll: float = 0.0
-## id -> the separator+cell box, hidden until GameState reveals the resource
+## id -> the cell, hidden until GameState reveals the resource
 var _res_slots: Dictionary = {}
+## id -> ResourceChip (scenes/ui/components/ResourceChip.tscn)
+var _res_chips: Dictionary = {}
 ## Small superscript income/upkeep labels next to each value: id -> Label
 var _rate_lbls: Dictionary = {}
 ## Raw resources dropdown under the "Raw ▾" cell (null when closed)
@@ -682,10 +684,10 @@ func _build_resource_cells(hbox: HBoxContainer) -> void:
 ## Fixed text width per top-bar cell, so the bar never changes width; the
 ## value's font shrinks to fit instead (_fit_label).
 const CELL_TEXT_W := {
-	"credits": 50, "science": 30, "energy": 28, "population": 56,
-	"raw": 36, "goods": 24, "fuel": 24, "rare_elements": 24,
+	"credits": 62, "science": 38, "energy": 36, "population": 70,
+	"raw": 46, "goods": 32, "fuel": 32, "rare_elements": 32,
 }
-const VALUE_FONT_MAX := 12
+## Largest value size is the theme's ValueLabel font size (voidle_theme.tres).
 const VALUE_FONT_MIN := 7
 
 ## Sets a value label's text, shrinking its font until it fits its fixed width.
@@ -693,9 +695,9 @@ func _set_value(lbl: Label, text: String) -> void:
 	if lbl.text == text:
 		return
 	lbl.text = text
-	var font: Font = _orbitron if _orbitron else lbl.get_theme_default_font()
+	var font: Font = lbl.get_theme_font("font")
 	var w := lbl.custom_minimum_size.x
-	var size := VALUE_FONT_MAX
+	var size := UIStyle.font_size(&"ValueLabel")
 	while size > VALUE_FONT_MIN and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > w:
 		size -= 1
 	lbl.add_theme_font_size_override("font_size", size)
@@ -794,84 +796,38 @@ func _spawn_loss(id: String, amount: float, lbl: Label) -> void:
 	tw.parallel().tween_property(chip, "modulate:a", 0.0, 0.7).set_delay(0.25)
 	tw.tween_callback(chip.queue_free)
 
-## Superscript-style income label ("+3.2" green, "−1.5" red) sitting top-right of a value.
-func _make_rate_lbl(id: String) -> Label:
-	var l := Label.new()
-	if _orbitron: l.add_theme_font_override("font", _orbitron)
-	l.add_theme_font_size_override("font_size", 8)
-	l.custom_minimum_size = Vector2(18, 0)
-	l.clip_text = true
-	l.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_rate_lbls[id] = l
-	return l
-
 func _set_rate(id: String, per_s: float) -> void:
-	var l: Label = _rate_lbls.get(id)
-	if not is_instance_valid(l):
+	var chip: ResourceChip = _res_chips.get(id)
+	if not is_instance_valid(chip) or not _rate_lbls.has(id):
 		return
 	var v := snappedf(per_s, 0.1)
-	l.text = ("+" if v >= 0.0 else "−") + Economy.fmt(absf(v))
-	l.add_theme_color_override("font_color",
-		Color(0.45, 0.95, 0.50) if v >= 0.0 else Color(1.0, 0.40, 0.35))
+	chip.rate_text = ("+" if v >= 0.0 else "−") + Economy.fmt(absf(v))
+	chip.rate_tone = ResourceChip.Tone.GOOD if v >= 0.0 else ResourceChip.Tone.BAD
 
-## Value colour: red once the stock reaches its cap.
-func _stock_color(id: String, base: Color) -> Color:
-	return Color(1.0, 0.38, 0.32) if Economy.is_full(id) else base
-
-func _add_res_sep(hbox: HBoxContainer) -> void:
-	var sep := Label.new()
-	sep.text = "│"
-	sep.add_theme_font_size_override("font_size", 12)
-	sep.add_theme_color_override("font_color", Color(0.30, 0.36, 0.55, 0.6))
-	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(sep)
-
-func _add_res_cell(hbox: HBoxContainer, id: String, glyph: String, tip: String, sep: bool = true) -> void:
-	# slot = separator + cell, hidden together until the resource is revealed
-	var slot := HBoxContainer.new()
-	slot.add_theme_constant_override("separation", 6)
-	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(slot)
-	_res_slots[id] = slot
-	if sep:
-		_add_res_sep(slot)
-	hbox = slot
-	var cell := HBoxContainer.new()
-	cell.add_theme_constant_override("separation", 4)
+## One ResourceChip per resource (scenes/ui/components/ResourceChip.tscn).
+## The icon comes from UIIcons; `_glyph` and `_sep` stay for call compatibility.
+func _add_res_cell(hbox: HBoxContainer, id: String, _glyph: String, tip: String, _sep: bool = true) -> void:
+	var cell := ResourceChip.create(id)
+	cell.value_width = float(CELL_TEXT_W.get(id, 40))
+	cell.value_text = ""
 	cell.mouse_filter = Control.MOUSE_FILTER_STOP
-	var col := Economy.color_of(id) if id != Economy.RAW else Color(0.72, 0.66, 0.60)
-	var ic := Label.new()
-	ic.text = glyph
-	ic.add_theme_font_size_override("font_size", 12)
-	ic.add_theme_color_override("font_color", col)
-	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cell.add_child(ic)
-	var lbl := Label.new()
-	if _orbitron: lbl.add_theme_font_override("font", _orbitron)
-	lbl.add_theme_font_size_override("font_size", 12)
-	lbl.add_theme_color_override("font_color", col.lerp(Color.WHITE, 0.35))
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	lbl.clip_text = true
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT   # value hugs its rate
-	lbl.custom_minimum_size = Vector2(float(CELL_TEXT_W.get(id, 40)), 0)
-	cell.add_child(lbl)
-	if id == Economy.ENERGY:
-		pass   # net only; made / used are in the tooltip
-	elif id == Economy.POPULATION:
-		pass   # available / max says it all; used is in the tooltip
-	else:
-		cell.add_child(_make_rate_lbl(id))
 	hbox.add_child(cell)
-	_res_lbls[id] = lbl
-	var title := ("%s %s" % [glyph, Economy.display_name(id)]) if id != Economy.RAW else "⛏ Raw Resources"
+	_res_slots[id] = cell   # hidden until GameState reveals the resource
+	_res_chips[id] = cell
+	_res_lbls[id] = cell.value_label
+	if id != Economy.ENERGY and id != Economy.POPULATION:
+		# energy: net only; population: available / max — the rest is in the tooltip
+		_rate_lbls[id] = cell.rate_label
+	var title := Economy.display_name(id).to_upper() if id != Economy.RAW else "RAW RESOURCES"
 	cell.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
 		if id == Economy.RAW:
 			if _raw_dd == null:
 				TooltipManager.show_tip(title, "Click to show every raw resource.")
+				TooltipManager.set_title_icon(id)
 			return
-		TooltipManager.show_tip(title, _cell_tip(id, tip)))
+		TooltipManager.show_tip(title, _cell_tip(id, tip))
+		TooltipManager.set_title_icon(id))
 	cell.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
@@ -977,12 +933,13 @@ func _refresh_resource_cells() -> void:
 	_set_rate(Economy.SCIENCE, rates.get(Economy.SCIENCE, 0.0))
 	_track_stock(Economy.CREDITS)
 	_track_stock(Economy.SCIENCE)
+	_set_chip_state(Economy.SCIENCE, false, GameState.science_points <= 0.0 and float(rates.get(Economy.SCIENCE, 0.0)) <= 0.0)
 	var e_lbl: Label = _res_lbls.get(Economy.ENERGY)
 	if is_instance_valid(e_lbl):
 		var net: float = rates.get(Economy.ENERGY, 0.0)
 		_set_value(e_lbl, ("+" if snappedf(net, 0.1) >= 0.0 else "−") + Economy.fmt(absf(snappedf(net, 0.1))))
-		e_lbl.add_theme_color_override("font_color",
-			Color(0.45, 0.95, 0.50) if net >= 0.0 else Color(1.0, 0.40, 0.35))
+		var sp: Vector2 = ProductionManager.get_global_energy_split()
+		_set_chip_state(Economy.ENERGY, net < 0.0, sp.x <= 0.0 and sp.y <= 0.0)
 
 	var pop_lbl: Label = _res_lbls.get(Economy.POPULATION)
 	if is_instance_valid(pop_lbl):
@@ -994,27 +951,37 @@ func _refresh_resource_cells() -> void:
 			var mx := Economy.max_population(pd, pp)
 			# available / max (used is in the tooltip)
 			_set_value(pop_lbl, "%s/%s" % [Economy.fmt(mx - used), Economy.fmt(mx)])
-			pop_lbl.add_theme_color_override("font_color", Color(1.0, 0.38, 0.32) if used >= mx
-				else Economy.color_of(Economy.POPULATION).lerp(Color.WHITE, 0.35))
+			_set_chip_state(Economy.POPULATION, used >= mx, false)
 		else:
 			_set_value(pop_lbl, "—")
+			_set_chip_state(Economy.POPULATION, false, true)
 	for id: String in Economy.PROCESSED:
 		var l: Label = _res_lbls.get(id)
 		if is_instance_valid(l):
 			_track_stock(id)
-			l.add_theme_color_override("font_color", _stock_color(id, Economy.color_of(id).lerp(Color.WHITE, 0.35)))
 			_set_rate(id, rates.get(id, 0.0))
+			_set_chip_state(id, Economy.is_full(id), Economy.amount(id) <= 0.0 and float(rates.get(id, 0.0)) == 0.0)
 	var raw_lbl: Label = _res_lbls.get(Economy.RAW)
 	if is_instance_valid(raw_lbl):
 		_track_stock(Economy.RAW)
 		var any_full := false
 		for r: Dictionary in _listed_raws():
 			if Economy.is_full(r["id"]): any_full = true
-		raw_lbl.add_theme_color_override("font_color", Color(1.0, 0.38, 0.32) if any_full
-			else Color(0.72, 0.66, 0.60).lerp(Color.WHITE, 0.35))
 		_set_rate(Economy.RAW, rates.get(Economy.RAW, 0.0))
+		_set_chip_state(Economy.RAW, any_full, Economy.raw_total() <= 0.0 and float(rates.get(Economy.RAW, 0.0)) == 0.0)
 	if _raw_dd != null:
 		_fill_raw_dropdown()
+
+## Alert = value in the palette's "bad" colour (at the cap, deficit, overcrowded);
+## inactive = nothing stored and nothing coming in (dimmed chip).
+func _set_chip_state(id: String, alert: bool, inactive: bool) -> void:
+	var chip: ResourceChip = _res_chips.get(id)
+	if not is_instance_valid(chip):
+		return
+	if chip.alert != alert:
+		chip.alert = alert
+	if chip.inactive != inactive:
+		chip.inactive = inactive
 
 ## Raw resources worth listing: discovered ones (or anything in stock).
 ## Undiscovered minerals never leak their name here.
@@ -1035,11 +1002,11 @@ func _toggle_raw_dropdown() -> void:
 	dd.theme_type_variation = &"TooltipPanel"
 	dd.mouse_filter = Control.MOUSE_FILTER_STOP
 	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 5)
+	list.add_theme_constant_override("separation", 4)
 	dd.add_child(list)
 	_top_layer.add_child(dd)
-	dd.global_position = Vector2(_raw_cell.global_position.x - 12.0,
-		credits_panel.global_position.y + credits_panel.size.y)
+	dd.global_position = Vector2(_raw_cell.global_position.x - 6.0,
+		credits_panel.global_position.y + credits_panel.size.y + 2.0)
 	_raw_dd = dd
 	_raw_dd_list = list
 	_fill_raw_dropdown()
@@ -1052,54 +1019,39 @@ func _close_raw_dropdown() -> void:
 	_raw_dd_list = null
 	_refresh_resource_cells()
 
-## One row per raw resource: icon, name and stock (red at the cap).
+## One ResourceChip per raw resource (mineral colour, stock; red at the cap,
+## dim when empty). The name is in its tooltip.
 func _fill_raw_dropdown() -> void:
 	if not is_instance_valid(_raw_dd_list):
 		return
 	var raws := _listed_raws()
 	var rows := _raw_dd_list.get_children()
-	if rows.size() != maxi(raws.size(), 1):
+	if rows.size() != raws.size() or raws.is_empty():
 		for c in rows:
 			c.queue_free()
+		if raws.is_empty():
+			var none := Label.new()
+			none.text = "No raw resources yet"
+			none.theme_type_variation = &"SubLabel"
+			_raw_dd_list.add_child(none)
+			return
 		rows = []
-		for i in maxi(raws.size(), 1):
-			var row := HBoxContainer.new()
-			row.add_theme_constant_override("separation", 8)
-			row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var ic := TextureRect.new()
-			ic.custom_minimum_size = Vector2(12, 12)
-			ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			row.add_child(ic)
-			for j in 2:
-				var l := Label.new()
-				if _orbitron: l.add_theme_font_override("font", _orbitron)
-				l.add_theme_font_size_override("font_size", 10)
-				l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				l.custom_minimum_size = Vector2(110 if j == 0 else 44, 0)
-				if j == 1: l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-				row.add_child(l)
-			_raw_dd_list.add_child(row)
-			rows.append(row)
-	if raws.is_empty():
-		var ls := (rows[0] as HBoxContainer).get_children()
-		(ls[1] as Label).text = "No raw resources yet"
-		(ls[2] as Label).text = ""
-		return
+		for r: Dictionary in raws:
+			var chip := ResourceChip.create(UIIcons.RAW_PLACEHOLDER)
+			chip.icon_color = r["color"]
+			chip.value_width = 44.0
+			var nm: String = r["name"]
+			chip.mouse_entered.connect(func() -> void: TooltipManager.show_tip(nm))
+			chip.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+			_raw_dd_list.add_child(chip)
+			rows.append(chip)
 	for i in raws.size():
 		var r: Dictionary = raws[i]
-		var ls := (rows[i] as HBoxContainer).get_children()
-		var col: Color = r["color"]
-		var ic := ls[0] as TextureRect
-		if ic.texture == null or not ic.has_meta("rid") or ic.get_meta("rid") != r["id"]:
-			ic.texture = MineralIcon.make(1, col)
-			ic.set_meta("rid", r["id"])
-		(ls[1] as Label).text = r["name"]
-		(ls[1] as Label).add_theme_color_override("font_color", col.lerp(Color.WHITE, 0.3))
-		(ls[2] as Label).text = Economy.fmt(Economy.amount(r["id"]))
-		(ls[2] as Label).add_theme_color_override("font_color", _stock_color(r["id"], Color(0.80, 0.84, 0.95)))
+		var chip := rows[i] as ResourceChip
+		chip.icon_color = r["color"]
+		chip.value_text = Economy.fmt(Economy.amount(r["id"]))
+		chip.alert = Economy.is_full(r["id"])
+		chip.inactive = Economy.amount(r["id"]) <= 0.0
 
 ## Closes the raw dropdown on any click outside it (and outside its cell).
 func _input(event: InputEvent) -> void:
