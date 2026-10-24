@@ -2,7 +2,7 @@
 ##   [icon] │ TITLE ................. [badge]
 ##          │ ─────
 ##          │ stats or description      [-][+]
-##          │ ▬▬▬▬▬▬▬▬▬▬▬▬ cycle / construction bar (optional)
+## Cycle / construction progress fills the card's background (ProgressFill).
 ## Layout: scenes/ui/components/ListItem.tscn. Look: theme type ItemPanel
 ## (panel / panel_hover / panel_selected), IconCell, Badge.
 @tool
@@ -35,11 +35,14 @@ signal stepped(delta: int)
 @export var selected: bool = false:
 	set(v): selected = v; _apply_box()
 @export var clickable: bool = true
-## Cycle / construction progress 0..1; below 0 hides the bar.
+## Cycle / construction progress 0..1; below 0 hides the fill.
 @export_range(-1.0, 1.0) var progress: float = -1.0:
 	set(v): progress = v; _sync()
 @export var progress_color: Color = Color(0.137, 0.725, 0.906):
 	set(v): progress_color = v; _sync()
+## Construction look: crawling stripes over the fill.
+@export var progress_striped: bool = false:
+	set(v): progress_striped = v; _sync()
 
 @onready var _icon: TextureRect = $Row/IconCell/Icon
 @onready var _title: Label = $Row/Body/Top/Title
@@ -48,9 +51,7 @@ signal stepped(delta: int)
 @onready var _stats: HBoxContainer = $Row/Body/Bottom/Stats
 @onready var _desc: Label = $Row/Body/Bottom/Description
 @onready var _stepper: Control = $Row/Body/Bottom/Stepper
-@onready var _bar: Control = $Row/Body/Bar
-@onready var _fill: ColorRect = $Row/Body/Bar/Fill
-
+var _fill: ProgressFill = null
 var _hovered := false
 
 static func create(t: String, icon_id: String, badge_text := "", stat_list: PackedStringArray = [], desc := "") -> ListItem:
@@ -63,6 +64,7 @@ static func create(t: String, icon_id: String, badge_text := "", stat_list: Pack
 	return it
 
 func _ready() -> void:
+	_fill = ProgressFill.attach(self, progress_color)
 	_sync()
 	if Engine.is_editor_hint():
 		return
@@ -96,9 +98,9 @@ func _sync() -> void:
 	_desc.text = description
 	_desc.visible = stats.is_empty() and description != ""
 	_stepper.visible = show_stepper
-	_bar.visible = progress >= 0.0
-	_fill.anchor_right = clampf(progress, 0.0, 1.0)
+	_fill.progress = progress
 	_fill.color = progress_color
+	_fill.striped = progress_striped
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if clickable else Control.CURSOR_ARROW
 	_apply_box()
 

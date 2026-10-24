@@ -48,11 +48,6 @@ var _radial_menu: Control = null
 ## Maps building pm_key -> bool indicating if its mineral switcher tray is expanded
 var _open_mineral_switchers: Dictionary = {}
 
-## Live district construction progress bars.
-var _district_pbars: Dictionary = {}
-var _planet_upgrade_pbar: ProgressBar = null
-var _district_upgrade_pbars: Dictionary = {}  # poi_label -> ProgressBar
-
 # ── Tutorial highlight state ──────────────────────────────────────────────────
 var _tut_highlight:      String  = ""     # current highlight target id
 var _tut_highlight_node: Control = null   # specific UI node being pulsed
@@ -4415,30 +4410,6 @@ func _process(delta: float) -> void:
 				else:
 					piv.position = _orbital_layer._planet_center + Vector2(sv.x, sv.y)
 
-	if current_data != null:
-		var pp := GameState.get_planet(current_data.seed)
-		if pp != null and _planet_upgrade_pbar != null and is_instance_valid(_planet_upgrade_pbar):
-			_planet_upgrade_pbar.value = pp.upgrade_progress * 100.0
-		if pp != null:
-			var _stale_dlabels: Array = []
-			for dlabel in _district_upgrade_pbars:
-				var dpbar = _district_upgrade_pbars[dlabel]
-				if not is_instance_valid(dpbar):
-					_stale_dlabels.append(dlabel)
-				else:
-					(dpbar as ProgressBar).value = pp.district_upgrading.get(dlabel, 0.0) * 100.0
-			for dl in _stale_dlabels:
-				_district_upgrade_pbars.erase(dl)
-
-		# display only — ProductionManager advances (and finishes) construction
-		for poi_label in _district_pbars:
-			var pbar: ProgressBar = _district_pbars[poi_label]
-			if is_instance_valid(pbar):
-				for poi: POIData in current_data.custom_pois:
-					if poi.label == poi_label:
-						pbar.value = poi.construct_progress * 100.0
-						break
-
 	# Launch / deploy animations assume an untilted globe — lock the tilt only
 	# while one is really flying, so a launch that never reports back can't
 	# freeze the up/down camera for good.
@@ -5449,19 +5420,6 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 	)
 
 ## Small rounded chip for the planet overview (size, atmosphere, modifiers, deposits).
-## Progress bar in the theme's colours (track = panel, fill = `fill`).
-func _style_progress(bar: ProgressBar, fill: Color) -> void:
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = UIStyle.color(&"panel_bg")
-	bg.border_color = UIStyle.color(&"accent_dim")
-	bg.set_border_width_all(1)
-	bg.set_corner_radius_all(2)
-	var fg := StyleBoxFlat.new()
-	fg.bg_color = Color(fill, 0.85)
-	fg.set_corner_radius_all(2)
-	bar.add_theme_stylebox_override("background", bg)
-	bar.add_theme_stylebox_override("fill", fg)
-
 func _info_chip(text: String, col: Color, tip_title: String, tip_body: String,
 		icon: Texture2D = null) -> PanelContainer:
 	var pc := PanelContainer.new()
@@ -5504,11 +5462,6 @@ func _make_overview_tab_btn(label: String, is_active: bool) -> Button:
 	btn.focus_mode     = Control.FOCUS_NONE
 	UIStyle.style_button(btn, UIStyle.DEFAULT)
 	return btn
-
-func _on_colonize_progress_changed(planet_seed: int, key: String, progress: float, pbar: Variant, bind_seed: int) -> void:
-	if planet_seed == bind_seed and key == "colonize":
-		if is_instance_valid(pbar):
-			(pbar as ProgressBar).value = progress * 100.0
 
 func _build_planet_overview(data: PlanetData) -> void:
 	_orbit_panel_open = false
@@ -5592,28 +5545,19 @@ func _build_planet_overview(data: PlanetData) -> void:
 		planet_page.add_child(HSeparator.new())
 
 		if pp.is_colonizing:
-			var pbar := ProgressBar.new()
-			pbar.custom_minimum_size = Vector2(0, 32)
-			pbar.value = pp.colonize_progress * 100.0
-			pbar.show_percentage = false
-			
-			_style_progress(pbar, UIStyle.color(&"positive_stroke"))
-			
+			var ccard := PanelContainer.new()
+			ccard.theme_type_variation = &"ItemPanel"
+			ccard.custom_minimum_size = Vector2(0, 32)
+			ProgressFill.attach(ccard, UIStyle.color(&"positive_stroke"),
+				func() -> float: return pp.colonize_progress)
+
 			var plabel := Label.new()
 			plabel.text = "Lander in transit..." if data.planet_type == PlanetData.Type.MOON else ("Establishing..." if data.planet_type == PlanetData.Type.ASTEROID else "Colonizing...")
 			plabel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			plabel.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			plabel.set_anchors_preset(Control.PRESET_FULL_RECT)
 			plabel.theme_type_variation = &"TitleLabel"
-			pbar.add_child(plabel)
-			
-			planet_page.add_child(pbar)
-			
-			# Listen for progress updates
-			for conn in ProductionManager.building_progress_changed.get_connections():
-				if conn["callable"].get_object() == self and conn["callable"].get_method() == "_on_colonize_progress_changed":
-					ProductionManager.building_progress_changed.disconnect(conn["callable"])
-			ProductionManager.building_progress_changed.connect(_on_colonize_progress_changed.bind(pbar, data.seed))
+			ccard.add_child(plabel)
+			planet_page.add_child(ccard)
 		elif not GameState.can_play_on(data.seed):
 			# post-demo inspection: other worlds can be looked at, not settled
 			var note := Label.new()
@@ -5749,22 +5693,18 @@ func _build_planet_overview(data: PlanetData) -> void:
 	root.add_child(HSeparator.new())
 
 	if pp.is_upgrading:
+		var up_card := PanelContainer.new()
+		up_card.theme_type_variation = &"ItemPanel"
+		ProgressFill.attach(up_card, UIStyle.color(&"positive_stroke"),
+			func() -> float: return pp.upgrade_progress, true)
 		var up_lbl := Label.new()
 		up_lbl.text = "UPGRADING TO LV %d..." % (pp.level + 1)
 		up_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		up_lbl.theme_type_variation = &"TitleLabel"
 		up_lbl.add_theme_color_override("font_color", UIStyle.color(&"good"))
-		root.add_child(up_lbl)
-
-		_planet_upgrade_pbar = ProgressBar.new()
-		_planet_upgrade_pbar.custom_minimum_size.y = 12
-		_planet_upgrade_pbar.show_percentage = false
-		_planet_upgrade_pbar.value = pp.upgrade_progress * 100.0
-		_style_progress(_planet_upgrade_pbar, UIStyle.color(&"positive_stroke"))
-		root.add_child(_planet_upgrade_pbar)
+		up_card.add_child(up_lbl)
+		root.add_child(up_card)
 	else:
-		_planet_upgrade_pbar = null
-		
 		var up_btn := IconButton.create("UPGRADE PLANET", "upgrade", IconButton.Variant.POSITIVE,
 			"Lv %d → %d" % [pp.level, pp.level + 1])
 		up_btn.mouse_entered.connect(func():
@@ -6406,17 +6346,6 @@ func _on_resource_produced(planet_seed: int, poi_label: String, text: String, co
 		_refresh_district_energy_lbl()
 
 func _on_production_update(_planet_seed: int, key: String, progress: float) -> void:
-	if _district_pbars.has(key):
-		var pbar: ProgressBar = _district_pbars[key]
-		if is_instance_valid(pbar):
-
-			pbar.value = progress * 100.0
-		else:
-			print("[UI Debug] pbar is invalid for ", key)
-	else:
-		if " " in key: # naive check for district names to see if we missed it
-			pass
-
 	if not _bar_meta.has(key):
 		return
 	var m: Dictionary = _bar_meta[key]
@@ -7410,12 +7339,13 @@ func _card_panel_style() -> StyleBoxFlat:
 ## count = number of this building type in this POI (for ×N badge)
 ## poi/planet/pp needed for "+" stacking button
 func _build_construction_bar(def: BuildingDef, pm_key: String) -> PanelContainer:
-	# ListItem look (scenes/ui/components/ListItem.tscn); the bar is the build progress
+	# ListItem look (scenes/ui/components/ListItem.tscn); its background fill is the build progress
 	var card := ListItem.create(def.display_name.to_upper(), _building_icon(def), "", [], "Constructing...  0%")
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.clickable = false
 	card.icon_color = UIStyle.color(&"neutral_stroke")
 	card.progress_color = UIStyle.color(&"neutral_stroke")
+	card.progress_striped = true
 	card.progress = ProductionManager.get_construct_progress(pm_key)
 	_bar_meta[pm_key] = {"item": card, "construction": true}
 	return card
@@ -7679,7 +7609,8 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 		btn.label_text = "UPGRADING…"
 		btn.counter = "Lv %d → %d" % [lv, lv + 1]
 		btn.disabled = true
-		btn.add_child(_hazard_fill(func() -> float: return float(pp.district_upgrading.get(poi.label, 1.0))))
+		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),
+			func() -> float: return float(pp.district_upgrading.get(poi.label, 1.0)), true)
 	elif lv >= Balance.cfg.max_district_level:
 		btn.label_text = "MAX LEVEL"
 		btn.counter = "Lv %d" % lv
@@ -7871,12 +7802,7 @@ func _build_spaceport_card(def: BuildingDef, pm_key: String,
 
 	# the Moon lander is built here: show its construction (GDD §20.4)
 	if pp.planet_seed == GameState.home_planet_seed:
-		var prep_bar := ProgressBar.new()
-		prep_bar.show_percentage = false
-		prep_bar.custom_minimum_size = Vector2(0, 6)
-		prep_bar.max_value = 1.0
-		prep_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		left_vbox.add_child(prep_bar)
+		var prep_fill := ProgressFill.attach(card, UIStyle.color(&"neutral_stroke"), Callable(), true)
 		var sp_refresh := func() -> void:
 			if not is_instance_valid(status_lbl):
 				return
@@ -7885,17 +7811,16 @@ func _build_spaceport_card(def: BuildingDef, pm_key: String,
 				"preparing":
 					var left: float = float(ex.get("prep_left", 0.0))
 					status_lbl.text = "Building the Moon lander — %ds" % int(ceil(left))
-					prep_bar.visible = true
-					prep_bar.value = 1.0 - left / GameState.LANDER_PREP_SEC
+					prep_fill.progress = 1.0 - left / GameState.LANDER_PREP_SEC
 				"launching":
 					status_lbl.text = "Lander lifting off"
-					prep_bar.visible = false
+					prep_fill.progress = -1.0
 				"orbiting":
 					status_lbl.text = "Lander circling the planet"
-					prep_bar.visible = false
+					prep_fill.progress = -1.0
 				_:
 					status_lbl.text = "Operational"
-					prep_bar.visible = false
+					prep_fill.progress = -1.0
 		sp_refresh.call()
 		var sp_timer := Timer.new()
 		sp_timer.wait_time = 0.25
@@ -9792,63 +9717,6 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	root.add_child(_build_city_level_row(city, planet, pp))
 	panel_content.add_child(root)
 
-## Construction-style fill (black/yellow hazard stripes, crawling) drawn behind
-## its parent control; `progress` returns 0..1 and is polled while visible.
-func _hazard_fill(progress: Callable) -> Control:
-	var c := Control.new()
-	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	c.show_behind_parent = true
-	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	c.draw.connect(func() -> void: _paint_hazard(c, float(progress.call())))
-	var t := Timer.new()
-	t.wait_time = 0.05
-	t.autostart = true
-	t.timeout.connect(c.queue_redraw)
-	c.add_child(t)
-	return c
-
-## The one look for anything being built or levelled (buildings, districts,
-## Cities): crawling black/yellow stripes filling left → right.
-static func _paint_hazard(c: Control, progress: float) -> void:
-	c.draw_rect(Rect2(Vector2.ZERO, c.size), Color(0.10, 0.09, 0.05, 0.9))
-	var w := c.size.x * clampf(progress, 0.0, 1.0)
-	const STRIPE := 8.0
-	var shift := fmod(float(Time.get_ticks_msec()) / 40.0, STRIPE * 2.0)
-	var y := 0.0
-	while y < c.size.y:   # diagonal stripes, built row by row from rects
-		var x := -STRIPE * 2.0 + fmod(shift + y, STRIPE * 2.0)
-		while x < w:
-			var x0 := maxf(x, 0.0)
-			var x1 := minf(x + STRIPE, w)
-			if x1 > x0:
-				c.draw_rect(Rect2(x0, y, x1 - x0, 2.0), Color(1.0, 0.82, 0.15, 0.32))
-			x += STRIPE * 2.0
-		y += 2.0
-	if w > 1.0:
-		c.draw_rect(Rect2(w - 2.0, 0, 2.0, c.size.y), Color(1.0, 0.82, 0.15, 0.7))
-
-## The one look for anything producing on a cycle (buildings, districts,
-## Cities): the card fills in its resource's colour, bright leading edge.
-static func _paint_cycle(c: Control, progress: float, col: Color) -> void:
-	var w := c.size.x * clampf(progress, 0.0, 1.0)
-	if w > 0.5:
-		c.draw_rect(Rect2(0, 0, w, c.size.y), Color(col.r, col.g, col.b, 0.20))
-		c.draw_rect(Rect2(w - 2.0, 0, 2.0, c.size.y), Color(col.r, col.g, col.b, 0.55))
-
-## Card-sized production fill behind a card's content (see _paint_cycle).
-func _cycle_fill(progress: Callable, col: Color) -> Control:
-	var c := Control.new()
-	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	c.show_behind_parent = true
-	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	c.draw.connect(func() -> void: _paint_cycle(c, float(progress.call()), col))
-	var t := Timer.new()
-	t.wait_time = 0.1
-	t.autostart = true
-	t.timeout.connect(c.queue_redraw)
-	c.add_child(t)
-	return c
-
 ## "CITY LEVEL UP" — needs enough district levels in the City; costs credits +
 ## population; each level lets the City hold more districts.
 func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress) -> Button:
@@ -9864,7 +9732,8 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 	if upgrading:
 		btn.label_text = "LEVELLING UP…"
 		btn.counter = "Lv %d → %d" % [lv, next]
-		btn.add_child(_hazard_fill(func() -> float: return float(pp.city_upgrading.get(city.label, 1.0))))
+		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),
+			func() -> float: return float(pp.city_upgrading.get(city.label, 1.0)), true)
 	_live_enable(btn, func() -> bool:
 		return Leveling.city_level_block(planet, pp, city) == "" and GameState.credits >= credits)
 	var tip := "Raise %s to Lv %d:\n%s\n\nCost  %s\n%s" % [city.shown_name(), next,
