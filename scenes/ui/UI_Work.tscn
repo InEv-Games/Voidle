@@ -10,6 +10,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/components/InfoRow.tscn" id="8_info"]
 [ext_resource type="PackedScene" path="res://scenes/ui/components/TooltipCard.tscn" id="9_tip"]
 [ext_resource type="PackedScene" path="res://scenes/ui/components/PopupCard.tscn" id="10_popup"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/ResourceChip.tscn" id="11_chip"]
 [ext_resource type="Texture2D" uid="uid://cdtbquk0vqqx7" path="res://resources/ui/icons/experiment.svg" id="12_ofvqd"]
 [ext_resource type="Texture2D" uid="uid://cn7gtl3d5v4gw" path="res://resources/ui/icons/dangerous.svg" id="14_d7cf6"]
 [ext_resource type="Texture2D" uid="uid://dbv1pigrg58ke" path="res://resources/ui/icons/keyboard_double_arrow_up.svg" id="15_sacjx"]
@@ -1224,6 +1225,189 @@ theme_type_variation = &"ButtonPositive"
 label_text = "CONTINUE"
 
 [node name="Rule" type="HSeparator" parent="Scroll/Content/P02_TooltipPopup" unique_id=992363481]
+layout_mode = 2
+
+[node name="P03_ResourceBar" type="VBoxContainer" parent="Scroll/Content"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Scroll/Content/P03_ResourceBar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.137, 0.725, 0.906, 1)
+theme_override_fonts/font = ExtResource("1_orb")
+theme_override_font_sizes/font_size = 13
+text = "HUD · KAYNAK BARI (Resource Panels)"
+
+[node name="Note" type="Label" parent="Scroll/Content/P03_ResourceBar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.62, 0.78, 1)
+theme_override_font_sizes/font_size = 9
+text = "Normal · Hover (cyan çerçeve) · Inactive (stok ve gelir yok: soluk). Kırmızı değer = alert (stok dolu, enerji açığı, kalabalık). Raw'a tıklayınca alt liste açılır."
+
+[node name="Row" type="VBoxContainer" parent="Scroll/Content/P03_ResourceBar"]
+layout_mode = 2
+theme = ExtResource("2_theme")
+theme_override_constants/separation = 12
+
+[node name="Bar" type="PanelContainer" parent="Scroll/Content/P03_ResourceBar/Row"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_type_variation = &"ResourceBar"
+
+[node name="Chips" type="HBoxContainer" parent="Scroll/Content/P03_ResourceBar/Row/Bar"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Credits" parent="Scroll/Content/P03_ResourceBar/Row/Bar/Chips" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "credits"
+value_text = "1.1k cr"
+rate_text = "+1.5"
+rate_tone = 1
+value_width = 62
+
+[node name="Science" parent="Scroll/Content/P03_ResourceBar/Row/Bar/Chips" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "science"
+value_text = "41"
+rate_text = "+0.7"
+rate_tone = 1
+value_width = 38
+
+[node name="Energy" parent="Scroll/Content/P03_ResourceBar/Row/Bar/Chips" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "energy"
+value_text = "−3"
+alert = true
+value_width = 36
+
+[node name="Population" parent="Scroll/Content/P03_ResourceBar/Row/Bar/Chips" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "population"
+value_text = "14K/18K"
+value_width = 68
+
+[node name="Raw" parent="Scroll/Content/P03_ResourceBar/Row/Bar/Chips" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "raw"
+value_text = "120 ▾"
+rate_text = "+2"
+rate_tone = 1
+value_width = 46
+
+[node name="Goods" parent="Scroll/Content/P03_ResourceBar/Row/Bar/Chips" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "goods"
+value_text = "200"
+rate_text = "−0.5"
+rate_tone = 2
+alert = true
+value_width = 32
+
+[node name="Fuel" parent="Scroll/Content/P03_ResourceBar/Row/Bar/Chips" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "fuel"
+value_text = "0"
+inactive = true
+value_width = 32
+
+[node name="Rare" parent="Scroll/Content/P03_ResourceBar/Row/Bar/Chips" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "rare_elements"
+value_text = "0"
+inactive = true
+value_width = 32
+
+[node name="States" type="HBoxContainer" parent="Scroll/Content/P03_ResourceBar/Row"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Normal" type="VBoxContainer" parent="Scroll/Content/P03_ResourceBar/Row/States"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Caption" type="Label" parent="Scroll/Content/P03_ResourceBar/Row/States/Normal"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "Normal"
+
+[node name="Chip" parent="Scroll/Content/P03_ResourceBar/Row/States/Normal" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "credits"
+value_text = "50.000"
+
+[node name="Hover" type="VBoxContainer" parent="Scroll/Content/P03_ResourceBar/Row/States"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Caption" type="Label" parent="Scroll/Content/P03_ResourceBar/Row/States/Hover"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "Hover"
+
+[node name="Chip" parent="Scroll/Content/P03_ResourceBar/Row/States/Hover" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "credits"
+value_text = "50.000"
+preview_hover = true
+
+[node name="Inactive" type="VBoxContainer" parent="Scroll/Content/P03_ResourceBar/Row/States"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Caption" type="Label" parent="Scroll/Content/P03_ResourceBar/Row/States/Inactive"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "Inactive"
+
+[node name="Chip" parent="Scroll/Content/P03_ResourceBar/Row/States/Inactive" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "credits"
+value_text = "50.000"
+inactive = true
+
+[node name="RawDropdown" type="VBoxContainer" parent="Scroll/Content/P03_ResourceBar/Row/States"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Caption" type="Label" parent="Scroll/Content/P03_ResourceBar/Row/States/RawDropdown"]
+layout_mode = 2
+theme_type_variation = &"SubLabel"
+text = "Raw ▾ alt listesi"
+
+[node name="Panel" type="PanelContainer" parent="Scroll/Content/P03_ResourceBar/Row/States/RawDropdown"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_type_variation = &"TooltipPanel"
+
+[node name="List" type="VBoxContainer" parent="Scroll/Content/P03_ResourceBar/Row/States/RawDropdown/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Ferrite" parent="Scroll/Content/P03_ResourceBar/Row/States/RawDropdown/Panel/List" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "add_triangle"
+value_text = "500"
+value_width = 40
+icon_color = Color(0.66, 0.58, 0.52, 1)
+
+[node name="Aurorium" parent="Scroll/Content/P03_ResourceBar/Row/States/RawDropdown/Panel/List" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "add_triangle"
+value_text = "500"
+alert = true
+value_width = 40
+icon_color = Color(0.4, 1, 0.6, 1)
+
+[node name="Moonstone" parent="Scroll/Content/P03_ResourceBar/Row/States/RawDropdown/Panel/List" instance=ExtResource("11_chip")]
+layout_mode = 2
+resource_id = "add_triangle"
+value_text = "0"
+inactive = true
+value_width = 40
+icon_color = Color(0.8, 0.84, 0.95, 1)
+
+[node name="Rule" type="HSeparator" parent="Scroll/Content/P03_ResourceBar"]
 layout_mode = 2
 
 [node name="S00_System" type="VBoxContainer" parent="Scroll/Content" unique_id=652723224]

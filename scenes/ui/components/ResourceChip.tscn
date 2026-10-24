@@ -1,0 +1,39 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/components/ResourceChip.gd" id="1_script"]
+
+[node name="ResourceChip" type="PanelContainer"]
+offset_right = 80.0
+offset_bottom = 22.0
+size_flags_vertical = 4
+mouse_default_cursor_shape = 2
+theme_type_variation = &"ResourceChip"
+script = ExtResource("1_script")
+
+[node name="Row" type="HBoxContainer" parent="."]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="Icon" type="TextureRect" parent="Row"]
+custom_minimum_size = Vector2(13, 13)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+texture_filter = 3
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Value" type="Label" parent="Row"]
+layout_mode = 2
+theme_type_variation = &"ValueLabel"
+text = "50.000"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="Rate" type="Label" parent="Row"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 0
+theme_type_variation = &"StatLabel"
+text = "+0"
