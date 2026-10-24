@@ -503,9 +503,6 @@ func _update_panel() -> void:
 	_panel_content.add_child(survey_wrap)
 
 	var sep := HSeparator.new()
-	var sep_s := StyleBoxFlat.new()
-	sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
-	sep.add_theme_stylebox_override("separator", sep_s)
 	survey_wrap.add_child(sep)
 
 	# Survey button styled like Level Up (always green)
@@ -534,9 +531,6 @@ func _build_scan_asteroid_section() -> void:
 	_panel_content.add_child(_scan_wrap)
 
 	var sep := HSeparator.new()
-	var sep_s := StyleBoxFlat.new()
-	sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
-	sep.add_theme_stylebox_override("separator", sep_s)
 	_scan_wrap.add_child(sep)
 
 	# Show scan status per belt

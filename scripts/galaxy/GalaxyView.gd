@@ -98,15 +98,6 @@ func _ready() -> void:
 
 func _build_right_panel() -> void:
 	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color    = Color(0.04, 0.05, 0.10, 0.92)
-	ps.border_color = Color(0.20, 0.28, 0.50, 0.45)
-	ps.border_width_left = 1
-	ps.content_margin_left   = 16
-	ps.content_margin_right  = 16
-	ps.content_margin_top    = 14
-	ps.content_margin_bottom = 14
-	panel.add_theme_stylebox_override("panel", ps)
 	panel.anchor_left   = 0.70
 	panel.anchor_right  = 1.0
 	panel.anchor_top    = 0.0
@@ -186,8 +177,6 @@ func _make_lbl(text: String, size: int, col: Color) -> Label:
 
 func _add_sep(vbox: VBoxContainer, col: Color) -> void:
 	var sep := HSeparator.new()
-	var ss := StyleBoxFlat.new(); ss.bg_color = col
-	sep.add_theme_stylebox_override("separator", ss)
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(sep)
 

@@ -1206,10 +1206,7 @@ func _build_quest_ui() -> void:
 	skip_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	hdr.add_child(skip_btn)
 
-	var sep_sty := StyleBoxFlat.new()
-	sep_sty.bg_color = Color(0.25, 0.32, 0.55, 0.35)
-	sep_sty.content_margin_top = 1
-	var sep1 := _hsep(sep_sty)
+	var sep1 := _hsep()
 	rv.add_child(sep1)
 	_quest_body.append(sep1)
 
@@ -1231,7 +1228,7 @@ func _build_quest_ui() -> void:
 	_reward_lbl.add_theme_font_size_override("font_size", 9)
 	_reward_lbl.add_theme_color_override("font_color", Color(0.38, 0.88, 0.55))
 	rv.add_child(_reward_lbl)
-	var sep2 := _hsep(sep_sty)
+	var sep2 := _hsep()
 	rv.add_child(sep2)
 	_quest_body.append_array([_title_lbl, _desc_lbl, _reward_lbl, sep2])
 
@@ -1564,12 +1561,11 @@ func _tw_label(lbl: Label, text: String, spd: float) -> void:
 		lbl.text = text
 
 # ── Style helpers ─────────────────────────────────────────────────────────────
-func _panel_style(bg: Color, border: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = bg; s.border_color = border
-	s.set_border_width_all(1); s.set_corner_radius_all(7)
-	s.content_margin_left = 22; s.content_margin_right  = 22
-	s.content_margin_top  = 18; s.content_margin_bottom = 16
+## Tutorial panels use the theme's PopupCard look; `bg` keeps only its alpha,
+## `border` is ignored — edit the look in voidle_theme.tres.
+func _panel_style(bg: Color, _border: Color) -> StyleBoxFlat:
+	var s := UIStyle.box(&"PopupCard").duplicate() as StyleBoxFlat
+	s.bg_color = Color(s.bg_color, bg.a)
 	return s
 
 func _mk_lbl(parent: Node, txt: String, sz: int, col: Color) -> Label:
@@ -1587,7 +1583,6 @@ func _mk_btn(txt: String, col: Color) -> Button:
 	UIStyle.style_button(b, UIStyle.FLAT)
 	return b
 
-func _hsep(sty: StyleBoxFlat) -> HSeparator:
-	var s := HSeparator.new()
-	s.add_theme_stylebox_override("separator", sty)
-	return s
+## Separator in the theme's look (HSeparator in voidle_theme.tres).
+func _hsep() -> HSeparator:
+	return HSeparator.new()

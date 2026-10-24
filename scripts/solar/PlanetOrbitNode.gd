@@ -264,35 +264,13 @@ func _build_badge(lv: int) -> void:
 	if _badge and is_instance_valid(_badge):
 		_badge.queue_free()
 
-	var style := StyleBoxFlat.new()
-	style.bg_color              = Color(0.05, 0.06, 0.14, 0.95)
-	style.border_width_left     = 1
-	style.border_width_right    = 1
-	style.border_width_top      = 1
-	style.border_width_bottom   = 1
-	style.border_color          = Color(0.9, 0.70, 0.15, 0.95)
-	style.corner_radius_top_left     = 3
-	style.corner_radius_top_right    = 3
-	style.corner_radius_bottom_left  = 3
-	style.corner_radius_bottom_right = 3
-	style.content_margin_left   = 5.0
-	style.content_margin_right  = 5.0
-	style.content_margin_top    = 2.0
-	style.content_margin_bottom = 2.0
-	style.shadow_color          = Color(0, 0, 0, 0.6)
-	style.shadow_size           = 2
-
+	# Badge / BadgeLabel from voidle_theme.tres
 	_badge_label = Label.new()
-	_badge_label.text = str(lv)
-	if _orbitron:
-		_badge_label.add_theme_font_override("font", _orbitron)
-	_badge_label.add_theme_font_size_override("font_size", 10)
-	_badge_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
-	_badge_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-	_badge_label.add_theme_constant_override("outline_size", 3)
+	_badge_label.text = "Lv %d" % lv
+	_badge_label.theme_type_variation = &"BadgeLabel"
 
 	_badge = PanelContainer.new()
-	_badge.add_theme_stylebox_override("panel", style)
+	_badge.theme_type_variation = &"Badge"
 	_badge.z_as_relative = false
 	_badge.z_index       = 150   # above planet, rings, everything
 	_badge.add_child(_badge_label)

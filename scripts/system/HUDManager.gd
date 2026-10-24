@@ -543,19 +543,7 @@ func _on_achievement_unlocked(def) -> void:
 	get_tree().root.add_child(overlay)
 
 	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.06, 0.05, 0.02, 0.96)
-	ps.border_color = Color(0.95, 0.78, 0.15, 0.9)
-	ps.set_border_width_all(2)
-	ps.corner_radius_top_left     = 8
-	ps.corner_radius_top_right    = 8
-	ps.corner_radius_bottom_left  = 8
-	ps.corner_radius_bottom_right = 8
-	ps.content_margin_left   = 16
-	ps.content_margin_right  = 16
-	ps.content_margin_top    = 10
-	ps.content_margin_bottom = 10
-	panel.add_theme_stylebox_override("panel", ps)
+	panel.theme_type_variation = &"TooltipPanel"
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var hbox := HBoxContainer.new()

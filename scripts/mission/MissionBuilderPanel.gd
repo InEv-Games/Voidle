@@ -51,16 +51,7 @@ static func open(parent: Control, context: Dictionary, on_confirm: Callable) -> 
 	# Main panel card
 	var card          := PanelContainer.new()
 	card.custom_minimum_size = Vector2(380, 0)
-	var card_style    := StyleBoxFlat.new()
-	card_style.bg_color     = Color(0.05, 0.07, 0.14, 0.97)
-	card_style.border_color = Color(0.25, 0.45, 0.80, 0.55)
-	card_style.set_border_width_all(1)
-	card_style.set_corner_radius_all(6)
-	card_style.content_margin_left   = 14
-	card_style.content_margin_right  = 14
-	card_style.content_margin_top    = 12
-	card_style.content_margin_bottom = 12
-	card.add_theme_stylebox_override("panel", card_style)
+	card.theme_type_variation = &"PopupCard"
 	center.add_child(card)
 
 	var vbox := VBoxContainer.new()
@@ -578,25 +569,15 @@ func _build_chain_arrow() -> Control:
 	return lbl
 
 
-func _card_style(border_color: Color) -> StyleBoxFlat:
-	var cs := StyleBoxFlat.new()
-	cs.bg_color     = Color(0.07, 0.10, 0.20, 0.88)
-	cs.border_color = border_color
-	cs.set_border_width_all(1)
-	cs.set_corner_radius_all(5)
-	cs.content_margin_left   = 10
-	cs.content_margin_right  = 8
-	cs.content_margin_top    = 8
-	cs.content_margin_bottom = 8
-	return cs
+## Task card look from the theme (ItemPanel); the old border colour is ignored.
+func _card_style(_border_color: Color) -> StyleBoxFlat:
+	return UIStyle.box(&"ItemPanel").duplicate() as StyleBoxFlat
 
 
 func _make_x_btn(on_press: Callable) -> Button:
 	var btn := Button.new()
 	btn.text = "×"
 	_font_apply(btn, 9)
-	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0, 0, 0, 0); s.set_border_width_all(0)
 	btn.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
@@ -627,14 +608,7 @@ func _show_add_dropdown(anchor: Control) -> void:
 		return
 
 	var popup := PanelContainer.new()
-	var ps    := StyleBoxFlat.new()
-	ps.bg_color     = Color(0.06, 0.09, 0.18, 0.97)
-	ps.border_color = Color(0.25, 0.45, 0.80, 0.55)
-	ps.set_border_width_all(1)
-	ps.set_corner_radius_all(5)
-	ps.content_margin_left = 6; ps.content_margin_right = 6
-	ps.content_margin_top  = 6; ps.content_margin_bottom = 6
-	popup.add_theme_stylebox_override("panel", ps)
+	popup.theme_type_variation = &"TooltipPanel"
 	popup.z_index = 210
 
 	var pvbox := VBoxContainer.new()
@@ -645,15 +619,6 @@ func _show_add_dropdown(anchor: Control) -> void:
 		var cap_def: MissionTaskDef = def
 		var item_btn := Button.new()
 		item_btn.text = cap_def.display_name
-		_font_apply(item_btn, 7)
-		var ibs := StyleBoxFlat.new()
-		ibs.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
-		ibs.border_color = Color(0.0, 0.0, 0.0, 0.0)
-		ibs.set_border_width_all(0)
-		ibs.content_margin_left = 6; ibs.content_margin_right = 6
-		ibs.content_margin_top  = 3; ibs.content_margin_bottom = 3
-		var ibs_h := ibs.duplicate()
-		(ibs_h as StyleBoxFlat).bg_color = Color(0.12, 0.22, 0.45, 0.80)
 		item_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		item_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		item_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
@@ -704,17 +669,11 @@ func _refresh_cost() -> void:
 	if _cost_lbl != null and is_instance_valid(_cost_lbl):
 		_cost_lbl.text = "%.0f cr" % total
 		_cost_lbl.add_theme_color_override("font_color",
-			Color(0.90, 0.75, 0.20) if valid else Color(0.65, 0.40, 0.40))
+			UIStyle.color(&"neutral_stroke") if valid else UIStyle.color(&"bad"))
 
 	if _confirm_btn != null and is_instance_valid(_confirm_btn):
 		_confirm_btn.disabled = not valid
-		var fbs_col := Color(0.07, 0.28, 0.16, 0.92) if valid else Color(0.18, 0.12, 0.12, 0.85)
-		var fbs_brd := Color(0.22, 0.78, 0.42, 0.75) if valid else Color(0.48, 0.28, 0.28, 0.55)
-		var fbs     := _btn_style(fbs_col, fbs_brd)
-		_confirm_btn.add_theme_stylebox_override("normal", fbs)
-		_confirm_btn.add_theme_stylebox_override("hover",  fbs)
-		_confirm_btn.add_theme_color_override("font_color",
-			Color(0.35, 0.95, 0.58) if valid else Color(0.55, 0.40, 0.40))
+		# Positive button; its disabled look shows when the mission isn't valid
 
 
 func _on_confirm_pressed() -> void:
@@ -737,11 +696,6 @@ func _close() -> void:
 
 func _add_sep() -> void:
 	var sep := HSeparator.new()
-	var ss  := StyleBoxFlat.new()
-	ss.bg_color = Color(0.22, 0.38, 0.65, 0.25)
-	ss.content_margin_top    = 0
-	ss.content_margin_bottom = 0
-	sep.add_theme_stylebox_override("separator", ss)
 	_vbox.add_child(sep)
 
 
@@ -752,14 +706,6 @@ func _font_apply(node: CanvasItem, size: int) -> void:
 
 
 func _style_lineedit(le: LineEdit) -> void:
-	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.07, 0.09, 0.18, 0.90)
-	s.border_color = Color(0.22, 0.42, 0.75, 0.55)
-	s.set_border_width_all(1); s.set_corner_radius_all(3)
-	s.content_margin_left = 5; s.content_margin_right = 5
-	s.content_margin_top  = 3; s.content_margin_bottom = 3
-	le.add_theme_stylebox_override("normal", s)
-	le.add_theme_stylebox_override("focus",  s)
 	_font_apply(le, 8)
 	le.add_theme_color_override("font_color", Color(0.90, 0.92, 1.0))
 
@@ -778,19 +724,6 @@ func _make_btn(text_val: String, _bg: Color, border: Color, _font_color: Color) 
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	return btn
-
-
-func _btn_style(bg: Color, border: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color     = bg
-	s.border_color = border
-	s.set_border_width_all(1)
-	s.set_corner_radius_all(4)
-	s.content_margin_left   = 10
-	s.content_margin_right  = 10
-	s.content_margin_top    = 4
-	s.content_margin_bottom = 4
-	return s
 
 
 func _parse_repeat(text: String) -> float:

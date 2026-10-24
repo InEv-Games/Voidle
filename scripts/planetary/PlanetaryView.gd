@@ -3337,6 +3337,13 @@ func _details_row(parent: VBoxContainer, label: String, value: String,
 	parent.add_child(hbox)
 	return hbox
 
+## ItemPanel look with the rarity colour as its edge (mineral cells and cards).
+func _rarity_card_style(rarity_col: Color) -> StyleBoxFlat:
+	var s := UIStyle.box(&"ItemPanel").duplicate() as StyleBoxFlat
+	s.border_color = rarity_col
+	s.set_border_width_all(1)
+	return s
+
 ## Vivid rarity-based border color (hue = rarity, always max sat/brightness).
 func _rarity_border_color(rarity: int) -> Color:
 	var r: float = clampf(float(rarity - 1) / 14.0, 0.0, 1.0)
@@ -3366,18 +3373,7 @@ func _mineral_icon_cell(rd: ResourceData, show_count: bool, stored: float = 0.0)
 	var rarity_col := _rarity_border_color(rd.rarity)
 
 	var cell := PanelContainer.new()
-	var s    := StyleBoxFlat.new()
-	s.bg_color            = Color(0.07, 0.08, 0.13, 0.92)
-	s.border_color        = rarity_col
-	s.border_width_left   = 3
-	s.border_width_right  = 1
-	s.border_width_top    = 1
-	s.border_width_bottom = 1
-	s.corner_radius_top_left     = 4; s.corner_radius_top_right    = 4
-	s.corner_radius_bottom_left  = 4; s.corner_radius_bottom_right = 4
-	s.content_margin_left   = 5; s.content_margin_right  = 6
-	s.content_margin_top    = 4; s.content_margin_bottom = 4
-	cell.add_theme_stylebox_override("panel", s)
+	cell.add_theme_stylebox_override("panel", _rarity_card_style(rarity_col))
 	cell.mouse_filter = Control.MOUSE_FILTER_STOP
 	if show_count:
 		cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -3424,17 +3420,7 @@ func _mineral_grid_card(rd: ResourceData, stored: float, show_count: bool, sub_l
 	var rarity_col := _rarity_border_color(rd.rarity)
 
 	var card := PanelContainer.new()
-	var s    := StyleBoxFlat.new()
-	s.bg_color            = Color(0.07, 0.08, 0.13, 0.92)
-	s.border_color        = rarity_col
-	s.border_width_left   = 2
-	s.border_width_right  = 2
-	s.border_width_top    = 2
-	s.border_width_bottom = 2
-	s.corner_radius_top_left     = 5; s.corner_radius_top_right    = 5
-	s.corner_radius_bottom_left  = 5; s.corner_radius_bottom_right = 5
-	s.content_margin_left   = 6; s.content_margin_right  = 6
-	s.content_margin_top    = 6; s.content_margin_bottom = 5
+	var s := _rarity_card_style(rarity_col)   # its edge lights up on hover
 	card.add_theme_stylebox_override("panel", s)
 	card.custom_minimum_size = Vector2(44, 44) if not show_count else Vector2(52, 0)
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -3494,7 +3480,7 @@ func _mineral_grid_card(rd: ResourceData, stored: float, show_count: bool, sub_l
 		card.pivot_offset = card.size * 0.5
 		var tw := card.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_property(card, "scale", Vector2(1.10, 1.10), 0.12)
-		s.border_color = Color(1.0, 0.90, 0.25))
+		s.border_color = UIStyle.color(&"neutral_stroke"))
 	card.mouse_exited.connect(func() -> void:
 		card.z_index = 0
 		card.pivot_offset = card.size * 0.5
@@ -3558,11 +3544,6 @@ func _details_section(parent: VBoxContainer, title: String) -> void:
 	lbl.add_theme_color_override("font_color", Color(0.4, 0.45, 0.65))
 	parent.add_child(lbl)
 	var sep := HSeparator.new()
-	var sep_style := StyleBoxFlat.new()
-	sep_style.bg_color = Color(0.2, 0.25, 0.4, 0.4)
-	sep_style.content_margin_top    = 0
-	sep_style.content_margin_bottom = 0
-	sep.add_theme_stylebox_override("separator", sep_style)
 	parent.add_child(sep)
 
 func _fill_uncolonized_details(vbox: VBoxContainer, data: PlanetData) -> void:
@@ -3899,14 +3880,7 @@ func _show_ship_panel(ship: ShipData, layer: OrbitalLayer) -> void:
 	var planet_cont: Control = planet_renderer.get_parent()
 
 	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color     = Color(0.06, 0.08, 0.14, 0.92)
-	ps.border_color = Color(1.0, 0.92, 0.30, 0.70)
-	ps.set_border_width_all(1)
-	ps.set_corner_radius_all(5)
-	ps.content_margin_left = 14; ps.content_margin_right  = 14
-	ps.content_margin_top  = 10; ps.content_margin_bottom = 10
-	panel.add_theme_stylebox_override("panel", ps)
+	panel.theme_type_variation = &"TooltipPanel"
 	panel.z_index = 10
 	panel.custom_minimum_size = Vector2(180, 0)
 
@@ -3997,13 +3971,7 @@ func _show_launch_info_panel(anim_d: Dictionary, container: Control) -> void:
 	_close_ship_panel()
 
 	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color     = Color(0.06, 0.08, 0.14, 0.92)
-	ps.border_color = Color(1.0, 0.92, 0.30, 0.70)
-	ps.set_border_width_all(1); ps.set_corner_radius_all(5)
-	ps.content_margin_left = 14; ps.content_margin_right  = 14
-	ps.content_margin_top  = 10; ps.content_margin_bottom = 10
-	panel.add_theme_stylebox_override("panel", ps)
+	panel.theme_type_variation = &"TooltipPanel"
 	panel.z_index = 10
 	panel.custom_minimum_size = Vector2(180, 0)
 
@@ -5720,14 +5688,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 ## Compact card for a ship in the Orbital tab.
 func _build_orbital_ship_card(ship: ShipData) -> PanelContainer:
 	var card := PanelContainer.new()
-	var s := StyleBoxFlat.new()
-	s.bg_color     = Color(0.07, 0.10, 0.18, 0.85)
-	s.border_color = Color(0.35, 0.42, 0.70, 0.40)
-	s.set_border_width_all(1)
-	s.set_corner_radius_all(4)
-	s.content_margin_left = 10; s.content_margin_right  = 10
-	s.content_margin_top  =  7; s.content_margin_bottom =  7
-	card.add_theme_stylebox_override("panel", s)
+	card.theme_type_variation = &"ItemPanel"
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 
@@ -5787,9 +5748,6 @@ func _build_orbital_ship_card(ship: ShipData) -> PanelContainer:
 
 func _build_resources_section(parent: VBoxContainer, data: PlanetData, pp: PlanetProgress) -> void:
 	var sep := HSeparator.new()
-	var sep_s := StyleBoxFlat.new()
-	sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
-	sep.add_theme_stylebox_override("separator", sep_s)
 	parent.add_child(sep)
 
 	var title := Label.new()
@@ -5833,12 +5791,7 @@ func _station_tile() -> PanelContainer:
 	tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tile.custom_minimum_size = Vector2(40, 40)
 	tile.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.12, 0.11, 0.24, 0.95)
-	sb.border_color = Color(0.60, 0.55, 1.0, 0.8)
-	sb.set_border_width_all(1)
-	sb.set_corner_radius_all(4)
-	tile.add_theme_stylebox_override("panel", sb)
+	tile.theme_type_variation = &"IconCell"
 	var l := Label.new()
 	l.text = "◈"
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -5856,12 +5809,7 @@ func _level_badge(lv: int, is_city: bool) -> PanelContainer:
 	tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tile.custom_minimum_size = Vector2(40, 40)
 	tile.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(col.r * 0.22, col.g * 0.22, col.b * 0.22, 0.95)
-	sb.border_color = Color(1.0, 0.85, 0.35) if is_city else col
-	sb.set_border_width_all(2 if is_city else 1)
-	sb.set_corner_radius_all(4)
-	tile.add_theme_stylebox_override("panel", sb)
+	tile.theme_type_variation = &"Badge"
 	var v := VBoxContainer.new()
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_theme_constant_override("separation", -2)
@@ -7270,19 +7218,7 @@ func _show_construction_toast(building_name: String, district_label: String) -> 
 	# ── Outer panel ─────────────────────────────────────────────────────────
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ps := StyleBoxFlat.new()
-	ps.bg_color     = Color(0.07, 0.10, 0.15, 0.90)
-	ps.border_color = Color(0.28, 0.78, 0.48, 0.55)
-	ps.set_border_width_all(1)
-	ps.corner_radius_top_left     = 6
-	ps.corner_radius_top_right    = 6
-	ps.corner_radius_bottom_left  = 6
-	ps.corner_radius_bottom_right = 6
-	ps.content_margin_left   = 10.0
-	ps.content_margin_right  = 12.0
-	ps.content_margin_top    = 7.0
-	ps.content_margin_bottom = 7.0
-	panel.add_theme_stylebox_override("panel", ps)
+	panel.theme_type_variation = &"TooltipPanel"
 
 	# ── Content row ─────────────────────────────────────────────────────────
 	var hbox := HBoxContainer.new()
@@ -7938,9 +7874,6 @@ func _register_mission_tasks() -> void:
 			var cap_i: int = i
 			var del_btn := Button.new()
 			del_btn.text = "×"
-			var dbs := StyleBoxFlat.new()
-			dbs.bg_color = Color(0,0,0,0); dbs.set_border_width_all(0)
-			dbs.content_margin_left = 4; dbs.content_margin_right = 4
 			del_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 			del_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 			del_btn.pressed.connect(func() -> void:
@@ -8148,13 +8081,7 @@ func _show_rdv_add_popup(anchor: Control, rdv_tasks: Array, ship_type: String,
 	if available.is_empty():
 		return
 	var popup := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.06, 0.09, 0.18, 0.97)
-	ps.border_color = Color(0.25, 0.45, 0.80, 0.55)
-	ps.set_border_width_all(1); ps.set_corner_radius_all(5)
-	ps.content_margin_left = 6; ps.content_margin_right = 6
-	ps.content_margin_top = 6; ps.content_margin_bottom = 6
-	popup.add_theme_stylebox_override("panel", ps)
+	popup.theme_type_variation = &"TooltipPanel"
 	popup.z_index = 215
 
 	var pvbox := VBoxContainer.new()
@@ -8167,13 +8094,6 @@ func _show_rdv_add_popup(anchor: Control, rdv_tasks: Array, ship_type: String,
 		var cap_def: MissionTaskDef = def
 		var btn := Button.new()
 		btn.text = cap_def.display_name
-		var ibs := StyleBoxFlat.new()
-		ibs.bg_color = Color(0.0, 0.0, 0.0, 0.0)
-		ibs.set_border_width_all(0)
-		ibs.content_margin_left = 6; ibs.content_margin_right = 6
-		ibs.content_margin_top = 3; ibs.content_margin_bottom = 3
-		var ibs_h := ibs.duplicate()
-		(ibs_h as StyleBoxFlat).bg_color = Color(0.12, 0.22, 0.45, 0.80)
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
@@ -8212,13 +8132,7 @@ func _mission_show_resource_popup(anchor: Control, entry: Dictionary,
 		rdv_pp: PlanetProgress = null, pending_cargo: Dictionary = {},
 		orig_ctx: Dictionary = {}) -> void:
 	var popup := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.06, 0.09, 0.18, 0.97)
-	ps.border_color = Color(0.25, 0.45, 0.80, 0.55)
-	ps.set_border_width_all(1); ps.set_corner_radius_all(5)
-	ps.content_margin_left = 8; ps.content_margin_right = 8
-	ps.content_margin_top = 8; ps.content_margin_bottom = 8
-	popup.add_theme_stylebox_override("panel", ps)
+	popup.theme_type_variation = &"TooltipPanel"
 	popup.z_index = 220
 	popup.custom_minimum_size = Vector2(220, 0)
 
@@ -8517,14 +8431,6 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_edit.add_theme_font_size_override("font_size", 9)
 	name_edit.add_theme_color_override("font_color", Color(0.90, 0.92, 1.0))
-	var le_style := StyleBoxFlat.new()
-	le_style.bg_color = Color(0.07, 0.09, 0.18, 0.90)
-	le_style.border_color = Color(0.22, 0.42, 0.75, 0.55)
-	le_style.set_border_width_all(1); le_style.set_corner_radius_all(3)
-	le_style.content_margin_left = 5; le_style.content_margin_right = 5
-	le_style.content_margin_top = 3; le_style.content_margin_bottom = 3
-	name_edit.add_theme_stylebox_override("normal", le_style)
-	name_edit.add_theme_stylebox_override("focus",  le_style)
 	name_edit.text_changed.connect(func(t: String) -> void: entry["ship_name"] = t)
 	name_row.add_child(name_edit)
 
@@ -8836,11 +8742,7 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 	# Popup panel
 	var panel := PanelContainer.new()
 	panel.z_index = 1
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.06, 0.08, 0.16, 0.97)
-	ps.border_color = Color(0.28, 0.48, 0.80, 0.70)
-	ps.set_border_width_all(1); ps.set_corner_radius_all(6)
-	panel.add_theme_stylebox_override("panel", ps)
+	panel.theme_type_variation = &"PopupCard"
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	# Center in overlay
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -9004,11 +8906,7 @@ func _sp_show_pickup_popup(entry: Dictionary, pp: PlanetProgress, rebuild_sp: Ca
 	overlay.add_child(dim)
 	var panel := PanelContainer.new()
 	panel.z_index = 1
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.06, 0.10, 0.08, 0.97)
-	ps.border_color = Color(0.22, 0.70, 0.38, 0.70)
-	ps.set_border_width_all(1); ps.set_corner_radius_all(6)
-	panel.add_theme_stylebox_override("panel", ps)
+	panel.theme_type_variation = &"PopupCard"
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	panel.custom_minimum_size = Vector2(240, 0)
@@ -9339,19 +9237,7 @@ func _toggle_mineral_dropdown(btn: Control, raw_list: Array, target_key: String,
 
 	var outer := PanelContainer.new()
 	outer.set_meta("trigger_btn", btn)
-	var tray_style := StyleBoxFlat.new()
-	tray_style.bg_color = Color(0.05, 0.07, 0.12, 0.95)
-	tray_style.border_color = Color(0.2, 0.25, 0.4, 0.7)
-	tray_style.set_border_width_all(1)
-	tray_style.corner_radius_top_left = 4
-	tray_style.corner_radius_top_right = 4
-	tray_style.corner_radius_bottom_left = 4
-	tray_style.corner_radius_bottom_right = 4
-	tray_style.content_margin_left = 6
-	tray_style.content_margin_right = 6
-	tray_style.content_margin_top = 4
-	tray_style.content_margin_bottom = 4
-	outer.add_theme_stylebox_override("panel", tray_style)
+	outer.theme_type_variation = &"TooltipPanel"
 
 	var tray_h := HBoxContainer.new()
 	tray_h.add_theme_constant_override("separation", 6)
@@ -9603,8 +9489,6 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	body.move_child(d_hdr, 0)
 
 	var sep := HSeparator.new()
-	var sep_s := StyleBoxFlat.new(); sep_s.bg_color = Color(0.2, 0.25, 0.4, 0.35)
-	sep.add_theme_stylebox_override("separator", sep_s)
 	root.add_child(sep)
 	root.add_child(_build_orbit_level_row(planet, pp))
 	panel_content.add_child(root)
@@ -10085,13 +9969,7 @@ func _show_rendezvous_picker(ship: ShipData, layer: OrbitalLayer) -> void:
 	planet_renderer.get_parent().add_child(overlay)
 
 	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.05, 0.08, 0.16, 0.96)
-	ps.border_color = Color(0.28, 0.55, 1.0, 0.60)
-	ps.set_border_width_all(1); ps.set_corner_radius_all(8)
-	ps.content_margin_left = 16; ps.content_margin_right = 16
-	ps.content_margin_top = 14; ps.content_margin_bottom = 14
-	panel.add_theme_stylebox_override("panel", ps)
+	panel.theme_type_variation = &"PopupCard"
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	overlay.add_child(panel)
 
@@ -10138,13 +10016,7 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 	var cont: Control = planet_renderer.get_parent()
 
 	var panel := PanelContainer.new()
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.04, 0.07, 0.14, 0.96)
-	ps.border_color = Color(0.30, 0.82, 1.0, 0.65)
-	ps.set_border_width_all(1); ps.set_corner_radius_all(8)
-	ps.content_margin_left = 14; ps.content_margin_right = 14
-	ps.content_margin_top = 12; ps.content_margin_bottom = 12
-	panel.add_theme_stylebox_override("panel", ps)
+	panel.theme_type_variation = &"PopupCard"
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	cont.add_child(panel)
