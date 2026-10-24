@@ -14,6 +14,9 @@ const SOLAR_SCENE  := "res://scenes/solar/SolarView.tscn"
 const PLANET_SCENE := "res://scenes/planetary/PlanetaryView.tscn"
 const MAX_HISTORY  := 50
 const APPLY_TIMEOUT_MS := 4000
+## Off for now: the history keeps working (views still call visit / nav_apply),
+## but the bar and its shortcuts (‹ ›, mouse back/forward, Alt+arrows) are hidden.
+const BAR_ENABLED := false
 
 var _history: Array[Dictionary] = []
 var _index: int = -1
@@ -130,14 +133,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	_bar = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.05, 0.10, 0.82)
-	sb.border_color = Color(0.25, 0.35, 0.65, 0.45)
-	sb.set_border_width_all(1)
-	sb.set_corner_radius_all(6)
-	sb.content_margin_left = 6; sb.content_margin_right = 10
-	sb.content_margin_top = 3;  sb.content_margin_bottom = 3
-	_bar.add_theme_stylebox_override("panel", sb)
+	_bar.theme_type_variation = &"TooltipPanel"
 	_bar.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_bar)
 	var row := HBoxContainer.new()
@@ -234,7 +230,7 @@ func _process(_delta: float) -> void:
 	var on_map := path == GALAXY_SCENE or path == SOLAR_SCENE or path == PLANET_SCENE
 	if path.ends_with("MainMenu.tscn") and not _history.is_empty():
 		clear_history()
-	_bar.visible = on_map and not SkillTreeView.is_open and not (_user_hidden and GameState.showcase_mode)
+	_bar.visible = BAR_ENABLED and on_map and not SkillTreeView.is_open and not (_user_hidden and GameState.showcase_mode)
 	if not _bar.visible:
 		return
 	# top-centre of the map area (the part of the screen beside the side panel);
