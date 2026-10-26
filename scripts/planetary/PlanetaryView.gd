@@ -499,6 +499,7 @@ func _manage_commands(poi: POIData) -> Array:
 		return out
 	var pp := GameState.get_planet(current_data.seed)
 	var rate := Settlement.refund_rate()
+	out.append_array(_cancel_commands(poi, pp))
 	for b: Dictionary in pp.buildings_in_district(poi.label):
 		if b.get("constructing", false):
 			continue
@@ -508,8 +509,8 @@ func _manage_commands(poi: POIData) -> Array:
 		out.append(GameCommand.make("remove_" + def.building_id, "Remove 1 × %s  (%d left)" % [def.display_name, int(b.get("amount", 1)) - 1],
 			_remove_one_building.bind(b), Callable(),
 			{"icon": "−", "color": CMD_MANAGE_COL,
-			 "cost": "+◈ " + HUDManager.fmt_credits(Settlement.remove_refund(b, 1)),
-			 "tooltip": "Refund %d%% of what this building cost. Materials aren't refunded." % int(round(rate * 100.0))}))
+			 "cost": "+" + Economy.cost_text(_refund_cost(b)),
+			 "tooltip": "Refund %d%% of what this building cost (credits and materials)." % int(round(rate * 100.0))}))
 	var what := "City" if poi.is_city() else "district"
 	out.append(GameCommand.make("move", "Move %s…" % what, _begin_move.bind(poi),
 		Settlement.move_block.bind(current_data, poi),
@@ -528,10 +529,101 @@ func _manage_commands(poi: POIData) -> Array:
 		 "tooltip": "Removes it%s. The planet itself stays." % (" with all its districts" if poi.is_city() else "")}))
 	return out
 
-func _remove_one_building(entry: Dictionary) -> void:
-	var refund := Settlement.remove_buildings(GameState.get_planet(current_data.seed), entry, 1)
+## Clear / Reset / Demolish as visible buttons (the same commands as the
+## right-click menu, so players find them — playtest 23.10).
+func _build_manage_row(poi: POIData) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	for kind: String in ["clear", "reset", "demolish"]:
+		var b := Button.new()
+		b.text = {"clear": "⌫ Clear", "reset": "↺ Reset", "demolish": "✖ Demolish"}[kind]
+		b.focus_mode = Control.FOCUS_NONE
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_apply_orbitron(b, 8)
+		b.add_theme_color_override("font_color", CMD_DANGER_COL)
+		var cap_kind := kind
+		var block := Settlement.block(kind, current_data, poi)
+		b.disabled = block != ""
+		b.pressed.connect(func() -> void:
+			AudioManager.play("click")
+			_confirm_settlement(cap_kind, poi))
+		var tip := String(Settlement.preview(kind, current_data, poi)["text"]) if block == "" else block
+		b.mouse_entered.connect(func() -> void: TooltipManager.show_tip(b.text.substr(2), tip + "\n\nRight-click it on the map for every action."))
+		b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+		row.add_child(b)
+	return row
+
+## "Call off" commands for unfinished work at a City / district: its own
+## construction, a level-up in progress, buildings still going up. Full refund.
+func _cancel_commands(poi: POIData, pp: PlanetProgress) -> Array:
+	var out: Array = []
+	if poi.constructing:
+		var back := {Economy.CREDITS: maxf(poi.paid_credits, 0.0)}
+		back.merge(poi.paid_materials)
+		out.append(GameCommand.make("cancel_construction", "Cancel construction", _cancel_district.bind(poi),
+			Settlement.cancel_district_block.bind(current_data, poi),
+			{"icon": "✖", "color": CMD_DANGER_COL, "cost": "+" + Economy.cost_text(back),
+			 "tooltip": "Calls off the construction. Everything paid comes back."}))
+	for city_lv: bool in ([true, false] if poi.is_city() else [false]):
+		var paid := Settlement.level_in_progress_paid(pp, poi, city_lv)
+		if paid > 0.0:
+			out.append(GameCommand.make("cancel_level_" + ("city" if city_lv else "district"),
+				"Cancel %s level-up" % ("City" if city_lv else ("Capital" if poi.is_city() else "district")),
+				_cancel_level.bind(poi, city_lv), Callable(),
+				{"icon": "✖", "color": CMD_DANGER_COL, "cost": "+◈ " + HUDManager.fmt_credits(paid),
+				 "tooltip": "Calls off the level-up. Its full price comes back."}))
+	for b: Dictionary in pp.buildings_in_district(poi.label):
+		var def := BuildingDef.find(b.get("building_id", ""))
+		if def == null or not b.get("constructing", false):
+			continue
+		var bb := {Economy.CREDITS: PlanetProgress.stack_paid(b)}
+		bb.merge(PlanetProgress.stack_mats(b))
+		out.append(GameCommand.make("cancel_" + String(b.get("uid", "")), "Cancel %s" % def.display_name,
+			_cancel_building.bind(b), Callable(),
+			{"icon": "✖", "color": CMD_DANGER_COL, "cost": "+" + Economy.cost_text(bb),
+			 "tooltip": "Calls off this building. Everything paid comes back."}))
+	return out
+
+func _cancel_district(poi: POIData) -> void:
+	var back := Settlement.cancel_district(current_data, poi)
+	if back.is_empty():
+		AudioManager.play("error")
+		return
 	AudioManager.play("click")
-	_show_unlock_toast("Building removed", "+%s cr refunded" % Economy.fmt(refund))
+	_show_unlock_toast("%s called off" % poi.shown_name(), "+%s refunded" % Economy.cost_text(back))
+	if _panel_open and (_active_district_poi == poi or _city_panel_poi == poi):
+		_set_panel_open(false)
+	load_planet(current_data)
+
+func _cancel_level(poi: POIData, city_lv: bool) -> void:
+	var back := Settlement.cancel_level(GameState.get_planet(current_data.seed), poi, city_lv)
+	if back <= 0.0:
+		AudioManager.play("error")
+		return
+	AudioManager.play("click")
+	_show_unlock_toast("Level-up called off", "+%s cr refunded" % Economy.fmt(back))
+	_refresh_active_panel()
+
+func _cancel_building(entry: Dictionary) -> void:
+	var back := Settlement.cancel_building(GameState.get_planet(current_data.seed), entry)
+	if back.is_empty():
+		AudioManager.play("error")
+		return
+	AudioManager.play("click")
+	_show_unlock_toast("Building called off", "+%s refunded" % Economy.cost_text(back))
+	_refresh_active_panel()
+
+## What removing one building of a stack gives back: { credits, material: amount }.
+static func _refund_cost(entry: Dictionary) -> Dictionary:
+	var out := {Economy.CREDITS: Settlement.remove_refund(entry, 1)}
+	out.merge(Settlement.remove_refund_mats(entry, 1))
+	return out
+
+func _remove_one_building(entry: Dictionary) -> void:
+	var back := _refund_cost(entry)   # before the stack shrinks
+	Settlement.remove_buildings(GameState.get_planet(current_data.seed), entry, 1)
+	AudioManager.play("click")
+	_show_unlock_toast("Building removed", "+%s refunded" % Economy.cost_text(back))
 	_refresh_active_panel()
 
 func _confirm_settlement(kind: String, poi: POIData) -> void:
@@ -549,7 +641,9 @@ func _confirm_settlement(kind: String, poi: POIData) -> void:
 				"reset":    refund = Settlement.reset(data, poi)
 				"demolish": refund = Settlement.demolish(data, poi)
 			AudioManager.play("click")
-			_show_unlock_toast("%s done" % verb, "+%s cr refunded" % Economy.fmt(refund))
+			var back := {Economy.CREDITS: refund}
+			back.merge(pv.get("materials", {}))   # materials go back with the credits
+			_show_unlock_toast("%s done" % verb, "+%s refunded" % Economy.cost_text(back))
 			if kind == "demolish" and _panel_open:
 				_set_panel_open(false)
 			load_planet(data))
@@ -939,8 +1033,33 @@ func _refresh_solar_btn() -> void:
 	pass   # navigation via right-click only
 
 
+## Right button held: { from, pos, drag, on_planet } ({} when up).
+var _rmb: Dictionary = {}
+const RMB_DRAG_PX := 6.0
+
+## A right-click (released without dragging): a ship's radial menu, the
+## selected ship's planet menu, or the context menu (CommandRegistry).
+func _on_right_click(at: Vector2) -> void:
+	if _orbital_layer != null and is_instance_valid(_orbital_layer):
+		var ship_hit := _orbital_layer._ship_at(at)
+		if ship_hit != null:
+			if _orbital_layer._selected_ship != ship_hit:
+				_orbital_layer.select_ship(ship_hit)
+			_show_radial_menu(ship_hit, at, _orbital_layer)
+			return
+	# Right-click is for actions only — going back/up lives in the navigation
+	# HUD (NavigationManager). With a ship selected, empty space keeps the
+	# ship's planet menu.
+	if _orbital_layer != null and _orbital_layer._selected_ship != null and _poi_at_screen(at) == null:
+		_show_planet_radial_menu(at)
+	else:
+		_open_context_menu(at)
+
 func _input(event: InputEvent) -> void:
 	if SkillTreeView.is_open or TradePanel.is_open:   # full-screen modals own the input
+		if not _rmb.is_empty() and _rmb["drag"]:
+			planet_renderer.end_drag()
+		_rmb = {}
 		return
 	if event is InputEventMouseButton and (event as InputEventMouseButton).double_click \
 			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
@@ -972,10 +1091,28 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
+	if event is InputEventMouseMotion and not _rmb.is_empty():
+		var mm := event as InputEventMouseMotion
+		if not _rmb["drag"] and _rmb["on_planet"] \
+				and mm.global_position.distance_to(_rmb["from"]) > RMB_DRAG_PX:
+			_rmb["drag"] = true
+			planet_renderer.begin_drag(_rmb["pos"])
+		if _rmb["drag"]:
+			planet_renderer.drag_to(mm.position)
+			get_viewport().set_input_as_handled()
+			return
+
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		# Showcase is read-only: no right-click actions (navigate with NavigationManager)
-		if GameState.showcase_mode and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+		# Showcase is read-only: no right-click actions, but right-drag still turns the globe
+		if GameState.showcase_mode and mb.button_index == MOUSE_BUTTON_RIGHT:
+			if mb.pressed:
+				_rmb = {"from": mb.global_position, "pos": mb.position, "drag": false,
+					"on_planet": _is_over_planet_area(mb.global_position)}
+			elif not _rmb.is_empty():
+				if _rmb["drag"]:
+					planet_renderer.end_drag()
+				_rmb = {}
 			get_viewport().set_input_as_handled()
 			return
 		# Tutorial deselect: during generator-district step with panel open,
@@ -995,24 +1132,20 @@ func _input(event: InputEvent) -> void:
 			if not dd_rect.has_point(get_viewport().get_mouse_position()):
 				_active_slot_dropdown.queue_free()
 				_active_slot_dropdown = null
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
-			# Check if right-clicking on a ship → ship radial menu
-			if _orbital_layer != null and is_instance_valid(_orbital_layer):
-				var ship_hit := _orbital_layer._ship_at(mb.global_position)
-				if ship_hit != null:
-					if _orbital_layer._selected_ship != ship_hit:
-						_orbital_layer.select_ship(ship_hit)
-					_show_radial_menu(ship_hit, mb.global_position, _orbital_layer)
-					get_viewport().set_input_as_handled()
-					return
-			# Right-click is for actions only — going back/up lives in the
-			# navigation HUD (NavigationManager). With a ship selected, empty space
-			# keeps the ship's planet menu; otherwise the context menu (CommandRegistry).
-			if _orbital_layer != null and _orbital_layer._selected_ship != null \
-					and _poi_at_screen(mb.global_position) == null:
-				_show_planet_radial_menu(mb.global_position)
-			else:
-				_open_context_menu(mb.global_position)
+		if mb.button_index == MOUSE_BUTTON_RIGHT:
+			# Right button: dragging turns the globe, a click (no drag) opens the
+			# menu on release (KARARLAR §10). Press only remembers where.
+			if mb.pressed:
+				_rmb = {"from": mb.global_position, "pos": mb.position, "drag": false,
+					"on_planet": _is_over_planet_area(mb.global_position)}
+			elif not _rmb.is_empty():
+				var was_drag: bool = _rmb["drag"]
+				var at: Vector2 = _rmb["from"]
+				_rmb = {}
+				if was_drag:
+					planet_renderer.end_drag()
+				else:
+					_on_right_click(at)
 			get_viewport().set_input_as_handled()
 		# Wheel / pinch only zoom. Leaving the planet view on zoom-out is disabled
 		# for now — it will be bound to another control.
@@ -3225,6 +3358,7 @@ func _spawn_district(data: PlanetData, lbl: String, def: DistrictDef, site: Vect
 	var poi          := POIData.new()
 	# the price at this moment is what was just paid for it (refund ledger)
 	poi.paid_credits = DistrictDef.placement_cost(def, data, "" if def.is_system_anchor() else parent_city)
+	poi.paid_materials = DistrictDef.placement_materials(def, data).duplicate()
 	poi.label        = POIData.make_key(data)   # internal id; `lbl` is the shown name
 	poi.display_name = lbl
 	poi.parent_city  = "" if def.is_system_anchor() else parent_city
@@ -6884,19 +7018,15 @@ func _on_district_clicked(index: int, _data: Dictionary) -> void:
 		_focus_city(_city_of(poi))
 		return   # the first click already chose the panel
 	if poi.constructing:
-		TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\n%d%% built · %.0fs total" % [
+		TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\n%d%% built · %.0fs total\n\nRight-click it to cancel (full refund)." % [
 			int(poi.construct_progress * 100.0), poi.construct_duration])
 		_hide_tip_when_mouse_leaves(get_viewport().get_mouse_position())
 		return
 	_reveal_panel()   # selecting a district brings the side panel back
-	# zoomed out a City icon is the whole City; zoomed in it's its Capital District.
-	# Clicking it again toggles City <-> Capital District.
-	var shown := $SidePanel/PanelContent.get_node_or_null("DistrictBuildPanel")
-	var showing_capital: bool = shown != null and not shown.is_queued_for_deletion() \
-			and shown.get_meta("district", "") == poi.label
-	if poi.is_city() and _city_panel_poi == poi:
-		_build_district_panel(poi, current_data)
-	elif poi.is_city() and (showing_capital or _zoom < ZOOM_DETAIL_FULL):
+	# A City's marker always opens the City (playtest 23.10: one click meaning
+	# two things was confusing). Its Capital District opens from the City panel's
+	# Capital card or the right-click menu.
+	if poi.is_city():
 		_build_city_panel(poi, current_data)
 	else:
 		_build_district_panel(poi, current_data)
@@ -7946,7 +8076,7 @@ func _card_panel_style() -> StyleBoxFlat:
 ## Orb-of-Creation style: card whose background fills left→right as production ticks.
 ## count = number of this building type in this POI (for ×N badge)
 ## poi/planet/pp needed for "+" stacking button
-func _build_construction_bar(def: BuildingDef, pm_key: String) -> PanelContainer:
+func _build_construction_bar(def: BuildingDef, pm_key: String, entry: Dictionary = {}) -> PanelContainer:
 	var card := PanelContainer.new()
 	card.add_theme_stylebox_override("panel", _card_panel_style())
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -8001,6 +8131,22 @@ func _build_construction_bar(def: BuildingDef, pm_key: String) -> PanelContainer
 	pct_lbl.add_theme_color_override("font_color", Color(0.70, 0.58, 0.25))
 	pct_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(pct_lbl)
+
+	# ✖ calls the building off with a full refund
+	if not entry.is_empty() and not GameState.showcase_mode:
+		var x_btn := Button.new()
+		x_btn.text = "✖"
+		x_btn.flat = true
+		x_btn.focus_mode = Control.FOCUS_NONE
+		x_btn.add_theme_color_override("font_color", CMD_DANGER_COL)
+		x_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.80, 0.70))
+		x_btn.pressed.connect(_cancel_building.bind(entry))
+		var bb := {Economy.CREDITS: PlanetProgress.stack_paid(entry)}
+		bb.merge(PlanetProgress.stack_mats(entry))
+		x_btn.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Cancel construction",
+			"Calls off this building. Everything paid comes back:\n+" + Economy.cost_text(bb)))
+		x_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+		hbox.add_child(x_btn)
 
 	# Wire live updates via _bar_meta
 	_bar_meta[pm_key] = {"fill": fill_ctrl, "prog": prog_ref, "pct": pct_lbl, "construction": true}
@@ -8119,7 +8265,9 @@ func _buy_buildings(poi: POIData, planet: PlanetData, def: BuildingDef, want: in
 		return 0
 	for _i in n:   # each building's own repeat price goes to the refund ledger
 		var each := Economy.building_full_cost(pp, def, poi.label, 1)
-		pp.build_in_district(poi, def.building_id, "", float(each.get(Economy.CREDITS, 0.0)))
+		var mats := each.duplicate()
+		mats.erase(Economy.CREDITS)
+		pp.build_in_district(poi, def.building_id, "", float(each.get(Economy.CREDITS, 0.0)), mats)
 	AudioManager.play("construct")
 	AchievementManager.notify_trigger(AchievementDef.Trigger.FIRST_BUILDING)
 	ProductionManager.building_queued.emit(planet.seed, def.building_id)
@@ -10805,6 +10953,23 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	header.add_child(lv_lbl)
 	root.add_child(header)
 
+	# The Capital District has its own panel (the City's marker opens this one)
+	var cap_btn := Button.new()
+	cap_btn.text = "◆  CAPITAL DISTRICT  ·  Lv %d  ›" % int(pp.district_levels.get(city.label, 1))
+	cap_btn.focus_mode = Control.FOCUS_NONE
+	cap_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_apply_orbitron(cap_btn, 9)
+	cap_btn.add_theme_color_override("font_color", Color(1.0, 0.85, 0.40))
+	cap_btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.65))
+	cap_btn.disabled = city.constructing
+	cap_btn.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		_open_capital(city))
+	cap_btn.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Capital District",
+		"The City's own district: its buildings, level and income."))
+	cap_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	root.add_child(cap_btn)
+
 	# City stats
 	var count := Leveling.city_district_count(planet, city)
 	var max_d := Leveling.city_max_districts(lv)
@@ -10867,6 +11032,7 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	sep.add_theme_stylebox_override("separator", sep_s)
 	root.add_child(sep)
 	root.add_child(_build_city_level_row(city, planet, pp))
+	root.add_child(_build_manage_row(city))
 	panel_content.add_child(root)
 
 ## Construction-style fill (black/yellow hazard stripes, crawling) drawn behind
@@ -11258,7 +11424,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		var pm_key: String = "%d:%s:%s" % [planet.seed, poi.label, entry.get("uid", "-1")]
 		var amount: int    = entry.get("amount", 1)
 		if entry.get("constructing", false):
-			body.add_child(_build_construction_bar(def, pm_key))
+			body.add_child(_build_construction_bar(def, pm_key, entry))
 		else:
 			body.add_child(_build_production_bar(def, pm_key, planet.seed, amount, poi, planet, pp, entry))
 
@@ -11281,6 +11447,8 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	root.add_child(lv_btn)
 	if not lv_btn.disabled:
 		_notify_tutorial_district_upgrade_btn(lv_btn)
+	if not poi.is_city() and not poi.is_orbital():   # the Capital's live on the City panel
+		root.add_child(_build_manage_row(poi))
 
 	panel_content.add_child(root)
 	_notify_tutorial_district_opened(poi, root)

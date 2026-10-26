@@ -203,21 +203,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		var center := size * 0.5
 		var dist := local.distance_to(center)
 		if event.pressed and dist < _planet_radius_px:
-			_dragging = true
-			_drag_velocity = 0.0
-			_tilt_velocity = 0.0
-			_drag_total_px = 0.0
-			_last_mouse_x = float(event.position.x)
-			_last_mouse_y = float(event.position.y)
+			begin_drag(event.position)
 		elif not event.pressed:
 			# Only treat as a tap if total drag distance was small
 			if _dragging and _drag_total_px < 8.0:
 				planet_clicked.emit(event.position)
-			if Time.get_ticks_msec() - _last_drag_time > 100:
-				_drag_velocity = 0.0
-				_tilt_velocity = 0.0
-			_dragging = false
-			_drag_total_px = 0.0
+			end_drag()
 
 	if event is InputEventMouseMotion and _dragging:
 		root = get_tree().root
@@ -233,33 +224,55 @@ func _unhandled_input(event: InputEvent) -> void:
 			_drag_velocity = 0.0
 			return
 				
-		var delta_x: float = float(event.position.x) - _last_mouse_x
-		var delta_y: float = float(event.position.y) - _last_mouse_y
-		_drag_total_px += abs(delta_x) + abs(delta_y)
-		_last_mouse_x = float(event.position.x)
-		_last_mouse_y = float(event.position.y)
-		# Vertical drag tilts the globe: dragging down brings the north into view.
-		if delta_y != 0.0 and not tilt_locked:
-			var delta_tilt: float = delta_y / _planet_radius_px
-			set_tilt(tilt + delta_tilt)
-			_tilt_velocity = delta_tilt if _tilt_velocity == 0.0 else lerp(_tilt_velocity, delta_tilt, 0.6)
-		# 1:1 surface mapping: dragging by r_px = π radians rotation
-		# Keep the surface under the cursor moving 1:1: the view centre sits at
-		# latitude = tilt, where a radian of spin covers only cos(tilt) of the radius.
-		var delta_rot: float = delta_x / (_planet_radius_px * maxf(cos(tilt), 0.35))
-		_rotation_offset = fposmod(_rotation_offset - delta_rot, TAU)
+		drag_to(event.position)
+
+## Globe dragging, also driven from outside (PlanetaryView's right-drag):
+## begin at a point, follow the mouse, end with momentum.
+func begin_drag(pos: Vector2) -> void:
+	_dragging = true
+	_drag_velocity = 0.0
+	_tilt_velocity = 0.0
+	_drag_total_px = 0.0
+	_last_mouse_x = pos.x
+	_last_mouse_y = pos.y
+
+func end_drag() -> void:
+	if Time.get_ticks_msec() - _last_drag_time > 100:
+		_drag_velocity = 0.0
+		_tilt_velocity = 0.0
+	_dragging = false
+	_drag_total_px = 0.0
+
+func drag_to(pos: Vector2) -> void:
+	if not _dragging:
+		return
+	var delta_x: float = pos.x - _last_mouse_x
+	var delta_y: float = pos.y - _last_mouse_y
+	_drag_total_px += abs(delta_x) + abs(delta_y)
+	_last_mouse_x = pos.x
+	_last_mouse_y = pos.y
+	# Vertical drag tilts the globe: dragging down brings the north into view.
+	if delta_y != 0.0 and not tilt_locked:
+		var delta_tilt: float = delta_y / _planet_radius_px
+		set_tilt(tilt + delta_tilt)
+		_tilt_velocity = delta_tilt if _tilt_velocity == 0.0 else lerp(_tilt_velocity, delta_tilt, 0.6)
+	# 1:1 surface mapping: dragging by r_px = π radians rotation
+	# Keep the surface under the cursor moving 1:1: the view centre sits at
+	# latitude = tilt, where a radian of spin covers only cos(tilt) of the radius.
+	var delta_rot: float = delta_x / (_planet_radius_px * maxf(cos(tilt), 0.35))
+	_rotation_offset = fposmod(_rotation_offset - delta_rot, TAU)
+	
+	# Smooth velocity so a single tiny mouse event doesn't kill momentum
+	if _drag_velocity == 0.0:
+		_drag_velocity = -delta_rot
+	else:
+		_drag_velocity = lerp(_drag_velocity, -delta_rot, 0.6)
 		
-		# Smooth velocity so a single tiny mouse event doesn't kill momentum
-		if _drag_velocity == 0.0:
-			_drag_velocity = -delta_rot
-		else:
-			_drag_velocity = lerp(_drag_velocity, -delta_rot, 0.6)
-			
-		_last_drag_time = Time.get_ticks_msec()
-		
-		if material:
-			material.set_shader_parameter("rotation_offset", _rotation_offset)
-			# light_direction synced at end of _process every frame
+	_last_drag_time = Time.get_ticks_msec()
+	
+	if material:
+		material.set_shader_parameter("rotation_offset", _rotation_offset)
+		# light_direction synced at end of _process every frame
 
 func _process(_delta: float) -> void:
 	# @tool script: in the editor only the preview runs. Hot-reloaded editor

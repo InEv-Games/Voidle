@@ -54,6 +54,9 @@ static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⚗", "�
 ## Credits really paid for this settlement's shell (GDD §15.6; the first,
 ## free City paid 0). −1 = unknown (older saves): treated as 0.
 @export var paid_credits: float = -1.0
+## Materials really paid for the shell ({id: amount}; e.g. a Moon Production
+## district's Ferrite). Refunded with the credits (KARARLAR §10).
+@export var paid_materials: Dictionary = {}
 
 ## Settlement growth along roads: for each road (keyed by the district at its
 ## other end) the settlement size this district had when the road appeared.

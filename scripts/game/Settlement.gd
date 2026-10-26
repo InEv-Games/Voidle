@@ -3,13 +3,13 @@
 ## the refund, what is lost) and an apply step; PlanetaryView turns them into
 ## right-click commands (KARARLAR §6).
 ##
-## Refunds (§15.6): only credits really paid and not refunded yet (the ledger):
-##   building stacks  entry["paid"]                (PlanetProgress.stack_paid)
-##   district shell   POIData.paid_credits         (the first, free City paid 0)
+## Refunds (§15.6): only what was really paid and not refunded yet (the ledger):
+##   building stacks  entry["paid"], entry["paid_mats"]   (PlanetProgress.stack_paid / stack_mats)
+##   district shell   POIData.paid_credits, paid_materials (the first, free City paid 0)
 ##   levels           PlanetProgress.level_paid    (district label, "city:<label>")
 ## k of N buildings give back rate × C·k/N and C drops by the whole share, so
-## nothing is refunded twice. Materials are never refunded. Rate: 50%, 65% with
-## Recycling I, 75% with Recycling II.
+## nothing is refunded twice. Credits and materials come back at the same rate
+## (KARARLAR §10): 50%, 65% with Recycling I, 75% with Recycling II.
 ##
 ## Moving (§15.9–§15.11) needs Settlement Layout and costs 10% of the moved
 ## subtree's paid credits (a service fee: not added to the ledger). A City moves
@@ -59,6 +59,25 @@ static func subtree_paid(pd: PlanetData, pp: PlanetProgress, poi: POIData) -> fl
 
 # ── Building stacks ──────────────────────────────────────────────────────────
 
+## Materials refunded for removing k buildings from a stack ({id: amount}).
+static func remove_refund_mats(entry: Dictionary, k: int) -> Dictionary:
+	var n := int(entry.get("amount", 1))
+	if n <= 0:
+		return {}
+	return PlanetProgress.scale_mats(PlanetProgress.stack_mats(entry), float(mini(k, n)) / float(n) * refund_rate())
+
+## Puts materials back in stock; returns them.
+static func _give(mats: Dictionary) -> Dictionary:
+	for id: String in mats:
+		if float(mats[id]) > 0.0:
+			GameState.add_resource(id, float(mats[id]))
+	return mats
+
+## Adds `mats` × f into `into`.
+static func _sum_into(into: Dictionary, mats: Dictionary, f: float = 1.0) -> void:
+	for id: String in mats:
+		into[id] = float(into.get(id, 0.0)) + float(mats[id]) * f
+
 ## Refund for removing k buildings from a stack.
 static func remove_refund(entry: Dictionary, k: int) -> float:
 	var n := int(entry.get("amount", 1))
@@ -75,11 +94,13 @@ static func remove_buildings(pp: PlanetProgress, entry: Dictionary, k: int) -> f
 	var c := PlanetProgress.stack_paid(entry)
 	var share := c * float(k) / float(n)
 	var refund := share * refund_rate()
+	_give(remove_refund_mats(entry, k))
 	if k >= n:
 		pp.remove_building_stack(entry)
 	else:
 		entry["amount"] = n - k
 		entry["paid"] = c - share
+		entry["paid_mats"] = PlanetProgress.scale_mats(PlanetProgress.stack_mats(entry), float(n - k) / float(n))
 	GameState.earn_credits(refund)
 	_changed(pp)
 	return refund
@@ -108,15 +129,18 @@ static func preview(kind: String, pd: PlanetData, poi: POIData) -> Dictionary:
 			pass
 	var n_buildings := 0
 	var housing := 0.0
+	var mats := {}
 	for p: POIData in emptied:
 		paid += _buildings_paid(pp, p.label)
 		for b: Dictionary in pp.buildings_in_district(p.label):
 			n_buildings += int(b.get("amount", 1))
+			_sum_into(mats, PlanetProgress.stack_mats(b), rate)
 			var def := BuildingDef.find(b.get("building_id", ""))
 			if def != null and def.outputs.has(Economy.POPULATION) and not gone.has(p):
 				housing += float(def.outputs[Economy.POPULATION]) * float(b.get("amount", 1))
 	for p: POIData in gone:
 		paid += _shell_paid(p) + (_levels_paid(pp, p) if p != poi or kind == "demolish" else 0.0)
+		_sum_into(mats, p.paid_materials, rate)
 		housing += float(Economy.district_housing(pd, pp, p))
 	var lines: Array[String] = []
 	if not gone.is_empty():
@@ -130,9 +154,10 @@ static func preview(kind: String, pd: PlanetData, poi: POIData) -> Dictionary:
 		lines.append("%s returns to Lv1" % poi.shown_name())
 	if housing > 0.0:
 		lines.append("Housing lost: about %s" % Economy.fmt(housing))
-	lines.append("Refund: %s cr (%d%% of the credits paid; materials aren't refunded)" % [
-		Economy.fmt(paid * rate), int(round(rate * 100.0))])
-	return {"refund": paid * rate, "districts": gone, "buildings": n_buildings,
+	var back := {Economy.CREDITS: paid * rate}
+	back.merge(mats)
+	lines.append("Refund: %s (%d%% of what was paid)" % [Economy.cost_text(back), int(round(rate * 100.0))])
+	return {"refund": paid * rate, "materials": mats, "districts": gone, "buildings": n_buildings,
 		"housing": housing, "text": "\n".join(lines)}
 
 # ── Operations ───────────────────────────────────────────────────────────────
@@ -209,6 +234,7 @@ static func _drop_buildings(pp: PlanetProgress, label: String) -> float:
 	var refund := 0.0
 	for b: Dictionary in pp.buildings_in_district(label):
 		refund += PlanetProgress.stack_paid(b) * refund_rate()
+		_give(PlanetProgress.scale_mats(PlanetProgress.stack_mats(b), refund_rate()))
 		pp.remove_building_stack(b)
 	return refund
 
@@ -216,6 +242,7 @@ static func _drop_buildings(pp: PlanetProgress, label: String) -> float:
 static func _remove_district(pd: PlanetData, pp: PlanetProgress, p: POIData) -> float:
 	var refund := _drop_buildings(pp, p.label)
 	refund += (_shell_paid(p) + _levels_paid(pp, p)) * refund_rate()
+	_give(PlanetProgress.scale_mats(p.paid_materials, refund_rate()))
 	pp.level_paid.erase(p.label)
 	pp.level_paid.erase("city:" + p.label)
 	pp.district_levels.erase(p.label)
@@ -224,6 +251,75 @@ static func _remove_district(pd: PlanetData, pp: PlanetProgress, p: POIData) -> 
 	pp.city_upgrading.erase(p.label)
 	pd.custom_pois.erase(p)
 	return refund
+
+# ── Cancelling (full refund) ────────────────────────────────────────────────
+# Work that hasn't finished can be called off: everything paid for it comes back
+# (playtest 23.10) — no Recycling rate, nothing was built yet.
+
+## A building still under construction. Returns what came back ({} when it can't).
+static func cancel_building(pp: PlanetProgress, entry: Dictionary) -> Dictionary:
+	if not entry.get("constructing", false):
+		return {}
+	var back := {Economy.CREDITS: PlanetProgress.stack_paid(entry)}
+	back.merge(_give(PlanetProgress.stack_mats(entry)))
+	GameState.earn_credits(float(back[Economy.CREDITS]))
+	pp.remove_building_stack(entry)
+	_changed(pp)
+	return back
+
+## Why a district / City under construction can't be called off ("" when it can).
+static func cancel_district_block(pd: PlanetData, poi: POIData) -> String:
+	if GameState.showcase_mode:
+		return "Read-only showcase"
+	if not poi.constructing:
+		return "Already built"
+	if poi.is_orbital():
+		return "The station is already on its way"
+	if poi.is_city():
+		for p: POIData in pd.custom_pois:
+			if p != poi and p.is_city() and not p.is_orbital():
+				return ""
+		return "A world's first City can't be called off"
+	return ""
+
+## A district / City still under construction goes; its full price comes back.
+static func cancel_district(pd: PlanetData, poi: POIData) -> Dictionary:
+	if cancel_district_block(pd, poi) != "":
+		return {}
+	var pp := GameState.get_planet(pd.seed)
+	var back := {Economy.CREDITS: _shell_paid(poi)}
+	back.merge(_give(poi.paid_materials))
+	GameState.earn_credits(float(back[Economy.CREDITS]))
+	pp.district_levels.erase(poi.label)
+	pd.custom_pois.erase(poi)
+	_changed(pp)
+	return back
+
+## Credits a level-up in progress cost (what cancelling it gives back), 0 when
+## none is running. `city`: the City's own level, else the district's.
+static func level_in_progress_paid(pp: PlanetProgress, poi: POIData, city: bool) -> float:
+	if city:
+		if not pp.city_upgrading.has(poi.label):
+			return 0.0
+		return Leveling.city_level_credits(Leveling.city_level(pp, poi) + 1)
+	if not pp.district_upgrading.has(poi.label):
+		return 0.0
+	return Leveling.district_level_credits(int(pp.district_levels.get(poi.label, 1)))
+
+## Calls off a level-up in progress; returns the credits given back.
+static func cancel_level(pp: PlanetProgress, poi: POIData, city: bool) -> float:
+	var price := level_in_progress_paid(pp, poi, city)
+	if price <= 0.0:
+		return 0.0
+	var key := ("city:" + poi.label) if city else poi.label
+	pp.level_paid[key] = maxf(float(pp.level_paid.get(key, 0.0)) - price, 0.0)
+	if city:
+		pp.city_upgrading.erase(poi.label)
+	else:
+		pp.district_upgrading.erase(poi.label)
+	GameState.earn_credits(price)
+	_changed(pp)
+	return price
 
 # ── Moving ───────────────────────────────────────────────────────────────────
 

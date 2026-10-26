@@ -392,6 +392,7 @@ func _apply_pending_pois() -> void:
 			poi.resource_tags      = pd_entry.get("resource_tags",      {})
 			poi.site_features      = pd_entry.get("site_features",      {})
 			poi.paid_credits       = float(pd_entry.get("paid_credits",  -1.0))
+			poi.paid_materials     = pd_entry.get("paid_materials",     {})
 			poi.spoke_birth        = pd_entry.get("spoke_birth",        {})
 			poi.constructing       = pd_entry.get("constructing",       false)
 			poi.construct_progress = pd_entry.get("construct_progress", 0.0)
@@ -1132,6 +1133,7 @@ func save() -> void:
 					"resource_tags":      poi.resource_tags,
 					"site_features":      poi.site_features,
 					"paid_credits":       poi.paid_credits,
+					"paid_materials":     poi.paid_materials,
 					"spoke_birth":        poi.spoke_birth,
 					"constructing":       poi.constructing,
 					"construct_progress": poi.construct_progress,

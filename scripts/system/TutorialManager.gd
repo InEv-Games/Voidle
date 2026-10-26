@@ -122,7 +122,7 @@ const GUIDED_STEPS: Array = [
 	},
 	{
 		"type":        "action",
-		"instruction": "Open the Capital District  →  Press  LEVEL UP",
+		"instruction": "Open the City  →  Capital District  →  LEVEL UP",
 		"targets":     [{"type": "district_upgrade"}],
 		"reward_credits": 400.0,
 		"reward_science": 10.0,
@@ -835,7 +835,7 @@ func _target_hint(tgt: Dictionary) -> String:
 			return "Place a%s %s" % ["n" if ddef != null and ddef.display_name.substr(0, 1) in ["A", "E", "I", "O", "U"] else "",
 				ddef.display_name if ddef != null else "district"]
 		"city_level_up":    return "Open the City  →  Press  CITY LEVEL UP"
-		"district_upgrade": return "Open the Capital District  →  Press  LEVEL UP"
+		"district_upgrade": return "Open the City  →  Capital District  →  LEVEL UP"
 	var bdef := BuildingDef.find(tgt.get("id", ""))
 	if bdef != null:
 		return "Build  →  %s inside the district" % bdef.display_name

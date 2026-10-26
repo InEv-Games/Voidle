@@ -439,10 +439,10 @@ func _init() -> void:
 		350.0, _at("settlement_layout", -135, 1.15), ["settlement_layout"], "public", "Construction Office (coming later)",
 		{})
 	_n("recycling_1", "Recycling I", "Salvage more when you tear something down.",
-		250.0, _at("public_administration", -100, 1.15), ["public_administration"], "public", "Credit refund on demolition 65%",
+		250.0, _at("public_administration", -100, 1.15), ["public_administration"], "public", "Refund on removal 65% (credits and materials)",
 		{})
 	_n("recycling_2", "Recycling II", "Salvage nearly everything.",
-		500.0, _at("recycling_1", -120, 1.05), ["recycling_1"], "public", "Credit refund on demolition 75%",
+		500.0, _at("recycling_1", -120, 1.05), ["recycling_1"], "public", "Refund on removal 75% (credits and materials)",
 		{})
 	_n("logistics", "Logistics", "One Logistics Center coordinates the whole planet.",
 		450.0, _at("settlement_layout", -170, 1.15), ["settlement_layout"], "public", "Unlocks Logistics Center",
