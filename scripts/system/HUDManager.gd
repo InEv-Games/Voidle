@@ -268,6 +268,7 @@ func _ready() -> void:
 	GameState.credits_changed.connect(_on_credits_changed)
 	GameState.civilization_reached.connect(func(_civ: int) -> void: _show_act1_complete())
 	GameState.lander_reached_moon.connect(_show_lander_notice)
+	GameState.expedition_changed.connect(_on_expedition_changed)
 	GameState.science_changed.connect(_on_science_changed)
 	AchievementManager.achievement_unlocked.connect(_on_achievement_unlocked)
 
@@ -719,10 +720,26 @@ func _maybe_celebrate_moon() -> void:
 ## The lander parked in the Moon's orbit: a notice that flies the camera there
 ## (the Moon, its orbit and the lander's INITIATE COLONIZATION card).
 func _show_lander_notice(moon_seed: int) -> void:
+	_show_notice("◆  The lander reached the Moon's orbit  —  click to go there", go_to_lander.bind(moon_seed))
+
+## The final rocket left the Moon: point the player at the star system view,
+## where its flight is drawn.
+func _on_expedition_changed(kind: String) -> void:
+	if kind != "rocket" or GameState.expedition_state("rocket") != "in_transit":
+		return
+	var scene := get_tree().current_scene
+	if scene != null and scene.scene_file_path.ends_with("SolarView.tscn"):
+		return   # already watching
+	var tgt := GameState.get_planet_data(int(GameState.expedition("rocket").get("target_seed", -1)))
+	_show_notice("▲  The final rocket left for %s  —  click to watch" % (tgt.planet_name if tgt != null else "a new world"),
+		func() -> void: SceneTransition.go("res://scenes/solar/SolarView.tscn", GameState.get_home_solar()))
+
+## A clickable banner under the top bar; fades after a while.
+func _show_notice(text: String, on_click: Callable) -> void:
 	if _top_layer == null or not is_instance_valid(_top_layer):
 		return
 	var btn := Button.new()
-	btn.text = "◆  The lander reached the Moon's orbit  —  click to go there"
+	btn.text = text
 	if _orbitron: btn.add_theme_font_override("font", _orbitron)
 	btn.add_theme_font_size_override("font_size", 11)
 	btn.add_theme_color_override("font_color", Color(0.80, 1.0, 0.85))
@@ -749,7 +766,7 @@ func _show_lander_notice(moon_seed: int) -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		btn.queue_free()
 		AudioManager.play("click")
-		go_to_lander(moon_seed))
+		on_click.call())
 	_top_layer.add_child(btn)
 	AudioManager.play("building_done")
 	# stays a while, then fades away

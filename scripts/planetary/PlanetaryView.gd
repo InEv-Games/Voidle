@@ -1952,7 +1952,8 @@ func _add_found_settlement_button(page: Control) -> void:
 	var scanned := GameState.is_scanned(current_data.seed)
 	var paid := GameState.landing_paid.has(current_data.seed)
 	var note := Label.new()
-	note.text = ("Surface scanned. " if scanned else "Scan the surface first (free) to see where things thrive. ") \
+	note.text = ("Surface scanned — look around with the lenses at the bottom first. " if scanned \
+		else "Scan the surface first (free) to see where things thrive. ") \
 		+ ("Initiate colonization and pick the site of the first City." if paid \
 		else "Landing the first City: %s." % Economy.cost_text(GameState.LANDING_COST))
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -4818,7 +4819,7 @@ func _tick_surface_scan(delta: float) -> void:
 		GameState.scanned_bodies[seed_val] = true
 		GameState.save()
 		AudioManager.play("building_done")
-		_show_unlock_toast("Surface scanned", "The role lenses of this world are open.")
+		_show_unlock_toast("Surface scanned", "Pick a lens at the bottom (Energy, Production …) and hover the surface to see what each spot gives.")
 		_rebuild_lens_bar()
 		_refresh_active_panel()
 
@@ -6179,7 +6180,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 		elif not GameState.can_play_on(data.seed):
 			# post-demo inspection: other worlds can be looked at, not settled
 			var note := Label.new()
-			note.text = "Preview — settling new worlds is Civilization 1 content, not playable in the demo."
+			note.text = "Settling new worlds is Civilization 1 content — not playable in the demo. Earth and its Moon are yours."
 			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			_apply_orbitron(note, 9)
 			note.add_theme_color_override("font_color", Color(0.65, 0.6, 0.85))

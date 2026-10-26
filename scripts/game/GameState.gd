@@ -209,15 +209,17 @@ func can_view_galaxy() -> bool:
 func can_view_moon() -> bool:
 	return showcase_mode or demo_completed or moon_unlocked
 
-## Whether a body can be played on (settled, built on). Showcase never plays;
-## after the demo, only the home world and its Moon keep being playable.
+## Whether a body can be played on (settled, built on). Showcase never plays.
+## Civilization 0 is the home world and its Moon — before and after the demo's
+## ending; other worlds open with Civilization 1 content (playtest 23.10: a
+## new planet could be colonized in the demo).
 func can_play_on(planet_seed: int) -> bool:
 	if showcase_mode:
 		return false
-	if not demo_completed:
-		return true
 	var moon := home_moon()
-	return planet_seed == home_planet_seed or (moon != null and planet_seed == moon.seed)
+	if planet_seed == home_planet_seed or (moon != null and planet_seed == moon.seed):
+		return true
+	return playable_content_type > 0
 
 func enter_showcase() -> void:
 	save()   # keep progress safe before looking around (no-op in the demo)
@@ -605,7 +607,7 @@ func spend_science(amount: float) -> bool:
 
 ## Stub colonize — no ship requirement yet. Returns false if can't afford.
 func colonize_planet(planet_seed: int, cost: float = 1000.0) -> bool:
-	if not spend_credits(cost):
+	if not can_play_on(planet_seed) or not spend_credits(cost):
 		return false
 	var pp := get_planet(planet_seed)
 	pp.is_colonizing = true
@@ -630,7 +632,7 @@ const LANDER_PREP_SEC  := 30.0
 const MOON_TRANSIT_SEC := 30.0
 const ROCKET_COST := {"credits": 12000.0, "moonstone": 1200.0, "goods": 30.0, "fuel": 120.0, "rare_elements": 40.0}
 const ROCKET_PREP_SEC   := 60.0
-const ROCKET_FLIGHT_SEC := 60.0
+const ROCKET_FLIGHT_SEC := 180.0   # a real trip, watched in the star system view (playtest 23.10)
 
 signal act1_completed
 signal expedition_changed(kind: String)

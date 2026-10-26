@@ -203,9 +203,9 @@ func _init() -> void:
 		600.0, _at("root", -90, 1.7), ["root"], "common", "Unlocks Spaceport",
 		{"grants": ["spaceport"], "requires": ["fuel_processing"], "common": true})
 	_n("orbital_assembly", "Orbital Assembly", "Assemble modular stations in low orbit from Spaceport launches. The road to the Moon goes through orbit.",
-		1500.0, _at("rocketry", -90, 3.4), ["rocketry"], "common", "Unlocks Space Station Districts",
-		{"events": ["built:spaceport"], "common": true, "shape": NodeShape.CIRCLE})
-	_n("lunar_program", "Lunar Program", "A lander that carries settlers to the Moon. It needs a working station in orbit first. Pick the Moon in the Local System view. Terran buildings can't stand on the Moon: research Lunar ones from here.",
+		1500.0, _at("rocketry", -90, 3.4), ["rocketry"], "common", "Unlocks Space Station Districts and the Orbital Cargo Bay",
+		{"grants": ["orbital_cargo_bay"], "events": ["built:spaceport"], "common": true, "shape": NodeShape.CIRCLE})
+	_n("lunar_program", "Lunar Program", "A lander that carries settlers to the Moon. It needs a working station in orbit first. Pick the Moon in the Local System view. Earth buildings work there too; the Lunar ones around this node are made for it.",
 		1200.0, _at("orbital_assembly", -90, 4.6), ["orbital_assembly"], "common", "Unlocks the Moon lander and the Lunar lines",
 		{"events": ["orbit_station"], "common": true, "shape": NodeShape.CIRCLE})
 	_n("lunar_materials", "Lunar Materials", "Build big with what the Moon gives: the Lunar Spaceport, and the upgrades on the Lunar lines.",

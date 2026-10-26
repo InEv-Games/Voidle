@@ -87,4 +87,6 @@ Tarih: 26 Ekim 2026. İş planı: [PLAYTEST_2026-10-23.md](PLAYTEST_2026-10-23.m
 - **Erken nüfus.** Residential district tabanı 1.500 → 3.000; district kurma nüfus adımı +%50 → +%25 (maliyet hâlâ artar, §3).
 - **Low-rise Housing enerjisiz konut** (+1.250 nüfus, 0 enerji, 10 Ferrite).
 - **Spaceport 2.500 kredi + 50 Ferrite + 10 Goods** (önceden 500 kredi).
+- **Demoda yalnızca Dünya ve Ay oynanır** (demo bitmeden de). Diğer dünyalar Medeniyet 1 içeriği açılınca oynanır; Earth Spaceport Ay'a kurulamaz (Ay'ın kendi Lunar Spaceport'u var).
+- **Son roket 3 dakika uçar** ve yıldız sistemi görünümünde yolu ve ETA'sıyla çizilir.
 - **İade kredi ve malzemeyi kapsar.** Clear, reset ve demolish ödenen kredinin ve malzemenin aynı oranını iade eder: %50, Recycling skilleriyle %65 ve %75.

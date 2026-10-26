@@ -22,3 +22,4 @@ logic = SubResource("Resource_logic")
 unlocked_by_default = false
 max_per_planet = 1
 build_materials = {"ferrite": 50.0, "goods": 10.0}
+allowed_planet_types = Array[int]([0, 1, 2, 3, 4, 5, 7])
