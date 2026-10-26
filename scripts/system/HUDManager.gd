@@ -972,7 +972,7 @@ func _build_resource_cells(hbox: HBoxContainer) -> void:
 ## Fixed text width per top-bar cell, so the bar never changes width; the
 ## value's font shrinks to fit instead (_fit_label).
 const CELL_TEXT_W := {
-	"credits": 50, "science": 30, "energy": 28, "population": 56,
+	"credits": 50, "science": 30, "energy": 48, "population": 56,
 	"raw": 36, "goods": 24, "fuel": 24, "rare_elements": 24,
 }
 const VALUE_FONT_MAX := 12
@@ -1147,7 +1147,7 @@ func _add_res_cell(hbox: HBoxContainer, id: String, glyph: String, tip: String, 
 	lbl.custom_minimum_size = Vector2(float(CELL_TEXT_W.get(id, 40)), 0)
 	cell.add_child(lbl)
 	if id == Economy.ENERGY:
-		pass   # net only; made / used are in the tooltip
+		pass   # used / made; per-world and empire split in the tooltip
 	elif id == Economy.POPULATION:
 		pass   # available / max says it all; used is in the tooltip
 	else:
@@ -1187,12 +1187,19 @@ func _cell_tip(id: String, base: String) -> String:
 			var pm: Node = get_node_or_null("/root/ProductionManager")
 			var net: float = pm.get_global_energy() if pm != null else 0.0
 			var sp: Vector2 = pm.get_global_energy_split() if pm != null else Vector2.ZERO
-			var lines: Array[String] = [
+			var lines: Array[String] = ["Shown as used / made on this world."]
+			var wpp := _rate_planet()
+			if wpp != null and pm != null:
+				var wsp: Vector2 = pm.planet_energy_split(wpp)
+				lines.append("%s  made +%s ⚡  ·  used −%s ⚡" % [_rate_planet_name(), Economy.fmt(wsp.x), Economy.fmt(wsp.y)])
+			lines.append("")
+			lines.append("All worlds:")
+			lines.append_array([
 				"Produced   +%s ⚡" % Economy.fmt(sp.x),
 				"Consumed   −%s ⚡" % Economy.fmt(sp.y),
 				"Balance    %s%s ⚡" % ["+" if net >= 0.0 else "", Economy.fmt(net)],
 				"",
-				"A deficit lowers what energy-using buildings make (down to %d%% at worst) — cycles keep their length." % int(round((1.0 - Balance.cfg.energy_max_slowdown) * 100.0))]
+				"A deficit lowers what energy-using buildings make (down to %d%% at worst) — cycles keep their length." % int(round((1.0 - Balance.cfg.energy_max_slowdown) * 100.0))])
 			if net < 0.0:
 				lines.append("Now producing at %d%% output." % int(round(pm.get_energy_ratio() * 100.0)))
 			lines.append("")
@@ -1213,8 +1220,12 @@ func _cell_tip(id: String, base: String) -> String:
 			return head + "Shown as available / max.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, every finished cycle on the planet makes less (down to %d%% at worst) until you build homes." % [
 				Economy.fmt(Balance.cfg.city_base_pop), Economy.fmt(Economy.district_found_pop(0)), int(round((1.0 - Balance.cfg.pop_max_slowdown) * 100.0))] + penalty + _idle_pop_text()
 	var r: float = ProductionManager.resource_rates().get(id, 0.0)
-	return "%s\n\nStored  %s  (max %s)\nPer second  %s%s" % [base, Economy.fmt(Economy.amount(id)),
-		Economy.fmt(Economy.cap(id)), "+" if r >= 0.0 else "", Economy.fmt(r)]
+	var txt := "%s\n\nStored  %s  (max %s, shared by all worlds)" % [base, Economy.fmt(Economy.amount(id)), Economy.fmt(Economy.cap(id))]
+	var wpp := _rate_planet()
+	if wpp != null:
+		var rw: float = ProductionManager.resource_rates(wpp.planet_seed).get(id, 0.0)
+		txt += "\nPer second on %s  %s%s" % [_rate_planet_name(), "+" if rw >= 0.0 else "", Economy.fmt(rw)]
+	return txt + "\nPer second, all worlds  %s%s" % ["+" if r >= 0.0 else "", Economy.fmt(r)]
 
 ## Idle housing across the empire and what research turns it into.
 func _idle_pop_text() -> String:
@@ -1231,37 +1242,29 @@ func _idle_pop_text() -> String:
 		out += "\n  +%d%% Raw and processed output  (Production Reserve)" % int(round((reserve - 1.0) * 100.0))
 	return out
 
-## Resources show up in the bar as the player meets them (credits and
-## population always). Revealed ids persist in GameState.revealed_resources.
-const ALWAYS_SHOWN := ["credits", "population"]
-
-func _update_reveals(rates: Dictionary) -> void:
+## Every resource shows in the bar from the start, even before the player
+## makes any (playtest 23.10) — what's ahead is part of the goal.
+func _update_reveals(_rates: Dictionary) -> void:
 	for id: String in _res_slots:
-		var slot: Control = _res_slots[id]
-		var shown := id in ALWAYS_SHOWN or GameState.revealed_resources.has(id)
-		if not shown and _should_reveal(id, rates):
-			GameState.revealed_resources.append(id)
-			shown = true
-			slot.modulate = Color(2.0, 2.0, 1.4, 0.0)
-			var tw := create_tween()
-			tw.tween_property(slot, "modulate", Color.WHITE, 0.8).set_trans(Tween.TRANS_QUAD)
-		slot.visible = shown
+		(_res_slots[id] as Control).visible = true
 
-func _should_reveal(id: String, rates: Dictionary) -> bool:
-	match id:
-		Economy.ENERGY:
-			var sp: Vector2 = ProductionManager.get_global_energy_split()
-			return sp.x > 0.0 or sp.y > 0.0
-		Economy.SCIENCE:
-			return GameState.science_points > 0.0 or float(rates.get(id, 0.0)) > 0.0
-		Economy.RAW:
-			return Economy.raw_total() > 0.0 or float(rates.get(id, 0.0)) != 0.0
-	return Economy.amount(id) > 0.0 or float(rates.get(id, 0.0)) != 0.0
+## The world whose rates the bar shows: the one in view (null when none is colonized).
+func _rate_planet() -> PlanetProgress:
+	if GameState.active_planet_seed == -1:
+		return null
+	var pp: PlanetProgress = GameState.get_planet(GameState.active_planet_seed)
+	return pp if pp != null and pp.is_colonized else null
+
+func _rate_planet_name() -> String:
+	var pd: PlanetData = GameState.get_planet_data(GameState.active_planet_seed)
+	return pd.planet_name if pd != null else "this world"
 
 func _refresh_resource_cells() -> void:
 	if _res_lbls.is_empty():
 		return
-	var rates: Dictionary = ProductionManager.resource_rates()
+	# per-second rates of the world in view; stocks stay empire-wide
+	var wpp := _rate_planet()
+	var rates: Dictionary = ProductionManager.resource_rates(wpp.planet_seed if wpp != null else -1)
 	_update_reveals(rates)
 	_set_rate(Economy.CREDITS, rates.get(Economy.CREDITS, 0.0))
 	_set_rate(Economy.SCIENCE, rates.get(Economy.SCIENCE, 0.0))
@@ -1269,10 +1272,12 @@ func _refresh_resource_cells() -> void:
 	_track_stock(Economy.SCIENCE)
 	var e_lbl: Label = _res_lbls.get(Economy.ENERGY)
 	if is_instance_valid(e_lbl):
-		var net: float = rates.get(Economy.ENERGY, 0.0)
-		_set_value(e_lbl, ("+" if snappedf(net, 0.1) >= 0.0 else "−") + Economy.fmt(absf(snappedf(net, 0.1))))
+		# used / made — the output is right there, a deficit shows in red
+		var esp: Vector2 = ProductionManager.planet_energy_split(wpp) if wpp != null \
+			else ProductionManager.get_global_energy_split()
+		_set_value(e_lbl, "%s/%s" % [Economy.fmt(snappedf(esp.y, 0.1)), Economy.fmt(snappedf(esp.x, 0.1))])
 		e_lbl.add_theme_color_override("font_color",
-			Color(0.45, 0.95, 0.50) if net >= 0.0 else Color(1.0, 0.40, 0.35))
+			Color(0.45, 0.95, 0.50) if esp.x >= esp.y else Color(1.0, 0.40, 0.35))
 
 	var pop_lbl: Label = _res_lbls.get(Economy.POPULATION)
 	if is_instance_valid(pop_lbl):
@@ -1353,7 +1358,8 @@ func _close_raw_dropdown() -> void:
 func _fill_raw_dropdown() -> void:
 	if not is_instance_valid(_raw_dd_list):
 		return
-	var raws := _listed_raws()
+	# every raw mineral has a row; undiscovered ones show unnamed (no spoiler)
+	var raws: Array = Economy.RAW_TABLE
 	var rows := _raw_dd_list.get_children()
 	if rows.size() != maxi(raws.size(), 1):
 		for c in rows:
@@ -1388,14 +1394,15 @@ func _fill_raw_dropdown() -> void:
 	for i in raws.size():
 		var r: Dictionary = raws[i]
 		var ls := (rows[i] as HBoxContainer).get_children()
-		var col: Color = r["color"]
+		var known: bool = Economy.is_mineral_discovered(r["id"]) or Economy.amount(r["id"]) > 0.0
+		var col: Color = r["color"] if known else Color(0.40, 0.43, 0.52)
 		var ic := ls[0] as TextureRect
 		if ic.texture == null or not ic.has_meta("rid") or ic.get_meta("rid") != r["id"]:
 			ic.texture = MineralIcon.make(1, col)
 			ic.set_meta("rid", r["id"])
-		(ls[1] as Label).text = r["name"]
+		(ls[1] as Label).text = r["name"] if known else "Undiscovered"
 		(ls[1] as Label).add_theme_color_override("font_color", col.lerp(Color.WHITE, 0.3))
-		(ls[2] as Label).text = Economy.fmt(Economy.amount(r["id"]))
+		(ls[2] as Label).text = Economy.fmt(Economy.amount(r["id"])) if known else "—"
 		(ls[2] as Label).add_theme_color_override("font_color", _stock_color(r["id"], Color(0.80, 0.84, 0.95)))
 
 ## Closes the raw dropdown on any click outside it (and outside its cell).

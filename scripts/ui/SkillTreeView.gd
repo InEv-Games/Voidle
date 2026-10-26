@@ -451,10 +451,10 @@ func _build_tree_graph() -> void:
 				tip_cost = "%s Science" % Economy.fmt(next_cost)
 				var cross: int = st.call("cross_branch_count", id)
 				if cross > 0:
-					body_str += "\n[color=#8899bb]+%d%% — %d research%s in other branches[/color]" % [
+					body_str += "\n[color=#8899bb]Price +%d%%: you own %d research%s in other branches[/color]" % [
 						int(round(float(st.call("cross_branch_mult", id)) * 100.0 - 100.0)), cross, "" if cross == 1 else "es"]
 			if node.common and id != "root":
-				body_str += "\n[color=#b9a8ff]Common path — no cross-branch surcharge[/color]"
+				body_str += "\n[color=#b9a8ff]Main path — research in other branches never raises its price[/color]"
 
 			# Requirements checking (ANY parent; every extra condition)
 			if cur_lv == 0:

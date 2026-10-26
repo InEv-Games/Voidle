@@ -185,7 +185,8 @@ static func requirement_block(site: Dictionary, features: Array[String]) -> Stri
 const ROLES := {
 	"energy":      {"label": "Energy",     "family": "energy",      "tint": Color(1.0, 0.85, 0.30)},
 	"residential": {"label": "Population", "family": "residential", "tint": Color(0.55, 0.85, 1.0)},
-	"production":  {"label": "Production", "family": "production",  "tint": Color(1.0, 0.60, 0.35)},
+	# magenta: orange is taken by Cities and mining districts on the map
+	"production":  {"label": "Production", "family": "production",  "tint": Color(1.0, 0.40, 0.80)},
 	"science":     {"label": "Science",    "family": "science",     "tint": Color(0.45, 0.65, 1.0)},
 	"commercial":  {"label": "Commercial", "family": "commercial",  "tint": Color(0.45, 1.0, 0.55)},
 }

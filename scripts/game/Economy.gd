@@ -199,6 +199,17 @@ static func raw_total() -> float:
 		t += amount(r["id"])
 	return t
 
+# ── Site ─────────────────────────────────────────────────────────────────────
+## The site multiplier the economy uses: terrain × location, snapped to half
+## steps — 1x, 1.5x, 2x … (playtest 23.10, KARARLAR §10): players read one
+## simple number, and the tooltip shows exactly what is paid out.
+static func site_mult(terrain: float, location: float) -> float:
+	return maxf(1.0, roundf(terrain * location * 2.0) / 2.0)
+
+## "1x", "1.5x", "2x" …
+static func mult_text(m: float) -> String:
+	return ("%dx" % int(m)) if is_equal_approx(m, roundf(m)) else ("%.1fx" % m)
+
 # ── Costs ────────────────────────────────────────────────────────────────────
 ## Buildings already in a district make the next one there dearer
 ## (Balance.cfg.building_cost_growth each). The profile picks what counts: every

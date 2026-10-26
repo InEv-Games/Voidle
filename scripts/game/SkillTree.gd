@@ -253,7 +253,7 @@ func _init() -> void:
 		600.0, _at("lunar_extraction", 45, 1.15), ["lunar_extraction"], "processing", "Unlocks Regolith Goods Plant",
 		{"grants": ["regolith_goods_plant"], "requires": ["lunar_materials"], "events": ["moon_production"]})
 	_n("regolith_storage", "Regolith Storage", "Sealed silos for lunar materials.",
-		80.0, _at("lunar_program", -135, 1.5), ["lunar_program"], "production", "Unlocks Regolith Silo",
+		80.0, _at("lunar_extraction", 90, 1.15), ["lunar_extraction"], "production", "Unlocks Regolith Silo",
 		{"grants": ["regolith_silo"]})
 	_n("lunar_field_science", "Lunar Field Science", "Study the Moon from a small outpost.",
 		60.0, _at("lunar_program", 135, 1.5), ["lunar_program"], "science", "Unlocks Lunar Research Outpost",
@@ -429,8 +429,8 @@ func _init() -> void:
 
 	# ── Administration (up-left) §17.17 ──────────────────────────────────────
 	_line = "admin"
-	_n("public_administration", "Public Administration", "The root of the Capital's support offices.",
-		350.0, _at("root", -135, 1.6), ["root"], "public", "Opens public support buildings",
+	_n("public_administration", "Public Administration", "The Capital's offices: settlement planning, recycling and logistics.",
+		350.0, _at("root", -135, 1.6), ["root"], "public", "Opens the Administration branch (no building of its own)",
 		{})
 	_n("settlement_layout", "Settlement Layout", "Plan, rearrange and move settlements.",
 		250.0, _at("public_administration", -135, 1.2), ["public_administration"], "public", "Move districts and buildings",

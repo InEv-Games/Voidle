@@ -112,7 +112,10 @@ extends Resource
 ## production, science, residential, commercial, energy_solar, energy_wind,
 ## energy_tidal, energy_geothermal.
 @export var terrain_bonuses: Dictionary = {
-	"terrain_mountain":   {"production": 0.20, "science": 0.30},
+	# Mountains and craters lean to Production, so the Production and Science
+	# lenses don't paint the same places (playtest 23.10); peaks still suit the
+	# Mountain Observatory.
+	"terrain_mountain":   {"production": 0.30, "science": 0.10},
 	"terrain_plain":      {"residential": 0.20, "commercial": 0.10},
 	"terrain_forest":     {"residential": 0.10, "science": 0.10},
 	"terrain_seacoast":   {"residential": 0.20, "commercial": 0.20, "energy_tidal": 0.20},
@@ -125,7 +128,7 @@ extends Resource
 	"terrain_geothermal": {"energy_geothermal": 0.40},
 	"terrain_wind":       {"energy_wind": 0.30},
 	"terrain_ruins":      {"science": 0.30, "commercial": 0.20},
-	"terrain_crater":     {"production": 0.10, "science": 0.20},
+	"terrain_crater":     {"production": 0.20, "science": 0.10},
 }
 
 @export_group("Storage")

@@ -4380,6 +4380,7 @@ func _process(delta: float) -> void:
 	_update_aspect()
 	_tick_zoom(delta)
 	_update_placement_hover()
+	_tick_lens_tip()
 	_tick_lander(delta)
 	_tick_companions()
 	_tick_key_spin(delta)
@@ -4617,6 +4618,13 @@ func _rebuild_lens_bar() -> void:
 	row.add_theme_constant_override("separation", 4)
 	row.z_index = 50
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# NORMAL: the plain map, no lens
+	var nb := _make_lens_button("NORMAL", Color(0.80, 0.84, 0.95), func() -> void: _set_role(""))
+	nb.set_meta("tint", Color(0.80, 0.84, 0.95))
+	nb.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Normal", "The plain map, no lens."))
+	nb.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	_lens_buttons[""] = nb
+	row.add_child(nb)
 	for role: String in FeatureMap.ROLES:
 		var info: Dictionary = FeatureMap.ROLES[role]
 		var tint: Color = info["tint"]
@@ -4705,6 +4713,44 @@ func _style_lens_bar() -> void:
 		var st := _lens_button_style(role == _role, b.get_meta("tint", Color.WHITE))
 		for state: String in ["normal", "hover", "pressed"]:
 			b.add_theme_stylebox_override(state, st)
+
+## With a lens on, hovering the globe tells what that spot gives the role:
+## "Production here  +30%" and the features behind it (on them full, near half).
+var _lens_tip_cell := ""
+func _tick_lens_tip() -> void:
+	var mouse := get_viewport().get_mouse_position()
+	var hit := {"hit": false}
+	if _role != "" and _placing_def == null and current_data != null and _is_over_planet_area(mouse) \
+			and poi_layer._hovered_index < 0 and not TutorialManager.is_narrating():
+		hit = _screen_to_lonlat(mouse)
+	if not hit["hit"]:
+		if _lens_tip_cell != "":
+			_lens_tip_cell = ""
+			# only our own tip: the mouse may have moved onto a button with its own
+			if is_instance_valid(TooltipManager._title_lbl) and TooltipManager._title_lbl.text.ends_with(" lens"):
+				TooltipManager.hide_tip()
+		return
+	var cell := "%s|%d,%d" % [_role, roundi(rad_to_deg(hit["lon"]) * 2.0), roundi(rad_to_deg(hit["lat"]) * 2.0)]
+	if cell == _lens_tip_cell:
+		return
+	_lens_tip_cell = cell
+	var info: Dictionary = FeatureMap.ROLES[_role]
+	var site := FeatureMap.shares(current_data, hit["lon"], hit["lat"])
+	var fam: String = info["family"]
+	var total := FeatureMap.bonus_for(site, fam)
+	var lines: Array[String] = []
+	for fid: String in FeatureMap.IDS:
+		if not site.has(fid):
+			continue
+		var v := FeatureMap.bonus_for({fid: site[fid]}, fam)
+		if v > 0.004:
+			lines.append("%s %s  +%s%%" % ["On" if float(site[fid]) >= 1.0 else "Near",
+				FeatureMap.feature_name(fid), _pct(v)])
+	var head := "No bonus for %s here." % String(info["label"]).to_lower() if total <= 0.004 \
+		else "%s here  +%s%%" % [info["label"], _pct(total)]
+	if not lines.is_empty():
+		head += "\n\n" + "\n".join(lines)
+	TooltipManager.show_tip(String(info["label"]) + " lens", head)
 
 ## Shows one role's overlay ("" = none).
 func _set_role(role: String) -> void:
@@ -5173,7 +5219,7 @@ func _placement_detail_lines(def: DistrictDef, chk: Dictionary, sys: Dictionary)
 	return lines
 
 ## Feature lines for a site ({ feature_id: share }): one per feature, with what
-## it boosts, e.g. ["On Mountain: +20% Production, +30% Science", colour].
+## it boosts, e.g. ["On Mountain: +30% Production, +10% Science", colour].
 func _feature_lines(site: Dictionary) -> Array:
 	var out: Array = []
 	var table: Dictionary = Balance.cfg.terrain_bonuses
@@ -5198,14 +5244,14 @@ static func _family_label(fam: String) -> String:
 		"energy_geothermal": return "Geothermal"
 	return fam.capitalize()
 
-## "+25% cr · +10% sci" — the terrain bonus a district's base outputs get here.
-func _terrain_bonus_text(poi: POIData, outputs: Dictionary) -> String:
-	var parts: Array[String] = []
+## The site multiplier a district's base outputs get here (Economy.site_mult:
+## terrain × location, snapped to half steps) — the best over its outputs.
+func _site_mult(poi: POIData, outputs: Dictionary) -> float:
+	var best := 1.0
+	var loc := Location.mult(current_data, poi)
 	for id: String in outputs:
-		var b := FeatureMap.terrain_mult(current_data, poi, id) - 1.0
-		if b > 0.004:
-			parts.append("+%s%% %s" % [_pct(b), Economy.INFO.get(id, {}).get("short", id)])
-	return " · ".join(parts)
+		best = maxf(best, Economy.site_mult(FeatureMap.terrain_mult(current_data, poi, id), loc))
+	return best
 
 ## Location bonus as text lines (Location.breakdown): the total, then each part;
 ## `detailed` also names every contributing district.
@@ -5262,9 +5308,9 @@ func _site_resource_lines(def: DistrictDef, tags: Dictionary, coastal: bool, ter
 		lines.append(ln)
 	if not def.base_outputs.is_empty() and current_data != null:
 		var ppv := GameState.get_planet(current_data.seed)
-		var tb := _terrain_bonus_text(probe, def.base_outputs)
-		lines.append(["Base: %s%s" % [_district_base_text(ppv, probe), "   terrain %s" % tb if tb != "" else ""],
-			Color(0.55, 0.95, 0.60)])
+		var sm := _site_mult(probe, def.base_outputs)
+		lines.append(["Site %s  ·  Base: %s" % [Economy.mult_text(sm), _district_base_text(ppv, probe)],
+			Color(0.55, 0.95, 0.60) if sm > 1.0 else Color(0.70, 0.74, 0.86)])
 		var loc := Location.breakdown(current_data, probe)
 		for ln: String in _location_lines(loc):
 			lines.append([ln, Color(0.65, 0.85, 1.0) if float(loc["mult"]) > 1.005 else Color(0.60, 0.64, 0.75)])
@@ -7972,7 +8018,7 @@ func _entry_output_text(pp: PlanetProgress, entry: Dictionary, def: BuildingDef)
 		match id:
 			Economy.ENERGY:     parts.append("+%s ⚡/s" % BuildingDef._num(snappedf(v, 0.1)))
 			Economy.POPULATION: parts.append("+%s pop" % Economy.fmt(v))
-			Economy.RAW:        parts.append("+%s raw" % BuildingDef._num(snappedf(v, 0.1)))
+			Economy.RAW:        parts.append("+%s %s" % [BuildingDef._num(snappedf(v, 0.1)), _raw_label()])
 			_: parts.append("+%s %s" % [BuildingDef._num(snappedf(v, 0.1)),
 				Economy.INFO.get(id, {}).get("short", id)])
 	var n := float(entry.get("amount", 1))
@@ -8003,16 +8049,27 @@ static func _bb(text: String, col: Variant) -> String:
 	return "[color=#%s]%s[/color]" % [hex.trim_prefix("#"), text]
 
 ## "+4.2 cr" in the resource's colour (energy per second, population compact).
-static func _res_bb(id: String, v: float, sign := "+") -> String:
+static func _res_bb(id: String, v: float, sign := "+", raw_name := "raw") -> String:
 	var num := Economy.fmt(absf(v)) if absf(v) >= 1000.0 else BuildingDef._num(snappedf(absf(v), 0.1))
 	var unit: String
 	match id:
 		Economy.ENERGY:     unit = "⚡/s"
 		Economy.POPULATION: unit = "pop"
-		Economy.RAW:        unit = "raw"
+		Economy.RAW:        unit = raw_name
 		_:                  unit = Economy.INFO.get(id, {}).get("short", id)
 	var col := Economy.color_of(id) if id != Economy.RAW else Color(0.85, 0.78, 0.70)
 	return _bb("%s%s %s" % [sign, num, unit], col)
+
+## What a mine digs up on the world in view: its discovered minerals by name
+## ("Ferrite"), or "raw" before the first Production district surveys them.
+func _raw_label() -> String:
+	if current_data == null:
+		return "raw"
+	var names: Array[String] = []
+	for r: Dictionary in Economy.raw_for_body(current_data):
+		if Economy.is_mineral_discovered(r["id"]):
+			names.append(String(r["name"]))
+	return "raw" if names.is_empty() else "/".join(names)
 
 ## Cost line: credits (red when short) and workers (orange when housing runs out).
 func _cost_bb(credits: float, pop: int, pd: PlanetData, pp: PlanetProgress) -> String:
@@ -8095,7 +8152,7 @@ func _district_base_text(pp: PlanetProgress, poi: POIData) -> String:
 		match id:
 			Economy.ENERGY:     parts.append("+%s ⚡/s" % BuildingDef._num(snappedf(v, 0.1)))
 			Economy.POPULATION: parts.append("+%s pop" % Economy.fmt(v))
-			Economy.RAW:        parts.append("+%s raw /%ds" % [BuildingDef._num(snappedf(v, 0.1)), int(ddef.base_tick)])
+			Economy.RAW:        parts.append("+%s %s /%ds" % [BuildingDef._num(snappedf(v, 0.1)), _raw_label(), int(ddef.base_tick)])
 			_: parts.append("+%s %s /%ds" % [BuildingDef._num(snappedf(v, 0.1)),
 				Economy.INFO.get(id, {}).get("short", id), int(ddef.base_tick)])
 	return "  ·  ".join(parts)
@@ -8116,8 +8173,8 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 	k.add_theme_color_override("font_color", Color(0.45, 0.50, 0.65))
 	k.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var v := Label.new()
-	var tb := _terrain_bonus_text(poi, ddef.base_outputs)
-	v.text = _district_base_text(pp, poi) + ("   terrain %s" % tb if tb != "" else "")
+	var sm := _site_mult(poi, ddef.base_outputs)
+	v.text = _district_base_text(pp, poi) + "   site " + Economy.mult_text(sm)
 	# wraps instead of widening the side panel
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -8129,9 +8186,10 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 	row.add_child(k); row.add_child(v)
 	box.add_child(row)
 	var lv: int = pp.district_levels.get(poi.label, 1)
-	var tip_lines: Array[String] = ["What this district makes before any buildings.",
-		"Its location bonus applies to this and to every building in it."]
-	tip_lines.append("")
+	var tip_lines: Array[String] = ["Site  %s" % Economy.mult_text(sm),
+		"Terrain × location, rounded to the nearest half step. It multiplies what this",
+		"district makes before any buildings, and every building in it.",
+		"", "Why:"]
 	tip_lines.append("Terrain — visible features here (full on them, half within %d km), the City's included:" % int(Balance.cfg.terrain_near_km))
 	var feat_lines := _feature_lines(FeatureMap.merged_site(planet, poi))
 	for ln: Array in feat_lines:
@@ -10233,7 +10291,7 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		tip_body_parts.append("Cost      " + _full_cost_bb(full_cost, pop_need, planet, pp) + "\n")
 		var gains: Array[String] = []
 		for oid: String in def.outputs:
-			gains.append(_res_bb(oid, ProductionManager.output_per_cycle(pp, preview_entry, def, oid)))
+			gains.append(_res_bb(oid, ProductionManager.output_per_cycle(pp, preview_entry, def, oid), "+", _raw_label()))
 		for bid_: String in def.planet_bonus:
 			gains.append(_bb("+%d%% %s %s" % [int(round(float(def.planet_bonus[bid_]) * 100.0)),
 				Economy.INFO.get(bid_, {}).get("short", bid_), "planet-wide" if def.planet_wide else "in this city"],
@@ -10249,7 +10307,9 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		for iid: String in def.inputs:
 			costs.append(_res_bb(iid, float(def.inputs[iid]), "−"))
 		if not costs.is_empty():
-			tip_body_parts.append("Upkeep    " + "  ".join(costs) + "\n")
+			# energy reads per second; goods and minerals are taken once per cycle
+			tip_body_parts.append("Upkeep    " + "  ".join(costs) \
+				+ (_bb("  /%.0fs" % cycle_s, BB_DIM) if not def.inputs.is_empty() else "") + "\n")
 		var b_time: float = def.construct_duration if def.construct_duration > 0.0 else def.tick_duration
 		tip_body_parts.append(_bb("Build %.0fs%s" % [b_time, "  ·  %d slots" % def.slot_cost if def.slot_cost > 1 else ""], BB_DIM))
 		if reason != "":

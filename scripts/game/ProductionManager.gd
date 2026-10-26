@@ -410,7 +410,7 @@ static func district_income_raw(pd: PlanetData, poi: POIData) -> Dictionary:
 		return out
 	var loc := Location.mult(pd, poi)
 	for id: String in ddef.base_outputs:
-		out[id] = float(ddef.base_outputs[id]) * FeatureMap.terrain_mult(pd, poi, id) * loc
+		out[id] = float(ddef.base_outputs[id]) * Economy.site_mult(FeatureMap.terrain_mult(pd, poi, id), loc)
 	return out
 
 ## A district's base income per its cycle (per second for energy, capacity for
@@ -470,10 +470,14 @@ func _outputs_full(pp: PlanetProgress, def: BuildingDef) -> bool:
 ## Steady income / upkeep per second of every stored resource across all
 ## colonies: { resource_id: net per second }. "raw" is all raw kinds together;
 ## energy is the grid's net. Waiting, paused and constructing buildings count 0.
-func resource_rates() -> Dictionary:
+## `only_seed`: one world's own production and use (its energy net; the
+## empire-wide idle income left out).
+func resource_rates(only_seed: int = -1) -> Dictionary:
 	var rates := {Economy.ENERGY: _global_energy}
 	var st := get_node("/root/SkillTree")
 	for pp: PlanetProgress in _all_colonies():
+		if only_seed != -1 and pp.planet_seed != only_seed:
+			continue
 		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
 		if pd != null:
 			for poi: POIData in pd.custom_pois:
@@ -510,6 +514,10 @@ func resource_rates() -> Dictionary:
 				rates[id] = float(rates.get(id, 0.0)) + output_per_cycle(pp, entry, def, id) * eff * per_s
 			for id: String in def.inputs:
 				rates[id] = float(rates.get(id, 0.0)) - float(def.inputs[id]) * float(entry.get("amount", 1)) * per_s
+	if only_seed != -1:
+		var opp := GameState.get_planet(only_seed)
+		rates[Economy.ENERGY] = planet_energy_net(opp) if opp != null else 0.0
+		return rates
 	var idle := idle_income_rates()
 	for id: String in idle:
 		if float(idle[id]) > 0.0:
@@ -598,8 +606,8 @@ func output_per_cycle(pp: PlanetProgress, entry: Dictionary, def: BuildingDef, i
 	if not def.outputs.has(id):
 		return 0.0
 	var v: float = float(def.outputs[id]) * float(entry.get("amount", 1))
-	v *= get_site_mult(pp, entry, def, id) * Economy.scope_bonus(pp, entry.get("district_id", ""), id)
-	v *= location_mult(pp, entry.get("district_id", ""))
+	v *= Economy.site_mult(get_site_mult(pp, entry, def, id), location_mult(pp, entry.get("district_id", ""))) \
+		* Economy.scope_bonus(pp, entry.get("district_id", ""), id)
 	return _skill_mods(pp, id, v, def.output_tag)
 
 ## Skill / planet-modifier multipliers shared by buildings and district base income.
@@ -816,6 +824,10 @@ func _calc_global_energy() -> void:
 		_global_energy_ratio = 1.0 - Balance.cfg.energy_max_slowdown * (1.0 - clampf(total_prod / total_demand, 0.0, 1.0))
 
 ## Per-planet energy contribution (used by PlanetaryView for breakdown display).
+## One world's energy: Vector2(produced, demanded) per second.
+func planet_energy_split(pp: PlanetProgress) -> Vector2:
+	return _planet_energy(pp)
+
 func planet_energy_net(pp: PlanetProgress) -> float:
 	var e := _planet_energy(pp)
 	return e.x - e.y
