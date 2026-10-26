@@ -120,13 +120,14 @@ func buildings_in_district(district_label: String) -> Array[Dictionary]:
 	return result
 
 ## Building slots: 3 + 2 per level; the Capital District (a City) holds only a
-## few hand-picked buildings — 1 + 1 per level.
+## few hand-picked buildings — 2 + 1 per level (its Civic Office and a 2-slot
+## Spaceport fit at Lv2).
 func district_slots(poi: POIData) -> int:
 	var lv: int = district_levels.get(poi.label, 1)
 	if poi.is_orbital():
 		return 1   # a station holds one module; the Orbit levels instead
 	if poi.is_city():
-		return lv
+		return lv + 1
 	return 3 + (lv - 1) * 2
 
 ## Slots one more level adds to this district.

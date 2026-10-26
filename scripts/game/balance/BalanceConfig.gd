@@ -60,7 +60,7 @@ extends Resource
 @export_group("Population")
 ## Population the k-th district of a City takes to found: base × (1 + step·k).
 @export var district_found_pop_base: float = 3000.0
-@export var district_found_pop_step: float = 0.5
+@export var district_found_pop_step: float = 0.25   # 0.5 starved the early game of housing (playtest 23.10)
 ## Population for a district level L → L+1: base × growth^(L−1).
 @export var level_pop_base: float = 2000.0
 @export var level_pop_growth: float = 2.0

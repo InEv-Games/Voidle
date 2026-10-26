@@ -19,3 +19,4 @@ energy_per_tick = -2.0
 pop_cost = 250
 construct_duration = 4.0
 description = "A small first Fuel line: 8 Ferrite into 2 Fuel."
+build_materials = {"ferrite": 20.0}

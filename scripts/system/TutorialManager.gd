@@ -271,7 +271,7 @@ const QUESTS := [
 	{"id": "fuel", "title": "Fuel for the Journey", "desc": "Research Fuel Processing and make or buy Fuel.",
 		"reward_credits": 300.0, "reward_science": 100.0, "reward_text": "+300 cr  +100 sci",
 		"sub_steps": [{"type": "skill", "target": "fuel_processing"}]},
-	{"id": "rocketry", "title": "Rocketry", "desc": "Research Rocketry and build a Spaceport in your Capital (it needs Capital Lv2 for its two slots).",
+	{"id": "rocketry", "title": "Rocketry", "desc": "Research Rocketry and build a Spaceport in your Capital (it takes two slots — level the Capital up if they are taken).",
 		"reward_credits": 600.0, "reward_science": 150.0, "reward_text": "+600 cr  +150 sci",
 		"sub_steps": [{"type": "skill", "target": "rocketry"}, {"type": "building", "target": "spaceport"}]},
 	{"id": "orbital", "title": "Into Orbit", "desc": "Research Orbital Assembly, then found your Orbit from the planet panel and launch a Space Station from the Spaceport. The Moon needs it.",

@@ -21,4 +21,4 @@ inputs = {"goods": 1.0}
 planet_bonus = {}
 tier = 1
 unlocked_by_default = true
-
+build_materials = {"ferrite": 20.0}

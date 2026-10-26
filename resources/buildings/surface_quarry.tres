@@ -19,3 +19,4 @@ energy_per_tick = -0.5
 pop_cost = 125
 construct_duration = 2.0
 description = "A small open pit: half a Mine for half the workers and power."
+build_materials = {"ferrite": 10.0}

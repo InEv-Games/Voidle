@@ -445,6 +445,13 @@ func _build_tree_graph() -> void:
 				if unlocked:
 					body_str += "\n\n[color=#55f58c]✦ UNLOCKED ✦[/color]"
 			
+			# a granted building whose cost names an undiscovered mineral stays hidden
+			for gb: String in node.grants:
+				var gdef := BuildingDef.find(gb)
+				if gdef != null and not gdef.minerals_known():
+					body_str += "\n[color=#ffaa44]%s shows up once a Production district has found the mineral it needs.[/color]" % gdef.display_name
+					break
+
 			# Cost handling: base × target level × cross-branch factor
 			if cur_lv < max_lv:
 				var next_cost: float = st.call("get_next_cost", id)
