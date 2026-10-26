@@ -145,9 +145,17 @@ extends Resource
 ## (not used yet)
 @export var idle_pop_uses_level_mult: bool = false
 
-@export_group("Trade (not used yet)")
+@export_group("Trade")
 @export var trade_sell_ratio: float = 0.9
 @export var trade_buy_ratio: float = 1.1
+## Dynamic prices (KARARLAR §10): buying raises a product's price, selling lowers
+## it; this many credits' worth of trade moves the price by 100%.
+@export var trade_depth_credits: float = 4000.0
+## Seconds for half of a price change to fade back toward the reference.
+@export var trade_recovery_half_life: float = 120.0
+## Price multiplier limits (×reference): never below / above these.
+@export var trade_price_min: float = 0.4
+@export var trade_price_max: float = 3.0
 
 @export_group("Research")
 ## Price surcharge per distinct strategy node bought in another branch (GDD §17.5).

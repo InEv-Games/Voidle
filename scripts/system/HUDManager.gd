@@ -292,7 +292,7 @@ func _make_trade_button(normal: StyleBoxFlat, hover: StyleBoxFlat) -> Button:
 	b.mouse_entered.connect(func() -> void:
 		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("Trade", "Buy and sell at fixed prices, keep reserves and set standing orders." \
+		TooltipManager.show_tip("Trade", "Buy and sell (prices move with your trades), keep reserves and set standing orders." \
 			if Trade.has_access() else "Research Trade Access to buy and sell."))
 	b.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)

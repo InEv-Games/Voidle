@@ -77,7 +77,7 @@ GDD'nin geri kalanı kabul edildi. Derinliğin idle oyun için fazla olabileceğ
 
 Tarih: 26 Ekim 2026. İş planı: [PLAYTEST_2026-10-23.md](PLAYTEST_2026-10-23.md).
 
-- **Trade fiyatları dinamik.** *GDD'de:* sabit fiyat (satış %90, alış %110). *Kararımız:* her alım o kaynağın fiyatını artırır, her satış düşürür; fiyat zamanla taban değere geri döner.
+- **Trade fiyatları dinamik.** *GDD'de:* sabit fiyat (satış %90, alış %110). *Kararımız:* her alım o kaynağın fiyatını artırır, her satış düşürür; fiyat zamanla taban değere geri döner. 4.000 kredilik işlem fiyatı %100 oynatır; değişimin yarısı 2 dakikada söner; fiyat referansın 0,4–3 katı arasında kalır (`BalanceConfig` → Trade). Depo taşmasının otomatik satışı artık Trade Automation araştırmasıyla açılır.
 - **Sağ sürükleme gezegeni döndürür.** Sürüklemeden yapılan sağ tık §6'daki komut menüsünü açar.
 - **Dünya binaları Ay district'lerine kurulabilir.** Kaynaklar (Ferrite dahil) ortak global stoktur; nerede harcandığı fark etmez. §1'deki sabit girdi kuralı değişmez.
 - **Uzaklık bantları City'nin erişimine göredir.** *GDD'de:* sabit 500 / 1.000 / 2.000 / 3.500 km. *Kararımız:* bantlar district'in City erişiminin oranıdır (çok yakın ≤ %40, yakın ≤ %60, orta ≤ %80, uzak < %95, sonrası çok uzak). Böylece %0–%50 aralığının tamamı her City seviyesinde ve Ay'da erişilebilir. Yakınlık ve merkez bonusları da aynı bantları kullanır. Oranlar `BalanceConfig` içindedir.

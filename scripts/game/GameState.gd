@@ -42,12 +42,14 @@ signal minerals_discovered(body_seed: int, mineral_ids: Array)
 signal trade_changed
 
 ## Trade (see Trade.gd): player reserves {id: amount}, automation orders
-## {id: order}, recent trades and the running overflow-sale totals.
+## {id: order}, recent trades and the running overflow-sale totals (credits per product).
 var trade_reserves: Dictionary = {}
 var trade_orders: Dictionary = {}
 var trade_log: Array = []
 var trade_seq: int = 0
 var overflow_sold: Dictionary = {}
+## Price pressure per product (Trade.price_mult): + after buying, − after selling.
+var trade_pressure: Dictionary = {}
 
 func is_body_surveyed(body_seed: int) -> bool:
 	return surveyed_bodies.has(body_seed)
@@ -1106,7 +1108,7 @@ func save() -> void:
 		"research":             get_node("/root/SkillTree").get_save_data() if has_node("/root/SkillTree") else {},
 		"moon_local_moonstone": moon_local_moonstone,
 		"trade": {"reserves": trade_reserves, "orders": trade_orders, "log": trade_log,
-			"seq": trade_seq, "overflow_sold": overflow_sold},
+			"seq": trade_seq, "overflow_sold": overflow_sold, "pressure": trade_pressure},
 		"ships":                get_node("/root/ShipManager").serialize() if has_node("/root/ShipManager") else [],
 		"planet_progress":      {},
 	}
@@ -1260,6 +1262,7 @@ func load_save() -> bool:
 	trade_log = trade.get("log", [])
 	trade_seq = int(trade.get("seq", 0))
 	overflow_sold = trade.get("overflow_sold", {})
+	trade_pressure = trade.get("pressure", {})
 
 	global_resources    = data.get("global_resources",   {})
 	global_resources.erase(Economy.ENERGY)   # energy is a flow; older saves stored it
@@ -1366,6 +1369,7 @@ func delete_save() -> void:
 	get_node("/root/SkillTree").reset_to_defaults()
 	moon_local_moonstone = 0.0
 	trade_reserves.clear()
+	trade_pressure.clear()
 	trade_orders.clear()
 	trade_log.clear()
 	trade_seq = 0

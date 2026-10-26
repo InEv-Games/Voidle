@@ -381,8 +381,8 @@ func _init() -> void:
 	_n("start_commercial", "Commerce Operations", "Commercial Districts and Markets.",
 		0.0, _at("root", 90, 1.6), ["root"], "trade", "Unlocks Commercial Districts & Market",
 		{"grants": ["commercial"], "common": true})
-	_n("trade_access", "Trade Access", "Buy and sell at fixed prices. Once researched, storage overflow is sold instead of lost.",
-		150.0, _at("start_commercial", 90, 1.2), ["start_commercial"], "trade", "Manual trade and overflow sales",
+	_n("trade_access", "Trade Access", "Buy and sell. Prices rise as you buy and fall as you sell, then drift back.",
+		150.0, _at("start_commercial", 90, 1.2), ["start_commercial"], "trade", "Manual trade",
 		{"common": true})
 	_n("consumer_goods", "Consumer Goods", "Bazaars that sell factory Goods.",
 		250.0, _at("trade_access", 90, 1.2), ["trade_access"], "trade", "Unlocks Bazaar",
@@ -396,8 +396,8 @@ func _init() -> void:
 	_n("local_business", "Local Business", "Neighbourhood trade centres.",
 		150.0, _at("trade_access", 55, 1.1), ["trade_access"], "trade", "Unlocks Local Trade Center",
 		{"grants": ["local_trade_center"]})
-	_n("trade_automation", "Trade Automation", "Standing orders: sell above a reserve, buy up to a target stock.",
-		300.0, _at("trade_access", 125, 1.1), ["trade_access"], "trade", "Trade automation with reserves",
+	_n("trade_automation", "Trade Automation", "Standing orders: sell above a reserve, buy up to a target stock. Storage overflow is sold instead of lost.",
+		300.0, _at("trade_access", 125, 1.1), ["trade_access"], "trade", "Standing orders and overflow sales",
 		{})
 	_n("harbor_trade", "Harbor Trade", "Markets on the waterfront.",
 		450.0, _at("trade_networks", 45, 1.15), ["trade_networks"], "trade", "Unlocks Harbor Market",

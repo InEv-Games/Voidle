@@ -45,6 +45,7 @@ func _process(delta: float) -> void:
 	_tick_all(delta)
 	_tick_idle_income(delta)
 	GameState.tick_expeditions(delta)
+	Trade.tick_prices(delta)
 
 # ── Save / load ───────────────────────────────────────────────────────────────
 

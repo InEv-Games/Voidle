@@ -1,16 +1,21 @@
-## Trade (docs/design/VOIDLE_GDD.md §18): fixed prices, no market simulation.
+## Trade (docs/design/VOIDLE_GDD.md §18, KARARLAR §10): prices move with trade.
 ##
 ##   access      Trade Access research opens manual buying and selling of every
 ##               product the player can reach, Science included; automation needs
 ##               Trade Automation. A raw resource must have been discovered first
 ##               (its name and price never show before); Fuel needs Fuel
 ##               Processing, Rare needs Rare Processing. Trade never opens access.
-##   prices      sell = reference × trade_sell_ratio (90%), buy = reference ×
-##               trade_buy_ratio (110%) from the balance profile. A future raw's
-##               reference is 2 × its rarity yield.
-##   overflow    with Trade Access, new production that doesn't fit in storage is
-##               sold at the sell price; without it the overflow is lost. Old
-##               stock above a lowered cap is never sold this way.
+##   prices      sell = reference × trade_sell_ratio (90%) × m, buy = reference ×
+##               trade_buy_ratio (110%) × m, where m = 1 + the product's price
+##               pressure (clamped to trade_price_min…max). Buying raises the
+##               pressure, selling lowers it: trade_depth_credits worth of trade
+##               moves m by 1. A trade pays the exact area under that slope, so
+##               splitting it into small trades gains nothing. Pressure fades to 0
+##               with a half-life of trade_recovery_half_life seconds. A future
+##               raw's reference is 2 × its rarity yield.
+##   overflow    with Trade Automation, new production that doesn't fit in storage
+##               is sold (it lowers the price like any sale); without it the
+##               overflow is lost. Old stock above a lowered cap is never sold.
 ##   reserves    the player can hold stock back (e.g. for the rocket); no sale —
 ##               manual or automatic — dips into it.
 ##   orders      per product: sell what's above the reserve once the stock reaches
@@ -42,11 +47,74 @@ static func reference_price(id: String) -> float:
 		return 2.0 * Economy.yield_mult(int(r["rarity"]))
 	return 0.0
 
+## Current sell / buy price of one unit (the next one).
 static func sell_price(id: String) -> float:
-	return reference_price(id) * Balance.cfg.trade_sell_ratio
+	return reference_price(id) * Balance.cfg.trade_sell_ratio * price_mult(id)
 
 static func buy_price(id: String) -> float:
-	return reference_price(id) * Balance.cfg.trade_buy_ratio
+	return reference_price(id) * Balance.cfg.trade_buy_ratio * price_mult(id)
+
+# ── Dynamic prices ───────────────────────────────────────────────────────────
+
+static func pressure(id: String) -> float:
+	return float(GameState.trade_pressure.get(id, 0.0))
+
+## Price multiplier now (1 = reference).
+static func price_mult(id: String) -> float:
+	return clampf(1.0 + pressure(id), Balance.cfg.trade_price_min, Balance.cfg.trade_price_max)
+
+## Units of a product that move its price by 100%.
+static func depth(id: String) -> float:
+	var r := reference_price(id)
+	return Balance.cfg.trade_depth_credits / r if r > 0.0 else INF
+
+## ∫ clamp(1 + p) dp from a to b (a ≤ b): the multiplier's area over a pressure span.
+static func _area(a: float, b: float) -> float:
+	var c: BalanceConfig = Balance.cfg
+	var lo := c.trade_price_min - 1.0
+	var hi := c.trade_price_max - 1.0
+	var total := 0.0
+	var x := a
+	if x < lo:
+		var x1 := minf(b, lo)
+		total += (x1 - x) * c.trade_price_min
+		x = x1
+	if x < b and x < hi:
+		var x2 := minf(b, hi)
+		total += (x2 - x) * (1.0 + (x + x2) * 0.5)
+		x = x2
+	if x < b:
+		total += (b - x) * c.trade_price_max
+	return total
+
+## Credits buying `n` units costs now (the price rises along the way).
+static func buy_cost(id: String, n: float) -> float:
+	var d := depth(id)
+	var p0 := pressure(id)
+	return reference_price(id) * Balance.cfg.trade_buy_ratio * d * _area(p0, p0 + n / d)
+
+## Credits selling `n` units brings now (the price falls along the way).
+static func sell_value(id: String, n: float) -> float:
+	var d := depth(id)
+	var p0 := pressure(id)
+	return reference_price(id) * Balance.cfg.trade_sell_ratio * d * _area(p0 - n / d, p0)
+
+static func _push(id: String, units: float) -> void:
+	var c: BalanceConfig = Balance.cfg
+	GameState.trade_pressure[id] = clampf(pressure(id) + units / depth(id),
+		c.trade_price_min - 1.0, c.trade_price_max - 1.0)
+
+## Every frame (ProductionManager): pressure fades back toward the reference.
+static func tick_prices(delta: float) -> void:
+	if GameState.trade_pressure.is_empty():
+		return
+	var k := pow(0.5, delta / maxf(Balance.cfg.trade_recovery_half_life, 1.0))
+	for id: String in GameState.trade_pressure.keys():
+		var v := float(GameState.trade_pressure[id]) * k
+		if absf(v) < 0.001:
+			GameState.trade_pressure.erase(id)
+		else:
+			GameState.trade_pressure[id] = v
 
 static func has_access() -> bool:
 	return SkillTree.is_unlocked("trade_access")
@@ -115,13 +183,24 @@ static func room(id: String) -> float:
 		return INF
 	return maxf(Economy.cap(id) - stock(id), 0.0)
 
-## Largest purchase possible now (credits, storage, optional credit floor).
+## Largest purchase possible now (credits, storage, optional credit floor);
+## the price climbs as it buys, so it searches for the largest affordable amount.
 static func max_buy(id: String, credit_floor: float = 0.0) -> float:
 	var p := buy_price(id)
 	if p <= 0.0:
 		return 0.0
-	var by_money := maxf(GameState.credits - credit_floor, 0.0) / p
-	return maxf(floorf(minf(by_money, room(id)) * 100.0) / 100.0, 0.0)
+	var money := maxf(GameState.credits - credit_floor, 0.0)
+	var hi_n := minf(money / (reference_price(id) * Balance.cfg.trade_buy_ratio * Balance.cfg.trade_price_min), room(id))
+	if hi_n <= 0.0:
+		return 0.0
+	var lo_n := 0.0
+	for _i in 40:
+		var mid := (lo_n + hi_n) * 0.5
+		if buy_cost(id, mid) <= money:
+			lo_n = mid
+		else:
+			hi_n = mid
+	return maxf(floorf(lo_n * 100.0) / 100.0, 0.0)
 
 # ── Transactions ─────────────────────────────────────────────────────────────
 
@@ -132,8 +211,9 @@ static func sell(id: String, qty: float, source: String = "manual", extra_reserv
 	var n := minf(qty, sellable(id, extra_reserve))
 	if n <= 0.0:
 		return 0.0
-	var credits := n * sell_price(id)
+	var credits := sell_value(id, n)
 	_take(id, n)
+	_push(id, -n)
 	GameState.earn_credits(credits)
 	_log("sell", id, n, credits, source)
 	return n
@@ -145,9 +225,10 @@ static func buy(id: String, qty: float, source: String = "manual", credit_floor:
 	var n := minf(qty, max_buy(id, credit_floor))
 	if n <= 0.0:
 		return 0.0
-	var credits := n * buy_price(id)
+	var credits := buy_cost(id, n)
 	if not GameState.spend_credits(credits):
 		return 0.0
+	_push(id, n)
 	Economy.add(id, n)
 	_log("buy", id, n, -credits, source)
 	return n
@@ -157,13 +238,15 @@ static func _take(id: String, n: float) -> void:
 		Economy.SCIENCE: GameState.spend_science(n)
 		_:               GameState.consume_resource(id, n)
 
-## New production that didn't fit in storage (GameState.add_resource). Sold at
-## the sell price once Trade Access is researched; otherwise it's lost.
+## New production that didn't fit in storage (GameState.add_resource). Sold
+## once Trade Automation is researched (playtest 23.10: it should be earned);
+## otherwise it's lost. It lowers the price like any sale.
 static func sell_overflow(id: String, overflow: float) -> void:
-	if overflow <= 0.0 or not can_trade(id):
+	if overflow <= 0.0 or not can_trade(id) or not has_automation():
 		return
-	var credits := overflow * sell_price(id)
-	GameState.overflow_sold[id] = float(GameState.overflow_sold.get(id, 0.0)) + overflow
+	var credits := sell_value(id, overflow)
+	_push(id, -overflow)
+	GameState.overflow_sold[id] = float(GameState.overflow_sold.get(id, 0.0)) + credits   # credits earned
 	GameState.earn_credits(credits)
 
 static func _log(kind: String, id: String, qty: float, credits: float, source: String) -> void:
