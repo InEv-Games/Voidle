@@ -214,8 +214,8 @@ static func building_cost(pp: PlanetProgress, def: BuildingDef, district_label: 
 			owned += int(b.get("amount", 1))
 	return roundf(Balance.geometric(def.base_cost, c.building_cost_growth, owned))
 
-## Named materials one building of this model costs on top of credits
-## (fixed — not grown by the repeat counter). Its own list, else its tier's.
+## Named materials the first building of this model costs on top of credits
+## (repeats grow like credits, see building_full_cost). Its own list, else its tier's.
 static func building_materials(def: BuildingDef) -> Dictionary:
 	if not def.build_materials.is_empty():
 		return def.build_materials
@@ -227,7 +227,8 @@ static func building_materials(def: BuildingDef) -> Dictionary:
 	return {}
 
 ## Full price of `count` more of a model in a district: { "credits": Σ each
-## unit's repeat price, material: amount × count, … }. Same rounding as single buys.
+## unit's repeat price, material: Σ each unit's repeat amount, … }. Materials grow
+## by the same repeat factor as credits (rounded up to whole units).
 static func building_full_cost(pp: PlanetProgress, def: BuildingDef, district_label: String, count: int = 1) -> Dictionary:
 	var c: BalanceConfig = Balance.cfg
 	var owned := 0
@@ -242,7 +243,10 @@ static func building_full_cost(pp: PlanetProgress, def: BuildingDef, district_la
 	var out := {CREDITS: credits}
 	var mats := building_materials(def)
 	for id: String in mats:
-		out[id] = float(mats[id]) * float(count)
+		var total := 0.0
+		for i in count:
+			total += ceilf(Balance.geometric(float(mats[id]), c.building_cost_growth, owned + i) - 0.0001)
+		out[id] = total
 	return out
 
 ## Stock of a resource for paying costs (credits and Science included).
@@ -384,7 +388,7 @@ static func max_population(pd: PlanetData, pp: PlanetProgress) -> int:
 	for poi: POIData in pd.custom_pois:
 		if poi.is_orbital():
 			continue
-		if poi.is_city():
+		if poi.is_city() and not poi.constructing:   # a City houses nobody until it stands
 			total += Balance.cfg.city_base_pop * scope_bonus(pp, poi.label, POPULATION, pd)
 		total += ProductionManager.district_base(pp, poi, POPULATION)   # bonus included
 	for b: Dictionary in pp.buildings:
@@ -445,7 +449,7 @@ static func district_pop_used(pp: PlanetProgress, poi: POIData) -> int:
 ## Housing one district provides: its base + its housing buildings (City base included).
 static func district_housing(pd: PlanetData, pp: PlanetProgress, poi: POIData) -> int:
 	var total := ProductionManager.district_base(pp, poi, POPULATION)
-	if poi.is_city():
+	if poi.is_city() and not poi.constructing:
 		total += Balance.cfg.city_base_pop * scope_bonus(pp, poi.label, POPULATION, pd)
 	for b: Dictionary in pp.buildings_in_district(poi.label):
 		if b.get("constructing", false):

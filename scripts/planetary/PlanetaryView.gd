@@ -940,7 +940,7 @@ func _refresh_solar_btn() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if SkillTreeView.is_open:
+	if SkillTreeView.is_open or TradePanel.is_open:   # full-screen modals own the input
 		return
 	if event is InputEventMouseButton and (event as InputEventMouseButton).double_click \
 			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
@@ -1278,7 +1278,7 @@ static func _hidden_by(v: Vector3, b: Dictionary) -> bool:
 ## in the console, or with the Upgrade Tree open. Slower when zoomed in.
 const KEY_SPIN_SPEED := 1.6   # rad/s at the widest zoom
 func _tick_key_spin(delta: float) -> void:
-	if SkillTreeView.is_open or _naming_open or _switching_body:
+	if SkillTreeView.is_open or TradePanel.is_open or _naming_open or _switching_body:
 		return
 	var focus := get_viewport().gui_get_focus_owner()
 	if focus is LineEdit or focus is TextEdit:
@@ -2555,7 +2555,7 @@ func _setup_material(data: PlanetData) -> void:
 const MAX_TERRITORIES:     int   = 128
 # Settlement radius = BASE + SIZE·√(Σ building weights).
 # A fresh district is a hamlet of a few pixels; housing grows it fastest.
-const SETTLE_BASE_DEG:     float = 0.9
+const SETTLE_BASE_DEG:     float = TerrainSampler.SETTLE_BASE_DEG
 const SETTLE_SIZE_DEG:     float = 1.1
 const TERRITORY_WARP:      float = 0.18   # edge raggedness — same as the shader
 ## Hide district borders while zoomed out (fully visible from ZOOM_BORDER_FULL).
@@ -2790,6 +2790,10 @@ func _rebuild_roads() -> void:
 			_route_cache[key] = net.route(deg_to_rad(a.lon_deg), deg_to_rad(a.lat_deg),
 				deg_to_rad(b.lon_deg), deg_to_rad(b.lat_deg),
 				_is_sea_site(a), _is_sea_site(b))
+			if (_route_cache[key] as Dictionary).is_empty():
+				# no road or port-to-port lane found (e.g. no harbour near an inland
+				# site): a direct lane keeps the two linked (neighbour rule, income)
+				_route_cache[key] = _direct_lane(a, b)
 		var r: Dictionary = _route_cache[key]
 		if not r.is_empty():
 			if not r.has("port_names"):
@@ -2799,6 +2803,17 @@ func _rebuild_roads() -> void:
 	poi_layer.roads = out
 	_set_spokes_from_routes(routed)
 	_store_road_relations(routed)
+
+## A straight sea lane between two settlements (great circle), in route format.
+static func _direct_lane(a: POIData, b: POIData) -> Dictionary:
+	var va := _lonlat_to_world(deg_to_rad(a.lon_deg), deg_to_rad(a.lat_deg))
+	var vb := _lonlat_to_world(deg_to_rad(b.lon_deg), deg_to_rad(b.lat_deg))
+	var pts := PackedVector2Array()
+	const STEPS := 24
+	for k in STEPS + 1:
+		var v := va.slerp(vb, float(k) / float(STEPS)).normalized()
+		pts.append(Vector2(atan2(v.x, v.z), asin(clampf(-v.y, -1.0, 1.0))))
+	return {"segments": [{"sea": true, "points": pts}], "ports": PackedVector2Array()}
 
 ## Neighbour income runs along roads: two districts are income partners when a
 ## road links them directly (a road merely passing through a third district
@@ -3430,8 +3445,7 @@ func _mineral_icon_cell(rd: ResourceData, show_count: bool, stored: float = 0.0)
 		count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		inner.add_child(count_lbl)
 
-	var tier_suffix := ResourceData.TIER_SUFFIXES[clampi(rd.tier - 1, 0, ResourceData.TIER_SUFFIXES.size() - 1)]
-	var tip_body := "R%d  ·  T%d %s" % [rd.rarity, rd.tier, tier_suffix]
+	var tip_body := "R%d  ·  %s" % [rd.rarity, _tier_text(rd)]
 	cell.mouse_entered.connect(func() -> void:
 		TooltipManager.show_tip(rd.unique_name, tip_body))
 	cell.mouse_exited.connect(func() -> void:
@@ -3440,6 +3454,12 @@ func _mineral_icon_cell(rd: ResourceData, show_count: bool, stored: float = 0.0)
 	return cell
 
 ## Square grid card: icon top, count bottom, fixed width. Used in resource grid.
+## "Raw" for tier-1 minerals (what players dig up), else "T2 Ingot" etc.
+static func _tier_text(rd: ResourceData) -> String:
+	if rd.tier <= 1:
+		return "Raw"
+	return "T%d %s" % [rd.tier, ResourceData.TIER_SUFFIXES[clampi(rd.tier - 1, 0, ResourceData.TIER_SUFFIXES.size() - 1)]]
+
 func _mineral_grid_card(rd: ResourceData, stored: float, show_count: bool, sub_label: String = "", pp: PlanetProgress = null) -> PanelContainer:
 	var rarity_col := _rarity_border_color(rd.rarity)
 
@@ -3522,11 +3542,10 @@ func _mineral_grid_card(rd: ResourceData, stored: float, show_count: bool, sub_l
 		tw.tween_property(card, "scale", Vector2(1.0, 1.0), 0.10)
 		s.border_color = rarity_col)
 
-	var tier_suffix := ResourceData.TIER_SUFFIXES[clampi(rd.tier - 1, 0, ResourceData.TIER_SUFFIXES.size() - 1)]
 	var cap_rd := rd
 	var cap_pp := pp
 	card.mouse_entered.connect(func() -> void:
-		var header := "R%d  ·  T%d %s" % [cap_rd.rarity, cap_rd.tier, tier_suffix]
+		var header := "R%d  ·  %s" % [cap_rd.rarity, _tier_text(cap_rd)]
 		var rid    := cap_rd.resource_id()
 		if cap_pp == null:
 			TooltipManager.show_tip(cap_rd.unique_name, header)
@@ -4338,6 +4357,15 @@ func _add_orbit_toggle(planet_cont: Control, layer: OrbitalLayer) -> void:
 	btn.offset_left   = 40   # clear of the panel's open/close tab
 	btn.offset_top    = btn.offset_bottom - SIZE
 	btn.offset_right  = btn.offset_left + SIZE
+	# nothing to toggle until the world has an Orbit
+	var show_if_orbit := func() -> void:
+		btn.visible = current_data != null and Leveling.orbit_hub(current_data) != null
+	show_if_orbit.call()
+	var t := Timer.new()
+	t.wait_time = 0.5
+	t.autostart = true
+	t.timeout.connect(show_if_orbit)
+	btn.add_child(t)
 
 func _process(delta: float) -> void:
 	_poll_slot_dropdown(delta)
@@ -5055,17 +5083,15 @@ static func _city_count(data: PlanetData) -> int:
 			n += 1
 	return n
 
-## How far beyond its settlements a City's districts may be placed: grows by
-## CITY_REACH_PER_LV_DEG for every level the City has.
-const CITY_REACH_PER_LV_DEG: float = 3.0
+## How far beyond its settlements a City's districts may be placed
+## (TerrainSampler.city_reach_deg — the distance bands use it too).
 func _city_reach_rad(city_label: String) -> float:
 	var lv := 1
 	if current_data != null:
 		var pp := GameState.get_planet(current_data.seed)
 		if pp != null:
 			lv = pp.district_levels.get(city_label, 1)
-	return deg_to_rad((SETTLE_BASE_DEG + TerrainSampler.NEIGHBOR_GAP_DEG * 1.3
-		+ CITY_REACH_PER_LV_DEG * float(lv - 1)) * TerrainSampler.body_scale(current_data))
+	return deg_to_rad(TerrainSampler.city_reach_deg(current_data, lv))
 
 func _placement_system_check(def: DistrictDef, lon: float, lat: float) -> Dictionary:
 	var n := _lonlat_to_world(lon, lat)
@@ -5191,8 +5217,8 @@ func _location_lines(loc: Dictionary, detailed: bool = false) -> Array[String]:
 	if nearest == INF:
 		out.append("  +%d%%  distance — no other district on this world" % int(round(float(loc["distance"]) * 100.0)))
 	else:
-		out.append("  +%s%%  distance — nearest %s (%s)" % [_pct(float(loc["distance"])),
-			_km_text(nearest), Location.band_label(loc["band"])])
+		out.append("  +%s%%  distance — nearest %s (%s of the City's %s reach)" % [_pct(float(loc["distance"])),
+			_km_text(nearest), Location.band_label(loc["band"]).to_lower(), _km_text(float(loc.get("reach_km", 0.0)))])
 	if float(loc["proximity"]) > 0.0:
 		out.append("  +%s%%  same-type (and linked) districts nearby" % _pct(float(loc["proximity"])) \
 			if SkillTree.is_unlocked("cross_networks") else "  +%s%%  same-type districts nearby" % _pct(float(loc["proximity"])))
@@ -5245,7 +5271,8 @@ func _site_resource_lines(def: DistrictDef, tags: Dictionary, coastal: bool, ter
 	var enabled: Array[String] = []
 	var missing: Array[String] = []
 	for b: BuildingDef in BuildingDef.for_poi_and_planet(def.to_poi_type(), current_data.planet_type):
-		if b.required_tag == "" and not b.requires_coastal and b.required_terrain.is_empty():
+		if b.required_tag == "" and not b.requires_coastal and b.required_terrain.is_empty() \
+				and b.required_features.is_empty():
 			continue
 		if b.site_block_reason(probe) == "":
 			enabled.append(b.display_name)
@@ -5503,6 +5530,19 @@ func _live_enable(btn: BaseButton, can_use: Callable) -> void:
 			btn.disabled = not ok)
 	btn.add_child(t)
 
+## "have / need" label that follows the stock live (green when met).
+func _live_have_label(lbl: Label, key: String, need: float, fmt: String) -> void:
+	var refresh := func() -> void:
+		var have := _level_cost_have(key)
+		lbl.text = fmt % [have, need]
+		lbl.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4) if have >= need else Color(0.9, 0.4, 0.4))
+	refresh.call()
+	var t := Timer.new()
+	t.wait_time = 0.25
+	t.autostart = true
+	t.timeout.connect(refresh)
+	lbl.add_child(t)
+
 ## How much of a level-up cost key the player has: credits, a resource id, or
 ## "ANY_T<n>" (all raw minerals of that tier together).
 func _level_cost_have(k: String) -> float:
@@ -5594,13 +5634,9 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 		c_lbl.add_theme_color_override("font_color", Color(0.9, 0.82, 0.25))
 		
 		var v_lbl := Label.new()
-		v_lbl.text = "%d / %d" % [has_amt, cost_amt]
 		_apply_orbitron(v_lbl, 10)
-		
-		if has_amt >= cost_amt:
-			v_lbl.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
-		else:
-			v_lbl.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4))
+		_live_have_label(v_lbl, "credits", cost_amt, "%d / %d")
+		if has_amt < cost_amt:
 			can_afford = false
 			
 		cred_box.add_child(c_lbl)
@@ -5632,7 +5668,7 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 			display_rd.tier = tier
 			display_rd.rarity = 1
 			display_rd.display_color = Color(0.65, 0.65, 0.70)
-			display_rd.unique_name = "Any T%d Mineral" % tier
+			display_rd.unique_name = "Raw minerals (any)" if tier == 1 else "Raw minerals T%d (any)" % tier
 		else:
 			has_amt = GameState.global_resources.get(k_str, 0.0)
 			display_rd = GameState.known_resources.get(k_str) as ResourceData
@@ -5645,11 +5681,7 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 			
 			var card_vbox = card.get_child(0)
 			var lbl = card_vbox.get_child(1) as Label
-			lbl.text = "%d/%d" % [has_amt, cost_amt]
-			if has_amt >= cost_amt:
-				lbl.add_theme_color_override("font_color", Color(0.4, 0.9, 0.4))
-			else:
-				lbl.add_theme_color_override("font_color", Color(0.9, 0.4, 0.4))
+			_live_have_label(lbl, k_str, cost_amt, "%d/%d")
 				
 			res_flow.add_child(card)
 			
@@ -7439,6 +7471,12 @@ func _tick_one_rocket(d: Dictionary, delta: float) -> void:
 	# ── Occlusion: hide when behind planet ────────────────────────────────────────
 	var depth: float = view.z
 	rocket.visible = not (depth < -0.05 and offset.length() < planet_r * 0.99)
+	# launched from another body (the view switched to the Moon): keep flying, unseen
+	if current_data == null or current_data.seed != int(d["planet_seed"]):
+		rocket.visible = false
+		if d.get("booster_particles") != null:
+			for bp: Dictionary in d["booster_particles"]:
+				bp["alpha"] = 0.0
 
 	rocket.queue_redraw()
 
@@ -7446,7 +7484,7 @@ func _tick_one_rocket(d: Dictionary, delta: float) -> void:
 	var ctr2: Control = d["container"]
 	var mp:   Vector2 = get_viewport().get_mouse_position()
 	var rp:   Vector2 = ctr2.get_global_rect().position + rocket.position
-	var near: bool    = mp.distance_to(rp) < 12.0
+	var near: bool    = rocket.visible and mp.distance_to(rp) < 12.0
 	if near and not d["hover_active"]:
 		d["hover_active"] = true
 		CursorManager.set_state(CursorManager.State.POINTER)

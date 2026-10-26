@@ -654,7 +654,7 @@ func empire_idle() -> Vector2:
 			used += float(Economy.used_population(pd, pp))
 			if not Balance.cfg.idle_pop_counts_city_base:
 				for poi: POIData in pd.custom_pois:
-					if poi.is_city() and not poi.is_orbital():
+					if poi.is_city() and not poi.is_orbital() and not poi.constructing:
 						cap -= Balance.cfg.city_base_pop
 		_idle_cache = [now, maxf(cap - used, 0.0), maxf(cap, 0.0)]
 		_idle_computing = false

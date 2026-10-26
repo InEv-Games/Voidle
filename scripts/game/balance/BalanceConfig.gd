@@ -86,11 +86,14 @@ extends Resource
 @export_group("Location")
 ## Surface radius of a planet_size 1.0 world, in km (Location.radius_km).
 @export var planet_radius_km: float = 6000.0
-## Distance bands (km): ≤ very near, ≤ near, ≤ mid, < far, then very far.
-@export var distance_very_near_km: float = 500.0
-@export var distance_near_km: float = 1000.0
-@export var distance_mid_km: float = 2000.0
-@export var distance_far_km: float = 3500.0
+## Distance bands as fractions of the district's City reach
+## (TerrainSampler.city_reach_deg): ≤ very near, ≤ near, ≤ mid, < far, then very
+## far. Relative, so the whole range fits inside the area a City may build in —
+## at every City level and on small bodies (playtest 23.10, KARARLAR §10).
+@export var distance_very_near_frac: float = 0.40
+@export var distance_near_frac: float = 0.60
+@export var distance_mid_frac: float = 0.80
+@export var distance_far_frac: float = 0.95
 ## Distance bonus by the nearest other district's band (very near … very far).
 @export var distance_bonuses: Array[float] = [0.0, 0.125, 0.25, 0.375, 0.5]
 ## Each same-family district very near / near adds this (no diminishing).

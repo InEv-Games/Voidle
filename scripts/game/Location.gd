@@ -11,6 +11,8 @@
 ##              diminishing, no source cap — Balance.cfg.proximity_cap is a total cap, 0 = none)
 ##   centres    every City (its Capital District) in reach supports all families
 ##   distance   by the nearest other finished district: 0 / 12.5 / 25 / 37.5 / 50 %
+## Bands are fractions of the district's City reach (reach_km), not fixed km,
+## so every band can be reached at every City level and on small bodies.
 ## Numbers come from Balance.cfg. Results are cached per planet until a
 ## district is placed, finished or removed.
 class_name Location
@@ -29,13 +31,25 @@ static func distance_km(pd: PlanetData, a: POIData, b: POIData) -> float:
 	return TerrainSampler.angular_distance(deg_to_rad(a.lon_deg), deg_to_rad(a.lat_deg),
 		deg_to_rad(b.lon_deg), deg_to_rad(b.lat_deg)) * radius_km(pd)
 
-## Band of a distance: ≤ very_near, ≤ near, ≤ mid, < far, then very far.
-static func band(km: float) -> Band:
+## Reach of the City `poi` belongs to (its own, for a City), in km: how far
+## beyond its settlements that City may place districts.
+static func reach_km(pd: PlanetData, poi: POIData) -> float:
+	var city := poi.label if poi.is_city() else poi.parent_city
+	var lv := 1
+	var pp := GameState.get_planet(pd.seed)
+	if pp != null and city != "":
+		lv = int(pp.district_levels.get(city, 1))
+	return deg_to_rad(TerrainSampler.city_reach_deg(pd, lv)) * radius_km(pd)
+
+## Band of a distance, as a share of `reach` (km): ≤ very_near, ≤ near, ≤ mid,
+## < far, then very far.
+static func band(km: float, reach: float) -> Band:
 	var c: BalanceConfig = Balance.cfg
-	if km <= c.distance_very_near_km: return Band.VERY_NEAR
-	if km <= c.distance_near_km:      return Band.NEAR
-	if km <= c.distance_mid_km:       return Band.MID
-	if km < c.distance_far_km:        return Band.FAR
+	var f := km / maxf(reach, 1.0)
+	if f <= c.distance_very_near_frac: return Band.VERY_NEAR
+	if f <= c.distance_near_frac:      return Band.NEAR
+	if f <= c.distance_mid_frac:       return Band.MID
+	if f < c.distance_far_frac:        return Band.FAR
 	return Band.VERY_FAR
 
 static func band_label(b: Band) -> String:
@@ -70,7 +84,7 @@ static func output_family(p: POIData) -> String:
 static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 	if pd == null or poi == null:
 		return {"mult": 1.0, "proximity": 0.0, "centre": 0.0, "distance": 0.0,
-			"nearest_km": INF, "band": Band.VERY_FAR, "sources": []}
+			"nearest_km": INF, "band": Band.VERY_FAR, "reach_km": 0.0, "sources": []}
 	if poi.label != "":
 		var cached := _cached(pd, poi.label)
 		if not cached.is_empty():
@@ -82,12 +96,13 @@ static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 	var centre := 0.0
 	var nearest := INF
 	var sources: Array = []
+	var reach := reach_km(pd, poi)
 	for p: POIData in pd.custom_pois:
 		if p == poi or (poi.label != "" and p.label == poi.label) or not _counts(p):
 			continue
 		var km := distance_km(pd, poi, p)
 		nearest = minf(nearest, km)
-		var b := band(km)
+		var b := band(km, reach)
 		if b != Band.VERY_NEAR and b != Band.NEAR:
 			continue
 		if p.is_city():   # a centre supports every family in reach
@@ -106,12 +121,12 @@ static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 			sources.append({"poi": p, "km": km, "share": xs, "kind": "cross"})
 	if c.proximity_cap > 0.0:
 		prox = minf(prox, c.proximity_cap)
-	var nb := band(nearest) if nearest != INF else Band.VERY_FAR
+	var nb := band(nearest, reach) if nearest != INF else Band.VERY_FAR
 	var dist := band_bonus(nb)
 	if dist > 0.0:   # Independent Centres never turns near into far
 		dist += SkillTree.get_distance_bonus_add()
 	var out := {"mult": 1.0 + prox + centre + dist, "proximity": prox, "centre": centre,
-		"distance": dist, "nearest_km": nearest, "band": nb, "sources": sources}
+		"distance": dist, "nearest_km": nearest, "band": nb, "reach_km": reach, "sources": sources}
 	if poi.label != "":
 		_store(pd, poi.label, out)
 	return out
@@ -126,13 +141,18 @@ static func invalidate(planet_seed: int = -1) -> void:
 	else:
 		_cache.erase(planet_seed)
 
-# Cache: valid while the set of finished surface districts is unchanged.
+# Cache: valid while the set of finished surface districts and the Cities'
+# levels (their reach sets the bands) are unchanged.
 static func _signature(pd: PlanetData) -> String:
 	var built := 0
+	var city_lv := 0
+	var pp := GameState.get_planet(pd.seed)
 	for p: POIData in pd.custom_pois:
 		if _counts(p):
 			built += 1
-	return "%d|%d|%s|%d" % [pd.custom_pois.size(), built, Balance.profile_name, SkillTree.version]
+		if p.is_city() and pp != null:
+			city_lv = city_lv * 31 + int(pp.district_levels.get(p.label, 1))
+	return "%d|%d|%d|%s|%d" % [pd.custom_pois.size(), built, city_lv, Balance.profile_name, SkillTree.version]
 
 static func _cached(pd: PlanetData, label: String) -> Dictionary:
 	var entry: Dictionary = _cache.get(pd.seed, {})

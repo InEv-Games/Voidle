@@ -790,7 +790,7 @@ func _survey_system(gd: GalaxyData, star_idx: int, cost_cr: float, cost_sci: flo
 
 
 func _input(event: InputEvent) -> void:
-	if SkillTreeView.is_open:
+	if SkillTreeView.is_open or TradePanel.is_open:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton

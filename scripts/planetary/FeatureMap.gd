@@ -51,6 +51,10 @@ const SPOT_CRATER_FLOOR := 1
 const SPOT_CRATER_RIM := 2
 const SPOT_RUINS := 3
 
+## Windy regions: the windiest WINDY_SHARE of a world's land, never below WINDY_MIN wind.
+const WINDY_SHARE := 0.18
+const WINDY_MIN := 0.25
+
 ## Height bands (match planet_rocky.gdshader and TerrainSampler).
 const MOUNTAIN_H := 0.32
 const SNOW_H := 0.44
@@ -673,15 +677,26 @@ static func _place_ruins(rng: RandomNumberGenerator, land: PackedByteArray, heig
 static func _mark_windy(data: PlanetData, land: PackedByteArray, windy: PackedByteArray, mask: PackedInt32Array) -> void:
 	if not ResourceMap.has_map(data.seed) or not data.has_atmosphere:
 		return
+	# Relative to the world's own wind: a thin atmosphere scales the whole field
+	# down, and a fixed cut left some terran worlds with no windy region at all.
+	var vals := PackedFloat32Array(); vals.resize(WIDTH * HEIGHT)
+	var lands := PackedFloat32Array()
 	for y in HEIGHT:
 		for x in WIDTH:
 			var i := y * WIDTH + x
 			if land[i] == 0:
 				continue
 			var ll := _cell_lonlat(x, y)
-			if ResourceMap.field(data.seed, "wind", ll.x, ll.y) >= 0.55:
-				windy[i] = 255
-				mask[i] |= 1 << F.WIND
+			vals[i] = ResourceMap.field(data.seed, "wind", ll.x, ll.y)
+			lands.append(vals[i])
+	if lands.is_empty():
+		return
+	lands.sort()
+	var cut := maxf(lands[int(float(lands.size() - 1) * (1.0 - WINDY_SHARE))], WINDY_MIN)
+	for i in WIDTH * HEIGHT:
+		if land[i] != 0 and vals[i] >= cut:
+			windy[i] = 255
+			mask[i] |= 1 << F.WIND
 
 static func _store(planet_seed: int, mask: PackedInt32Array, cover: PackedByteArray, lines: PackedByteArray,
 		spots: PackedByteArray, windy: PackedByteArray) -> void:
