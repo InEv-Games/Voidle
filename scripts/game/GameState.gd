@@ -1382,4 +1382,7 @@ func delete_save() -> void:
 	planet_view_unlocked = false
 	global_resources.clear()
 	_planet_progress.clear()
+	# the old game's ships (freighters, landers) must not keep flying in the new one
+	if has_node("/root/ShipManager"):
+		get_node("/root/ShipManager").deserialize([])
 	_bootstrap_world()
