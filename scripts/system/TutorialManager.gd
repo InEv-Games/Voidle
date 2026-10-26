@@ -366,6 +366,8 @@ var _pulse_ring:      Control = null
 var _action_block_on: bool   = false  # whether input blocking is active
 var _allowed_rects:   Array[Rect2]  = []      # clicks inside any of these pass through
 var _waiting_for_bid: String        = ""      # if set, waiting for this building to finish constructing
+var _waiting_for_district: int      = -1      # if >= 0, waiting for a district of this type to finish constructing
+var _topup_key: String              = ""      # the step target last topped up once it became doable
 var _construction_lbl: Label        = null    # non-blocking "under construction" label
 
 # ── Quest UI ───────────────────────────────────────────────────────────────────
@@ -401,6 +403,10 @@ func start() -> void:
 		_quest_done = false
 	if _tutorial_done:
 		if not _quest_done:
+			# the first objectives build inside the Capital: wait until it stands
+			while not _district_built(DISTRICT_CITY):
+				await get_tree().create_timer(0.5).timeout
+				if not _active: return
 			_build_quest_ui()
 			_show_quest_step(_quest_step)
 	else:
@@ -425,6 +431,8 @@ func _on_new_game() -> void:
 	_action_block_on = false
 	_allowed_rects   = []
 	_waiting_for_bid = ""
+	_waiting_for_district = -1
+	_topup_key = ""
 	_inventory_shown = false
 	_hide_construction_wait()
 	_narr_instant     = false
@@ -484,14 +492,18 @@ func _on_district_placed(_seed: int, dtype: int) -> void:
 		var step: Dictionary = GUIDED_STEPS[_guided_step]
 		if step["type"] == "action":
 			var tgt: Dictionary = step["targets"][_action_sub]
-			if tgt["type"] == "district" and tgt["id"] == dtype:
-				_advance_action()
+			if tgt["type"] == "district" and tgt["id"] == dtype and _waiting_for_district < 0:
+				if _district_built(dtype):
+					_advance_action()
+				else:   # the next instruction would need the district — wait for it to stand
+					_hide_action_bar()
+					_waiting_for_district = dtype
+					_action_block_on = int(dtype) != DISTRICT_CITY
+					highlight_changed.emit("construction_wait")
+					_show_construction_wait()
 
-	if not _quest_done and _quest_step < QUESTS.size():
-		var q: Dictionary = QUESTS[_quest_step]
-		var ss: Dictionary = q["sub_steps"][_quest_sub]
-		if ss["type"] == "district" and ss["target"] == dtype:
-			_advance_quest_sub()
+	# quests: a district sub-step is met once it is built (polled in _process)
+	_check_quest_sub_already_done()
 
 func _on_planet_progress_changed(planet_seed: int) -> void:
 	var pp: PlanetProgress = GameState.get_planet(planet_seed)
@@ -687,10 +699,77 @@ func _process(delta: float) -> void:
 				var ss: Dictionary = QUESTS[_quest_step]["sub_steps"][_quest_sub]
 				if ss["type"] == "event" and event_done(String(ss["target"])):
 					_advance_quest_sub()
+				elif ss["type"] == "district":
+					_check_quest_sub_already_done()
+				elif _quest_step < TUTORIAL_QUEST_COUNT and GRANTS_ENABLED:
+					_topup_when_doable(ss, "target", "q%d.%d" % [_quest_step, _quest_sub])
 	if not _active or _tutorial_done or _guided_step >= GUIDED_STEPS.size(): return
 	var step: Dictionary = GUIDED_STEPS[_guided_step]
 	if step["type"] == "action":
+		if _waiting_for_district >= 0:
+			if _district_built(_waiting_for_district):
+				_finish_district_wait(step)
+			return
 		_check_freeform_action_step(step)
+		if GRANTS_ENABLED and _action_sub < (step["targets"] as Array).size():
+			_topup_when_doable(step["targets"][_action_sub], "id", "g%d.%d" % [_guided_step, _action_sub])
+
+## The waited district stands: show the step's next instruction (or finish it).
+func _finish_district_wait(step: Dictionary) -> void:
+	_waiting_for_district = -1
+	_hide_construction_wait()
+	if _action_sub + 1 < (step["targets"] as Array).size():
+		_action_sub += 1
+		_show_action_bar(step)
+		_action_lbl.text = "✓ Done!  Now:  " + _target_hint(step["targets"][_action_sub])
+	else:
+		_advance_action()
+
+## A finished (not under construction) district of this DistrictDef type on any colonized world.
+func _district_built(dtype: int) -> bool:
+	var ddef: DistrictDef = DistrictDef.find(dtype as DistrictDef.Type)
+	var poi_t: int = int(ddef.to_poi_type()) if ddef != null else -1
+	for pp: PlanetProgress in GameState._planet_progress.values():
+		if not pp.is_colonized: continue
+		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+		if pd == null: continue
+		for poi: POIData in pd.custom_pois:
+			if int(poi.poi_type) == poi_t and not poi.constructing:
+				return true
+	return false
+
+## Level-up targets can need more than the step's opening grant (credits spent
+## meanwhile on what the level needs first): once the target can be done, top
+## the credits up to its price, once.
+func _topup_when_doable(tgt: Dictionary, id_key: String, key: String) -> void:
+	if _topup_key == key or tgt["type"] not in ["city_level_up", "district_upgrade"]:
+		return
+	var home: PlanetData = GameState.get_home_planet()
+	if home == null: return
+	var pp: PlanetProgress = GameState.get_planet(home.seed)
+	var city: POIData = null
+	for p: POIData in home.custom_pois:
+		if p.is_city() and not p.is_orbital():
+			city = p
+			break
+	if pp == null or city == null: return
+	var block := Leveling.city_level_block(home, pp, city) if tgt["type"] == "city_level_up" \
+		else Leveling.district_level_block(home, pp, city)
+	if block != "": return
+	_topup_key = key
+	_grant_step_needs([tgt], id_key)
+
+## A narrative card is up: the world behind it must not react to the mouse.
+func is_narrating() -> bool:
+	return is_instance_valid(_narr_panel) or is_instance_valid(_dim)
+
+## The guided tutorial waits for a building or district to finish.
+func is_waiting_construction() -> bool:
+	return _waiting_for_bid != "" or _waiting_for_district >= 0
+
+## HUD buttons outside the current step (Trade, …) stay shut during the guided tutorial.
+func blocks_hud() -> bool:
+	return _active and not _tutorial_done
 
 func _input(event: InputEvent) -> void:
 	if not _action_block_on: return
@@ -1079,7 +1158,7 @@ func _show_action_bar(step: Dictionary) -> void:
 	_action_lbl.add_theme_color_override("font_color", Color(0.95, 0.90, 0.60))
 	vbox.add_child(_action_lbl)
 
-	var tgt0: Dictionary = step["targets"][0]
+	var tgt0: Dictionary = step["targets"][mini(_action_sub, (step["targets"] as Array).size() - 1)]
 	_action_lbl.text = _target_hint(tgt0)
 
 	# Spawn pulse ring and signal which element to highlight
@@ -1306,19 +1385,8 @@ func _check_quest_sub_already_done() -> void:
 			for pp: PlanetProgress in GameState._planet_progress.values():
 				if pp.has_building(ss["target"]):
 					satisfied = true; break
-		"district":
-			var dtype: int = int(ss["target"])
-			# dtype is DistrictDef.Type; map to POIData.POIType via DistrictDef
-			var ddef: DistrictDef = DistrictDef.find(dtype as DistrictDef.Type)
-			var poi_t: int = int(ddef.to_poi_type()) if ddef != null else -1
-			for pp: PlanetProgress in GameState._planet_progress.values():
-				if not pp.is_colonized: continue
-				var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
-				if pd == null: continue
-				for poi: POIData in pd.custom_pois:
-					if int(poi.poi_type) == poi_t:
-						satisfied = true; break
-				if satisfied: break
+		"district":   # built, not just placed: the next sub-step builds inside it
+			satisfied = _district_built(int(ss["target"]))
 		"skill":
 			satisfied = get_node("/root/SkillTree").is_unlocked(String(ss["target"]))
 		"event":

@@ -81,7 +81,7 @@ autowrap_mode = 3
 layout_mode = 2
 theme_override_colors/font_color = Color(0.54, 0.58, 0.69, 1)
 theme_override_font_sizes/font_size = 11
-text = "The demo takes about an hour. Follow the objectives on the right."
+text = "Follow the objectives on the right — they lead the way."
 autowrap_mode = 3
 
 [node name="SaveNote" type="Label" parent="Center/Panel/VBox"]

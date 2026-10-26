@@ -72,3 +72,12 @@ GDD'nin geri kalanı kabul edildi. Derinliğin idle oyun için fazla olabileceğ
 **GDD'de:** District seviyesi yalnız kredi ve nüfusla alınır; yol şartı yoktur.
 
 **Kararımız:** Capital District serbestçe seviye atlar. Diğer district'ler, yolla bağlı bir komşusu hedef seviyeye ulaşmadan seviye atlayamaz; seviyeler Capital'dan dışarıya yayılır. Yollar ekonomide konum bonusu vermez, ama bu seviye kuralını taşır.
+
+## 10. Playtest kararları (23 Ekim playtest'i)
+
+Tarih: 26 Ekim 2026. İş planı: [PLAYTEST_2026-10-23.md](PLAYTEST_2026-10-23.md).
+
+- **Trade fiyatları dinamik.** *GDD'de:* sabit fiyat (satış %90, alış %110). *Kararımız:* her alım o kaynağın fiyatını artırır, her satış düşürür; fiyat zamanla taban değere geri döner.
+- **Sağ sürükleme gezegeni döndürür.** Sürüklemeden yapılan sağ tık §6'daki komut menüsünü açar.
+- **Dünya binaları Ay district'lerine kurulabilir.** Kaynaklar (Ferrite dahil) ortak global stoktur; nerede harcandığı fark etmez. §1'deki sabit girdi kuralı değişmez.
+- **İade kredi ve malzemeyi kapsar.** Clear, reset ve demolish ödenen kredinin ve malzemenin aynı oranını iade eder: %50, Recycling skilleriyle %65 ve %75.

@@ -725,7 +725,7 @@ func _stop_tut_panel_pulse() -> void:
 	_tut_panel_tween = null
 
 func _notify_tutorial_district_opened(poi: POIData, root: VBoxContainer) -> void:
-	if TutorialManager._waiting_for_bid != "":
+	if TutorialManager.is_waiting_construction():
 		return
 	var target_bid := TutorialManager.get_action_building_target()
 	if target_bid == "":
@@ -765,7 +765,7 @@ func _notify_tutorial_district_upgrade_btn(btn: Button) -> void:
 	_start_tut_node_pulse(btn)
 
 func _notify_tutorial_district_type_dropdown(dd: PanelContainer) -> void:
-	if TutorialManager._waiting_for_bid != "":
+	if TutorialManager.is_waiting_construction():
 		return
 	if TutorialManager.get_action_step_type() != "district":
 		return
@@ -782,6 +782,33 @@ func _notify_tutorial_district_type_dropdown(dd: PanelContainer) -> void:
 				_start_tut_node_pulse(_tut_highlight_node)
 				return
 
+## Screen position for the tutorial ring on a POI; off-screen while that side of
+## the globe faces away (or the POI isn't drawn).
+func _tut_ring_on(label: String) -> Vector2:
+	for poi: Dictionary in poi_layer._pois:
+		if poi["label"] == label:
+			return poi["screen"] if poi["visible"] else Vector2(-999.0, -999.0)
+	return Vector2(-999.0, -999.0)
+
+## The district the current guided step placed (its first target's type; newest wins).
+func _tutorial_step_district() -> POIData:
+	if current_data == null or TutorialManager._guided_step >= TutorialManager.GUIDED_STEPS.size():
+		return null
+	var step: Dictionary = TutorialManager.GUIDED_STEPS[TutorialManager._guided_step]
+	if step["type"] != "action":
+		return null
+	var t0: Dictionary = step["targets"][0]
+	if t0["type"] != "district":
+		return null
+	var ddef := DistrictDef.find(int(t0["id"]) as DistrictDef.Type)
+	if ddef == null:
+		return null
+	var found: POIData = null
+	for p: POIData in current_data.custom_pois:
+		if int(p.poi_type) == int(ddef.to_poi_type()):
+			found = p
+	return found
+
 func _update_tutorial_highlight() -> void:
 	if not TutorialManager._action_block_on:
 		return
@@ -790,7 +817,7 @@ func _update_tutorial_highlight() -> void:
 	var px := _panel_right_edge()
 	var planet_area := Rect2(px, 0.0, vp.size.x - px, vp.size.y)
 	# Construction wait
-	if TutorialManager._waiting_for_bid != "":
+	if TutorialManager.is_waiting_construction():
 		TutorialManager.set_highlight_pos(Vector2(-999.0, -999.0))
 		_stop_tut_panel_pulse()
 		for card_v in _poi_overview_cards.values():
@@ -838,21 +865,16 @@ func _update_tutorial_highlight() -> void:
 				allowed.append((cap_card_v as Control).get_global_rect())
 		"generator_district":
 			if _active_district_poi != null:
-				if planet_renderer != null:
-					ring_pos = planet_renderer.global_position + Vector2(
-						planet_renderer.size.x * 0.25, planet_renderer.size.y * 0.65)
+				# the district panel is open: its slot card pulses, no ring on the globe
 				allowed.append(planet_area)
 			else:
-				for poi in poi_layer._pois:
-					var lbl: String = poi.get("label", "") if poi is Dictionary else poi.label
-					var orb: bool = poi.get("is_orbital", false) if poi is Dictionary else poi.is_orbital()
-					var city: bool = poi.get("data", {}).get("is_city", false) if poi is Dictionary else poi.is_city()
-					if not orb and not city and lbl != "":
-						ring_pos = poi_layer.get_poi_screen_pos(lbl)
-						var cv = _poi_overview_cards.get(lbl, null)
-						if cv != null and is_instance_valid(cv):
-							allowed.append((cv as Control).get_global_rect())
-						break
+				# the district this step just placed (newest of the step's type)
+				var target := _tutorial_step_district()
+				if target != null:
+					ring_pos = _tut_ring_on(target.label)
+					var cv = _poi_overview_cards.get(target.label, null)
+					if cv != null and is_instance_valid(cv):
+						allowed.append((cv as Control).get_global_rect())
 				if ring_pos.x > -900.0:
 					allowed.append(Rect2(ring_pos - Vector2(90, 90), Vector2(180, 180)))
 		"planet_level_up_btn":
@@ -864,8 +886,11 @@ func _update_tutorial_highlight() -> void:
 				allowed.append(_tut_highlight_node.get_global_rect())
 			allowed.append(planet_area)
 		"add_district":
-			if planet_renderer != null:
-				ring_pos = planet_renderer.global_position + planet_renderer.size * 0.5
+			# point at the City the district goes into — its ring is where it can stand
+			var city_key := _placing_parent.label if _placing_parent != null \
+				else (TutorialManager._first_city_key(current_data) if current_data != null else "")
+			if city_key != "":
+				ring_pos = _tut_ring_on(city_key)
 			if is_instance_valid(_tut_highlight_node):
 				allowed.append(_tut_highlight_node.get_global_rect())
 			elif ring_pos.x > -900.0:
@@ -4966,7 +4991,8 @@ func _update_placement_hover() -> void:
 		return
 	var mouse := get_viewport().get_mouse_position()
 	var hit := _screen_to_lonlat(mouse)
-	if not hit["hit"] or not _is_over_planet_area(mouse):
+	# a tutorial card covers the planet: no site tooltip through it
+	if not hit["hit"] or not _is_over_planet_area(mouse) or TutorialManager.is_narrating():
 		poi_layer.clear_ghost()
 		return
 	var chk := TerrainSampler.check_site(current_data, _placing_def, hit["lon"], hit["lat"])

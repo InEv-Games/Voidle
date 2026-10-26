@@ -283,6 +283,9 @@ func _make_trade_button(normal: StyleBoxFlat, hover: StyleBoxFlat) -> Button:
 	b.add_theme_stylebox_override("normal", normal)
 	b.add_theme_stylebox_override("hover", hover)
 	b.pressed.connect(func() -> void:
+		if TutorialManager.blocks_hud():   # like the Upgrade Tree: shut during the guided tutorial
+			AudioManager.play("error")
+			return
 		AudioManager.play("click")
 		toggle_trade_panel())
 	b.mouse_entered.connect(func() -> void:

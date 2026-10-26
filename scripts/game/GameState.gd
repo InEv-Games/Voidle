@@ -174,9 +174,10 @@ func demo_stats() -> Dictionary:
 			research += 1
 	return {"minutes": int(play_seconds / 60.0), "worlds": worlds, "cities": cities, "research": research}
 
-## Explore opens once the guided tutorial is done.
+## Explore opens once the guided tutorial is done and the Moon has a City.
 func explore_available() -> bool:
-	return TutorialManager.tutorial_finished() and not showcase_mode
+	# the wider universe opens once the Moon is settled (playtest 23.10)
+	return TutorialManager.tutorial_finished() and not showcase_mode and SkillTree.event_met("moon_city")
 
 ## Leaves the player's world for the read-only map tour (starts at the galaxy).
 func start_explore() -> void:
