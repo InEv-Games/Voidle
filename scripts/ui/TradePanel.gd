@@ -46,7 +46,7 @@ func _ready() -> void:
 	var title := _label("⇄  TRADE", 15, Color(0.65, 0.85, 1.0))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(title)
-	var close_btn := _button("CLOSE", Color(0.9, 0.92, 1.0))
+	var close_btn := IconButton.create("CLOSE", "close")
 	close_btn.pressed.connect(close)
 	head.add_child(close_btn)
 
@@ -256,16 +256,14 @@ func _label(t: String, font_size: int, col: Color) -> Label:
 	l.add_theme_color_override("font_color", col)
 	return l
 
-## Theme button types: sells Positive, buys Neutral, anything else Default.
+## Text-centred buttons: sells Positive, buys Neutral, anything else Default.
 func _button(t: String, _col: Color) -> Button:
-	var b := Button.new()
-	b.text = t.to_upper()
-	var variation := UIStyle.DEFAULT
+	var v := IconButton.Variant.DEFAULT
 	if t.begins_with("Sell"):
-		variation = UIStyle.POSITIVE
+		v = IconButton.Variant.POSITIVE
 	elif t.begins_with("Buy"):
-		variation = UIStyle.NEUTRAL
-	UIStyle.style_button(b, variation, 8)
+		v = IconButton.Variant.NEUTRAL
+	var b := IconButton.create_text(t.to_upper(), v)
 	b.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	b.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	return b

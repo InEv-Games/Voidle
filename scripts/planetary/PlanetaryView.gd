@@ -530,12 +530,9 @@ func _build_manage_row(poi: POIData) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
 	for kind: String in ["clear", "reset", "demolish"]:
-		var b := Button.new()
-		b.text = {"clear": "⌫ Clear", "reset": "↺ Reset", "demolish": "✖ Demolish"}[kind]
-		b.focus_mode = Control.FOCUS_NONE
+		var b := IconButton.create({"clear": "CLEAR", "reset": "RESET", "demolish": "DEMOLISH"}[kind],
+			{"clear": "negative", "reset": "downgrade", "demolish": "danger"}[kind], IconButton.Variant.NEGATIVE)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		_apply_orbitron(b, 8)
-		b.add_theme_color_override("font_color", CMD_DANGER_COL)
 		var cap_kind := kind
 		var block := Settlement.block(kind, current_data, poi)
 		b.disabled = block != ""
@@ -543,7 +540,7 @@ func _build_manage_row(poi: POIData) -> Control:
 			AudioManager.play("click")
 			_confirm_settlement(cap_kind, poi))
 		var tip := String(Settlement.preview(kind, current_data, poi)["text"]) if block == "" else block
-		b.mouse_entered.connect(func() -> void: TooltipManager.show_tip(b.text.substr(2), tip + "\n\nRight-click it on the map for every action."))
+		b.mouse_entered.connect(func() -> void: TooltipManager.show_tip(b.label_text.capitalize(), tip + "\n\nRight-click it on the map for every action."))
 		b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 		row.add_child(b)
 	return row
@@ -1810,23 +1807,23 @@ func _switch_to_body(pd: PlanetData, from_rect: Rect2) -> void:
 
 ## PREPARE LANDER on an uncolonised Moon (GDD §20.4): pays once, the lander
 ## is prepared for 30 s at the home Spaceport and then flies on its own.
-func _setup_moon_colonize_button(btn: Button, data: PlanetData) -> void:
+func _setup_moon_colonize_button(btn: IconButton, data: PlanetData) -> void:
 	var refresh := func() -> void:
 		if not is_instance_valid(btn):
 			return
 		var ex := GameState.expedition("lander")
 		var lst := String(ex.get("state", ""))
 		if lst == "preparing":
-			btn.text = "PREPARING LANDER — %ds" % int(ceil(float(ex.get("prep_left", 0.0))))
+			btn.label_text = "PREPARING LANDER — %ds" % int(ceil(float(ex.get("prep_left", 0.0))))
 			btn.modulate = Color(0.85, 0.9, 1.0)
 		elif lst == "launching":
-			btn.text = "LANDER LIFTING OFF"
+			btn.label_text = "LANDER LIFTING OFF"
 			btn.modulate = Color(0.85, 0.9, 1.0)
 		elif lst == "orbiting":
-			btn.text = "LANDER CIRCLING HOME — %d%%" % int(round((1.0 - float(ex.get("loop_left", TAU)) / TAU) * 100.0))
+			btn.label_text = "LANDER CIRCLING HOME — %d%%" % int(round((1.0 - float(ex.get("loop_left", TAU)) / TAU) * 100.0))
 			btn.modulate = Color(0.85, 0.9, 1.0)
 		else:
-			btn.text = "PREPARE LANDER"
+			btn.label_text = "PREPARE LANDER"
 			btn.modulate = Color.WHITE if GameState.moon_colonize_block(data.seed) == "" else Color(0.6, 0.62, 0.7)
 	refresh.call()
 	var timer := Timer.new()
@@ -1867,8 +1864,7 @@ func _add_rocket_section(page: Control, data: PlanetData) -> void:
 	info.scroll_active = false
 	info.add_theme_font_size_override("normal_font_size", 10)
 	box.add_child(info)
-	var btn := Button.new()
-	UIStyle.style_button(btn, UIStyle.POSITIVE)
+	var btn := IconButton.create("PREPARE ROCKET", "rocket", IconButton.Variant.POSITIVE)
 	box.add_child(btn)
 	var refresh := func() -> void:
 		if not is_instance_valid(info):
@@ -1890,7 +1886,6 @@ func _add_rocket_section(page: Control, data: PlanetData) -> void:
 				if block != "":
 					lines.append(_bb(block, BB_BAD))
 				btn.visible = true
-				btn.text = "PREPARE ROCKET"
 				btn.disabled = block != ""
 			"preparing":
 				lines.append("Preparing — %ds left" % int(ceil(float(ex.get("prep_left", 0.0)))))
@@ -1956,14 +1951,11 @@ func _add_found_settlement_button(page: Control) -> void:
 	note.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	row.add_child(note)
 	page.add_child(card)
-	var btn := Button.new()
-	btn.text = "INITIATE COLONIZATION"
+	var btn := IconButton.create("INITIATE COLONIZATION", "planet", IconButton.Variant.POSITIVE)
 	btn.pressed.connect(_begin_lunar_landing)
 	if not scanned:
-		var scan_btn := Button.new()
-		scan_btn.text = "SCAN SURFACE  ·  free"
+		var scan_btn := IconButton.create("SCAN SURFACE", "explore", IconButton.Variant.DEFAULT, "free")
 		scan_btn.pressed.connect(func() -> void: _start_surface_scan(current_data))
-		UIStyle.style_button(scan_btn, UIStyle.DEFAULT)
 		page.add_child(scan_btn)
 		btn.disabled = true
 		btn.tooltip_text = "Scan the surface first"
@@ -1971,8 +1963,7 @@ func _add_found_settlement_button(page: Control) -> void:
 		btn.disabled = true
 		btn.tooltip_text = Economy.cost_block(GameState.LANDING_COST)
 	if not paid:
-		btn.text += "  ·  " + Economy.cost_text(GameState.LANDING_COST)
-	UIStyle.style_button(btn, UIStyle.POSITIVE)
+		btn.counter = Economy.cost_text(GameState.LANDING_COST)
 	page.add_child(btn)
 
 ## The lander leaves the home Spaceport: when the home world is on screen it
@@ -3305,12 +3296,7 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	type_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	type_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	header.add_child(type_lbl)
-	var close_btn := Button.new()
-	close_btn.text = "✕"
-	close_btn.flat = true
-	_apply_orbitron(close_btn, 9)
-	close_btn.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
-	close_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var close_btn := IconButton.create("", "close", IconButton.Variant.NEGATIVE)
 	close_btn.pressed.connect(func() -> void:
 		overlay.queue_free()
 		_name_form_overlay = null)
@@ -3350,11 +3336,7 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	_apply_orbitron(name_edit, 10)
 	vbox.add_child(name_edit)
 
-	var confirm := Button.new()
-	confirm.text = "▶  PLACE DISTRICT"
-	_apply_orbitron(confirm, 9)
-	confirm.add_theme_color_override("font_color",       UIStyle.color(&"neutral_stroke"))
-	confirm.add_theme_color_override("font_hover_color", UIStyle.color(&"neutral_stroke"))
+	var confirm := IconButton.create("PLACE DISTRICT", "district", IconButton.Variant.POSITIVE)
 	_live_enable(confirm, func() -> bool: return GameState.credits >= cost)
 	var cap_def  := def
 	var cap_data := data
@@ -4633,12 +4615,7 @@ func _focus_on_site(lon_deg: float, lat_deg: float, duration: float = 0.45) -> v
 # ── Resource lenses ───────────────────────────────────────────────────────────
 
 func _make_lens_button(text: String, tint: Color, on_press: Callable) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.focus_mode = Control.FOCUS_NONE
-	_apply_orbitron(b, 8)
-	b.add_theme_color_override("font_color", tint)
-	b.add_theme_color_override("font_hover_color", UIStyle.color(&"neutral_stroke"))
+	var b := IconButton.create_text(text)
 	b.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	b.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	b.pressed.connect(func() -> void:
@@ -4771,8 +4748,8 @@ func _draw_surface_scan() -> void:
 func _style_lens_bar() -> void:
 	# the lens that's on is Neutral (selection), the rest Default
 	for role: String in _lens_buttons:
-		var b: Button = _lens_buttons[role]
-		UIStyle.style_button(b, UIStyle.NEUTRAL if role == _role else UIStyle.DEFAULT, 8)
+		var b: IconButton = _lens_buttons[role]
+		b.variant = IconButton.Variant.NEUTRAL if role == _role else IconButton.Variant.DEFAULT
 
 ## With a lens on, hovering the globe tells what that spot gives the role:
 ## "Production here  +30%" and the features behind it (on them full, near half).
@@ -4837,8 +4814,8 @@ func _refresh_lens() -> void:
 # ── Side panel slide ──────────────────────────────────────────────────────────
 
 func _build_panel_toggle() -> void:
-	var btn := Button.new()
-	btn.focus_mode = Control.FOCUS_NONE
+	var btn := IconButton.create_text("‹")
+	btn.font_size = 12
 	btn.z_index = 201
 	btn.z_as_relative = false
 	btn.tooltip_text = ""
@@ -4847,7 +4824,6 @@ func _build_panel_toggle() -> void:
 	btn.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_set_panel_open(not _panel_open))
-	UIStyle.style_button(btn, UIStyle.DEFAULT, 12)
 	add_child(btn)
 	_panel_toggle_btn = btn
 	# If content ever widens the panel past its anchors, keep the tab on its edge
@@ -4908,7 +4884,7 @@ func _apply_panel_t(t: float) -> void:
 	($PlanetContainer as Control).anchor_right = 1.0
 	HUDManager.set_view_area_fraction(1.0 - _panel_edge_frac(t))
 	if _panel_toggle_btn != null:
-		_panel_toggle_btn.text = "‹" if _panel_open else "›"
+		_panel_toggle_btn.label_text = "‹" if _panel_open else "›"
 		_place_panel_toggle()
 	if _toast_container != null and is_instance_valid(_toast_container):
 		_toast_container.offset_left = _panel_edge_frac(t) * get_viewport_rect().size.x + 14.0
@@ -5676,14 +5652,13 @@ func _info_chip(text: String, col: Color, tip_title: String, tip_body: String,
 		TooltipManager.hide_tip())
 	return pc
 
-func _make_overview_tab_btn(label: String, is_active: bool) -> Button:
-	var btn := Button.new()
-	btn.text = label
+## Tab: the selected one Neutral, the rest Default, text centred with a counter.
+func _make_overview_tab_btn(label: String, count: String, is_active: bool) -> Button:
+	var btn := IconButton.create_text(label,
+		IconButton.Variant.NEUTRAL if is_active else IconButton.Variant.DEFAULT, count)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn.toggle_mode    = true
 	btn.button_pressed = is_active
-	btn.focus_mode     = Control.FOCUS_NONE
-	UIStyle.style_button(btn, UIStyle.DEFAULT)
 	return btn
 
 func _build_planet_overview(data: PlanetData) -> void:
@@ -5825,8 +5800,8 @@ func _build_planet_overview(data: PlanetData) -> void:
 	root.add_child(tab_row)
 
 	_inner_tab_active = "SURFACE"   # stations live in the Orbit card now
-	var dist_btn:    Button = _make_overview_tab_btn("CITIES  %d" % Leveling.cities_used(data, pp), true)
-	var orbital_btn: Button = _make_overview_tab_btn("ORBITAL  %d/%d" % [orbital_pois.size(), p_max_orbital],
+	var dist_btn:    Button = _make_overview_tab_btn("CITIES", str(Leveling.cities_used(data, pp)), true)
+	var orbital_btn: Button = _make_overview_tab_btn("ORBITAL", "%d/%d" % [orbital_pois.size(), p_max_orbital],
 		_inner_tab_active == "ORBITAL")
 	dist_btn.visible = false   # kept for the tab logic below; the section header shows the count
 	tab_row.add_child(dist_btn)
@@ -5980,8 +5955,7 @@ func _build_orbital_ship_card(ship: ShipData) -> PanelContainer:
 			cargo_row.add_child(_mineral_grid_card(rd, ship.cargo[rid], true))
 
 	# Select button
-	var sel_btn := Button.new()
-	sel_btn.text = "Select"
+	var sel_btn := IconButton.create_text("SELECT")
 	sel_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	sel_btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 
@@ -5996,7 +5970,6 @@ func _build_orbital_ship_card(ship: ShipData) -> PanelContainer:
 			# rot_target such that rx=0 and rz<0: atan2(-px, pz) + PI
 			var rot_target: float = atan2(-px, pz) + PI
 			_rotate_to_lon(rad_to_deg(rot_target - cap_ship.orbit_node)))
-	UIStyle.style_button(sel_btn, UIStyle.DEFAULT, 8)
 	hbox.add_child(sel_btn)
 
 	return card
@@ -8107,16 +8080,15 @@ func _register_mission_tasks() -> void:
 				on_change.call()
 			for st: ShipData in stations:
 				var cap_st: ShipData = st
-				var btn := Button.new()
-				btn.text = st.ship_name
 				var is_sel: bool = e.get("target_id", "") == st.ship_id
+				var btn := IconButton.create_text(st.ship_name.to_upper(),
+					IconButton.Variant.NEUTRAL if is_sel else IconButton.Variant.DEFAULT)   # selected = Neutral
 				btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 				btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 				btn.pressed.connect(func() -> void:
 					e["target_id"] = cap_st.ship_id
 					on_change.call()
 					rebuild_ms.call())
-				UIStyle.style_button(btn, UIStyle.NEUTRAL if is_sel else UIStyle.DEFAULT, 8)   # selected = Neutral
 				st_row.add_child(btn)
 
 		# ── Rendezvous actions ────────────────────────────────────────────────────
@@ -8159,15 +8131,13 @@ func _register_mission_tasks() -> void:
 					var res: String = rt.get("transfer_resource", "")
 					if res != "": rdv_running_cargo[res] = rdv_running_cargo.get(res, 0) + int(rt.get("transfer_amount", 0))
 			var cap_i: int = i
-			var del_btn := Button.new()
-			del_btn.text = "×"
+			var del_btn := IconButton.create("", "close", IconButton.Variant.NEGATIVE)
 			del_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 			del_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 			del_btn.pressed.connect(func() -> void:
 				rdv_tasks.remove_at(cap_i)
 				on_change.call()
 				rebuild_ms.call())
-			UIStyle.style_button(del_btn, UIStyle.NEGATIVE, 8)
 			rt_row.add_child(del_btn)
 
 		# "+" Add — driven by the registry, same DI pattern as the main chain.
@@ -8351,12 +8321,10 @@ func _build_res_icon_ui(cont: Control, e: Dictionary,
 ## Show a resource picker popup for mission task params.
 ## Small styled "+" button used to add nested (DI) mission sub-tasks.
 func _make_mission_add_btn(label_text: String) -> Button:
-	var btn := Button.new()
-	btn.text = label_text
+	var btn := IconButton.create(label_text.trim_prefix("+ ").to_upper(), "new", IconButton.Variant.NEUTRAL)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
-	UIStyle.style_button(btn, UIStyle.NEUTRAL, 8)
 	return btn
 
 ## Dependency-injected dropdown for "On Rendezvous" sub-tasks — lists whatever
@@ -8379,9 +8347,7 @@ func _show_rdv_add_popup(anchor: Control, rdv_tasks: Array, ship_type: String,
 
 	for def: MissionTaskDef in available:
 		var cap_def: MissionTaskDef = def
-		var btn := Button.new()
-		btn.text = cap_def.display_name
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var btn := IconButton.create(cap_def.display_name.to_upper(), "notes")
 		btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		btn.pressed.connect(func() -> void:
@@ -8389,7 +8355,6 @@ func _show_rdv_add_popup(anchor: Control, rdv_tasks: Array, ship_type: String,
 			if is_instance_valid(rdv_backdrop): rdv_backdrop.queue_free()
 			popup.queue_free()
 			on_added.call())
-		UIStyle.style_button(btn, UIStyle.DEFAULT, 8)
 		pvbox.add_child(btn)
 
 	# Add popup inside the Mission Builder overlay so mouse_filter doesn't block it.
@@ -8603,9 +8568,7 @@ func _sp_build_idle(left_vbox: VBoxContainer, hbox: HBoxContainer,
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left_vbox.add_child(status)
 
-	var btn := Button.new()
-	btn.text = "Prepare Mission"
-	btn.custom_minimum_size = Vector2(100, 0)
+	var btn := IconButton.create("PREPARE MISSION", "rocket", IconButton.Variant.NEUTRAL)
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	btn.pressed.connect(func() -> void:
@@ -8650,7 +8613,6 @@ func _sp_build_idle(left_vbox: VBoxContainer, hbox: HBoxContainer,
 			if ProductionManager.is_user_paused(pm_key):
 				ProductionManager.toggle_user_pause(pm_key)
 			rebuild_sp.call()))
-	UIStyle.style_button(btn, UIStyle.NEUTRAL)
 	hbox.add_child(btn)
 
 ## Config phase: ship name + type selection.
@@ -8739,11 +8701,11 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 		"heavy_hauler": "Heavy", "station": "Station",
 	}
 	for ttype in ["shuttle", "hauler", "heavy_hauler", "station"]:
-		var tb := Button.new()
-		tb.text = SP_SHIP_LABELS.get(ttype, ttype.capitalize())
 		var is_sel: bool = (entry.get("ship_type", "shuttle") == ttype)
 		var is_locked: bool = (ttype == "station" and station_locked)
-		tb.custom_minimum_size = Vector2(54, 0)
+		var tb := IconButton.create_text(String(SP_SHIP_LABELS.get(ttype, ttype.capitalize())).to_upper(),
+			IconButton.Variant.NEUTRAL if is_sel else IconButton.Variant.DEFAULT)   # selected = Neutral
+		tb.min_size = Vector2(54, 26)
 		tb.disabled = is_locked
 		if not is_locked:
 			tb.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
@@ -8753,7 +8715,6 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 			entry["ship_type"] = cap_t
 			entry.erase("cargo")  # reset cargo when type changes (capacity differs)
 			rebuild_sp.call())
-		UIStyle.style_button(tb, UIStyle.NEUTRAL if is_sel else UIStyle.DEFAULT, 8)   # selected = Neutral
 		type_row.add_child(tb)
 
 	if station_locked:
@@ -8802,8 +8763,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 			hint_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			left_vbox.add_child(hint_lbl)
 
-		var plan_btn := Button.new()
-		plan_btn.text = "Plan Mission" if mission_tasks.is_empty() else "Edit Mission"
+		var plan_btn := IconButton.create("PLAN MISSION" if mission_tasks.is_empty() else "EDIT MISSION", "map")
 		plan_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		plan_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		plan_btn.pressed.connect(func() -> void:
@@ -8822,7 +8782,6 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 				entry["repeat_cycle"]  = repeat
 				_sp_apply_mission_to_entry(entry, tasks)
 				rebuild_sp.call()))
-		UIStyle.style_button(plan_btn, UIStyle.DEFAULT, 8)
 		left_vbox.add_child(plan_btn)
 
 	# ── Bottom row: cost / Cancel / Start Prep ──────────────────────────────
@@ -8848,8 +8807,7 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bottom_row.add_child(spacer)
 
-	var cancel_btn := Button.new()
-	cancel_btn.text = "Cancel"
+	var cancel_btn := IconButton.create_text("CANCEL")
 	cancel_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	cancel_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	cancel_btn.pressed.connect(func() -> void:
@@ -8858,11 +8816,9 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 		entry.erase("mission_tasks")
 		_bar_meta.erase(pm_key)
 		rebuild_sp.call())
-	UIStyle.style_button(cancel_btn, UIStyle.DEFAULT, 8)
 	bottom_row.add_child(cancel_btn)
 
-	var confirm_btn := Button.new()
-	confirm_btn.text = "Start Prep"
+	var confirm_btn := IconButton.create_text("START PREP", IconButton.Variant.POSITIVE)
 	confirm_btn.disabled = not can_afford
 	confirm_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	confirm_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
@@ -8882,7 +8838,6 @@ func _sp_build_config(_card: PanelContainer, stack: Control, left_vbox: VBoxCont
 		if ProductionManager.is_user_paused(pm_key):
 			ProductionManager.toggle_user_pause(pm_key)
 		rebuild_sp.call())
-	UIStyle.style_button(confirm_btn, UIStyle.POSITIVE, 8)
 	bottom_row.add_child(confirm_btn)
 
 ## Progress bar view — used for both "preparing" and "cooldown" phases.
@@ -8921,9 +8876,7 @@ func _sp_build_progress(left_vbox: VBoxContainer, hbox: HBoxContainer,
 			left_vbox.add_child(qi_lbl)
 
 	# Queue Mission button
-	var q_btn := Button.new()
-	q_btn.text = "Queue Mission"
-	q_btn.custom_minimum_size = Vector2(100, 0)
+	var q_btn := IconButton.create("QUEUE MISSION", "rocket", IconButton.Variant.NEUTRAL)
 	q_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	q_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	var cap_pm := pm_key; var cap_pp := pp; var cap_entry := entry; var cap_rebuild := rebuild_sp
@@ -8951,7 +8904,6 @@ func _sp_build_progress(left_vbox: VBoxContainer, hbox: HBoxContainer,
 			})
 			cap_entry["mission_queue"] = mq
 			cap_rebuild.call()))
-	UIStyle.style_button(q_btn, UIStyle.NEUTRAL, 8)
 	hbox.add_child(q_btn)
 
 ## Launch-ready phase: prominent Launch button.
@@ -8966,15 +8918,13 @@ func _sp_build_launch_ready(left_vbox: VBoxContainer, hbox: HBoxContainer,
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	left_vbox.add_child(status)
 
-	var btn := Button.new()
-	btn.text = "Launch ▶"
-	btn.custom_minimum_size = Vector2(90, 0)
+	var btn := IconButton.create("LAUNCH", "rocket", IconButton.Variant.POSITIVE)
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 
 	var cap_pp := pp; var cap_poi := poi; var cap_entry := entry
 	btn.pressed.connect(func() -> void:
-		btn.text     = "Launching…"
+		btn.label_text = "LAUNCHING…"
 		btn.disabled = true
 		cap_pp.has_spaceport = true
 		cap_entry["cooldown_only"] = true
@@ -8996,7 +8946,6 @@ func _sp_build_launch_ready(left_vbox: VBoxContainer, hbox: HBoxContainer,
 			cap_entry.get("auto_land", false),
 			cap_entry.get("mission_tasks", [])))
 
-	UIStyle.style_button(btn, UIStyle.POSITIVE)
 	hbox.add_child(btn)
 
 ## Cargo resource selector popup — floating panel over the container.
@@ -9158,8 +9107,7 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 		vbox.add_child(HSeparator.new())
 
 		# ── Add button ────────────────────────────────────────────────────────
-		var add_btn2 := Button.new()
-		add_btn2.text = "Add to Cargo"
+		var add_btn2 := IconButton.create_text("ADD TO CARGO", IconButton.Variant.POSITIVE)
 		add_btn2.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		add_btn2.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		add_btn2.pressed.connect(func() -> void:
@@ -9168,7 +9116,6 @@ func _sp_show_cargo_popup(entry: Dictionary, pp: PlanetProgress,
 			if not entry.has("cargo"): entry["cargo"] = {}
 			entry["cargo"][rid2] = entry["cargo"].get(rid2, 0) + amt2
 			close_popup.call())
-		UIStyle.style_button(add_btn2, UIStyle.POSITIVE, 8)
 		vbox.add_child(add_btn2)
 
 ## Pick-up resource selector popup — picks what the shuttle should collect from the station.
@@ -9258,15 +9205,13 @@ func _sp_show_pickup_popup(entry: Dictionary, pp: PlanetProgress, rebuild_sp: Ca
 		slider_row.add_child(amt_lbl)
 		slider.value_changed.connect(func(v: float) -> void: amt_lbl.text = str(int(v)))
 		dropdown.item_selected.connect(func(idx: int) -> void: sel_res[0] = all_res[idx])
-		var confirm_btn := Button.new()
-		confirm_btn.text = "Set Pick-up"
+		var confirm_btn := IconButton.create_text("SET PICK-UP", IconButton.Variant.POSITIVE)
 		confirm_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		confirm_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		confirm_btn.pressed.connect(func() -> void:
 			entry["transfer_resource"] = sel_res[0]
 			entry["transfer_amount"]   = int(slider.value)
 			close_popup.call())
-		UIStyle.style_button(confirm_btn, UIStyle.POSITIVE, 8)
 		vbox.add_child(confirm_btn)
 
 ## Empty slot card — shows "+" and opens a build dropdown on click.
@@ -9724,14 +9669,10 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 8)
 	root.add_child(HSeparator.new())
-	var back := Button.new()
-	back.text = "‹  " + planet.planet_name
-	back.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	back.focus_mode = Control.FOCUS_NONE
+	var back := IconButton.create_text("‹  " + planet.planet_name.to_upper())
 	back.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_build_planet_overview(planet))
-	UIStyle.style_button(back, UIStyle.FLAT)
 	root.add_child(back)
 	var header := HBoxContainer.new()
 	var title := Label.new()
@@ -9787,10 +9728,11 @@ func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
 	var next := lv + 1
 	var credits := Leveling.orbit_level_credits(next)
 	var block := Leveling.orbit_level_block(planet, pp)
-	var btn := Button.new()
-	btn.focus_mode = Control.FOCUS_NONE
+	var at_max := lv >= Leveling.max_orbit_level()
+	var btn := IconButton.create("MAX LEVEL" if at_max else "ORBIT LV %d → %d" % [lv, next], "upgrade",
+		IconButton.Variant.POSITIVE,
+		"%d/%d" % [lv, Leveling.max_orbit_level()] if at_max else HUDManager.fmt_credits(credits))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.text = "ORBIT  Lv %d → Lv %d  ◈ %s" % [lv, next, HUDManager.fmt_credits(credits)] if lv < Leveling.max_orbit_level() else "ORBIT  MAX LEVEL"
 	_live_enable(btn, func() -> bool:
 		return Leveling.orbit_level_block(planet, pp) == "" and GameState.credits >= credits)
 	var tip := "Raise the Orbit to Lv %d:\n%s\n\nCost  %s\n%s" % [next,
@@ -9811,7 +9753,6 @@ func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
 		pp.recalculate_limits()
 		GameState.planet_progress_changed.emit(planet.seed)
 		_build_orbit_panel(planet))
-	UIStyle.style_button(btn, UIStyle.POSITIVE)
 	return btn
 
 func _build_city_panel(city: POIData, planet: PlanetData) -> void:
@@ -9836,10 +9777,7 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	root.add_theme_constant_override("separation", 8)
 
 	if GameState.planet_view_unlocked:
-		var back := Button.new()
-		back.text = "‹  " + planet.planet_name
-		UIStyle.style_button(back, UIStyle.FLAT)
-		back.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var back := IconButton.create_text("‹  " + planet.planet_name.to_upper())
 		back.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_city_panel_poi = null
@@ -10017,19 +9955,13 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	# Districts (and the Capital District) live in a City: offer the way back up.
 	var parent_city := _find_poi(planet, poi.parent_city) if not poi.is_city() else poi
 	if poi.is_orbital():
-		var oback := Button.new()
-		oback.text = "‹  Orbit"
-		UIStyle.style_button(oback, UIStyle.FLAT)
-		oback.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var oback := IconButton.create_text("‹  ORBIT")
 		oback.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_build_orbit_panel(planet))
 		root.add_child(oback)
 	if parent_city != null:
-		var back := Button.new()
-		back.text = "‹  " + parent_city.shown_name()
-		UIStyle.style_button(back, UIStyle.FLAT)
-		back.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var back := IconButton.create_text("‹  " + parent_city.shown_name().to_upper())
 		back.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		back.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		var cap_parent := parent_city
@@ -10278,9 +10210,7 @@ func _show_rendezvous_picker(ship: ShipData, layer: OrbitalLayer) -> void:
 	vbox.add_child(title)
 
 	for tgt: ShipData in others:
-		var btn := Button.new()
-		var type_icon: String = "◈" if tgt.ship_type == "station" else "▶"
-		btn.text = "%s  %s" % [type_icon, tgt.ship_name]
+		var btn := IconButton.create(tgt.ship_name.to_upper(), "defense" if tgt.ship_type == "station" else "rocket")
 		btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		var cap_tgt := tgt
@@ -10289,15 +10219,12 @@ func _show_rendezvous_picker(ship: ShipData, layer: OrbitalLayer) -> void:
 			ship.rendezvous_base_speed = ship.orbit_speed
 			ship.rendezvous_target_id  = cap_tgt.ship_id
 			layer.deselect())
-		UIStyle.style_button(btn, UIStyle.DEFAULT, 8)
 		vbox.add_child(btn)
 
-	var cancel_btn := Button.new()
-	cancel_btn.text = "Cancel"
+	var cancel_btn := IconButton.create_text("CANCEL")
 	cancel_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	cancel_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	cancel_btn.pressed.connect(func() -> void: overlay.queue_free())
-	UIStyle.style_button(cancel_btn, UIStyle.DEFAULT, 8)
 	vbox.add_child(cancel_btn)
 
 ## Transfer panel — shown when rendezvous is complete. Floating panel next to the ships.
@@ -10400,9 +10327,8 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 					amt_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 					info.add_child(amt_lbl)
 
-					var xfer_btn := Button.new()
 					var arrow: String = "→" if side == 0 else "←"
-					xfer_btn.text = "%s Transfer" % arrow
+					var xfer_btn := IconButton.create("TRANSFER " + arrow, "move", IconButton.Variant.NEUTRAL)
 					xfer_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 					xfer_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 					var cap_rid := res_id; var cap_src := src; var cap_dst := dst
@@ -10412,7 +10338,6 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 						cap_src.cargo.erase(cap_rid)
 						cap_dst.cargo[cap_rid] = cap_dst.cargo.get(cap_rid, 0) + move_amt
 						if not rebuild_ref.is_empty(): rebuild_ref[0].call())
-					UIStyle.style_button(xfer_btn, UIStyle.NEUTRAL, 8)
 					col.add_child(xfer_btn)
 
 	rebuild_ref.append(_build_transfer_cols)
@@ -10424,12 +10349,10 @@ func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer)
 	close_sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	close_sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	close_row.add_child(close_sp)
-	var close_btn := Button.new()
-	close_btn.text = "Done"
+	var close_btn := IconButton.create_text("DONE")
 	close_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	close_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	close_btn.pressed.connect(func() -> void: panel.queue_free())
-	UIStyle.style_button(close_btn, UIStyle.DEFAULT, 8)
 	close_row.add_child(close_btn)
 
 func _sync_station_buildings() -> void:

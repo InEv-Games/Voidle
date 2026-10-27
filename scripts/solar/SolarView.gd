@@ -533,14 +533,9 @@ func _update_panel() -> void:
 		child.queue_free()
 	for i in _current.planets.size():
 		var pd: PlanetData = _current.planets[i]
-		var btn := Button.new()
-		btn.text        = "%d. %s" % [i + 1, pd.planet_name]
-		btn.alignment   = HORIZONTAL_ALIGNMENT_LEFT
-		if not _can_access(pd):
-			btn.disabled = true
-			btn.modulate.a = 0.5
+		var btn := IconButton.create("%d. %s" % [i + 1, pd.planet_name.to_upper()], "moon" if pd.planet_type == PlanetData.Type.MOON else "planet")
+		btn.disabled = not _can_access(pd)
 		btn.pressed.connect(func() -> void: planet_selected.emit(pd))
-		UIStyle.style_button(btn, UIStyle.DEFAULT)
 		_planet_list.add_child(btn)
 
 	# remove old survey / scan buttons
@@ -586,9 +581,7 @@ func _update_panel() -> void:
 	survey_wrap.add_child(sep)
 
 	# Survey button styled like Level Up (always green)
-	_survey_btn = Button.new()
-	_survey_btn.text = "SURVEY SYSTEM"
-	_survey_btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_survey_btn = IconButton.create_text("SURVEY SYSTEM", IconButton.Variant.POSITIVE)
 
 
 	_survey_btn.mouse_entered.connect(func() -> void:
@@ -598,7 +591,6 @@ func _update_panel() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL))
 	_survey_btn.pressed.connect(func() -> void: _show_survey_popup(gd, star_idx, SURVEY_CREDITS, SURVEY_SCIENCE))
 
-	UIStyle.style_button(_survey_btn, UIStyle.POSITIVE)
 	survey_wrap.add_child(_survey_btn)
 
 const SCAN_SCIENCE: float = 5_000.0
@@ -627,9 +619,7 @@ func _build_scan_asteroid_section() -> void:
 	st_lbl.add_theme_color_override("font_color", UIStyle.color(&"text"))
 	_scan_wrap.add_child(st_lbl)
 
-	var scan_btn := Button.new()
-	scan_btn.text = "SCAN ASTEROID BELT"
-	scan_btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var scan_btn := IconButton.create_text("SCAN ASTEROID BELT", IconButton.Variant.POSITIVE)
 
 	# Find next unsaturated belt
 	var next_slot: int = -1
@@ -644,7 +634,7 @@ func _build_scan_asteroid_section() -> void:
 
 	if all_scanned:
 		scan_btn.disabled = true
-		scan_btn.text = "ALL BELTS SCANNED"
+		scan_btn.label_text = "ALL BELTS SCANNED"
 	elif not can_afford:
 		scan_btn.disabled = true
 
@@ -656,7 +646,6 @@ func _build_scan_asteroid_section() -> void:
 	cost_lbl.add_theme_color_override("font_color",
 		UIStyle.color(&"text") if can_afford else UIStyle.color(&"bad"))
 	_scan_wrap.add_child(cost_lbl)
-	UIStyle.style_button(scan_btn, UIStyle.POSITIVE)
 	_scan_wrap.add_child(scan_btn)
 
 	scan_btn.mouse_entered.connect(func() -> void: AudioManager.play("hover"))

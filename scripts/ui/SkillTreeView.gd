@@ -119,9 +119,8 @@ func _ready() -> void:
 	add_child(sub)
 
 	# Close button at the bottom center
-	_close_btn = Button.new()
-	_close_btn.text = "CLOSE"
-	_close_btn.custom_minimum_size = Vector2(100, 30)
+	_close_btn = IconButton.create("CLOSE", "close")
+	_close_btn.min_size = Vector2(100, 30)
 	_close_btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_close_btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_close_btn.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -140,7 +139,6 @@ func _ready() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER))
 	_close_btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL))
-	UIStyle.style_button(_close_btn, UIStyle.DEFAULT)
 	add_child(_close_btn)
 
 	# Listen to skill unlocks to redraw connections & button states
@@ -347,22 +345,18 @@ func _build_tree_graph() -> void:
 
 		# Buyout under the previous tree's centre node (KARARLAR §8)
 		if id == "civilization_0_tree":
-			var bo := Button.new()
 			var bo_cost: float = st.call("buyout_cost", 0)
 			var bo_block: String = st.call("buyout_block", 0)
-			bo.text = "Buyout  %s Science" % Economy.fmt(bo_cost)
-			if bo_block != "":
-				bo.text += "\n" + bo_block
+			var bo := IconButton.create_text("BUYOUT", IconButton.Variant.POSITIVE, "%s sci" % Economy.fmt(bo_cost))
+			bo.tooltip_text = bo_block   # why it can't be bought yet
 			bo.disabled = bo_block != ""
-			bo.focus_mode = Control.FOCUS_NONE
 			bo.position = Vector2(-80, card_size + 4)
-			bo.custom_minimum_size = Vector2(card_size + 160, 0)
+			bo.min_size = Vector2(card_size + 160, 26)
 			bo.pressed.connect(func() -> void:
 				if st.call("buyout", 0):
 					AudioManager.play("skill_buy")
 				else:
 					AudioManager.play("error"))
-			UIStyle.style_button(bo, UIStyle.POSITIVE, 9)
 			wrapper.add_child(bo)
 
 		# Position absolute coordinate

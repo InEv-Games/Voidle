@@ -150,13 +150,11 @@ func _build_ui() -> void:
 	row.add_child(_crumbs)
 
 func _make_btn(txt: String, tip: String, cb: Callable) -> Button:
-	var b := Button.new()
-	b.text = txt
-	b.focus_mode = Control.FOCUS_NONE
+	var b := IconButton.create_text(txt)
+	b.font_size = 12
+	b.min_size = Vector2(26, 26)
 	b.tooltip_text = tip
-	b.custom_minimum_size = Vector2(26, 0)
 	b.pressed.connect(cb)
-	UIStyle.style_button(b, UIStyle.DEFAULT, 12)
 	return b
 
 func _crumb(txt: String, target: Dictionary, enabled: bool) -> void:

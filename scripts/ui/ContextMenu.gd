@@ -76,28 +76,34 @@ func _build(title: String, subtitle: String, commands: Array[GameCommand], scree
 	p.y = minf(p.y, vp.y - _panel.size.y - 6.0)
 	_panel.position = p.max(Vector2(6, 6))
 
+## Command id prefix -> UIIcons name for the row's icon cell.
+const ROW_ICONS := [
+	["open_city", "city"], ["open_capital", "capital"], ["open_parent_city", "city"], ["focus_city", "city"],
+	["found_city", "city"], ["open_district", "district"], ["add_district", "district"], ["open_orbit", "rocket"],
+	["rocket_target", "rocket"], ["view_planet", "planet"], ["planet_overview", "planet"],
+	["star_system", "explore"], ["enter_system", "explore"], ["galaxy_view", "explore"],
+	["cancel", "cancel"], ["demolish", "danger"], ["clear", "negative"], ["remove_", "negative"],
+	["reset", "downgrade"], ["move", "move"], ["research", "research"],
+]
+## Destructive commands are Negative rows; everything else Default.
+const NEGATIVE_IDS := ["demolish", "clear", "remove_", "reset"]
+
+static func _row_icon(id: String) -> String:
+	for pair: Array in ROW_ICONS:
+		if id.begins_with(pair[0]):
+			return pair[1]
+	return "upgrade" if id.contains("level_up") else "unknown"
+
+## Menu row: icon │ LABEL ........ cost (the design system's icon-left button).
 func _row(c: GameCommand) -> Control:
 	var blocked := c.can_execute()
-	var btn := Button.new()
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.custom_minimum_size = Vector2(0, 24)
-
-	var row := HBoxContainer.new()
-	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	row.offset_left = 8; row.offset_right = -8
-	row.add_theme_constant_override("separation", 8)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(row)
-	var col := c.color if blocked == "" else Color(0.42, 0.45, 0.56)
-	if c.icon != "":
-		var ic := _label(c.icon, 9, col)
-		ic.custom_minimum_size = Vector2(14, 0)
-		row.add_child(ic)
-	var name_lbl := _label(c.label, 8, col)
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(name_lbl)
-	if c.cost != "":
-		row.add_child(_label(c.cost, 7, Color(0.95, 0.85, 0.45) if blocked == "" else Color(0.45, 0.42, 0.35)))
+	var v := IconButton.Variant.DEFAULT
+	for n: String in NEGATIVE_IDS:
+		if c.id.begins_with(n):
+			v = IconButton.Variant.NEGATIVE
+	var btn := IconButton.create(c.label.to_upper(), _row_icon(c.id), v, c.cost)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.disabled = blocked != ""
 
 	var tip := c.tooltip
 	if blocked != "":
@@ -117,7 +123,6 @@ func _row(c: GameCommand) -> Control:
 		AudioManager.play("click")
 		close()
 		c.execute())
-	UIStyle.style_button(btn, UIStyle.DEFAULT)
 	return btn
 
 func _label(txt: String, size: int, col: Color) -> Label:

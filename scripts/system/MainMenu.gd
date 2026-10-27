@@ -204,17 +204,15 @@ func _build_menu() -> void:
 	root.add_child(vgap)
 	root.add_child(ver)
 
+## Menu item: icon-left Default button (NEW GAME, CONTINUE, SETTINGS, QUIT).
+const MENU_ICONS := {"CONTINUE": "save", "NEW GAME": "new", "PLAY DEMO": "new", "SETTINGS": "settings", "QUIT": "close"}
+
 func _add_button(parent: Control, label: String, cb: Callable) -> Button:
-	var btn := Button.new()
-	btn.text                    = label
-	btn.alignment               = HORIZONTAL_ALIGNMENT_LEFT
-	btn.size_flags_horizontal   = Control.SIZE_SHRINK_BEGIN
-	btn.custom_minimum_size     = Vector2(260, 36)
-
-	# Hover: show a dim left-border accent via StyleBoxFlat
-
+	var btn := IconButton.create(label, MENU_ICONS.get(label, "unknown"))
+	btn.font_size = 12
+	btn.min_size = Vector2(260, 36)
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	btn.pressed.connect(cb)
-	UIStyle.style_button(btn, UIStyle.DEFAULT, 12)
 	parent.add_child(btn)
 	return btn
 

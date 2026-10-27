@@ -132,10 +132,10 @@ func _build_ui() -> void:
 	for ttype: String in ["shuttle", "hauler", "heavy_hauler", "station"]:
 		var cap_t: String = ttype
 		var is_locked: bool = (ttype == "station" and station_locked)
-		var tb := Button.new()
-		tb.text = SHIP_LABELS.get(ttype, ttype.capitalize())
 		var is_sel: bool = _context.get("entry", {}).get("ship_type", "shuttle") == ttype
-		tb.custom_minimum_size = Vector2(70, 0)
+		var tb := IconButton.create_text(String(SHIP_LABELS.get(ttype, ttype.capitalize())).to_upper(),
+			IconButton.Variant.NEUTRAL if is_sel else IconButton.Variant.DEFAULT)   # selected = Neutral
+		tb.min_size = Vector2(70, 26)
 		tb.disabled = is_locked
 		if not is_locked:
 			tb.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
@@ -146,7 +146,6 @@ func _build_ui() -> void:
 			# Rebuild whole UI so type buttons reflect new selection
 			for ch in _vbox.get_children(): ch.queue_free()
 			_build_ui())
-		UIStyle.style_button(tb, UIStyle.NEUTRAL if is_sel else UIStyle.DEFAULT, 8)   # selected = Neutral
 		type_row.add_child(tb)
 
 	if station_locked:
@@ -575,14 +574,11 @@ func _card_style(_border_color: Color) -> StyleBoxFlat:
 
 
 func _make_x_btn(on_press: Callable) -> Button:
-	var btn := Button.new()
-	btn.text = "×"
-	_font_apply(btn, 9)
+	var btn := IconButton.create("", "close", IconButton.Variant.NEGATIVE)
 	btn.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	btn.pressed.connect(on_press)
-	UIStyle.style_button(btn, UIStyle.NEGATIVE, 8)
 	return btn
 
 
@@ -617,16 +613,13 @@ func _show_add_dropdown(anchor: Control) -> void:
 
 	for def: MissionTaskDef in available:
 		var cap_def: MissionTaskDef = def
-		var item_btn := Button.new()
-		item_btn.text = cap_def.display_name
-		item_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var item_btn := IconButton.create(cap_def.display_name.to_upper(), "notes")
 		item_btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		item_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		item_btn.pressed.connect(func() -> void:
 			_tasks.append({"type": cap_def.task_type})
 			_dismiss_add_popup()
 			_rebuild_task_list())
-		UIStyle.style_button(item_btn, UIStyle.DEFAULT, 8)
 		pvbox.add_child(item_btn)
 
 	# Position below anchor, added to overlay so coordinates are consistent
@@ -710,17 +703,21 @@ func _style_lineedit(le: LineEdit) -> void:
 	le.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 
 
-## Theme button types: the old colour args only pick one
-## (reddish border = Negative, greenish = Positive, else Default).
+## Design-system buttons; the old colour args only pick the type: "+ …" adds
+## (Neutral, + icon), Cancel is Default, greenish border Positive, reddish Negative.
 func _make_btn(text_val: String, _bg: Color, border: Color, _font_color: Color) -> Button:
-	var btn := Button.new()
-	btn.text = text_val.to_upper()
-	var variation := UIStyle.DEFAULT
-	if border.r > border.g + 0.1:
-		variation = UIStyle.NEGATIVE
-	elif border.g > border.b:
-		variation = UIStyle.POSITIVE
-	UIStyle.style_button(btn, variation, 8)
+	var btn: IconButton
+	if text_val.begins_with("+ "):
+		btn = IconButton.create(text_val.trim_prefix("+ ").to_upper(), "new", IconButton.Variant.NEUTRAL)
+	else:
+		var v := IconButton.Variant.DEFAULT
+		if text_val == "Cancel":
+			v = IconButton.Variant.DEFAULT
+		elif border.r > border.g + 0.1:
+			v = IconButton.Variant.NEGATIVE
+		elif border.g > border.b:
+			v = IconButton.Variant.POSITIVE
+		btn = IconButton.create_text(text_val.to_upper(), v)
 	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	return btn

@@ -423,9 +423,7 @@ func show_settings_popup() -> void:
 	tut_lbl.theme_type_variation = &"SubLabel"
 	tut_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tut_row.add_child(tut_lbl)
-	var reset_btn := Button.new()
-	reset_btn.text = "RESET TUTORIAL"
-	UIStyle.style_button(reset_btn, UIStyle.DEFAULT, 8)
+	var reset_btn := IconButton.create_text("RESET TUTORIAL")
 	reset_btn.pressed.connect(func() -> void:
 		SettingsManager.tutorial_ever_done = false
 		SettingsManager.save_settings()
