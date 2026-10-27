@@ -1,26 +1,27 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://f5iy7u2ftuul"]
 
 [ext_resource type="PackedScene" path="res://scenes/ui/components/TooltipCard.tscn" id="1_card"]
 
-[node name="TooltipView" type="HBoxContainer"]
+[node name="TooltipView" type="HBoxContainer" unique_id=1450446102]
 offset_right = 320.0
 offset_bottom = 90.0
 mouse_filter = 2
 theme_override_constants/separation = 6
 
-[node name="Card" parent="." instance=ExtResource("1_card")]
+[node name="Card" parent="." unique_id=680986164 instance=ExtResource("1_card")]
 layout_mode = 2
 title = ""
 icon_name = ""
 
-[node name="SubPanel" type="PanelContainer" parent="."]
+[node name="SubPanel" type="PanelContainer" parent="." unique_id=1742339254]
 visible = false
 layout_mode = 2
 size_flags_vertical = 0
 mouse_filter = 2
 theme_type_variation = &"TooltipSubPanel"
 
-[node name="Body" type="RichTextLabel" parent="SubPanel"]
+[node name="Body" type="RichTextLabel" parent="SubPanel" unique_id=544023156]
+visible = false
 custom_minimum_size = Vector2(140, 0)
 layout_mode = 2
 mouse_filter = 2
