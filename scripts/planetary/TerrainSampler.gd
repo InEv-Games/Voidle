@@ -32,6 +32,18 @@ const MIN_SPACING_DEG: float = 4.0
 ## Districts whose settlements are within this gap of each other are neighbours.
 const NEIGHBOR_GAP_DEG: float = 9.0
 
+## Radius of a fresh settlement (PlanetaryView grows it with its buildings).
+const SETTLE_BASE_DEG: float = 0.9
+## A City's reach grows by this for every level its Capital District has.
+const CITY_REACH_PER_LV_DEG: float = 3.0
+
+## How far beyond its settlements a City's districts may be placed, in degrees
+## (`city_level` = its Capital District's level). The distance bands are
+## fractions of it (Location.band).
+static func city_reach_deg(data: PlanetData, city_level: int) -> float:
+	return (SETTLE_BASE_DEG + NEIGHBOR_GAP_DEG * 1.3 + CITY_REACH_PER_LV_DEG * float(maxi(city_level, 1) - 1)) \
+		* body_scale(data)
+
 ## Settlements keep their real size in km: on a small body (the Moon) the same
 ## town covers more degrees. 1 for Earth-sized worlds (planet_size ≥ 0.8).
 static func body_scale(data: PlanetData) -> float:
@@ -192,6 +204,11 @@ static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: floa
 	if not fits_placement(t, def.placement):
 		result.ok = false
 		result.reason = "%s must be built on %s" % [def.display_name, placement_label(def.placement)]
+		return result
+	# a City can stand beside a river, not across it (districts may still sit on one)
+	if def.is_system_anchor() and (FeatureMap.mask_at(data.seed, lon, lat) & (1 << FeatureMap.F.RIVER)) != 0:
+		result.ok = false
+		result.reason = "A City can't stand on a river — build it beside one"
 		return result
 	var min_d := deg_to_rad(min_spacing_deg(data))
 	var city_d := deg_to_rad(city_spacing_deg(data))

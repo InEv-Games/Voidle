@@ -210,6 +210,7 @@ func _ready() -> void:
 	GameState.credits_changed.connect(_on_credits_changed)
 	GameState.civilization_reached.connect(func(_civ: int) -> void: _show_act1_complete())
 	GameState.lander_reached_moon.connect(_show_lander_notice)
+	GameState.expedition_changed.connect(_on_expedition_changed)
 	GameState.science_changed.connect(_on_science_changed)
 	AchievementManager.achievement_unlocked.connect(_on_achievement_unlocked)
 
@@ -218,12 +219,15 @@ func _make_trade_button() -> Button:
 	var b := IconButton.create("TRADE", "trade", IconButton.Variant.NEUTRAL)
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
 	b.pressed.connect(func() -> void:
+		if TutorialManager.blocks_hud():   # like the Upgrade Tree: shut during the guided tutorial
+			AudioManager.play("error")
+			return
 		AudioManager.play("click")
 		toggle_trade_panel())
 	b.mouse_entered.connect(func() -> void:
 		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("Trade", "Buy and sell at fixed prices, keep reserves and set standing orders." \
+		TooltipManager.show_tip("Trade", "Buy and sell (prices move with your trades), keep reserves and set standing orders." \
 			if Trade.has_access() else "Research Trade Access to buy and sell."))
 	b.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
@@ -450,9 +454,25 @@ func _maybe_celebrate_moon() -> void:
 ## The lander parked in the Moon's orbit: a notice that flies the camera there
 ## (the Moon, its orbit and the lander's INITIATE COLONIZATION card).
 func _show_lander_notice(moon_seed: int) -> void:
+	_show_notice("THE LANDER REACHED THE MOON'S ORBIT  —  CLICK TO GO THERE", "moon", go_to_lander.bind(moon_seed))
+
+## The final rocket left the Moon: point the player at the star system view,
+## where its flight is drawn.
+func _on_expedition_changed(kind: String) -> void:
+	if kind != "rocket" or GameState.expedition_state("rocket") != "in_transit":
+		return
+	var scene := get_tree().current_scene
+	if scene != null and scene.scene_file_path.ends_with("SolarView.tscn"):
+		return   # already watching
+	var tgt := GameState.get_planet_data(int(GameState.expedition("rocket").get("target_seed", -1)))
+	_show_notice("THE FINAL ROCKET LEFT FOR %s  —  CLICK TO WATCH" % (tgt.planet_name if tgt != null else "a new world").to_upper(), "rocket",
+		func() -> void: SceneTransition.go("res://scenes/solar/SolarView.tscn", GameState.get_home_solar()))
+
+## A clickable banner under the top bar; fades after a while.
+func _show_notice(text: String, icon_id: String, on_click: Callable) -> void:
 	if _top_layer == null or not is_instance_valid(_top_layer):
 		return
-	var btn := IconButton.create("THE LANDER REACHED THE MOON'S ORBIT  —  CLICK TO GO THERE", "moon", IconButton.Variant.POSITIVE)
+	var btn := IconButton.create(text, icon_id, IconButton.Variant.POSITIVE)
 	btn.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	btn.offset_top = 132.0
@@ -462,7 +482,7 @@ func _show_lander_notice(moon_seed: int) -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		btn.queue_free()
 		AudioManager.play("click")
-		go_to_lander(moon_seed))
+		on_click.call())
 	_top_layer.add_child(btn)
 	AudioManager.play("building_done")
 	# stays a while, then fades away
@@ -699,7 +719,7 @@ func _build_resource_cells(hbox: HBoxContainer) -> void:
 ## Fixed text width per top-bar cell, so the bar never changes width; the
 ## value's font shrinks to fit instead (_fit_label).
 const CELL_TEXT_W := {
-	"credits": 62, "science": 38, "energy": 36, "population": 70,
+	"credits": 62, "science": 38, "energy": 56, "population": 70,
 	"raw": 46, "goods": 32, "fuel": 32, "rare_elements": 32,
 }
 ## Largest value size is the theme's ValueLabel font size (voidle_theme.tres).
@@ -868,12 +888,19 @@ func _cell_tip(id: String, base: String) -> String:
 			var pm: Node = get_node_or_null("/root/ProductionManager")
 			var net: float = pm.get_global_energy() if pm != null else 0.0
 			var sp: Vector2 = pm.get_global_energy_split() if pm != null else Vector2.ZERO
-			var lines: Array[String] = [
+			var lines: Array[String] = ["Shown as used / made on this world."]
+			var wpp := _rate_planet()
+			if wpp != null and pm != null:
+				var wsp: Vector2 = pm.planet_energy_split(wpp)
+				lines.append("%s  made +%s ⚡  ·  used −%s ⚡" % [_rate_planet_name(), Economy.fmt(wsp.x), Economy.fmt(wsp.y)])
+			lines.append("")
+			lines.append("All worlds:")
+			lines.append_array([
 				"Produced   +%s ⚡" % Economy.fmt(sp.x),
 				"Consumed   −%s ⚡" % Economy.fmt(sp.y),
 				"Balance    %s%s ⚡" % ["+" if net >= 0.0 else "", Economy.fmt(net)],
 				"",
-				"A deficit lowers what energy-using buildings make (down to %d%% at worst) — cycles keep their length." % int(round((1.0 - Balance.cfg.energy_max_slowdown) * 100.0))]
+				"A deficit lowers what energy-using buildings make (down to %d%% at worst) — cycles keep their length." % int(round((1.0 - Balance.cfg.energy_max_slowdown) * 100.0))])
 			if net < 0.0:
 				lines.append("Now producing at %d%% output." % int(round(pm.get_energy_ratio() * 100.0)))
 			lines.append("")
@@ -894,8 +921,12 @@ func _cell_tip(id: String, base: String) -> String:
 			return head + "Shown as available / max.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, every finished cycle on the planet makes less (down to %d%% at worst) until you build homes." % [
 				Economy.fmt(Balance.cfg.city_base_pop), Economy.fmt(Economy.district_found_pop(0)), int(round((1.0 - Balance.cfg.pop_max_slowdown) * 100.0))] + penalty + _idle_pop_text()
 	var r: float = ProductionManager.resource_rates().get(id, 0.0)
-	return "%s\n\nStored  %s  (max %s)\nPer second  %s%s" % [base, Economy.fmt(Economy.amount(id)),
-		Economy.fmt(Economy.cap(id)), "+" if r >= 0.0 else "", Economy.fmt(r)]
+	var txt := "%s\n\nStored  %s  (max %s, shared by all worlds)" % [base, Economy.fmt(Economy.amount(id)), Economy.fmt(Economy.cap(id))]
+	var wpp := _rate_planet()
+	if wpp != null:
+		var rw: float = ProductionManager.resource_rates(wpp.planet_seed).get(id, 0.0)
+		txt += "\nPer second on %s  %s%s" % [_rate_planet_name(), "+" if rw >= 0.0 else "", Economy.fmt(rw)]
+	return txt + "\nPer second, all worlds  %s%s" % ["+" if r >= 0.0 else "", Economy.fmt(r)]
 
 ## Idle housing across the empire and what research turns it into.
 func _idle_pop_text() -> String:
@@ -912,37 +943,29 @@ func _idle_pop_text() -> String:
 		out += "\n  +%d%% Raw and processed output  (Production Reserve)" % int(round((reserve - 1.0) * 100.0))
 	return out
 
-## Resources show up in the bar as the player meets them (credits and
-## population always). Revealed ids persist in GameState.revealed_resources.
-const ALWAYS_SHOWN := ["credits", "population"]
-
-func _update_reveals(rates: Dictionary) -> void:
+## Every resource shows in the bar from the start, even before the player
+## makes any (playtest 23.10) — what's ahead is part of the goal.
+func _update_reveals(_rates: Dictionary) -> void:
 	for id: String in _res_slots:
-		var slot: Control = _res_slots[id]
-		var shown := id in ALWAYS_SHOWN or GameState.revealed_resources.has(id)
-		if not shown and _should_reveal(id, rates):
-			GameState.revealed_resources.append(id)
-			shown = true
-			slot.modulate = Color(2.0, 2.0, 1.4, 0.0)
-			var tw := create_tween()
-			tw.tween_property(slot, "modulate", Color.WHITE, 0.8).set_trans(Tween.TRANS_QUAD)
-		slot.visible = shown
+		(_res_slots[id] as Control).visible = true
 
-func _should_reveal(id: String, rates: Dictionary) -> bool:
-	match id:
-		Economy.ENERGY:
-			var sp: Vector2 = ProductionManager.get_global_energy_split()
-			return sp.x > 0.0 or sp.y > 0.0
-		Economy.SCIENCE:
-			return GameState.science_points > 0.0 or float(rates.get(id, 0.0)) > 0.0
-		Economy.RAW:
-			return Economy.raw_total() > 0.0 or float(rates.get(id, 0.0)) != 0.0
-	return Economy.amount(id) > 0.0 or float(rates.get(id, 0.0)) != 0.0
+## The world whose rates the bar shows: the one in view (null when none is colonized).
+func _rate_planet() -> PlanetProgress:
+	if GameState.active_planet_seed == -1:
+		return null
+	var pp: PlanetProgress = GameState.get_planet(GameState.active_planet_seed)
+	return pp if pp != null and pp.is_colonized else null
+
+func _rate_planet_name() -> String:
+	var pd: PlanetData = GameState.get_planet_data(GameState.active_planet_seed)
+	return pd.planet_name if pd != null else "this world"
 
 func _refresh_resource_cells() -> void:
 	if _res_lbls.is_empty():
 		return
-	var rates: Dictionary = ProductionManager.resource_rates()
+	# per-second rates of the world in view; stocks stay empire-wide
+	var wpp := _rate_planet()
+	var rates: Dictionary = ProductionManager.resource_rates(wpp.planet_seed if wpp != null else -1)
 	_update_reveals(rates)
 	_set_rate(Economy.CREDITS, rates.get(Economy.CREDITS, 0.0))
 	_set_rate(Economy.SCIENCE, rates.get(Economy.SCIENCE, 0.0))
@@ -951,10 +974,11 @@ func _refresh_resource_cells() -> void:
 	_set_chip_state(Economy.SCIENCE, false, GameState.science_points <= 0.0 and float(rates.get(Economy.SCIENCE, 0.0)) <= 0.0)
 	var e_lbl: Label = _res_lbls.get(Economy.ENERGY)
 	if is_instance_valid(e_lbl):
-		var net: float = rates.get(Economy.ENERGY, 0.0)
-		_set_value(e_lbl, ("+" if snappedf(net, 0.1) >= 0.0 else "−") + Economy.fmt(absf(snappedf(net, 0.1))))
-		var sp: Vector2 = ProductionManager.get_global_energy_split()
-		_set_chip_state(Economy.ENERGY, net < 0.0, sp.x <= 0.0 and sp.y <= 0.0)
+		# used / made — the output is right there, a deficit shows as the chip's alert
+		var esp: Vector2 = ProductionManager.planet_energy_split(wpp) if wpp != null \
+			else ProductionManager.get_global_energy_split()
+		_set_value(e_lbl, "%s/%s" % [Economy.fmt(snappedf(esp.y, 0.1)), Economy.fmt(snappedf(esp.x, 0.1))])
+		_set_chip_state(Economy.ENERGY, esp.y > esp.x, esp.x <= 0.0 and esp.y <= 0.0)
 
 	var pop_lbl: Label = _res_lbls.get(Economy.POPULATION)
 	if is_instance_valid(pop_lbl):
@@ -1039,7 +1063,8 @@ func _close_raw_dropdown() -> void:
 func _fill_raw_dropdown() -> void:
 	if not is_instance_valid(_raw_dd_list):
 		return
-	var raws := _listed_raws()
+	# every raw mineral has a row; undiscovered ones show unnamed (no spoiler)
+	var raws: Array = Economy.RAW_TABLE
 	var rows := _raw_dd_list.get_children()
 	if rows.size() != raws.size() or raws.is_empty():
 		for c in rows:
@@ -1056,17 +1081,20 @@ func _fill_raw_dropdown() -> void:
 			chip.icon_color = r["color"]
 			chip.value_width = 44.0
 			var nm: String = r["name"]
-			chip.mouse_entered.connect(func() -> void: TooltipManager.show_tip(nm))
+			var rid: String = r["id"]
+			chip.mouse_entered.connect(func() -> void: TooltipManager.show_tip(nm \
+				if Economy.is_mineral_discovered(rid) or Economy.amount(rid) > 0.0 else "Undiscovered"))
 			chip.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 			_raw_dd_list.add_child(chip)
 			rows.append(chip)
 	for i in raws.size():
 		var r: Dictionary = raws[i]
 		var chip := rows[i] as ResourceChip
-		chip.icon_color = r["color"]
-		chip.value_text = Economy.fmt(Economy.amount(r["id"]))
+		var known: bool = Economy.is_mineral_discovered(r["id"]) or Economy.amount(r["id"]) > 0.0
+		chip.icon_color = r["color"] if known else UIStyle.color(&"neutral_stroke")
+		chip.value_text = Economy.fmt(Economy.amount(r["id"])) if known else "—"
 		chip.alert = Economy.is_full(r["id"])
-		chip.inactive = Economy.amount(r["id"]) <= 0.0
+		chip.inactive = not known or Economy.amount(r["id"]) <= 0.0
 
 ## Closes the raw dropdown on any click outside it (and outside its cell).
 func _input(event: InputEvent) -> void:

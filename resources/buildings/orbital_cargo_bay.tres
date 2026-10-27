@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_orbital_cargo_bay_3e9a"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+pop_cost = 0
+building_id = "orbital_cargo_bay"
+display_name = "Orbital Cargo Bay"
+description = "The first module of a new station: sealed holds for Goods and Fuel waiting for launch."
+allowed_poi_types = Array[int]([6])
+allowed_planet_types = Array[int]([])
+base_cost = 600.0
+slot_cost = 1
+min_planet_lv = 1
+construct_duration = 4.0
+tick_duration = 20.0
+energy_per_tick = -1.0
+outputs = {}
+inputs = {}
+planet_bonus = {}
+storage = {"goods": 150.0, "fuel": 150.0}
+build_materials = {"ferrite": 20.0}
+tier = 1
+unlocked_by_default = true

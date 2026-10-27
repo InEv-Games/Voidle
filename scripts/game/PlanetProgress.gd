@@ -120,13 +120,14 @@ func buildings_in_district(district_label: String) -> Array[Dictionary]:
 	return result
 
 ## Building slots: 3 + 2 per level; the Capital District (a City) holds only a
-## few hand-picked buildings — 1 + 1 per level.
+## few hand-picked buildings — 2 + 1 per level (its Civic Office and a 2-slot
+## Spaceport fit at Lv2).
 func district_slots(poi: POIData) -> int:
 	var lv: int = district_levels.get(poi.label, 1)
 	if poi.is_orbital():
 		return 1   # a station holds one module; the Orbit levels instead
 	if poi.is_city():
-		return lv
+		return lv + 1
 	return 3 + (lv - 1) * 2
 
 ## Slots one more level adds to this district.
@@ -162,7 +163,7 @@ func slots_used_in_district(district_label: String) -> int:
 ## `paid` = credits really paid for this one building (the refund ledger's C,
 ## GDD §15.6); merged stacks add their C together.
 func build_in_district(district: POIData, building_id: String,
-		target_mineral: String = "", paid: float = 0.0) -> bool:
+		target_mineral: String = "", paid: float = 0.0, paid_mats: Dictionary = {}) -> bool:
 	var def := BuildingDef.find(building_id)
 	if def == null:
 		return false
@@ -181,7 +182,7 @@ func build_in_district(district: POIData, building_id: String,
 				merge_idx = i
 				break
 	
-	var entry := { "district_id": district.label, "building_id": building_id, "amount": 1, "constructing": true, "uid": str(randi()), "paid": paid }
+	var entry := { "district_id": district.label, "building_id": building_id, "amount": 1, "constructing": true, "uid": str(randi()), "paid": paid, "paid_mats": paid_mats.duplicate() }
 	if merge_idx != -1:
 		entry["merge_into"] = merge_idx
 		
@@ -246,6 +247,9 @@ func split_building(entry: Dictionary, split_amount: int) -> bool:
 	new_stack["amount"] = split_amount
 	new_stack["paid"] = c * float(split_amount) / float(current_amt)
 	b["paid"] = c - float(new_stack["paid"])
+	var m := stack_mats(b)
+	new_stack["paid_mats"] = scale_mats(m, float(split_amount) / float(current_amt))
+	b["paid_mats"] = scale_mats(m, 1.0 - float(split_amount) / float(current_amt))
 	new_stack["uid"] = str(randi())
 	buildings.append(new_stack)
 	return true
@@ -276,6 +280,10 @@ func merge_identical(entry: Dictionary) -> bool:
 				and b.get("target_mineral", "") == entry.get("target_mineral", "") \
 				and int(b.get("level", 1)) == int(entry.get("level", 1)):
 			b["paid"] = stack_paid(b) + stack_paid(entry)
+			var sum := stack_mats(b).duplicate()
+			for id: String in stack_mats(entry):
+				sum[id] = float(sum.get(id, 0.0)) + float(stack_mats(entry)[id])
+			b["paid_mats"] = sum
 			b["amount"] = int(b.get("amount", 1)) + int(entry.get("amount", 1))
 			remove_building_stack(entry)
 			return true
@@ -298,6 +306,18 @@ static func stack_paid(entry: Dictionary) -> float:
 		return float(entry["paid"])
 	var def := BuildingDef.find(entry.get("building_id", ""))
 	return (def.base_cost if def != null else 0.0) * float(entry.get("amount", 1))
+
+## Materials really paid for a stack and not refunded yet ({id: amount});
+## empty for stacks from older saves.
+static func stack_mats(entry: Dictionary) -> Dictionary:
+	return entry.get("paid_mats", {})
+
+## Every amount × f (a share of a material record).
+static func scale_mats(mats: Dictionary, f: float) -> Dictionary:
+	var out := {}
+	for id: String in mats:
+		out[id] = float(mats[id]) * f
+	return out
 
 ## Credits really paid for district levels above Lv1 ({label: credits}).
 var level_paid: Dictionary = {}

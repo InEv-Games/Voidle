@@ -54,6 +54,7 @@ const STAR_PX: Dictionary = {
 }
 
 func _process(_delta: float) -> void:
+	_tick_rocket_fx()
 	# the side panel ends above the HUD's shortcut row (Upgrade Tree / Trade / Explore)
 	var side := $UICanvas/SidePanel as Control
 	if absf(side.offset_bottom + HUDManager.shortcut_bar_height()) > 0.5:
@@ -65,6 +66,87 @@ func _process(_delta: float) -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
 		return
 	CursorManager.set_state(CursorManager.State.NORMAL)
+
+# ── Final rocket (GDD §20.15–§20.18) ─────────────────────────────────────────
+# Before launch: a label at home and a dotted line to the target. In flight:
+# the rocket on a curved path to the target with its ETA (playtest 23.10: the
+# trip to a new world had no animation).
+var _rocket_fx: Node2D = null
+const ROCKET_COL := Color(1.0, 0.85, 0.5)
+
+func _tick_rocket_fx() -> void:
+	var st := GameState.expedition_state("rocket")
+	var shown := st == "preparing" or st == "ready" or st == "in_transit"
+	if not shown or _pivot == null or not is_instance_valid(_pivot):
+		if _rocket_fx != null and is_instance_valid(_rocket_fx):
+			_rocket_fx.visible = false
+		return
+	if _rocket_fx == null or not is_instance_valid(_rocket_fx):
+		_rocket_fx = Node2D.new()
+		_rocket_fx.z_as_relative = false
+		_rocket_fx.z_index = 95
+		_rocket_fx.draw.connect(_draw_rocket_fx)
+		_pivot.add_child(_rocket_fx)
+	_rocket_fx.visible = true
+	_rocket_fx.queue_redraw()
+
+func _orbit_node_of(seed_val: int) -> PlanetOrbitNode:
+	for n: PlanetOrbitNode in _orbits:
+		if is_instance_valid(n) and n.planet_data != null and n.planet_data.seed == seed_val:
+			return n
+	return null
+
+## Point k (0..1) of the curved path a → b (bulges sideways, like a transfer arc).
+static func _rocket_path_at(a: Vector2, b: Vector2, k: float) -> Vector2:
+	var mid := (a + b) * 0.5
+	var ctrl := mid + (b - a).orthogonal() * 0.25
+	return a.lerp(ctrl, k).lerp(ctrl.lerp(b, k), k)
+
+func _draw_rocket_fx() -> void:
+	var ex := GameState.expedition("rocket")
+	var home := _orbit_node_of(GameState.home_planet_seed)
+	if home == null:
+		return
+	var font := ThemeDB.fallback_font
+	var st := String(ex.get("state", ""))
+	var target := _orbit_node_of(int(ex.get("target_seed", -1)))
+	var a: Vector2 = home.position
+	var k := 0.0
+	if st == "in_transit":
+		k = clampf(1.0 - float(ex.get("flight_left", 0.0)) / GameState.ROCKET_FLIGHT_SEC, 0.0, 1.0)
+	if target != null:
+		var b: Vector2 = target.position
+		const STEPS := 48
+		for i in STEPS:
+			if i % 2 == 1:
+				continue   # dashed
+			var t0 := float(i) / STEPS
+			var t1 := float(i + 1) / STEPS
+			var flown := t1 <= k
+			_rocket_fx.draw_line(_rocket_path_at(a, b, t0), _rocket_path_at(a, b, t1),
+				Color(ROCKET_COL, 0.85 if flown else 0.30), 2.0 if flown else 1.0, true)
+	if st != "in_transit" or target == null:
+		var txt := "Final rocket: preparing %ds" % int(ceil(float(ex.get("prep_left", 0.0)))) if st == "preparing" \
+			else "Final rocket: ready"
+		if target == null:
+			txt += "  ·  right-click a planet to set its target"
+		_rocket_fx.draw_string(font, a + Vector2(16, -22), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ROCKET_COL)
+		return
+	# the rocket: a small dart along the path with a flickering flame
+	var b2: Vector2 = target.position
+	var p := _rocket_path_at(a, b2, k)
+	var dir := (_rocket_path_at(a, b2, minf(k + 0.01, 1.0)) - p).normalized()
+	if dir == Vector2.ZERO:
+		dir = (b2 - a).normalized()
+	var side := dir.orthogonal()
+	var tip := p + dir * 7.0
+	_rocket_fx.draw_colored_polygon(PackedVector2Array([tip, p - dir * 4.0 + side * 3.0, p - dir * 4.0 - side * 3.0]),
+		Color(0.95, 0.97, 1.0))
+	var flame := 4.0 + 2.0 * sin(Time.get_ticks_msec() * 0.03)
+	_rocket_fx.draw_line(p - dir * 4.0, p - dir * (4.0 + flame), Color(1.0, 0.6, 0.2, 0.9), 2.0, true)
+	var left := int(ceil(float(ex.get("flight_left", 0.0))))
+	_rocket_fx.draw_string(font, p + Vector2(10, -10), "→ %s  ·  %d:%02d" % [target.planet_data.planet_name, left / 60, left % 60],
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ROCKET_COL)
 
 func _ready() -> void:
 	CursorManager.set_state(CursorManager.State.NORMAL)
@@ -623,7 +705,7 @@ func _survey_system(gd: GalaxyData, star_idx: int, cost_cr: float, cost_sci: flo
 
 
 func _input(event: InputEvent) -> void:
-	if SkillTreeView.is_open:
+	if SkillTreeView.is_open or TradePanel.is_open:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton

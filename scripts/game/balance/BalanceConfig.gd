@@ -60,7 +60,7 @@ extends Resource
 @export_group("Population")
 ## Population the k-th district of a City takes to found: base × (1 + step·k).
 @export var district_found_pop_base: float = 3000.0
-@export var district_found_pop_step: float = 0.5
+@export var district_found_pop_step: float = 0.25   # 0.5 starved the early game of housing (playtest 23.10)
 ## Population for a district level L → L+1: base × growth^(L−1).
 @export var level_pop_base: float = 2000.0
 @export var level_pop_growth: float = 2.0
@@ -86,11 +86,14 @@ extends Resource
 @export_group("Location")
 ## Surface radius of a planet_size 1.0 world, in km (Location.radius_km).
 @export var planet_radius_km: float = 6000.0
-## Distance bands (km): ≤ very near, ≤ near, ≤ mid, < far, then very far.
-@export var distance_very_near_km: float = 500.0
-@export var distance_near_km: float = 1000.0
-@export var distance_mid_km: float = 2000.0
-@export var distance_far_km: float = 3500.0
+## Distance bands as fractions of the district's City reach
+## (TerrainSampler.city_reach_deg): ≤ very near, ≤ near, ≤ mid, < far, then very
+## far. Relative, so the whole range fits inside the area a City may build in —
+## at every City level and on small bodies (playtest 23.10, KARARLAR §10).
+@export var distance_very_near_frac: float = 0.40
+@export var distance_near_frac: float = 0.60
+@export var distance_mid_frac: float = 0.80
+@export var distance_far_frac: float = 0.95
 ## Distance bonus by the nearest other district's band (very near … very far).
 @export var distance_bonuses: Array[float] = [0.0, 0.125, 0.25, 0.375, 0.5]
 ## Each same-family district very near / near adds this (no diminishing).
@@ -109,7 +112,10 @@ extends Resource
 ## production, science, residential, commercial, energy_solar, energy_wind,
 ## energy_tidal, energy_geothermal.
 @export var terrain_bonuses: Dictionary = {
-	"terrain_mountain":   {"production": 0.20, "science": 0.30},
+	# Mountains and craters lean to Production, so the Production and Science
+	# lenses don't paint the same places (playtest 23.10); peaks still suit the
+	# Mountain Observatory.
+	"terrain_mountain":   {"production": 0.30, "science": 0.10},
 	"terrain_plain":      {"residential": 0.20, "commercial": 0.10},
 	"terrain_forest":     {"residential": 0.10, "science": 0.10},
 	"terrain_seacoast":   {"residential": 0.20, "commercial": 0.20, "energy_tidal": 0.20},
@@ -122,7 +128,7 @@ extends Resource
 	"terrain_geothermal": {"energy_geothermal": 0.40},
 	"terrain_wind":       {"energy_wind": 0.30},
 	"terrain_ruins":      {"science": 0.30, "commercial": 0.20},
-	"terrain_crater":     {"production": 0.10, "science": 0.20},
+	"terrain_crater":     {"production": 0.20, "science": 0.10},
 }
 
 @export_group("Storage")
@@ -139,9 +145,17 @@ extends Resource
 ## (not used yet)
 @export var idle_pop_uses_level_mult: bool = false
 
-@export_group("Trade (not used yet)")
+@export_group("Trade")
 @export var trade_sell_ratio: float = 0.9
 @export var trade_buy_ratio: float = 1.1
+## Dynamic prices (KARARLAR §10): buying raises a product's price, selling lowers
+## it; this many credits' worth of trade moves the price by 100%.
+@export var trade_depth_credits: float = 4000.0
+## Seconds for half of a price change to fade back toward the reference.
+@export var trade_recovery_half_life: float = 120.0
+## Price multiplier limits (×reference): never below / above these.
+@export var trade_price_min: float = 0.4
+@export var trade_price_max: float = 3.0
 
 @export_group("Research")
 ## Price surcharge per distinct strategy node bought in another branch (GDD §17.5).

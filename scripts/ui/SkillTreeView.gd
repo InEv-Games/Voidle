@@ -428,16 +428,23 @@ func _build_tree_graph() -> void:
 				if unlocked:
 					body_str += "\n\n[color=#55f58c]✦ UNLOCKED ✦[/color]"
 			
+			# a granted building whose cost names an undiscovered mineral stays hidden
+			for gb: String in node.grants:
+				var gdef := BuildingDef.find(gb)
+				if gdef != null and not gdef.minerals_known():
+					body_str += "\n[color=#ffaa44]%s shows up once a Production district has found the mineral it needs.[/color]" % gdef.display_name
+					break
+
 			# Cost handling: base × target level × cross-branch factor
 			if cur_lv < max_lv:
 				var next_cost: float = st.call("get_next_cost", id)
 				tip_cost = "%s Science" % Economy.fmt(next_cost)
 				var cross: int = st.call("cross_branch_count", id)
 				if cross > 0:
-					body_str += "\n[color=#8899bb]+%d%% — %d research%s in other branches[/color]" % [
+					body_str += "\n[color=#8899bb]Price +%d%%: you own %d research%s in other branches[/color]" % [
 						int(round(float(st.call("cross_branch_mult", id)) * 100.0 - 100.0)), cross, "" if cross == 1 else "es"]
 			if node.common and id != "root":
-				body_str += "\n[color=#b9a8ff]Common path — no cross-branch surcharge[/color]"
+				body_str += "\n[color=#b9a8ff]Main path — research in other branches never raises its price[/color]"
 
 			# Requirements checking (ANY parent; every extra condition)
 			if cur_lv == 0:

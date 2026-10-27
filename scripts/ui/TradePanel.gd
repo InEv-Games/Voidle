@@ -105,11 +105,12 @@ func _build_rows() -> void:
 		c.queue_free()
 	_rows.clear()
 	var access := Trade.has_access()
-	_status.text = ("Sell %d%% · buy %d%% of the reference price. Storage overflow is sold automatically." % [
+	_status.text = ("Sell %d%% · buy %d%% of the reference price. Buying raises a price, selling lowers it; prices drift back over a few minutes." % [
 		int(round(Balance.cfg.trade_sell_ratio * 100.0)), int(round(Balance.cfg.trade_buy_ratio * 100.0))]) \
-		if access else "Research Trade Access (150 Science) to buy and sell. Until then, storage overflow is lost."
-	if not Trade.has_automation() and access:
-		_status.text += "  Research Trade Automation for standing orders."
+		if access else "Research Trade Access (150 Science) to buy and sell."
+	if access:
+		_status.text += "  Storage overflow is sold automatically." if Trade.has_automation() \
+			else "  Research Trade Automation for standing orders and overflow sales."
 	for id: String in Trade.products():
 		_list.add_child(_product_row(id))
 	_refresh()
@@ -213,8 +214,13 @@ func _refresh() -> void:
 			continue
 		var cap := Economy.cap(id)
 		(e["stock"] as Label).text = Economy.fmt(Trade.stock(id)) + ("" if cap == INF else " / " + Economy.fmt(cap))
-		(e["sell"] as Label).text = "sell %s" % _price(Trade.sell_price(id))
-		(e["buy"] as Label).text = "buy %s" % _price(Trade.buy_price(id))
+		var trend := _trend(id)
+		(e["sell"] as Label).text = "sell %s%s" % [_price(Trade.sell_price(id)), trend]
+		(e["buy"] as Label).text = "buy %s%s" % [_price(Trade.buy_price(id)), trend]
+		var m := Trade.price_mult(id)
+		var tc := Color(1.0, 0.70, 0.40) if m > 1.01 else (Color(0.55, 0.95, 0.60) if m < 0.99 else Color(0.80, 0.85, 1.0))
+		(e["sell"] as Label).add_theme_color_override("font_color", tc)
+		(e["buy"] as Label).add_theme_color_override("font_color", tc)
 		if e.has("order") and is_instance_valid(e["order"]) and not String((e["order"] as Label).text).begins_with("⚠"):
 			(e["order"] as Label).text = Trade.order_text(id)
 	var lines: Array[String] = ["[color=#8899bb]Recent trades[/color]"]
@@ -225,10 +231,17 @@ func _refresh() -> void:
 			"+" if float(t["credits"]) >= 0.0 else "", Economy.fmt(float(t["credits"]))])
 	var sold := 0.0
 	for k in GameState.overflow_sold:
-		sold += float(GameState.overflow_sold[k]) * Trade.sell_price(String(k))
+		sold += float(GameState.overflow_sold[k])   # credits
 	if sold > 0.0:
 		lines.append("[color=#8899bb]Overflow sold so far: %s cr[/color]" % Economy.fmt(sold))
 	_log_lbl.text = "\n".join(lines)
+
+## "  ▲12%" / "  ▼8%" against the reference price ("" when close to it).
+static func _trend(id: String) -> String:
+	var d := Trade.price_mult(id) - 1.0
+	if absf(d) < 0.01:
+		return ""
+	return "  %s%d%%" % ["▲" if d > 0.0 else "▼", int(round(absf(d) * 100.0))]
 
 static func _price(v: float) -> String:
 	return "%.2f" % v if v < 10.0 else Economy.fmt(v)

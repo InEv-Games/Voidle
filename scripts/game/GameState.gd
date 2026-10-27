@@ -42,12 +42,14 @@ signal minerals_discovered(body_seed: int, mineral_ids: Array)
 signal trade_changed
 
 ## Trade (see Trade.gd): player reserves {id: amount}, automation orders
-## {id: order}, recent trades and the running overflow-sale totals.
+## {id: order}, recent trades and the running overflow-sale totals (credits per product).
 var trade_reserves: Dictionary = {}
 var trade_orders: Dictionary = {}
 var trade_log: Array = []
 var trade_seq: int = 0
 var overflow_sold: Dictionary = {}
+## Price pressure per product (Trade.price_mult): + after buying, − after selling.
+var trade_pressure: Dictionary = {}
 
 func is_body_surveyed(body_seed: int) -> bool:
 	return surveyed_bodies.has(body_seed)
@@ -174,9 +176,10 @@ func demo_stats() -> Dictionary:
 			research += 1
 	return {"minutes": int(play_seconds / 60.0), "worlds": worlds, "cities": cities, "research": research}
 
-## Explore opens once the guided tutorial is done.
+## Explore opens once the guided tutorial is done and the Moon has a City.
 func explore_available() -> bool:
-	return TutorialManager.tutorial_finished() and not showcase_mode
+	# the wider universe opens once the Moon is settled (playtest 23.10)
+	return TutorialManager.tutorial_finished() and not showcase_mode and SkillTree.event_met("moon_city")
 
 ## Leaves the player's world for the read-only map tour (starts at the galaxy).
 func start_explore() -> void:
@@ -208,15 +211,17 @@ func can_view_galaxy() -> bool:
 func can_view_moon() -> bool:
 	return showcase_mode or demo_completed or moon_unlocked
 
-## Whether a body can be played on (settled, built on). Showcase never plays;
-## after the demo, only the home world and its Moon keep being playable.
+## Whether a body can be played on (settled, built on). Showcase never plays.
+## Civilization 0 is the home world and its Moon — before and after the demo's
+## ending; other worlds open with Civilization 1 content (playtest 23.10: a
+## new planet could be colonized in the demo).
 func can_play_on(planet_seed: int) -> bool:
 	if showcase_mode:
 		return false
-	if not demo_completed:
-		return true
 	var moon := home_moon()
-	return planet_seed == home_planet_seed or (moon != null and planet_seed == moon.seed)
+	if planet_seed == home_planet_seed or (moon != null and planet_seed == moon.seed):
+		return true
+	return playable_content_type > 0
 
 func enter_showcase() -> void:
 	save()   # keep progress safe before looking around (no-op in the demo)
@@ -388,6 +393,7 @@ func _apply_pending_pois() -> void:
 			poi.resource_tags      = pd_entry.get("resource_tags",      {})
 			poi.site_features      = pd_entry.get("site_features",      {})
 			poi.paid_credits       = float(pd_entry.get("paid_credits",  -1.0))
+			poi.paid_materials     = pd_entry.get("paid_materials",     {})
 			poi.spoke_birth        = pd_entry.get("spoke_birth",        {})
 			poi.constructing       = pd_entry.get("constructing",       false)
 			poi.construct_progress = pd_entry.get("construct_progress", 0.0)
@@ -600,7 +606,7 @@ func spend_science(amount: float) -> bool:
 
 ## Stub colonize — no ship requirement yet. Returns false if can't afford.
 func colonize_planet(planet_seed: int, cost: float = 1000.0) -> bool:
-	if not spend_credits(cost):
+	if not can_play_on(planet_seed) or not spend_credits(cost):
 		return false
 	var pp := get_planet(planet_seed)
 	pp.is_colonizing = true
@@ -625,7 +631,7 @@ const LANDER_PREP_SEC  := 30.0
 const MOON_TRANSIT_SEC := 30.0
 const ROCKET_COST := {"credits": 12000.0, "moonstone": 1200.0, "goods": 30.0, "fuel": 120.0, "rare_elements": 40.0}
 const ROCKET_PREP_SEC   := 60.0
-const ROCKET_FLIGHT_SEC := 60.0
+const ROCKET_FLIGHT_SEC := 180.0   # a real trip, watched in the star system view (playtest 23.10)
 
 signal act1_completed
 signal expedition_changed(kind: String)
@@ -1099,7 +1105,7 @@ func save() -> void:
 		"research":             get_node("/root/SkillTree").get_save_data() if has_node("/root/SkillTree") else {},
 		"moon_local_moonstone": moon_local_moonstone,
 		"trade": {"reserves": trade_reserves, "orders": trade_orders, "log": trade_log,
-			"seq": trade_seq, "overflow_sold": overflow_sold},
+			"seq": trade_seq, "overflow_sold": overflow_sold, "pressure": trade_pressure},
 		"ships":                get_node("/root/ShipManager").serialize() if has_node("/root/ShipManager") else [],
 		"planet_progress":      {},
 	}
@@ -1128,6 +1134,7 @@ func save() -> void:
 					"resource_tags":      poi.resource_tags,
 					"site_features":      poi.site_features,
 					"paid_credits":       poi.paid_credits,
+					"paid_materials":     poi.paid_materials,
 					"spoke_birth":        poi.spoke_birth,
 					"constructing":       poi.constructing,
 					"construct_progress": poi.construct_progress,
@@ -1252,6 +1259,7 @@ func load_save() -> bool:
 	trade_log = trade.get("log", [])
 	trade_seq = int(trade.get("seq", 0))
 	overflow_sold = trade.get("overflow_sold", {})
+	trade_pressure = trade.get("pressure", {})
 
 	global_resources    = data.get("global_resources",   {})
 	global_resources.erase(Economy.ENERGY)   # energy is a flow; older saves stored it
@@ -1358,6 +1366,7 @@ func delete_save() -> void:
 	get_node("/root/SkillTree").reset_to_defaults()
 	moon_local_moonstone = 0.0
 	trade_reserves.clear()
+	trade_pressure.clear()
 	trade_orders.clear()
 	trade_log.clear()
 	trade_seq = 0
@@ -1370,4 +1379,7 @@ func delete_save() -> void:
 	planet_view_unlocked = false
 	global_resources.clear()
 	_planet_progress.clear()
+	# the old game's ships (freighters, landers) must not keep flying in the new one
+	if has_node("/root/ShipManager"):
+		get_node("/root/ShipManager").deserialize([])
 	_bootstrap_world()

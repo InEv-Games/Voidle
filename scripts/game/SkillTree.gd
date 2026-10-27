@@ -203,9 +203,9 @@ func _init() -> void:
 		600.0, _at("root", -90, 1.7), ["root"], "common", "Unlocks Spaceport",
 		{"grants": ["spaceport"], "requires": ["fuel_processing"], "common": true})
 	_n("orbital_assembly", "Orbital Assembly", "Assemble modular stations in low orbit from Spaceport launches. The road to the Moon goes through orbit.",
-		1500.0, _at("rocketry", -90, 3.4), ["rocketry"], "common", "Unlocks Space Station Districts",
-		{"events": ["built:spaceport"], "common": true, "shape": NodeShape.CIRCLE})
-	_n("lunar_program", "Lunar Program", "A lander that carries settlers to the Moon. It needs a working station in orbit first. Pick the Moon in the Local System view. Terran buildings can't stand on the Moon: research Lunar ones from here.",
+		1500.0, _at("rocketry", -90, 3.4), ["rocketry"], "common", "Unlocks Space Station Districts and the Orbital Cargo Bay",
+		{"grants": ["orbital_cargo_bay"], "events": ["built:spaceport"], "common": true, "shape": NodeShape.CIRCLE})
+	_n("lunar_program", "Lunar Program", "A lander that carries settlers to the Moon. It needs a working station in orbit first. Pick the Moon in the Local System view. Earth buildings work there too; the Lunar ones around this node are made for it.",
 		1200.0, _at("orbital_assembly", -90, 4.6), ["orbital_assembly"], "common", "Unlocks the Moon lander and the Lunar lines",
 		{"events": ["orbit_station"], "common": true, "shape": NodeShape.CIRCLE})
 	_n("lunar_materials", "Lunar Materials", "Build big with what the Moon gives: the Lunar Spaceport, and the upgrades on the Lunar lines.",
@@ -253,7 +253,7 @@ func _init() -> void:
 		600.0, _at("lunar_extraction", 45, 1.15), ["lunar_extraction"], "processing", "Unlocks Regolith Goods Plant",
 		{"grants": ["regolith_goods_plant"], "requires": ["lunar_materials"], "events": ["moon_production"]})
 	_n("regolith_storage", "Regolith Storage", "Sealed silos for lunar materials.",
-		80.0, _at("lunar_program", -135, 1.5), ["lunar_program"], "production", "Unlocks Regolith Silo",
+		80.0, _at("lunar_extraction", 90, 1.15), ["lunar_extraction"], "production", "Unlocks Regolith Silo",
 		{"grants": ["regolith_silo"]})
 	_n("lunar_field_science", "Lunar Field Science", "Study the Moon from a small outpost.",
 		60.0, _at("lunar_program", 135, 1.5), ["lunar_program"], "science", "Unlocks Lunar Research Outpost",
@@ -381,8 +381,8 @@ func _init() -> void:
 	_n("start_commercial", "Commerce Operations", "Commercial Districts and Markets.",
 		0.0, _at("root", 90, 1.6), ["root"], "trade", "Unlocks Commercial Districts & Market",
 		{"grants": ["commercial"], "common": true})
-	_n("trade_access", "Trade Access", "Buy and sell at fixed prices. Once researched, storage overflow is sold instead of lost.",
-		150.0, _at("start_commercial", 90, 1.2), ["start_commercial"], "trade", "Manual trade and overflow sales",
+	_n("trade_access", "Trade Access", "Buy and sell. Prices rise as you buy and fall as you sell, then drift back.",
+		150.0, _at("start_commercial", 90, 1.2), ["start_commercial"], "trade", "Manual trade",
 		{"common": true})
 	_n("consumer_goods", "Consumer Goods", "Bazaars that sell factory Goods.",
 		250.0, _at("trade_access", 90, 1.2), ["trade_access"], "trade", "Unlocks Bazaar",
@@ -396,8 +396,8 @@ func _init() -> void:
 	_n("local_business", "Local Business", "Neighbourhood trade centres.",
 		150.0, _at("trade_access", 55, 1.1), ["trade_access"], "trade", "Unlocks Local Trade Center",
 		{"grants": ["local_trade_center"]})
-	_n("trade_automation", "Trade Automation", "Standing orders: sell above a reserve, buy up to a target stock.",
-		300.0, _at("trade_access", 125, 1.1), ["trade_access"], "trade", "Trade automation with reserves",
+	_n("trade_automation", "Trade Automation", "Standing orders: sell above a reserve, buy up to a target stock. Storage overflow is sold instead of lost.",
+		300.0, _at("trade_access", 125, 1.1), ["trade_access"], "trade", "Standing orders and overflow sales",
 		{})
 	_n("harbor_trade", "Harbor Trade", "Markets on the waterfront.",
 		450.0, _at("trade_networks", 45, 1.15), ["trade_networks"], "trade", "Unlocks Harbor Market",
@@ -429,8 +429,8 @@ func _init() -> void:
 
 	# ── Administration (up-left) §17.17 ──────────────────────────────────────
 	_line = "admin"
-	_n("public_administration", "Public Administration", "The root of the Capital's support offices.",
-		350.0, _at("root", -135, 1.6), ["root"], "public", "Opens public support buildings",
+	_n("public_administration", "Public Administration", "The Capital's offices: settlement planning, recycling and logistics.",
+		350.0, _at("root", -135, 1.6), ["root"], "public", "Opens the Administration branch (no building of its own)",
 		{})
 	_n("settlement_layout", "Settlement Layout", "Plan, rearrange and move settlements.",
 		250.0, _at("public_administration", -135, 1.2), ["public_administration"], "public", "Move districts and buildings",
@@ -439,10 +439,10 @@ func _init() -> void:
 		350.0, _at("settlement_layout", -135, 1.15), ["settlement_layout"], "public", "Construction Office (coming later)",
 		{})
 	_n("recycling_1", "Recycling I", "Salvage more when you tear something down.",
-		250.0, _at("public_administration", -100, 1.15), ["public_administration"], "public", "Credit refund on demolition 65%",
+		250.0, _at("public_administration", -100, 1.15), ["public_administration"], "public", "Refund on removal 65% (credits and materials)",
 		{})
 	_n("recycling_2", "Recycling II", "Salvage nearly everything.",
-		500.0, _at("recycling_1", -120, 1.05), ["recycling_1"], "public", "Credit refund on demolition 75%",
+		500.0, _at("recycling_1", -120, 1.05), ["recycling_1"], "public", "Refund on removal 75% (credits and materials)",
 		{})
 	_n("logistics", "Logistics", "One Logistics Center coordinates the whole planet.",
 		450.0, _at("settlement_layout", -170, 1.15), ["settlement_layout"], "public", "Unlocks Logistics Center",

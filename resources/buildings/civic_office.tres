@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://b_civic_office_7d21"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+pop_cost = 250
+building_id = "civic_office"
+display_name = "Civic Office"
+description = "The Capital's first office: permits, taxes and a few clerks doing research on the side."
+allowed_poi_types = Array[int]([0])
+allowed_planet_types = Array[int]([])
+base_cost = 150.0
+slot_cost = 1
+max_per_district = 1
+min_planet_lv = 1
+construct_duration = 4.0
+tick_duration = 20.0
+energy_per_tick = -1.0
+outputs = {"credits": 8.0, "science": 1.0}
+inputs = {}
+planet_bonus = {}
+tier = 1
+unlocked_by_default = true

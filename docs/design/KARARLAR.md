@@ -72,3 +72,21 @@ GDD'nin geri kalanı kabul edildi. Derinliğin idle oyun için fazla olabileceğ
 **GDD'de:** District seviyesi yalnız kredi ve nüfusla alınır; yol şartı yoktur.
 
 **Kararımız:** Capital District serbestçe seviye atlar. Diğer district'ler, yolla bağlı bir komşusu hedef seviyeye ulaşmadan seviye atlayamaz; seviyeler Capital'dan dışarıya yayılır. Yollar ekonomide konum bonusu vermez, ama bu seviye kuralını taşır.
+
+## 10. Playtest kararları (23 Ekim playtest'i)
+
+Tarih: 26 Ekim 2026. İş planı: [PLAYTEST_2026-10-23.md](PLAYTEST_2026-10-23.md).
+
+- **Trade fiyatları dinamik.** *GDD'de:* sabit fiyat (satış %90, alış %110). *Kararımız:* her alım o kaynağın fiyatını artırır, her satış düşürür; fiyat zamanla taban değere geri döner. 4.000 kredilik işlem fiyatı %100 oynatır; değişimin yarısı 2 dakikada söner; fiyat referansın 0,4–3 katı arasında kalır (`BalanceConfig` → Trade). Depo taşmasının otomatik satışı artık Trade Automation araştırmasıyla açılır.
+- **Sağ sürükleme gezegeni döndürür.** Sürüklemeden yapılan sağ tık §6'daki komut menüsünü açar.
+- **Dünya binaları Ay district'lerine kurulabilir.** Kaynaklar (Ferrite dahil) ortak global stoktur; nerede harcandığı fark etmez. §1'deki sabit girdi kuralı değişmez.
+- **Uzaklık bantları City'nin erişimine göredir.** *GDD'de:* sabit 500 / 1.000 / 2.000 / 3.500 km. *Kararımız:* bantlar district'in City erişiminin oranıdır (çok yakın ≤ %40, yakın ≤ %60, orta ≤ %80, uzak < %95, sonrası çok uzak). Böylece %0–%50 aralığının tamamı her City seviyesinde ve Ay'da erişilebilir. Yakınlık ve merkez bonusları da aynı bantları kullanır. Oranlar `BalanceConfig` içindedir.
+- **Yer çarpanı yarım adımlara yuvarlanır.** Bir district'in ve binalarının yer çarpanı (arazi × konum) en yakın yarım adıma yuvarlanır: 1x, 1,5x, 2x … (en az 1x). Ekonomi yuvarlanmış değeri kullanır, arayüz de aynısını gösterir; yüzdeler yalnızca "neden" açıklamasında kalır. Küçük bonuslar (×1,2 gibi) kaybolur, büyükler yukarı yuvarlanabilir. `Economy.site_mult`.
+- **Araştırılan binalar malzeme ve bakım ister.** Başlangıç binaları (Solar Array, Habitat Block, Market, Research Lab, Mine, Warehouse, Goods Factory, Civic Office) bedavadır. Araştırmayla açılan tier-1 binalar Ferrite ile kurulur (10–30); tarifi olmayan üreticiler cycle başına az miktarda Goods tüketir (0,2–0,25). Değerler her binanın kendi `.tres` dosyasındadır. Tier 2+ zaten malzeme ve bakım istiyordu.
+- **Capital'de baştan bir bina.** Yeni Civic Office (1 slot, araştırma yok). Capital slotu 2 + seviye başına 1 oldu; Civic Office ile 2 slotluk Spaceport Lv2'de sığar.
+- **Erken nüfus.** Residential district tabanı 1.500 → 3.000; district kurma nüfus adımı +%50 → +%25 (maliyet hâlâ artar, §3).
+- **Low-rise Housing enerjisiz konut** (+1.250 nüfus, 0 enerji, 10 Ferrite).
+- **Spaceport 2.500 kredi + 50 Ferrite + 10 Goods** (önceden 500 kredi).
+- **Demoda yalnızca Dünya ve Ay oynanır** (demo bitmeden de). Diğer dünyalar Medeniyet 1 içeriği açılınca oynanır; Earth Spaceport Ay'a kurulamaz (Ay'ın kendi Lunar Spaceport'u var).
+- **Son roket 3 dakika uçar** ve yıldız sistemi görünümünde yolu ve ETA'sıyla çizilir.
+- **İade kredi ve malzemeyi kapsar.** Clear, reset ve demolish ödenen kredinin ve malzemenin aynı oranını iade eder: %50, Recycling skilleriyle %65 ve %75.

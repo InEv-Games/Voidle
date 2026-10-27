@@ -375,7 +375,40 @@ const _ICONS := {
 		"#####",
 		".###.",
 	],
+	# big (2-slot) buildings, drawn beside their district's marker
+	"big_spaceport": [
+		"..#..",
+		".###.",
+		".###.",
+		"#####",
+		"#.#.#",
+	],
+	"big_other": [
+		"#####",
+		"#...#",
+		"#.#.#",
+		"#...#",
+		"#####",
+	],
 }
+const BIG_ICON_COL := Color(0.92, 0.95, 1.0)
+
+## Big (2-slot) buildings stand out on the map: one small icon each, in a row
+## beside the district marker, on the side away from its label.
+func _draw_big_buildings(sp: Vector2, block: float, side: float, poi: POIData, pp: PlanetProgress, alpha: float) -> void:
+	var k := 0
+	for b: Dictionary in pp.buildings_in_district(poi.label):
+		if b.get("constructing", false):
+			continue
+		var def := BuildingDef.find(String(b.get("building_id", "")))
+		if def == null or def.slot_cost < 2:
+			continue
+		var icon: Array = _ICONS["big_spaceport"] if def.building_id.contains("spaceport") else _ICONS["big_other"]
+		var at := _snap_local(sp + Vector2(side * block * (7.0 + 6.0 * float(k)), 0.0))
+		_draw_pixel_icon(at, icon, block, Color(BIG_ICON_COL, alpha), alpha)
+		k += 1
+		if k >= 3:
+			return
 
 func _marker_icon(tag: String, is_city: bool = false) -> Array:
 	if is_city:
@@ -1044,6 +1077,8 @@ func _draw_scene(font: Font) -> void:
 				float((cpp as PlanetProgress).district_upgrading[(cpoi as POIData).label]), alpha)
 		elif cpoi is POIData and extra_progress.has((cpoi as POIData).label):
 			_draw_construct_bar(sp, line_px, float(extra_progress[(cpoi as POIData).label]), alpha)
+		if cpoi is POIData and cpp is PlanetProgress:
+			_draw_big_buildings(sp, line_px, -horiz_dir, cpoi as POIData, cpp as PlanetProgress, alpha)
 		if active:
 			var frame_col := Color(1.0, 0.95, 0.5, alpha * (0.9 if selected else 0.6))
 			_draw_pixel_brackets(sp, line_px * (6.0 if is_city else 4.5), line_px, frame_col)
