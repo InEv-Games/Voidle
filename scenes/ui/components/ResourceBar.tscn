@@ -1,0 +1,118 @@
+[gd_scene format=3 uid="uid://cresbar7hud01"]
+
+[ext_resource type="Script" uid="uid://eeggjqwvurwi" path="res://scripts/ui/components/ResourceBar.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://bwscu25qeej2b" path="res://scenes/ui/components/ResourceChip.tscn" id="2_chip"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hdao2"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.035699997, 0.09389667, 0.17, 0)
+anti_aliasing = false
+
+[node name="ResourceBar" type="Panel" unique_id=1318284027]
+process_mode = 3
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 0.046000004
+offset_bottom = 0.19199753
+grow_horizontal = 2
+theme_type_variation = &"ResourceBar"
+theme_override_styles/panel = SubResource("StyleBoxFlat_hdao2")
+script = ExtResource("1_script")
+
+[node name="Panel" type="Panel" parent="." unique_id=1451009247]
+modulate = Color(1, 1, 1, 0.11764706)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -580.0
+offset_top = -4.0
+offset_right = 580.0
+offset_bottom = 5.0
+grow_horizontal = 2
+grow_vertical = 2
+offset_transform_position = Vector2(0, 3)
+
+[node name="HSeparator" type="HSeparator" parent="." unique_id=534812319]
+modulate = Color(1, 1, 1, 0.11764706)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -579.0
+offset_top = -10.0
+offset_right = 579.0
+offset_bottom = 11.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 1
+
+[node name="Row" type="HBoxContainer" parent="." unique_id=423946139]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -570.0
+offset_top = -11.0
+offset_right = 570.0
+offset_bottom = 11.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="Credits" parent="Row" unique_id=947876999 instance=ExtResource("2_chip")]
+layout_mode = 2
+value_text = ""
+value_width = 62.0
+
+[node name="Science" parent="Row" unique_id=1497871144 instance=ExtResource("2_chip")]
+layout_mode = 2
+resource_id = "science"
+value_text = ""
+value_width = 38.0
+
+[node name="Energy" parent="Row" unique_id=203694312 instance=ExtResource("2_chip")]
+layout_mode = 2
+resource_id = "energy"
+value_text = ""
+value_width = 56.0
+
+[node name="Population" parent="Row" unique_id=255555737 instance=ExtResource("2_chip")]
+layout_mode = 2
+resource_id = "population"
+value_text = ""
+value_width = 70.0
+
+[node name="Raw" parent="Row" unique_id=1863673106 instance=ExtResource("2_chip")]
+layout_mode = 2
+resource_id = "raw"
+value_text = ""
+value_width = 46.0
+
+[node name="Goods" parent="Row" unique_id=1250797845 instance=ExtResource("2_chip")]
+layout_mode = 2
+resource_id = "goods"
+value_text = ""
+value_width = 32.0
+
+[node name="Fuel" parent="Row" unique_id=302142728 instance=ExtResource("2_chip")]
+layout_mode = 2
+resource_id = "fuel"
+value_text = ""
+value_width = 32.0
+
+[node name="Rare" parent="Row" unique_id=885310972 instance=ExtResource("2_chip")]
+layout_mode = 2
+resource_id = "rare_elements"
+value_text = ""
+value_width = 32.0
