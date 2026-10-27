@@ -3,7 +3,6 @@ extends CanvasLayer
 
 var _credits_lbl: Label
 var _science_lbl: Label
-var _skill_btn: Button = null
 var _skill_btn_tween: Tween = null
 ## Fraction of the screen width the game view occupies (left of the side panel).
 ## The energy readout stays centred on it; PlanetaryView animates it when the
@@ -79,58 +78,9 @@ func _ready() -> void:
 	_add_res_cell(hbox, Economy.CREDITS, "◈", "Earned by Commercial districts. Spent on districts and buildings.", false)
 	_credits_lbl = _res_lbls[Economy.CREDITS]
 
-	# Skill Tree Button
-	var skill_btn := IconButton.create("UPGRADE TREE", "research", IconButton.Variant.DEFAULT)
-	skill_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-
-	_skill_btn = skill_btn
 	TutorialManager.highlight_changed.connect(_on_tut_highlight)
 	TutorialManager.highlight_cleared.connect(_on_tut_highlight_clear)
 
-	skill_btn.pressed.connect(func() -> void:
-		if TutorialManager._active and not TutorialManager._tutorial_done \
-				and TutorialManager.get_action_step_type() != "skill":
-			AudioManager.play("error")
-			return
-		AudioManager.play("click")
-		var root := get_tree().root
-		var existing_layer: CanvasLayer = null
-		for child in root.get_children():
-			if child is CanvasLayer:
-				for gc in child.get_children():
-					var sc = gc.get_script()
-					if sc != null and sc.resource_path.ends_with("SkillTreeView.gd"):
-						existing_layer = child as CanvasLayer
-						break
-			if existing_layer != null:
-				break
-		if existing_layer != null:
-			CursorManager.set_state(CursorManager.State.NORMAL)
-			
-			# Find SkillTreeView to update its static state
-			for gc in existing_layer.get_children():
-				if gc.get_script() != null and gc.get_script().resource_path.ends_with("SkillTreeView.gd"):
-					gc.set("is_open", false)
-					break
-					
-			existing_layer.queue_free()
-		else:
-			var st_layer := CanvasLayer.new()
-			st_layer.layer = 220
-			var st_view = load("res://scripts/ui/SkillTreeView.gd").new()
-			st_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-			st_layer.add_child(st_view)
-			root.add_child(st_layer))
-
-		
-	skill_btn.mouse_entered.connect(func() -> void:
-		AudioManager.play("hover")
-		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("Upgrade Tree", "Research new buildings and upgrades with Science."))
-	skill_btn.mouse_exited.connect(func() -> void:
-		CursorManager.set_state(CursorManager.State.NORMAL)
-		TooltipManager.hide_tip())
-		
 	# Anchor top-left
 	panel.anchor_left   = 0.0
 	panel.anchor_right  = 0.0
@@ -175,30 +125,27 @@ func _ready() -> void:
 	top_layer.call_deferred("add_child", settings_btn)
 
 
-	# Upgrade Tree · Trade · Explore — one row along the bottom of the view's
-	# left panel (_place_shortcuts); bottom-left when the view has none.
+	# Upgrade Tree · Trade · Explore live at the bottom of the view's LeftPanel
+	# (fill_shortcuts). This bottom-left row only shows when no LeftPanel is on
+	# screen (Galaxy view, a hidden or slid-out panel).
 	var sci_panel := PanelContainer.new()
 	var bar_box := UIStyle.box(&"SidePanel").duplicate() as StyleBoxFlat
 	bar_box.content_margin_top = 6.0
 	bar_box.content_margin_bottom = 6.0
 	sci_panel.add_theme_stylebox_override("panel", bar_box)   # SidePanel look, tighter margins
 	sci_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	sci_panel.anchor_top    = 1.0
+	sci_panel.anchor_bottom = 1.0
+	sci_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
-	var sci_vbox := HBoxContainer.new()
-	sci_vbox.add_theme_constant_override("separation", 4)
-	sci_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	sci_panel.add_child(sci_vbox)
+	var sci_row := HBoxContainer.new()
+	sci_row.add_theme_constant_override("separation", 4)
+	sci_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sci_panel.add_child(sci_row)
+	fill_shortcuts(sci_row)
 
 	_add_res_cell(hbox, Economy.SCIENCE, "⬡", "Produced by Science districts. Spent in the Upgrade Tree.")
 	_science_lbl = _res_lbls[Economy.SCIENCE]
-
-	sci_vbox.add_child(skill_btn)
-	var trade_btn := _make_trade_button()
-	sci_vbox.add_child(trade_btn)
-	_explore_btn = _make_explore_button()
-	sci_vbox.add_child(_explore_btn)
-	for b: Control in [skill_btn, trade_btn, _explore_btn]:
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # share the row evenly
 	_build_resource_cells(hbox)
 
 	science_panel = sci_panel
@@ -214,7 +161,77 @@ func _ready() -> void:
 	GameState.science_changed.connect(_on_science_changed)
 	AchievementManager.achievement_unlocked.connect(_on_achievement_unlocked)
 
-## Trade button under the Upgrade Tree button (opens TradePanel).
+## Upgrade Tree · Trade · Explore into `row` (a LeftPanel's Shortcuts, or the
+## HUD's own bottom-left row). Each row gets its own buttons.
+var _skill_btns: Array[Button] = []
+var _explore_btns: Array[Button] = []
+
+func fill_shortcuts(row: HBoxContainer) -> void:
+	var skill_btn := _make_skill_button()
+	var trade_btn := _make_trade_button()
+	var explore_btn := _make_explore_button()
+	explore_btn.visible = GameState.explore_available()
+	for b: Button in [skill_btn, trade_btn, explore_btn]:
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # share the row evenly
+		row.add_child(b)
+	for list: Array[Button] in [_skill_btns, _explore_btns]:   # drop rows freed with their view
+		for i in range(list.size() - 1, -1, -1):
+			if not is_instance_valid(list[i]):
+				list.remove_at(i)
+	_skill_btns.append(skill_btn)
+	_explore_btns.append(explore_btn)
+
+## Upgrade Tree button (opens / closes the SkillTreeView layer).
+func _make_skill_button() -> Button:
+	var skill_btn := IconButton.create("UPGRADE TREE", "research", IconButton.Variant.DEFAULT)
+	skill_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	skill_btn.pressed.connect(func() -> void:
+		if TutorialManager._active and not TutorialManager._tutorial_done \
+				and TutorialManager.get_action_step_type() != "skill":
+			AudioManager.play("error")
+			return
+		AudioManager.play("click")
+		var root := get_tree().root
+		var existing_layer: CanvasLayer = null
+		for child in root.get_children():
+			if child is CanvasLayer:
+				for gc in child.get_children():
+					var sc = gc.get_script()
+					if sc != null and sc.resource_path.ends_with("SkillTreeView.gd"):
+						existing_layer = child as CanvasLayer
+						break
+			if existing_layer != null:
+				break
+		if existing_layer != null:
+			CursorManager.set_state(CursorManager.State.NORMAL)
+			
+			# Find SkillTreeView to update its static state
+			for gc in existing_layer.get_children():
+				if gc.get_script() != null and gc.get_script().resource_path.ends_with("SkillTreeView.gd"):
+					gc.set("is_open", false)
+					break
+					
+			existing_layer.queue_free()
+		else:
+			var st_layer := CanvasLayer.new()
+			st_layer.layer = 220
+			var st_view = load("res://scripts/ui/SkillTreeView.gd").new()
+			st_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			st_layer.add_child(st_view)
+			root.add_child(st_layer))
+
+		
+	skill_btn.mouse_entered.connect(func() -> void:
+		AudioManager.play("hover")
+		CursorManager.set_state(CursorManager.State.POINTER)
+		TooltipManager.show_tip("Upgrade Tree", "Research new buildings and upgrades with Science."))
+	skill_btn.mouse_exited.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		TooltipManager.hide_tip())
+	return skill_btn
+
+## Trade button next to the Upgrade Tree button (opens TradePanel).
 func _make_trade_button() -> Button:
 	var b := IconButton.create("TRADE", "trade", IconButton.Variant.NEUTRAL)
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -236,7 +253,6 @@ func _make_trade_button() -> Button:
 
 ## Explore: a read-only look at every map from inside the game, once the
 ## tutorial is done (GameState.start_explore). Hidden until then.
-var _explore_btn: Button = null
 func _make_explore_button() -> Button:
 	var b := IconButton.create("EXPLORE", "explore", IconButton.Variant.DEFAULT)
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -427,15 +443,16 @@ func _on_science_changed(_new_val: float) -> void:
 	pass
 
 func _process(delta: float) -> void:
-	_place_shortcuts()
+	_update_shortcut_fallback()
 	_res_poll += delta
 	if _res_poll >= 0.25:
 		_res_poll = 0.0
 		_refresh_resource_cells()
 		_maybe_show_offline()
 		_maybe_celebrate_moon()
-		if _explore_btn != null and is_instance_valid(_explore_btn):
-			_explore_btn.visible = GameState.explore_available()
+		for b: Button in _explore_btns:
+			if is_instance_valid(b):
+				b.visible = GameState.explore_available()
 
 ## The demo's high point: the first City on the Moon gets a short banner.
 func _maybe_celebrate_moon() -> void:
@@ -556,34 +573,12 @@ func _spawn_hud_chip(text: String, color: Color, panel: PanelContainer) -> void:
 func set_view_area_fraction(f: float) -> void:
 	view_area_fraction = f
 
-## The view's left panel: the shortcut row sits along its bottom edge, and the
-## view keeps its content above it (shortcut_bar_height).
-var _side_panel: Control = null
-
-func set_side_panel(panel: Control) -> void:
-	_side_panel = panel
-
-## Height the shortcut row takes at the bottom of the screen (0 while hidden).
-func shortcut_bar_height() -> float:
-	if science_panel == null or not is_instance_valid(science_panel) or not science_panel.is_visible_in_tree():
-		return 0.0
-	return science_panel.get_combined_minimum_size().y
-
-## Keeps the shortcut row on the bottom of the left panel: same x and width
-## (clamped on screen while the panel slides), natural width when there's none.
-func _place_shortcuts() -> void:
-	if science_panel == null or not is_instance_valid(science_panel) or not science_panel.is_inside_tree():
+## The HUD's own shortcut row only shows in views without a LeftPanel; while a
+## view's panel is closed its shortcuts go with it.
+func _update_shortcut_fallback() -> void:
+	if science_panel == null or not is_instance_valid(science_panel):
 		return
-	var vp := get_viewport().get_visible_rect().size
-	var min_size := science_panel.get_combined_minimum_size()
-	var x := 0.0
-	var w := min_size.x
-	if _side_panel != null and is_instance_valid(_side_panel) and _side_panel.is_visible_in_tree():
-		var r := _side_panel.get_global_rect()
-		w = maxf(r.size.x, min_size.x)
-		x = clampf(r.position.x, 0.0, vp.x - w)
-	science_panel.size = Vector2(w, min_size.y)
-	science_panel.position = Vector2(x, vp.y - min_size.y)
+	science_panel.visible = get_tree().get_nodes_in_group(LeftPanel.GROUP).is_empty()
 
 func _on_achievement_unlocked(def) -> void:
 	AudioManager.play("achievement", 2.0)
@@ -664,16 +659,26 @@ func _on_achievement_unlocked(def) -> void:
 	tw.tween_property(panel, "modulate", Color(1, 1, 1, 0), 0.6).set_ease(Tween.EASE_IN)
 	tw.tween_callback(func() -> void: overlay.queue_free())
 
+## The Upgrade Tree button the player can see (the LeftPanel's, else the HUD's).
+func _visible_skill_btn() -> Button:
+	for i in range(_skill_btns.size() - 1, -1, -1):
+		var b := _skill_btns[i]
+		if is_instance_valid(b) and b.is_visible_in_tree():
+			return b
+	return null
+
 func _on_tut_highlight(target: String) -> void:
-	if target != "skill_tree_btn" or not is_instance_valid(_skill_btn): return
+	var btn := _visible_skill_btn()
+	if target != "skill_tree_btn" or btn == null: return
 	if is_instance_valid(_skill_btn_tween): _skill_btn_tween.kill()
 	_skill_btn_tween = create_tween().set_loops()
-	_skill_btn_tween.tween_property(_skill_btn, "modulate", Color(1.6, 1.5, 0.6, 1.0), 0.5)
-	_skill_btn_tween.tween_property(_skill_btn, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.5)
+	_skill_btn_tween.tween_property(btn, "modulate", Color(1.6, 1.5, 0.6, 1.0), 0.5)
+	_skill_btn_tween.tween_property(btn, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.5)
 
 func _on_tut_highlight_clear() -> void:
 	if is_instance_valid(_skill_btn_tween): _skill_btn_tween.kill(); _skill_btn_tween = null
-	if is_instance_valid(_skill_btn): _skill_btn.modulate = Color.WHITE
+	for b: Button in _skill_btns:
+		if is_instance_valid(b): b.modulate = Color.WHITE
 
 func _energy_breakdown_text() -> String:
 	var pm: Node = get_node_or_null("/root/ProductionManager")

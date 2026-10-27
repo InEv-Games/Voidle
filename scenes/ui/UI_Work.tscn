@@ -2807,24 +2807,53 @@ layout_mode = 2
 caption = "Terran - Level 2"
 title = "VESUNA"
 
-[node name="Tag1" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(461574002, 945623272) index="1" unique_id=761897251]
+[node name="Tags" type="VBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="TagRule2" type="HSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Tags"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Tags" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Tags"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Bar" type="VSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Tags/Tags"]
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Tag1" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
+layout_mode = 2
 text = "Medium"
 tip = "Medium planet."
 
-[node name="Tag2" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(461574002, 945623272) index="2" unique_id=1743016901]
+[node name="Tag2" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
+layout_mode = 2
 text = "Dense Atm."
 tip = "Dense atmosphere."
 
-[node name="Tag3" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(461574002, 945623272) index="3" unique_id=1769105143]
+[node name="Tag3" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
+layout_mode = 2
 text = "Fertile Soil +2"
 tone = 1
 tip = "Rich biosphere accelerates colonisation."
 
-[node name="Tag4" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(461574002, 945623272) index="4" unique_id=1117565310 instance=ExtResource("7_tag")]
+[node name="Tag4" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
 layout_mode = 2
 text = "Mild Climate −15%"
 tone = 1
 tip = "Reduced infrastructure upkeep."
+
+[node name="TagRule" type="HSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox/Tags"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1
 
 [node name="Minerals" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/SidePanel/VBox" unique_id=463167819]
 layout_mode = 2
@@ -2991,16 +3020,45 @@ layout_mode = 2
 caption = "City - Level 2"
 title = "CAPITAL"
 
-[node name="Tag1" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(1881790810, 945623272) index="1" unique_id=761897251]
+[node name="Tags" type="VBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="TagRule2" type="HSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Tags"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Tags" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Tags"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Bar" type="VSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Tags/Tags"]
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Tag1" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
+layout_mode = 2
 text = "Districts 3/5"
 tip = "Districts in this City / how many its level allows."
 
-[node name="Tag2" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(1881790810, 945623272) index="2" unique_id=1743016901]
+[node name="Tag2" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
+layout_mode = 2
 text = "Levels 4/6 for Lv 3"
 tip = "Total district levels needed for the next City level."
 
-[node name="Tag3" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(1881790810, 945623272) index="3" unique_id=1769105143]
+[node name="Tag3" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
+layout_mode = 2
 visible = false
+
+[node name="TagRule" type="HSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox/Tags"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1
 
 [node name="Districts" parent="Scroll/Content/P01_PlanetPanel/Row/CityPanel/VBox" unique_id=256882957 instance=ExtResource("5_section")]
 layout_mode = 2
@@ -3076,23 +3134,52 @@ layout_mode = 2
 caption = "Science District - Level 1"
 title = "RESEARCH PARK"
 
-[node name="Tag1" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(274912764, 945623272) index="1" unique_id=761897251]
+[node name="Tags" type="VBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="TagRule2" type="HSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Tags"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Tags" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Tags"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="Bar" type="VSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Tags/Tags"]
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 1
+
+[node name="Tag1" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
+layout_mode = 2
 text = "Coastal"
 tone = 1
 tip = "Next to the sea: coastal buildings can be built here."
 
-[node name="Tag2" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(274912764, 945623272) index="2" unique_id=1743016901]
+[node name="Tag2" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
+layout_mode = 2
 text = "Solar 60%"
 tip = "Solar potential at this site."
 
-[node name="Tag3" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(274912764, 945623272) index="3" unique_id=1769105143]
+[node name="Tag3" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
+layout_mode = 2
 text = "Wind 30%"
 tip = "Wind potential at this site."
 
-[node name="Tag4" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Hero/Tags" parent_id_path=PackedInt32Array(274912764, 945623272) index="4" unique_id=717240152 instance=ExtResource("7_tag")]
+[node name="Tag4" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Tags/Tags" instance=ExtResource("7_tag")]
 layout_mode = 2
 text = "Geoth 10%"
 tip = "Geothermal potential at this site."
+
+[node name="TagRule" type="HSeparator" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox/Tags"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 1
 
 [node name="Minerals" type="HBoxContainer" parent="Scroll/Content/P01_PlanetPanel/Row/DistrictPanel/VBox" unique_id=579420652]
 layout_mode = 2

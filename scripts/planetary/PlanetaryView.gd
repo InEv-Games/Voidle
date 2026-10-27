@@ -131,7 +131,7 @@ var _base_radius:      float = 0.42
 # ── Side panel slide ──────────────────────────────────────────────────────────
 # The right panel can slide off-screen; the planet view (and the HUD energy
 # readout) widen with it so the globe stays centred in whatever space is left.
-const PANEL_FRACTION:  float = 0.3    # panel width as a fraction of the screen
+const PANEL_FRACTION:  float = LeftPanel.WIDTH   # panel width as a fraction of the screen
 const PANEL_SLIDE_SEC: float = 0.35
 var _panel_open:       bool    = true
 var _panel_t:          float   = 1.0  # 1 = fully open, 0 = fully hidden
@@ -186,8 +186,7 @@ func _ready() -> void:
 	ShipManager.ship_arrived.connect(_on_ship_arrived_here)
 	ProductionManager.city_leveled.connect(_on_city_leveled)
 	_build_panel_toggle()
-	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - PANEL_FRACTION))
-	HUDManager.set_side_panel($SidePanel)   # Upgrade Tree / Trade / Explore sit along its bottom
+	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - _panel_edge_frac(1.0)))
 	poi_layer.territory_lookup = _territory_at_screen
 	SettingsManager.night_shadow_changed.connect(func(v: float) -> void:
 		if planet_renderer.material:
@@ -3235,15 +3234,20 @@ func _update_panel(data: PlanetData) -> void:
 	_build_system_panel()
 
 # ── Hero header (scenes/ui/components/HeroHeader.tscn in PlanetaryView.tscn) ──
-## Tags are HeroTag nodes placed in the scene; this fills them in order and
-## hides the rest. Each item: [text, HeroTag.Tone, tooltip].
+## Tags are HeroTag nodes under SidePanel/Layout/PanelContent/Tags/Tags; this fills
+## them in order and hides the rest. Each item: [text, HeroTag.Tone, tooltip].
 func _set_hero(caption: String, title: String, items: Array) -> void:
-	var hero := get_node_or_null("SidePanel/PanelContent/Hero") as HeroHeader
+	var hero := get_node_or_null("SidePanel/Layout/PanelContent/Hero") as HeroHeader
 	if hero == null:
 		return
 	hero.caption = caption
 	hero.title = title.to_upper()
-	var tags := hero.tags()
+	var tags: Array[HeroTag] = []
+	var bar := get_node_or_null("SidePanel/Layout/PanelContent/Tags/Tags")
+	if bar != null:
+		for c in bar.get_children():
+			if c is HeroTag:
+				tags.append(c)
 	for i in tags.size():
 		var t := tags[i]
 		t.visible = i < items.size()
@@ -3281,7 +3285,7 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 		_name_form_overlay.queue_free()
 		_name_form_overlay = null
 
-	var panel_content := $SidePanel/PanelContent
+	var panel_content := $SidePanel/Layout/PanelContent
 
 	var overlay := PanelContainer.new()
 	overlay.add_theme_stylebox_override("panel", _make_hud_style(Color(0.06, 0.08, 0.17, 0.98), 8))
@@ -4450,8 +4454,7 @@ func _process(delta: float) -> void:
 	_tick_lander_watch()
 	_tick_departure_fx(delta)
 	_tick_cam_follow(delta)
-	if absf(($SidePanel as Control).offset_top - _hud_bar_height()) > 0.5 \
-			or absf(($SidePanel as Control).offset_bottom + HUDManager.shortcut_bar_height()) > 0.5:
+	if absf(($SidePanel as Control).offset_top - _hud_bar_height()) > 0.5:
 		_apply_panel_t(_panel_t)
 	_update_tutorial_highlight()
 	_update_aspect()
@@ -4694,6 +4697,21 @@ func _rebuild_lens_bar() -> void:
 	row.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_lens_bar = row
 	_style_lens_bar()
+	_place_lens_bar()
+
+## The lens bar comes and goes with the left panel: it slides down out of view
+## and fades as the panel closes (follows _panel_t, so the panel's tween drives it).
+const LENS_BAR_MARGIN := 16.0
+
+func _place_lens_bar() -> void:
+	if _lens_bar == null or not is_instance_valid(_lens_bar):
+		return
+	var h := _lens_bar.get_combined_minimum_size().y
+	var drop := (1.0 - _panel_t) * (h + LENS_BAR_MARGIN)
+	_lens_bar.offset_bottom = -LENS_BAR_MARGIN + drop
+	_lens_bar.offset_top = _lens_bar.offset_bottom - h
+	_lens_bar.modulate.a = _panel_t
+	_lens_bar.visible = _panel_t > 0.01
 
 ## Orbital surface scan: a bright band sweeps the globe once, then the role
 ## lenses of this world work (GameState.scanned_bodies).
@@ -4866,6 +4884,10 @@ func _set_panel_open(open: bool) -> void:
 	_panel_tween.tween_method(_apply_panel_t, _panel_t, 1.0 if open else 0.0, PANEL_SLIDE_SEC)
 
 ## Screen x of the side panel's right edge (0 when it's slid away).
+## The panel's right edge as a fraction of the screen width (t: 1 open, 0 hidden).
+func _panel_edge_frac(t: float) -> float:
+	return LeftPanel.edge_frac(t)
+
 func _panel_right_edge() -> float:
 	var panel := $SidePanel as Control
 	return maxf(0.0, panel.position.x + panel.size.x)
@@ -4881,21 +4903,16 @@ func _hud_bar_height() -> float:
 ## The panel lives on the left, under the resource bar; the globe fills the rest.
 func _apply_panel_t(t: float) -> void:
 	_panel_t = t
-	var panel := $SidePanel as Control
-	panel.anchor_left  = -PANEL_FRACTION * (1.0 - t)
-	panel.anchor_right = PANEL_FRACTION * t
-	panel.offset_left  = 0.0
-	panel.offset_right = 0.0
-	panel.offset_top   = _hud_bar_height()
-	panel.offset_bottom = -HUDManager.shortcut_bar_height()   # the HUD's shortcut row
-	($PlanetContainer as Control).anchor_left  = PANEL_FRACTION * t
+	($SidePanel as LeftPanel).set_slide(t)   # LeftPanel places itself: same spot in every view
+	($PlanetContainer as Control).anchor_left  = _panel_edge_frac(t)
 	($PlanetContainer as Control).anchor_right = 1.0
-	HUDManager.set_view_area_fraction(1.0 - PANEL_FRACTION * t)
+	HUDManager.set_view_area_fraction(1.0 - _panel_edge_frac(t))
 	if _panel_toggle_btn != null:
 		_panel_toggle_btn.text = "‹" if _panel_open else "›"
 		_place_panel_toggle()
 	if _toast_container != null and is_instance_valid(_toast_container):
-		_toast_container.offset_left = PANEL_FRACTION * t * get_viewport_rect().size.x + 14.0
+		_toast_container.offset_left = _panel_edge_frac(t) * get_viewport_rect().size.x + 14.0
+	_place_lens_bar()
 
 # ── Zoom / pan ────────────────────────────────────────────────────────────────
 
@@ -5682,7 +5699,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 	_city_panel_poi = null
 	_set_planet_hero(data)
 	_nav_visit(data, {}, "")
-	var panel_content := $SidePanel/PanelContent
+	var panel_content := $SidePanel/Layout/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
 		# Save active scroll position before destroying
@@ -7434,7 +7451,7 @@ func _get_toast_container() -> VBoxContainer:
 	tc.grow_vertical   = Control.GROW_DIRECTION_BEGIN   # stack upward
 	tc.grow_horizontal = Control.GROW_DIRECTION_END
 	tc.custom_minimum_size = Vector2(260, 0)
-	tc.offset_left = PANEL_FRACTION * _panel_t * get_viewport_rect().size.x + 14.0   # follows the panel
+	tc.offset_left = _panel_edge_frac(_panel_t) * get_viewport_rect().size.x + 14.0   # follows the panel
 	tc.add_theme_constant_override("separation", 5)
 	tc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(tc)
@@ -7445,7 +7462,7 @@ func _get_toast_container() -> VBoxContainer:
 ## side panel), above the marker (eye) button. Safe to call every time.
 func _reanchor_toast_above_credits() -> void:
 	var tc := _get_toast_container()
-	tc.offset_left = PANEL_FRACTION * _panel_t * get_viewport_rect().size.x + 14.0
+	tc.offset_left = _panel_edge_frac(_panel_t) * get_viewport_rect().size.x + 14.0
 	tc.offset_bottom = -(12.0 + 36.0 + 10.0)
 
 ## Shows a brief construction-complete notification at the bottom-left of the planet area,
@@ -9693,7 +9710,7 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	_city_panel_poi = null
 	_orbit_panel_open = true
 	_nav_visit(planet, {"orbit": true}, "Orbit")
-	var panel_content := $SidePanel/PanelContent
+	var panel_content := $SidePanel/Layout/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
 		old.name = "__freeing_district__"
@@ -9805,7 +9822,7 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	_active_district_poi = null
 	_city_panel_poi = city
 	_nav_visit(planet, {"city": city.label}, city.display_name)
-	var panel_content := $SidePanel/PanelContent
+	var panel_content := $SidePanel/Layout/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
 		old.name = "__freeing_district__"
@@ -9975,7 +9992,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	_active_district_poi = poi   # remember for _on_building_constructed
 	_city_panel_poi = null
 	_nav_visit(planet, {"district": poi.label}, poi.display_name)
-	var panel_content := $SidePanel/PanelContent
+	var panel_content := $SidePanel/Layout/PanelContent
 	var old := panel_content.get_node_or_null("DistrictBuildPanel")
 	if old:
 		# Save scroll position before destroying

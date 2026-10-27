@@ -1,8 +1,8 @@
-## Big panel header (design: Panel Hero + Tags under the Hero):
+## Big panel header (design: Panel Hero):
 ##   caption            "Terran - Level 2"
 ##   TITLE              planet / city name (wraps when too long)
 ##   ─────────────────
-##   | tag | tag | tag |  HeroTag nodes under Tags — edit them in the scene
+## The tag bar is no longer part of the header: it sits next to it in each panel scene.
 ## Layout: scenes/ui/components/HeroHeader.tscn. Look: SubLabel, HeaderHero, TagLabel.
 @tool
 class_name HeroHeader
@@ -33,11 +33,3 @@ func _sync() -> void:
 	_caption.text = caption
 	_caption.visible = caption != ""
 	_title.text = title
-
-## The tag cells in the bar, in order (hidden ones included).
-func tags() -> Array[HeroTag]:
-	var out: Array[HeroTag] = []
-	for c in $Tags.get_children():
-		if c is HeroTag:
-			out.append(c)
-	return out

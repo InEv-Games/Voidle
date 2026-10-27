@@ -8,10 +8,10 @@ signal back_pressed
 @export var debug_seed: int = 99999
 
 @onready var _space:        Control      = $SpaceContainer
-@onready var _system_name:  Label        = $UICanvas/SidePanel/PanelContent/SystemName
-@onready var _star_type:    Label        = $UICanvas/SidePanel/PanelContent/StarType
-@onready var _planet_list:  VBoxContainer = $UICanvas/SidePanel/PanelContent/PlanetList
-@onready var _panel_content: VBoxContainer = $UICanvas/SidePanel/PanelContent
+@onready var _system_name:  Label        = $UICanvas/SidePanel/Layout/PanelContent/SystemName
+@onready var _star_type:    Label        = $UICanvas/SidePanel/Layout/PanelContent/StarType
+@onready var _planet_list:  VBoxContainer = $UICanvas/SidePanel/Layout/PanelContent/PlanetList
+@onready var _panel_content: VBoxContainer = $UICanvas/SidePanel/Layout/PanelContent
 
 var _survey_btn: Button = null
 var _scan_wrap: VBoxContainer = null
@@ -55,10 +55,6 @@ const STAR_PX: Dictionary = {
 
 func _process(_delta: float) -> void:
 	_tick_rocket_fx()
-	# the side panel ends above the HUD's shortcut row (Upgrade Tree / Trade / Explore)
-	var side := $UICanvas/SidePanel as Control
-	if absf(side.offset_bottom + HUDManager.shortcut_bar_height()) > 0.5:
-		side.offset_bottom = -HUDManager.shortcut_bar_height()
 	if _dragging or _right_dragging:
 		CursorManager.set_state(CursorManager.State.GRAB)
 		return
@@ -163,12 +159,9 @@ func _ready() -> void:
 
 	# wait one frame so Control sizes are computed
 	await get_tree().process_frame
-	# the side panel (left) starts under the HUD's resource bar
-	var cp = HUDManager.get("credits_panel")
-	var bar_h: float = (cp as Control).size.y + 6.0 if cp != null and is_instance_valid(cp as Node) and (cp as Control).size.y > 4.0 else 58.0
-	($UICanvas/SidePanel as Control).offset_top = bar_h
+	# the left panel places itself (LeftPanel); the system fills the rest
 	($UICanvas/SidePanel as Control).visible = not GameState.showcase_mode
-	HUDManager.set_side_panel($UICanvas/SidePanel)   # Upgrade Tree / Trade / Explore sit along its bottom
+	_space.anchor_left = LeftPanel.edge_frac()
 	if GameState.showcase_mode:
 		_space.anchor_left = 0.0   # no side panel: the system fills the screen
 		await get_tree().process_frame

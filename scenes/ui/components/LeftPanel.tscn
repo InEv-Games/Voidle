@@ -1,0 +1,33 @@
+[gd_scene format=3 uid="uid://culxf1hisppox"]
+
+[ext_resource type="Script" uid="uid://rj46ev41sga" path="res://scripts/ui/components/LeftPanel.gd" id="1_script"]
+
+[node name="LeftPanel" type="PanelContainer" unique_id=1173640215]
+anchors_preset = -1
+anchor_left = 0.025
+anchor_right = 0.325
+anchor_bottom = 1.0
+theme_type_variation = &"SidePanel"
+script = ExtResource("1_script")
+
+[node name="Layout" type="VBoxContainer" parent="." unique_id=682719044]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PanelContainer" type="PanelContainer" parent="Layout" unique_id=487196389]
+modulate = Color(1, 1, 1, 0)
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="PanelContent" type="VBoxContainer" parent="Layout" unique_id=1938270561]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ShortcutRule" type="HSeparator" parent="Layout" unique_id=450918372]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Shortcuts" type="HBoxContainer" parent="Layout" unique_id=2017364859]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4

@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://c2j74hdpe1s1i"]
 
 [ext_resource type="Script" uid="uid://bntsmx52or47r" path="res://scripts/solar/SolarView.gd" id="1_sv"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/LeftPanel.tscn" id="9_left"]
 [ext_resource type="FontFile" path="res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf" id="2_orbitron"]
 
 [node name="SolarView" type="Control" unique_id=1623851356]
@@ -23,44 +24,39 @@ color = Color(0.04, 0.05, 0.1, 1)
 
 [node name="SpaceContainer" type="Control" parent="." unique_id=1074792099]
 layout_mode = 1
-anchor_left = 0.28
+anchor_left = 0.325
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
 [node name="UICanvas" type="CanvasLayer" parent="."]
-[node name="SidePanel" type="PanelContainer" parent="UICanvas" unique_id=401181337]
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 0.28
-anchor_bottom = 1.0
+[node name="SidePanel" parent="UICanvas" unique_id=401181337 instance=ExtResource("9_left")]
 z_as_relative = false
 z_index = 200
-theme_type_variation = &"SidePanel"
 
-[node name="PanelContent" type="VBoxContainer" parent="UICanvas/SidePanel" unique_id=1342141614]
-layout_mode = 2
+[node name="PanelContent" parent="UICanvas/SidePanel/Layout" index="0" unique_id=1938270561]
 theme_override_constants/separation = 3
 
-[node name="SystemName" type="Label" parent="UICanvas/SidePanel/PanelContent" unique_id=473665898]
+[node name="SystemName" type="Label" parent="UICanvas/SidePanel/Layout/PanelContent" unique_id=473665898]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("2_orbitron")
 theme_override_font_sizes/font_size = 18
 text = "System Name"
 
-[node name="StarType" type="Label" parent="UICanvas/SidePanel/PanelContent" unique_id=226972663]
+[node name="StarType" type="Label" parent="UICanvas/SidePanel/Layout/PanelContent" unique_id=226972663]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.60, 0.75, 0.8)
 theme_override_fonts/font = ExtResource("2_orbitron")
 theme_override_font_sizes/font_size = 11
 text = "Yellow Dwarf"
 
-[node name="PlanetList" type="VBoxContainer" parent="UICanvas/SidePanel/PanelContent" unique_id=52620883]
+[node name="PlanetList" type="VBoxContainer" parent="UICanvas/SidePanel/Layout/PanelContent" unique_id=52620883]
 layout_mode = 2
 visible = false
 
-[node name="Spacer" type="Control" parent="UICanvas/SidePanel/PanelContent" unique_id=724419288]
+[node name="Spacer" type="Control" parent="UICanvas/SidePanel/Layout/PanelContent" unique_id=724419288]
 layout_mode = 2
 size_flags_vertical = 3
 
+[editable path="UICanvas/SidePanel"]
