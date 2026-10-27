@@ -346,7 +346,7 @@ var _event_poll:    float = 0.0
 var _quest_sub:     int  = 0
 
 var _inventory_shown: bool = false
-var tutorial_enabled: bool = true  # set false in Settings to skip tutorial entirely
+var tutorial_enabled: bool = false  # set false in Settings to skip tutorial entirely (off for now)
 
 # ── Narrative UI ───────────────────────────────────────────────────────────────
 var _dim:         ColorRect      = null
