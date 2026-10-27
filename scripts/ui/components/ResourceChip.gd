@@ -18,8 +18,13 @@ enum Tone { PLAIN, GOOD, BAD }
 ## Tint for the icon; transparent = the resource's own colour.
 @export var icon_color: Color = Color(0, 0, 0, 0):
 	set(v): icon_color = v; _sync()
+## Writes the value label only here, so a rate / icon change never wipes a value
+## the HUD wrote straight into value_label.
 @export var value_text: String = "50.000":
-	set(v): value_text = v; _sync()
+	set(v):
+		value_text = v
+		if is_node_ready():
+			value_label.text = v
 ## Small "+1.5" next to the value; hidden when empty.
 @export var rate_text: String = "":
 	set(v): rate_text = v; _sync()
@@ -51,6 +56,7 @@ static func create(id: String) -> ResourceChip:
 	return c
 
 func _ready() -> void:
+	value_label.text = value_text
 	_sync()
 	if Engine.is_editor_hint():
 		return
@@ -66,7 +72,6 @@ func _sync() -> void:
 		return
 	var ic := $Row/Icon as TextureRect
 	ic.texture = UIIcons.get_icon(resource_id)
-	value_label.text = value_text
 	value_label.custom_minimum_size.x = value_width
 	value_label.clip_text = value_width > 0.0
 	rate_label.text = rate_text
