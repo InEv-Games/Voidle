@@ -122,8 +122,7 @@ func _draw_rocket_fx() -> void:
 			_rocket_fx.draw_line(_rocket_path_at(a, b, t0), _rocket_path_at(a, b, t1),
 				Color(ROCKET_COL, 0.85 if flown else 0.30), 2.0 if flown else 1.0, true)
 	if st != "in_transit" or target == null:
-		var txt := "Final rocket: preparing %ds" % int(ceil(float(ex.get("prep_left", 0.0)))) if st == "preparing" \
-			else "Final rocket: ready"
+		var txt := "Final rocket: preparing…" if st == "preparing" else "Final rocket: ready"
 		if target == null:
 			txt += "  ·  right-click a planet to set its target"
 		_rocket_fx.draw_string(font, a + Vector2(16, -22), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ROCKET_COL)

@@ -60,6 +60,9 @@ const COST_DEEP_SEA: float = 0.50
 const COST_LAND:     float = 1.0
 const COST_HIGHLAND: float = 1.6
 const COST_MOUNTAIN: float = 3.0
+## Rivers (FeatureMap) are dear to drive along, so roads cross them at a short
+## point or run beside them instead of following the riverbed.
+const COST_RIVER:    float = 5.0
 
 var planet_seed: int
 var _astar := RoadAStar.new()
@@ -80,7 +83,9 @@ static func for_planet(data: PlanetData) -> RoadNetwork:
 	# A rocky world's roads must see its baked terrain: built before the bake the
 	# whole planet reads as land (straight "roads" across the sea). Until then
 	# hand back an empty, never-ready network and don't cache it.
-	if TerrainMap.mode_for(data) == TerrainMap.Mode.ROCKY and not TerrainMap.has_map(data.seed, TerrainMap.Mode.ROCKY):
+	# The same for its rivers (FeatureMap, built right after the bake).
+	if TerrainMap.mode_for(data) == TerrainMap.Mode.ROCKY and not (TerrainMap.has_map(data.seed, TerrainMap.Mode.ROCKY) \
+			and FeatureMap.has_map(data.seed)):
 		return RoadNetwork.new()
 	var net := RoadNetwork.new()
 	net.planet_seed = data.seed
@@ -144,6 +149,8 @@ func _build() -> void:
 			else:
 				_kind[i] = 0
 				cost = COST_MOUNTAIN if h >= 0.38 else (COST_HIGHLAND if h >= 0.26 else COST_LAND)
+				if _rocky and FeatureMap.mask_at(planet_seed, ll.x, ll.y) & (1 << FeatureMap.F.RIVER):
+					cost = maxf(cost, COST_RIVER)
 			_astar.add_point(i, _to_vec(ll.x, ll.y), cost)
 	# edges: same-kind neighbours (E, S, SE, SW), wrapping in longitude
 	for y in HEIGHT:

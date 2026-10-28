@@ -206,7 +206,7 @@ func _cell_tip(id: String, base: String) -> String:
 			var pm: Node = get_node_or_null("/root/ProductionManager")
 			var net: float = pm.get_global_energy() if pm != null else 0.0
 			var sp: Vector2 = pm.get_global_energy_split() if pm != null else Vector2.ZERO
-			var lines: Array[String] = ["Shown as used / made on this world."]
+			var lines: Array[String] = ["Shown as the balance (made − used) on this world."]
 			var wpp := _rate_planet()
 			if wpp != null and pm != null:
 				var wsp: Vector2 = pm.planet_energy_split(wpp)
@@ -292,10 +292,11 @@ func _refresh_resource_cells() -> void:
 	_set_chip_state(Economy.SCIENCE, false, GameState.science_points <= 0.0 and float(rates.get(Economy.SCIENCE, 0.0)) <= 0.0)
 	var e_lbl: Label = _res_lbls.get(Economy.ENERGY)
 	if is_instance_valid(e_lbl):
-		# used / made — the output is right there, a deficit shows as the chip's alert
+		# the balance (made − used) as a signed number; a deficit also shows as the chip's alert
 		var esp: Vector2 = ProductionManager.planet_energy_split(wpp) if wpp != null \
 			else ProductionManager.get_global_energy_split()
-		_set_value(e_lbl, "%s/%s" % [Economy.fmt(snappedf(esp.y, 0.1)), Economy.fmt(snappedf(esp.x, 0.1))])
+		var bal := snappedf(esp.x - esp.y, 0.1)
+		_set_value(e_lbl, "%s%s" % ["+" if bal > 0.0 else "", Economy.fmt(bal)])
 		_set_chip_state(Economy.ENERGY, esp.y > esp.x, esp.x <= 0.0 and esp.y <= 0.0)
 
 	var pop_lbl: Label = _res_lbls.get(Economy.POPULATION)

@@ -205,11 +205,6 @@ static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: floa
 		result.ok = false
 		result.reason = "%s must be built on %s" % [def.display_name, placement_label(def.placement)]
 		return result
-	# a City can stand beside a river, not across it (districts may still sit on one)
-	if def.is_system_anchor() and (FeatureMap.mask_at(data.seed, lon, lat) & (1 << FeatureMap.F.RIVER)) != 0:
-		result.ok = false
-		result.reason = "A City can't stand on a river — build it beside one"
-		return result
 	var min_d := deg_to_rad(min_spacing_deg(data))
 	var city_d := deg_to_rad(city_spacing_deg(data))
 	for p: POIData in data.custom_pois:

@@ -129,6 +129,8 @@ static func orbit_level_credits(next: int) -> float:
 static func orbit_level_block(pd: PlanetData, pp: PlanetProgress) -> String:
 	if pp.orbit_level >= max_orbit_level():
 		return "Max level"
+	if pp.orbit_upgrading >= 0.0:
+		return "Already levelling up"
 	var stations := orbit_stations(pd)
 	if stations.size() < pp.orbit_level:
 		return "Launch all %d station%s first" % [pp.orbit_level, "" if pp.orbit_level == 1 else "s"]

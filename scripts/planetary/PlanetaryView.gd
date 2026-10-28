@@ -1814,7 +1814,7 @@ func _setup_moon_colonize_button(btn: IconButton, data: PlanetData) -> void:
 		var ex := GameState.expedition("lander")
 		var lst := String(ex.get("state", ""))
 		if lst == "preparing":
-			btn.label_text = "PREPARING LANDER — %ds" % int(ceil(float(ex.get("prep_left", 0.0))))
+			btn.label_text = "PREPARING LANDER…"
 			btn.modulate = Color(0.85, 0.9, 1.0)
 		elif lst == "launching":
 			btn.label_text = "LANDER LIFTING OFF"
@@ -1831,6 +1831,11 @@ func _setup_moon_colonize_button(btn: IconButton, data: PlanetData) -> void:
 	timer.autostart = true
 	timer.timeout.connect(refresh)
 	btn.add_child(timer)
+	ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"), func() -> float:
+		var ex := GameState.expedition("lander")
+		if String(ex.get("state", "")) != "preparing":
+			return -1.0
+		return 1.0 - float(ex.get("prep_left", 0.0)) / GameState.LANDER_PREP_SEC, true)
 	btn.mouse_entered.connect(func() -> void:
 		var block := GameState.moon_colonize_block(data.seed)
 		TooltipManager.show_tip("Colonize " + data.planet_name,
@@ -1866,6 +1871,13 @@ func _add_rocket_section(page: Control, data: PlanetData) -> void:
 	box.add_child(info)
 	var btn := IconButton.create("PREPARE ROCKET", "rocket", IconButton.Variant.POSITIVE)
 	box.add_child(btn)
+	# preparation and flight fill the button like any other build, no countdown digits
+	ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"), func() -> float:
+		var ex := GameState.expedition("rocket")
+		match String(ex.get("state", "")):
+			"preparing":  return 1.0 - float(ex.get("prep_left", 0.0)) / GameState.ROCKET_PREP_SEC
+			"in_transit": return 1.0 - float(ex.get("flight_left", 0.0)) / GameState.ROCKET_FLIGHT_SEC
+		return -1.0, true)
 	var refresh := func() -> void:
 		if not is_instance_valid(info):
 			return
@@ -1882,22 +1894,26 @@ func _add_rocket_section(page: Control, data: PlanetData) -> void:
 			"":
 				lines.append("Cost  " + _full_cost_bb(GameState.ROCKET_COST, 0, data, GameState.get_planet(data.seed)))
 				lines.append("Preparation %ds · flight %ds" % [int(GameState.ROCKET_PREP_SEC), int(GameState.ROCKET_FLIGHT_SEC)])
+				btn.label_text = "PREPARE ROCKET"
 				var block := GameState.rocket_block()
 				if block != "":
 					lines.append(_bb(block, BB_BAD))
 				btn.visible = true
 				btn.disabled = block != ""
 			"preparing":
-				lines.append("Preparing — %ds left" % int(ceil(float(ex.get("prep_left", 0.0)))))
 				lines.append("Target  " + tname)
-				btn.visible = false
+				btn.label_text = "PREPARING ROCKET…"
+				btn.visible = true
+				btn.disabled = true
 			"ready":
 				lines.append("Ready — waiting for a target")
 				lines.append(_bb("Right-click a planet in the Solar System view to pick it.", BB_WARN))
 				btn.visible = false
 			"in_transit":
-				lines.append("On its way to %s — %ds left" % [tname, int(ceil(float(ex.get("flight_left", 0.0))))])
-				btn.visible = false
+				lines.append("On its way to %s" % tname)
+				btn.label_text = "ROCKET IN FLIGHT…"
+				btn.visible = true
+				btn.disabled = true
 			"arrived":
 				lines.append(_bb("Arrived at %s — Civilization 1 reached." % tname, "#8ef59a"))
 				btn.visible = false
@@ -2439,7 +2455,9 @@ func _prepare_planet_maps(data: PlanetData) -> void:
 		if not pd.is_orbital() and pd.manual_position and pd.resource_tags.is_empty():
 			pd.resource_tags = ResourceMap.sample(data.seed, deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg))
 	# visible features: drawn by the shader, read by the economy (stored per district)
-	FeatureMap.build(data)
+	await FeatureMap.build_async(data, self)
+	if current_data != data:
+		return
 	for pd: POIData in data.custom_pois:
 		if not pd.is_orbital() and pd.manual_position:
 			pd.site_features = FeatureMap.shares(data, deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg))
@@ -4518,7 +4536,7 @@ func _process(delta: float) -> void:
 		if _ship_panel != null and is_instance_valid(_ship_panel):
 			# Launch panel: follow rocket position
 			if _ship_panel.has_meta("launch_rocket"):
-				var lrocket: Control = _ship_panel.get_meta("launch_rocket")
+				var lrocket = _ship_panel.get_meta("launch_rocket")  # untyped: may already be freed
 				if is_instance_valid(lrocket):
 					_ship_panel.position = lrocket.position + Vector2(16, -_ship_panel.size.y * 0.5)
 				else:
@@ -4764,7 +4782,7 @@ func _tick_lens_tip() -> void:
 		if _lens_tip_cell != "":
 			_lens_tip_cell = ""
 			# only our own tip: the mouse may have moved onto a button with its own
-			if is_instance_valid(TooltipManager._title_lbl) and TooltipManager._title_lbl.text.ends_with(" lens"):
+			if TooltipManager.shown_title().ends_with(" LENS"):
 				TooltipManager.hide_tip()
 		return
 	var cell := "%s|%d,%d" % [_role, roundi(rad_to_deg(hit["lon"]) * 2.0), roundi(rad_to_deg(hit["lat"]) * 2.0)]
@@ -5825,13 +5843,20 @@ func _build_planet_overview(data: PlanetData) -> void:
 
 	_poi_overview_cards.clear()
 	_stop_tut_panel_pulse()
+	# a world reached by the lander: nothing is built (orbit or surface) until the
+	# surface is scanned and the first City lands through INITIATE COLONIZATION
+	var lander_pending := pp.lander_state == 1 and _city_count(data) == 0
+	# the Orbit is the counterpart of the Capital: always first in the list
+	if pp.orbit_level > 0:
+		var orbit_card := _build_orbit_card(data, pp)
+		if lander_pending:
+			_lock_orbit_card(orbit_card, data)
+		districts_page.add_child(orbit_card)
 	for poi: POIData in surface_pois:
 		districts_page.add_child(_build_district_overview_card(poi, data, pp, panel_content, root))
-	if pp.orbit_level > 0:
-		districts_page.add_child(_build_orbit_card(data, pp))
 
 	var can_add_surface := UNLIMITED_SURFACE_DISTRICTS or surface_pois.size() < pp.max_districts
-	if can_add_surface:
+	if can_add_surface and not lander_pending:
 		var add_dist_card := _build_add_district_card(data, true, false)
 		districts_page.add_child(add_dist_card)
 	# Tutorial: districts are added from a City's panel — point at the first City
@@ -9239,6 +9264,7 @@ func _build_slot_card(poi: POIData, planet: PlanetData, pp: PlanetProgress,
 var _slot_dd_args: Array = []
 var _slot_dd_sig: String = ""
 var _slot_dd_poll: float = 0.0
+var _slot_dd_keep_scroll: int = 0
 
 ## Which picker rows are affordable right now (credits + free population).
 func _slot_dd_signature() -> String:
@@ -9267,6 +9293,8 @@ func _poll_slot_dropdown(delta: float) -> void:
 	var args := _slot_dd_args.duplicate()
 	if not is_instance_valid(args[0]):
 		return
+	var sc := _active_slot_dropdown.get_child(0) as ScrollContainer
+	_slot_dd_keep_scroll = sc.scroll_vertical if sc != null else 0   # rebuilt list keeps its place
 	if is_instance_valid(_dd_layer):
 		_dd_layer.queue_free()
 	_dd_layer = null
@@ -9306,9 +9334,14 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 	outer.set_meta("slot_card", card)
 	outer.theme_type_variation = &"TooltipPanel"
 
+	# long lists scroll inside the space left on screen (sized once laid out, below)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	outer.add_child(scroll)
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 4)
-	outer.add_child(list)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
 
 	for def: BuildingDef in buildable:
 		if def.min_planet_lv > pp.level:
@@ -9441,8 +9474,21 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 	if not is_instance_valid(outer):
 		return
 	var card_rect := card.get_global_rect()
-	outer.position            = Vector2(card_rect.position.x, card_rect.end.y)
+	var vp_h := get_viewport().get_visible_rect().size.y
+	var list_h := list.get_combined_minimum_size().y
+	var chrome := outer.get_combined_minimum_size().y - scroll.get_combined_minimum_size().y
+	var below := vp_h - card_rect.end.y - 8.0 - chrome
+	var above := card_rect.position.y - 8.0 - chrome
+	# open downwards; upwards only when that fits much more of the list
+	var up := list_h > below and above > below * 1.5
+	var view_h := minf(list_h, above if up else below)
+	scroll.custom_minimum_size = Vector2(0, view_h)
 	outer.custom_minimum_size = Vector2(card_rect.size.x, 0)
+	outer.reset_size()
+	outer.position = Vector2(card_rect.position.x,
+		card_rect.position.y - outer.size.y if up else card_rect.end.y)
+	scroll.scroll_vertical = _slot_dd_keep_scroll
+	_slot_dd_keep_scroll = 0
 	_active_slot_dropdown = outer
 	# Tutorial: highlight target building row and disable all others
 	var tut_bid := TutorialManager.get_action_building_target()
@@ -9567,6 +9613,15 @@ func _build_orbit_card(data: PlanetData, pp: PlanetProgress) -> PanelContainer:
 		AudioManager.play("click")
 		_build_orbit_panel(data))
 	return card
+
+## Orbit card before the first City has landed: greyed, says what comes first.
+func _lock_orbit_card(card: PanelContainer, data: PlanetData) -> void:
+	(card as ListItem).clickable = false
+	card.modulate.a = 0.45
+	var why := "Found the first City with INITIATE COLONIZATION first." if GameState.is_scanned(data.seed) \
+		else "Scan the surface first, then found the first City."
+	card.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Orbit", why))
+	card.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 
 ## Icon for a district type (UIIcons names).
 func _district_def_icon(def: DistrictDef) -> String:
@@ -9733,6 +9788,11 @@ func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
 		IconButton.Variant.POSITIVE,
 		"%d/%d" % [lv, Leveling.max_orbit_level()] if at_max else HUDManager.fmt_credits(credits))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if pp.orbit_upgrading >= 0.0:
+		btn.label_text = "LEVELLING UP…"
+		btn.counter = "Lv %d → %d" % [lv, next]
+		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),
+			func() -> float: return pp.orbit_upgrading if pp.orbit_upgrading >= 0.0 else 1.0, true)
 	_live_enable(btn, func() -> bool:
 		return Leveling.orbit_level_block(planet, pp) == "" and GameState.credits >= credits)
 	var tip := "Raise the Orbit to Lv %d:\n%s\n\nCost  %s\n%s" % [next,
@@ -9749,8 +9809,7 @@ func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
 			AudioManager.play("error")
 			return
 		AudioManager.play("construct")
-		pp.orbit_level = next
-		pp.recalculate_limits()
+		pp.orbit_upgrading = 0.0   # ProductionManager finishes it
 		GameState.planet_progress_changed.emit(planet.seed)
 		_build_orbit_panel(planet))
 	return btn

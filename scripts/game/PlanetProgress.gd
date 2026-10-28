@@ -58,6 +58,8 @@ func has_building(bid: String) -> bool:
 @export var city_levels: Dictionary = {}
 ## City label -> 0..1 while that City levels up (ProductionManager ticks it).
 @export var city_upgrading: Dictionary = {}
+## 0..1 while the Orbit levels up, -1 otherwise (ProductionManager ticks it).
+@export var orbit_upgrading: float = -1.0
 
 ## Seconds a City takes to reach `target_lv`.
 static func city_upgrade_duration(target_lv: int) -> float:

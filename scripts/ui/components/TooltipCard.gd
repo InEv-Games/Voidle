@@ -16,10 +16,13 @@ extends PanelContainer
 @export var icon_name: String = "unknown":
 	set(v): icon_name = v; _sync()
 @export_multiline var body: String = "":
-	set(v): body = v; _sync()
+	set(v): body = v; _body_from_parts = false; _sync()
 ## Cost line; empty hides the cost box.
 @export var cost: String = "":
 	set(v): cost = v; _sync()
+
+## set_body_parts filled the Body; _sync must not overwrite it with `body`.
+var _body_from_parts := false
 
 func _ready() -> void:
 	_sync()
@@ -32,9 +35,10 @@ func _sync() -> void:
 	ic.visible = icon_name != ""
 	if ic.visible:
 		ic.texture = UIIcons.get_icon(icon_name)
-	var b := $VBox/Body as RichTextLabel
-	b.text = body
-	b.visible = body != ""
+	if not _body_from_parts:
+		var b := $VBox/Body as RichTextLabel
+		b.text = body
+		b.visible = body != ""
 	($VBox/Rows as Control).visible = ($VBox/Rows as Node).get_child_count() > 0
 	($VBox/CostBox as Control).visible = cost != ""
 	($VBox/CostBox/Cost/Value as Label).text = cost
@@ -42,6 +46,7 @@ func _sync() -> void:
 
 ## Body from mixed parts: Strings (BBCode) and Texture2D icons drawn inline.
 func set_body_parts(parts: Array, icon_size: int = 13) -> void:
+	_body_from_parts = true
 	var b := $VBox/Body as RichTextLabel
 	b.clear()
 	for part in parts:

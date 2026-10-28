@@ -274,7 +274,7 @@ func _init() -> void:
 		0.0, _at("root", 180, 1.6), ["root"], "production", "Unlocks Production Districts, Mine & Warehouse",
 		{"grants": ["mine", "warehouse"], "common": true})
 	_n("processing_basics", "Basic Processing", "Turn Ferrite into Goods.",
-		0.0, _at("start_production", 180, 1.2), ["start_production"], "processing", "Unlocks Goods Factory",
+		100.0, _at("start_production", 180, 1.2), ["start_production"], "processing", "Unlocks Goods Factory",
 		{"grants": ["refinery"], "common": true})
 	_n("fuel_processing", "Fuel Processing", "Small-scale Fuel production — the first step towards rockets.",
 		450.0, _at("processing_basics", 180, 1.2), ["processing_basics"], "processing", "Unlocks Compact Fuel Workshop, Fuel access",

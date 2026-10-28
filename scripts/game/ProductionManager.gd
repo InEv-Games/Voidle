@@ -177,6 +177,15 @@ func _tick_all(delta: float) -> void:
 					city_leveled.emit(planet_seed, clabel, c_next, opened)
 					break  # dict modified — next frame handles the rest
 
+			# Orbit level-up (as long as a City's)
+			if pp.orbit_upgrading >= 0.0:
+				pp.orbit_upgrading += delta / max(0.1, PlanetProgress.city_upgrade_duration(pp.orbit_level + 1))
+				if pp.orbit_upgrading >= 1.0:
+					pp.orbit_upgrading = -1.0
+					pp.orbit_level += 1
+					pp.recalculate_limits()
+					GameState.planet_progress_changed.emit(planet_seed)
+
 			# District upgrades (independent of planet upgrade state)
 			for dlabel in pp.district_upgrading.keys():
 				var target_lv: int = pp.district_levels.get(dlabel, 1) + 1

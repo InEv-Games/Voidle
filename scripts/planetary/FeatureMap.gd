@@ -168,16 +168,24 @@ static func terrain_mult(pd: PlanetData, poi: POIData, resource_id: String, ener
 		return 1.0
 	return 1.0 + bonus_for(merged_site(pd, poi), family_of(resource_id, energy_tag))
 
-## Why a site can't host a building that needs one of `features` in full ("" if it can).
+## Shorelines and rivers are one grid cell thin, so a district almost never
+## stands exactly ON them: buildings that need one are also allowed NEAR it.
+const EDGE_FEATURES: Array[String] = ["terrain_seacoast", "terrain_lakeside", "terrain_river"]
+
+## Why a site can't host a building that needs one of `features` ("" if it can):
+## in full, or near for EDGE_FEATURES.
 static func requirement_block(site: Dictionary, features: Array[String]) -> String:
 	if features.is_empty():
 		return ""
 	var names: Array[String] = []
+	var edge := true
 	for fid: String in features:
-		if float(site.get(fid, 0.0)) >= 1.0:
+		var share := float(site.get(fid, 0.0))
+		if share >= 1.0 or (share > 0.0 and fid in EDGE_FEATURES):
 			return ""
 		names.append(feature_name(fid))
-	return "Needs to stand on: " + " or ".join(names)
+		edge = edge and fid in EDGE_FEATURES
+	return ("Needs to be on or near: " if edge else "Needs to stand on: ") + " or ".join(names)
 
 # ── Role overlay (role buttons) ──────────────────────────────────────────────
 
@@ -294,6 +302,33 @@ static func _n3(n: FastNoiseLite, lon: float, lat: float) -> float:
 static func build(data: PlanetData) -> void:
 	if _maps.has(data.seed):
 		return
+	_finish(data.seed, _compute(data))
+
+## build() on a worker thread (the grid takes a few seconds in GDScript, which
+## froze the first frames of a new game). Textures are made back on the main thread.
+static func build_async(data: PlanetData, host: Node) -> void:
+	if _maps.has(data.seed):
+		return
+	if OS.has_feature("web"):   # the web demo is exported without threads
+		build(data)
+		return
+	var result := {}
+	var task := WorkerThreadPool.add_task(func() -> void: result.merge(_compute(data)), false, "FeatureMap %d" % data.seed)
+	while not WorkerThreadPool.is_task_completed(task):
+		await host.get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	if not _maps.has(data.seed):
+		_finish(data.seed, result)
+
+static func _finish(planet_seed: int, r: Dictionary) -> void:
+	_maps[planet_seed] = {"mask": r["mask"], "tex": ImageTexture.create_from_image(r["img"])}
+	if r.has("river_img"):
+		_maps[planet_seed]["river"] = ImageTexture.create_from_image(r["river_img"])
+	if r.has("wind_img"):
+		_maps[planet_seed]["wind"] = ImageTexture.create_from_image(r["wind_img"])
+
+## The whole grid as plain data and Images — no textures, safe off the main thread.
+static func _compute(data: PlanetData) -> Dictionary:
 	var n := WIDTH * HEIGHT
 	var cover := PackedByteArray(); cover.resize(n)
 	var lines := PackedByteArray(); lines.resize(n)
@@ -304,8 +339,7 @@ static func build(data: PlanetData) -> void:
 	var rocky := stype == PlanetData.ShaderType.ROCKY and TerrainMap.has_map(data.seed, TerrainMap.Mode.ROCKY)
 	var moon := stype == PlanetData.ShaderType.MOON
 	if not rocky and not moon:
-		_store(data.seed, mask, cover, lines, spots, windy)   # gas giants, asteroids: nothing
-		return
+		return {"mask": mask, "img": _pack(cover, lines, spots, windy)}   # gas giants, asteroids: nothing
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = data.seed ^ 0x5EA7
@@ -337,9 +371,9 @@ static func build(data: PlanetData) -> void:
 		_place_ruins(rng, land, height, spots, mask, 4)
 	if rocky:
 		_mark_windy(data, land, windy, mask)
-	_store(data.seed, mask, cover, lines, spots, windy)
+	var out := {"mask": mask, "img": _pack(cover, lines, spots, windy)}
 	if not river_paths.is_empty():
-		_maps[data.seed]["river"] = _bake_rivers(river_paths, data.seed, land)
+		out["river_img"] = _bake_rivers(river_paths, data.seed, land)
 	if ResourceMap.has_map(data.seed) and data.has_atmosphere:
 		var wb := PackedByteArray(); wb.resize(n)
 		for y in HEIGHT:
@@ -347,7 +381,8 @@ static func build(data: PlanetData) -> void:
 				var i := y * WIDTH + x
 				var ll := _cell_lonlat(x, y)
 				wb[i] = int(clampf(ResourceMap.field(data.seed, "wind", ll.x, ll.y), 0.0, 1.0) * 255.0) if land[i] == 1 else 0
-		_maps[data.seed]["wind"] = ImageTexture.create_from_image(Image.create_from_data(WIDTH, HEIGHT, false, Image.FORMAT_R8, wb))
+		out["wind_img"] = Image.create_from_data(WIDTH, HEIGHT, false, Image.FORMAT_R8, wb)
+	return out
 
 static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: PackedFloat32Array,
 		land: PackedByteArray, cover: PackedByteArray, lines: PackedByteArray, mask: PackedInt32Array) -> Array:
@@ -549,7 +584,7 @@ const RIVER_SCALE := 4
 
 ## Draws every river as a smooth, gently meandering line that widens
 ## downstream, with a soft bank around it. R = water, G = bank.
-static func _bake_rivers(paths: Array, planet_seed: int, land: PackedByteArray) -> ImageTexture:
+static func _bake_rivers(paths: Array, planet_seed: int, land: PackedByteArray) -> Image:
 	var rw := WIDTH * RIVER_SCALE
 	var rh := HEIGHT * RIVER_SCALE
 	var water := PackedByteArray(); water.resize(rw * rh)
@@ -617,7 +652,7 @@ static func _bake_rivers(paths: Array, planet_seed: int, land: PackedByteArray) 
 	for i in rw * rh:
 		bytes[i * 2] = water[i]
 		bytes[i * 2 + 1] = bank[i]
-	return ImageTexture.create_from_image(Image.create_from_data(rw, rh, false, Image.FORMAT_RG8, bytes))
+	return Image.create_from_data(rw, rh, false, Image.FORMAT_RG8, bytes)
 
 ## One round of Chaikin corner cutting (ends kept).
 static func _chaikin(pts: PackedVector2Array) -> PackedVector2Array:
@@ -699,16 +734,15 @@ static func _mark_windy(data: PlanetData, land: PackedByteArray, windy: PackedBy
 			windy[i] = 255
 			mask[i] |= 1 << F.WIND
 
-static func _store(planet_seed: int, mask: PackedInt32Array, cover: PackedByteArray, lines: PackedByteArray,
-		spots: PackedByteArray, windy: PackedByteArray) -> void:
+static func _pack(cover: PackedByteArray, lines: PackedByteArray,
+		spots: PackedByteArray, windy: PackedByteArray) -> Image:
 	var bytes := PackedByteArray(); bytes.resize(WIDTH * HEIGHT * 4)
 	for i in WIDTH * HEIGHT:
 		bytes[i * 4]     = cover[i]
 		bytes[i * 4 + 1] = lines[i]
 		bytes[i * 4 + 2] = spots[i]
 		bytes[i * 4 + 3] = windy[i]
-	var img := Image.create_from_data(WIDTH, HEIGHT, false, Image.FORMAT_RGBA8, bytes)
-	_maps[planet_seed] = {"mask": mask, "tex": ImageTexture.create_from_image(img)}
+	return Image.create_from_data(WIDTH, HEIGHT, false, Image.FORMAT_RGBA8, bytes)
 
 static func _neighbours4(i: int) -> Array[int]:
 	var x := i % WIDTH

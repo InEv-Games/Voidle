@@ -110,6 +110,10 @@ func show_tip(title: String, body = "", cost = "", sub_body = "") -> void:
 func set_title_icon(icon_name: String) -> void:
 	_panel.icon_name = icon_name
 
+## Title of the tip on screen (upper-cased), "" when none is shown.
+func shown_title() -> String:
+	return _panel.title if _visible else ""
+
 func set_cost_color(c: Color) -> void:
 	_cost_lbl.add_theme_color_override("font_color", c)
 
