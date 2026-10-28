@@ -11,7 +11,6 @@ description = "+10% raw and processed output in this City, and Warehouse-sized s
 allowed_poi_types = Array[int]([0])
 allowed_planet_types = Array[int]([])
 base_cost = 1200.0
-slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
 tick_duration = 20.0

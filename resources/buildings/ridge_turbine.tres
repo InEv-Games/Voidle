@@ -11,7 +11,6 @@ tick_duration = 20.0
 unlocked_by_default = true
 display_name = "Ridge Turbine"
 tier = 2
-slot_cost = 2
 base_cost = 900.0
 outputs = {"energy": 18.0}
 inputs = {"goods": 0.333333}

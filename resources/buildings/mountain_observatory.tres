@@ -12,7 +12,6 @@ description = "Thin, clear air above the clouds. Must stand on a mountain."
 allowed_poi_types = Array[int]([4])
 allowed_planet_types = Array[int]([])
 base_cost = 600.0
-slot_cost = 2
 min_planet_lv = 1
 construct_duration = 6.0
 tick_duration = 20.0

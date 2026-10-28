@@ -13,6 +13,9 @@ var is_fullscreen: bool = true
 var tutorial_ever_done: bool = false
 ## How dark the night side of planets gets: 0 = fully lit, 1 = full shadow.
 var night_shadow: float = 1.0
+## Lowest layer of the current civ (Tip 0: buildings) shown as stacks ×N (true)
+## or one card each with its own demolish button (false).
+var stack_lowest_layer: bool = true
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -39,6 +42,7 @@ func load_settings() -> void:
 		is_fullscreen      = config.get_value("video",    "fullscreen",    true)
 		tutorial_ever_done = config.get_value("tutorial", "ever_done",     false)
 		night_shadow       = config.get_value("video",    "night_shadow",  1.0)
+		stack_lowest_layer = config.get_value("ui",       "stack_lowest",  true)
 	else:
 		master_volume = 1.0
 		music_volume  = 1.0
@@ -55,6 +59,7 @@ func save_settings() -> void:
 	config.set_value("video",    "fullscreen",    is_fullscreen)
 	config.set_value("video",    "night_shadow",  night_shadow)
 	config.set_value("tutorial", "ever_done",     tutorial_ever_done)
+	config.set_value("ui",       "stack_lowest",  stack_lowest_layer)
 	config.save(SETTINGS_PATH)
 
 func apply_settings() -> void:
@@ -98,6 +103,10 @@ func set_night_shadow(val: float) -> void:
 	night_shadow = clamp(val, 0.0, 1.0)
 	save_settings()
 	night_shadow_changed.emit(night_shadow)
+
+func set_stack_lowest_layer(val: bool) -> void:
+	stack_lowest_layer = val
+	save_settings()
 
 func set_fullscreen(val: bool) -> void:
 	is_fullscreen = val

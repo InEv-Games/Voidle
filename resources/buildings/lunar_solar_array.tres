@@ -11,7 +11,6 @@ description = "No air, no clouds: panels on the Moon catch the full sun."
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([6])
 base_cost = 200.0
-slot_cost = 1
 min_planet_lv = 1
 construct_duration = 4.0
 tick_duration = 20.0

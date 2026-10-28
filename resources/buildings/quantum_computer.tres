@@ -11,7 +11,6 @@ description = "Quantum research. Consumes Rare Elements."
 allowed_poi_types = Array[int]([4])
 allowed_planet_types = Array[int]([])
 base_cost = 5000.0
-slot_cost = 1
 min_planet_lv = 4
 construct_duration = 4.0
 tick_duration = 20.0

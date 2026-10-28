@@ -106,29 +106,33 @@ extends Resource
 @export var centre_near: float = 0.05
 
 @export_group("Terrain")
-## Within this distance of a visible feature's edge a site gets half its bonus (FeatureMap).
+## Within this distance of a visible feature's edge a site counts as near it (FeatureMap).
 @export var terrain_near_km: float = 250.0
-## Full bonus on each visible feature, by output family (GDD §6.1). Families:
-## production, science, residential, commercial, energy_solar, energy_wind,
-## energy_tidal, energy_geothermal.
+## Three steps only (playtest 28.10): ON a feature that helps a family ×2, NEAR
+## one ×1.5, otherwise nothing. Features don't stack — the best one counts.
+@export var terrain_on_bonus: float = 1.0
+@export var terrain_near_bonus: float = 0.5
+## Which visible feature helps which output family (GDD §6.1), as a weight on
+## the step above (1.0 = the full ×2 / ×1.5). Families: production, science,
+## residential, commercial, energy_solar, energy_wind, energy_tidal, energy_geothermal.
 @export var terrain_bonuses: Dictionary = {
 	# Mountains and craters lean to Production, so the Production and Science
 	# lenses don't paint the same places (playtest 23.10); peaks still suit the
 	# Mountain Observatory.
-	"terrain_mountain":   {"production": 0.30, "science": 0.10},
-	"terrain_plain":      {"residential": 0.20, "commercial": 0.10},
-	"terrain_forest":     {"residential": 0.10, "science": 0.10},
-	"terrain_seacoast":   {"residential": 0.20, "commercial": 0.20, "energy_tidal": 0.20},
-	"terrain_lakeside":   {"residential": 0.20, "science": 0.10},
-	"terrain_river":      {"residential": 0.10, "commercial": 0.20},
-	"terrain_desert":     {"energy_solar": 0.30, "science": 0.10},
-	"terrain_tundra":     {"science": 0.20, "residential": 0.10},
-	"terrain_glacier":    {"science": 0.20},
-	"terrain_volcanic":   {"energy_geothermal": 0.30, "production": 0.20},
-	"terrain_geothermal": {"energy_geothermal": 0.40},
-	"terrain_wind":       {"energy_wind": 0.30},
-	"terrain_ruins":      {"science": 0.30, "commercial": 0.20},
-	"terrain_crater":     {"production": 0.20, "science": 0.10},
+	"terrain_mountain":   {"production": 1.0, "science": 1.0},
+	"terrain_plain":      {"residential": 1.0, "commercial": 1.0},
+	"terrain_forest":     {"residential": 1.0, "science": 1.0},
+	"terrain_seacoast":   {"residential": 1.0, "commercial": 1.0, "energy_tidal": 1.0},
+	"terrain_lakeside":   {"residential": 1.0, "science": 1.0},
+	"terrain_river":      {"residential": 1.0, "commercial": 1.0},
+	"terrain_desert":     {"energy_solar": 1.0, "science": 1.0},
+	"terrain_tundra":     {"science": 1.0, "residential": 1.0},
+	"terrain_glacier":    {"science": 1.0},
+	"terrain_volcanic":   {"energy_geothermal": 1.0, "production": 1.0},
+	"terrain_geothermal": {"energy_geothermal": 1.0},
+	"terrain_wind":       {"energy_wind": 1.0},
+	"terrain_ruins":      {"science": 1.0, "commercial": 1.0},
+	"terrain_crater":     {"production": 1.0, "science": 1.0},
 }
 
 @export_group("Storage")

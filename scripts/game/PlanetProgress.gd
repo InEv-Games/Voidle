@@ -9,6 +9,9 @@ extends Resource
 @export var is_upgrading: bool = false
 @export var upgrade_progress: float = 0.0
 @export var upgrade_duration: float = 60.0
+## What the planet level-up in progress took: { "credits": n, resource id: n } —
+## cancelling it gives back the refund rate of this.
+@export var upgrade_paid: Dictionary = {}
 
 const BASE_DISTRICTS:        int = 2   # district slots at level 1
 const BASE_ORBITAL_DISTRICTS: int = 1  # orbital slots at level 1–5

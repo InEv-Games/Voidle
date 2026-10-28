@@ -14,7 +14,6 @@ display_name = "Spaceport"
 description = "Orbital launch facility. Enables ship construction and interplanetary trade routes."
 allowed_poi_types = Array[int]([0])
 base_cost = 2500.0
-slot_cost = 2
 construct_duration = 3.0
 tick_duration = 45.0
 energy_per_tick = 0.0

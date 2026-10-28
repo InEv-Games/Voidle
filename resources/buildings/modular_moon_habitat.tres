@@ -11,7 +11,6 @@ tick_duration = 20.0
 unlocked_by_default = true
 display_name = "Modular Moon Habitat"
 tier = 2
-slot_cost = 2
 base_cost = 480.0
 outputs = {"population": 10000.0}
 inputs = {"goods": 0.666667}

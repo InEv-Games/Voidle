@@ -307,6 +307,7 @@ const AUTOSAVE_INTERVAL := 60.0
 
 func _ready() -> void:
 	ShipManager.ship_arrived.connect(_on_ship_arrived)
+	save_slot = _read_last_slot()
 	load_save()
 	if home_planet_seed < 0:
 		home_planet_seed = randi_range(1000, 99999)
@@ -327,7 +328,7 @@ func _notification(what: int) -> void:
 static func has_save() -> bool:
 	if is_demo_build():
 		return false
-	return FileAccess.file_exists(SAVE_PATH)
+	return FileAccess.file_exists(save_path())
 
 func unlock_building(building_id: String) -> void:
 	if not unlocked_buildings.has(building_id):
@@ -1064,7 +1065,87 @@ func finish_colonization(planet_seed: int) -> void:
 	planet_progress_changed.emit(planet_seed)
 
 # ── Save / Load ───────────────────────────────────────────────────────────────
-const SAVE_PATH := "user://voidle_save.dat"
+## Save slots (the main menu's LOAD / NEW GAME pick one). Slot 0 is the old
+## single save's file, so an existing game shows up as slot 1.
+const SAVE_SLOTS := 3
+const SLOT_FILE := "user://voidle_slot.cfg"   # which slot CONTINUE opens
+## The slot this game saves to.
+static var save_slot: int = 0
+
+static func save_path(slot: int = save_slot) -> String:
+	return "user://voidle_save.dat" if slot == 0 else "user://voidle_save_%d.dat" % slot
+
+static func _read_last_slot() -> int:
+	var cfg := ConfigFile.new()
+	if cfg.load(SLOT_FILE) != OK:
+		return 0
+	return clampi(int(cfg.get_value("slots", "last", 0)), 0, SAVE_SLOTS - 1)
+
+static func _write_last_slot(slot: int) -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("slots", "last", slot)
+	cfg.save(SLOT_FILE)
+
+## What the save in a slot holds, for the slot list: {} when empty, else
+## { saved_at, play_seconds, civilization_type, credits, home_name, ok, why }.
+static func slot_info(slot: int) -> Dictionary:
+	var path := save_path(slot)
+	if not FileAccess.file_exists(path):
+		return {}
+	var file := FileAccess.open(path, FileAccess.READ)
+	var raw = file.get_var() if file != null else null
+	if not raw is Dictionary:
+		return {"ok": false, "why": "Can't be read", "saved_at": 0.0, "play_seconds": 0.0}
+	var d: Dictionary = raw
+	var v := int(d.get("save_version", 1))
+	var ok := v >= MIN_SAVE_VERSION and v <= SAVE_VERSION
+	return {"ok": ok, "why": "" if ok else "Save v%d — this build reads v%d" % [v, SAVE_VERSION],
+		"saved_at": float(d.get("saved_at", 0.0)), "play_seconds": float(d.get("play_seconds", 0.0)),
+		"civilization_type": int(d.get("civilization_type", 0)), "credits": float(d.get("credits", 0.0))}
+
+## True after the current slot was deleted, until a slot is opened again.
+var _save_suspended := false
+
+## Saves the running game, then makes `slot` the current game: its save is
+## loaded, or (no save there) a fresh world starts in it.
+func open_slot(slot: int) -> void:
+	if _loaded_from_save:
+		save()
+	_save_suspended = false
+	save_slot = clampi(slot, 0, SAVE_SLOTS - 1)
+	_write_last_slot(save_slot)
+	delete_save(false, false)   # clean slate, nothing removed from disk
+	ProductionManager.load_save_data({})   # no cycles carried over from the last game
+	load_save()
+	if home_planet_seed < 0:
+		home_planet_seed = randi_range(1000, 99999)
+	_bootstrap_world()
+
+## Saves the running game, then starts a brand-new world in `slot` (its old
+## save, if any, is removed — the menu asks first).
+func new_game_in(slot: int) -> void:
+	if _loaded_from_save:
+		save()
+	_save_suspended = false
+	save_slot = clampi(slot, 0, SAVE_SLOTS - 1)
+	_write_last_slot(save_slot)
+	incompatible_save_version = -1 if slot_info(save_slot).get("ok", true) else 0
+	ProductionManager.load_save_data({})
+	delete_save()
+
+## Removes the save in `slot` (an unreadable one is set aside, never destroyed).
+func delete_slot(slot: int) -> void:
+	var path := save_path(slot)
+	if not FileAccess.file_exists(path):
+		return
+	if slot_info(slot).get("ok", false):
+		DirAccess.remove_absolute(path)
+	else:
+		DirAccess.rename_absolute(path, "user://voidle_save_s%d_%d.bak" % [slot, int(Time.get_unix_time_from_system())])
+	if slot == save_slot:
+		incompatible_save_version = -1
+		delete_save(false)   # the deleted game must not linger (or autosave back)
+		_save_suspended = true
 ## Bump when the save format or the economy changes so old saves can't be
 ## loaded into rules they weren't made for. Saves without a version are v1.
 const SAVE_VERSION := 1
@@ -1078,6 +1159,8 @@ var incompatible_save_version: int = -1
 
 func save() -> void:
 	if demo_build or incompatible_save_version >= 0:   # exploring changes nothing: saving is safe
+		return
+	if _save_suspended:   # its slot was just deleted: don't write it back
 		return
 	var data := {
 		"save_version":         SAVE_VERSION,
@@ -1166,6 +1249,8 @@ func save() -> void:
 			"moons_unlocked":    pp.moons_unlocked,
 			"lander_state":      pp.lander_state,
 			"orbit_level":       pp.orbit_level,
+			"orbit_upgrading":   pp.orbit_upgrading,
+			"upgrade_paid":      pp.upgrade_paid,
 			"custom_pois":       pois_save,
 		}
 	data["global_resources"]    = global_resources
@@ -1187,16 +1272,16 @@ func save() -> void:
 	data["tutorial_quest_sub"]   = TutorialManager._quest_sub
 	data["tutorial_solar_count"] = TutorialManager._solar_count
 	data["tutorial_inv_shown"]   = TutorialManager._inventory_shown
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(save_path(), FileAccess.WRITE)
 	if file:
 		file.store_var(data)
 
 func load_save() -> bool:
 	if demo_build:
 		return false
-	if not FileAccess.file_exists(SAVE_PATH):
+	if not FileAccess.file_exists(save_path()):
 		return false
-	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var file := FileAccess.open(save_path(), FileAccess.READ)
 	if not file:
 		return false
 	var raw = file.get_var()
@@ -1311,6 +1396,8 @@ func load_save() -> bool:
 		pp.moons_unlocked     = d.get("moons_unlocked",     false)
 		pp.lander_state       = d.get("lander_state",       0)
 		pp.orbit_level        = d.get("orbit_level",        0)
+		pp.orbit_upgrading    = d.get("orbit_upgrading",    -1.0)
+		pp.upgrade_paid       = d.get("upgrade_paid",       {})
 		pp.recalculate_limits()
 		_planet_progress[seed_val] = pp
 		# Store POI data for later — applied in _apply_pending_pois() after _bootstrap_world
@@ -1328,14 +1415,18 @@ func save_block_reason() -> String:
 		return "This save is from an older version (v%d) and can't be continued. NEW GAME keeps it as a backup." % incompatible_save_version
 	return ""
 
-func delete_save() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
+## Starts a brand-new world in the current slot. `remove_file` = false keeps
+## the slot's file (open_slot loads it next); `rebuild` = false leaves the
+## world for the caller to bootstrap.
+func delete_save(remove_file := true, rebuild := true) -> void:
+	var path := save_path()
+	if remove_file and FileAccess.file_exists(path):
 		if incompatible_save_version >= 0:
 			# never destroy a save this build couldn't read — set it aside
 			var backup := "user://voidle_save_v%d_%d.dat" % [incompatible_save_version, int(Time.get_unix_time_from_system())]
-			DirAccess.rename_absolute(SAVE_PATH, backup)
+			DirAccess.rename_absolute(path, backup)
 		else:
-			DirAccess.remove_absolute(SAVE_PATH)
+			DirAccess.remove_absolute(path)
 	incompatible_save_version = -1
 	_loaded_from_save = false   # what follows is a brand-new world
 	exit_showcase()
@@ -1382,4 +1473,5 @@ func delete_save() -> void:
 	# the old game's ships (freighters, landers) must not keep flying in the new one
 	if has_node("/root/ShipManager"):
 		get_node("/root/ShipManager").deserialize([])
-	_bootstrap_world()
+	if rebuild:
+		_bootstrap_world()

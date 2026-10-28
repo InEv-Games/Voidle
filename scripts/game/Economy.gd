@@ -36,6 +36,20 @@ const INFO := {
 	RARE:       {"name": "Rare Elements",  "short": "rare", "color": Color(0.80, 0.55, 1.00)},
 }
 
+## One colour per output family, taken from its resource's symbol, so a
+## district, its buildings, its lens and its icon in the top bar all match.
+## Production has no single resource: it uses the mining orange.
+const PRODUCTION_COLOR := Color(1.0, 0.58, 0.28)
+
+static func family_color(family: String) -> Color:
+	match family:
+		"energy":      return INFO[ENERGY]["color"]
+		"residential": return INFO[POPULATION]["color"]
+		"commercial":  return INFO[CREDITS]["color"]
+		"science":     return INFO[SCIENCE]["color"]
+		"production":  return PRODUCTION_COLOR
+	return Color.WHITE
+
 # ── Raw resources ────────────────────────────────────────────────────────────
 ## Named raw resources. `bodies` = planet types that carry it (empty = any),
 ## Which civilization opens a mineral follows its rarity: R1–2 Tip 0 (Ferrite,
@@ -314,8 +328,8 @@ static func max_buildable(pp: PlanetProgress, def: BuildingDef, poi: POIData, ca
 			if String(b.get("building_id", "")) == def.building_id:
 				have += int(b.get("amount", 1))
 		n = mini(n, def.max_per_district - have)
-	if def.max_per_planet > 0:
-		n = mini(n, def.max_per_planet - def.count_on_planet(pp))
+	if def.planet_cap() > 0:
+		n = mini(n, def.planet_cap() - def.count_on_planet(pp))
 	while n > 0 and not can_pay(building_full_cost(pp, def, poi.label, n)):
 		n -= 1
 	return maxi(n, 0)
@@ -391,8 +405,37 @@ static func level_up_pop(level: int) -> int:
 	var c: BalanceConfig = Balance.cfg
 	return int(round(Balance.geometric(c.level_pop_base, c.level_pop_growth, maxi(level - 1, 0))))
 
-## Max population of a planet: City housing + running Population buildings.
+## Population is one pool for the whole civilization (playtest 28.10: the Moon
+## doesn't keep its own). These three answer for every colonised world
+## together; `pd` / `pp` only say the caller has a world. Per world:
+## world_max_population / world_used_population.
+static var _pop_frame := -1
+static var _pop_totals := Vector2i.ZERO   # (max, used)
+
+static func _empire_pop() -> Vector2i:
+	var f := Engine.get_process_frames()
+	if f == _pop_frame:
+		return _pop_totals
+	var mx := 0
+	var used := 0
+	for pp: PlanetProgress in GameState._planet_progress.values():
+		if not pp.is_colonized:
+			continue
+		var pd := GameState.get_planet_data(pp.planet_seed)
+		mx += world_max_population(pd, pp)
+		used += world_used_population(pd, pp)
+	_pop_frame = f
+	_pop_totals = Vector2i(mx, used)
+	return _pop_totals
+
 static func max_population(pd: PlanetData, pp: PlanetProgress) -> int:
+	return _empire_pop().x if pd != null and pp != null else 0
+
+static func used_population(pd: PlanetData, pp: PlanetProgress) -> int:
+	return _empire_pop().y if pd != null and pp != null else 0
+
+## Max population of one world: City housing + running Population buildings.
+static func world_max_population(pd: PlanetData, pp: PlanetProgress) -> int:
 	if pd == null or pp == null:
 		return 0
 	var total := 0.0
@@ -418,7 +461,7 @@ static func max_population(pd: PlanetData, pp: PlanetProgress) -> int:
 ## Population used on a planet: every district's founding + level costs
 ## (levels in progress count already) + the workers of every building
 ## (BuildingDef.pop_use; ones under construction count already).
-static func used_population(pd: PlanetData, pp: PlanetProgress) -> int:
+static func world_used_population(pd: PlanetData, pp: PlanetProgress) -> int:
 	if pd == null or pp == null:
 		return 0
 	var used := 0

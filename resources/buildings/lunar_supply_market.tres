@@ -11,7 +11,6 @@ tick_duration = 20.0
 unlocked_by_default = true
 display_name = "Lunar Supply Market"
 tier = 2
-slot_cost = 2
 base_cost = 900.0
 outputs = {"credits": 120.0}
 inputs = {"goods": 1.0, "fuel": 0.333333}

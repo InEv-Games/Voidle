@@ -11,7 +11,6 @@ description = "A self-contained city in a single structure. Consumes Consumer Go
 allowed_poi_types = Array[int]([7])
 allowed_planet_types = Array[int]([])
 base_cost = 3500.0
-slot_cost = 1
 min_planet_lv = 4
 construct_duration = 4.0
 tick_duration = 20.0

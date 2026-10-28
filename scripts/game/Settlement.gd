@@ -306,7 +306,8 @@ static func level_in_progress_paid(pp: PlanetProgress, poi: POIData, city: bool)
 		return 0.0
 	return Leveling.district_level_credits(int(pp.district_levels.get(poi.label, 1)))
 
-## Calls off a level-up in progress; returns the credits given back.
+## Calls off a level-up in progress; gives back refund_rate() of its price
+## (playtest 28.10: like demolishing) and returns that.
 static func cancel_level(pp: PlanetProgress, poi: POIData, city: bool) -> float:
 	var price := level_in_progress_paid(pp, poi, city)
 	if price <= 0.0:
@@ -317,9 +318,37 @@ static func cancel_level(pp: PlanetProgress, poi: POIData, city: bool) -> float:
 		pp.city_upgrading.erase(poi.label)
 	else:
 		pp.district_upgrading.erase(poi.label)
-	GameState.earn_credits(price)
+	var back := price * refund_rate()
+	GameState.earn_credits(back)
 	_changed(pp)
-	return price
+	return back
+
+## Calls off the Orbit's level-up; returns the credits given back.
+static func cancel_orbit_level(pp: PlanetProgress) -> float:
+	if pp.orbit_upgrading < 0.0:
+		return 0.0
+	pp.orbit_upgrading = -1.0
+	var back := Leveling.orbit_level_credits(pp.orbit_level + 1) * refund_rate()
+	GameState.earn_credits(back)
+	_changed(pp)
+	return back
+
+## Calls off the planet's level-up; returns what came back { credits, id: n }.
+static func cancel_planet_level(pp: PlanetProgress) -> Dictionary:
+	if not pp.is_upgrading:
+		return {}
+	var back := {}
+	_sum_into(back, pp.upgrade_paid, refund_rate())
+	var cr := float(back.get(Economy.CREDITS, 0.0))
+	back.erase(Economy.CREDITS)
+	_give(back)
+	GameState.earn_credits(cr)
+	back[Economy.CREDITS] = cr
+	pp.is_upgrading = false
+	pp.upgrade_progress = 0.0
+	pp.upgrade_paid = {}
+	_changed(pp)
+	return back
 
 # ── Moving ───────────────────────────────────────────────────────────────────
 

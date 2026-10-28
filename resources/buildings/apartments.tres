@@ -11,7 +11,6 @@ description = "Dense housing for a growing city."
 allowed_poi_types = Array[int]([7])
 allowed_planet_types = Array[int]([])
 base_cost = 360.0
-slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
 tick_duration = 20.0

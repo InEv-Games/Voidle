@@ -1,6 +1,8 @@
 extends Node2D
 
 signal poi_clicked(index: int, data: Dictionary)
+## The small Capital badge beside a City's marker was clicked (opens its Capital District).
+signal capital_clicked(index: int)
 
 const DOT_RADIUS       := 5.0
 const DOT_HOVER_RADIUS := 8.0
@@ -390,25 +392,67 @@ const _ICONS := {
 		"#...#",
 		"#####",
 	],
+	# small crown beside a City's marker: its Capital District
+	"capital_badge": [
+		"#.#.#",
+		"#####",
+		"#####",
+	],
 }
 const BIG_ICON_COL := Color(0.92, 0.95, 1.0)
+const CAPITAL_BADGE_COL := Color(1.0, 0.82, 0.25)
+## Index of the City whose Capital badge the mouse is over, -1 otherwise.
+var hovered_capital := -1
 
-## Big (2-slot) buildings stand out on the map: one small icon each, in a row
-## beside the district marker, on the side away from its label.
-func _draw_big_buildings(sp: Vector2, block: float, side: float, poi: POIData, pp: PlanetProgress, alpha: float) -> void:
-	var k := 0
-	for b: Dictionary in pp.buildings_in_district(poi.label):
-		if b.get("constructing", false):
+## Wonders (BuildingDef.is_wonder): [{ lon, lat (radians), name, spaceport: bool }],
+## each at its own spot inside its district's borders (set by PlanetaryView).
+var wonders: Array = []
+var _hover_wonder: Dictionary = {}
+
+## Screen position (global) of a wonder, or null when it faces away.
+func _wonder_screen(w: Dictionary, p: Dictionary) -> Variant:
+	var v: Vector3 = _planet.lonlat_to_view(w["lon"], w["lat"])
+	if v.z <= 0.0:
+		return null
+	return (p["center"] as Vector2) + Vector2(v.x, v.y) * float(p["r_px"])
+
+func _draw_wonders() -> void:
+	if wonders.is_empty() or marker_vis <= 0.02:
+		return
+	var p := _get_planet_params()
+	if p.is_empty():
+		return
+	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
+	for w: Dictionary in wonders:
+		var at = _wonder_screen(w, p)
+		if at == null:
 			continue
-		var def := BuildingDef.find(String(b.get("building_id", "")))
-		if def == null or def.slot_cost < 2:
-			continue
-		var icon: Array = _ICONS["big_spaceport"] if def.building_id.contains("spaceport") else _ICONS["big_other"]
-		var at := _snap_local(sp + Vector2(side * block * (7.0 + 6.0 * float(k)), 0.0))
-		_draw_pixel_icon(at, icon, block, Color(BIG_ICON_COL, alpha), alpha)
-		k += 1
-		if k >= 3:
-			return
+		var sp := _snap_local((at as Vector2) - global_position)
+		var hov: bool = _hover_wonder.get("name", "") == w["name"]
+		var icon: Array = _ICONS["big_spaceport"] if w.get("spaceport", false) else _ICONS["big_other"]
+		_draw_pixel_icon(sp, icon, block, Color(BIG_ICON_COL.lightened(0.3) if hov else BIG_ICON_COL, marker_vis), marker_vis)
+		if hov:   # its name, like a port's
+			var font: Font = _orbitron if _orbitron else ThemeDB.fallback_font
+			var text := String(w["name"]).to_upper()
+			const SIZE := 9
+			var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE).x
+			var box := Rect2(sp + Vector2(-tw * 0.5 - 5.0, -block * 3.0 - 13.0), Vector2(tw + 10.0, 15.0))
+			draw_rect(box, Color(0.04, 0.07, 0.14, 0.88))
+			draw_rect(box, Color(BIG_ICON_COL, 0.6), false, 1.0)
+			draw_string(font, box.position + Vector2(5.0, 11.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, BIG_ICON_COL)
+
+func _wonder_at(global_pos: Vector2) -> Dictionary:
+	if marker_vis < 0.5 or wonders.is_empty():
+		return {}
+	var p := _get_planet_params()
+	if p.is_empty():
+		return {}
+	var reach := maxf(8.0, _pixel_size() * 2.0)
+	for w: Dictionary in wonders:
+		var at = _wonder_screen(w, p)
+		if at != null and (at as Vector2).distance_to(global_pos) <= reach:
+			return w
+	return {}
 
 func _marker_icon(tag: String, is_city: bool = false) -> Array:
 	if is_city:
@@ -417,12 +461,12 @@ func _marker_icon(tag: String, is_city: bool = false) -> Array:
 
 func _marker_color(tag: String) -> Color:
 	match tag:
-		"generator": return Color(0.45, 0.85, 1.0)
-		"mining":    return Color(1.0, 0.58, 0.28)
-		"residential": return Color(0.60, 0.95, 0.60)
-		"commercial":  return Color(0.88, 0.95, 0.40)
-		"science":     return Color(0.40, 0.68, 1.0)
-		_:           return Color(1.0, 0.82, 0.25)
+		"generator":   return Economy.family_color("energy")
+		"mining":      return Economy.family_color("production")
+		"residential": return Economy.family_color("residential")
+		"commercial":  return Economy.family_color("commercial")
+		"science":     return Economy.family_color("science")
+		_:             return Color(1.0, 0.82, 0.25)
 
 ## Size of one shader pixel on screen.
 func _pixel_size() -> float:
@@ -971,6 +1015,7 @@ func _draw_scene(font: Font) -> void:
 		return
 	var merges := _label_merges()
 	_draw_roads()
+	_draw_wonders()
 	_draw_links()
 
 	for ft in _floating_texts:
@@ -1011,6 +1056,7 @@ func _draw_scene(font: Font) -> void:
 
 	for i in _pois.size():
 		var poi: Dictionary = _pois[i]
+		poi.erase("capital_sp")   # set again below while its badge is drawn
 
 		# ── Night-side glow ──────────────────────────────────────────────────────
 		# Draw city-light glow only for POIs that face the camera (sz > 0)
@@ -1077,8 +1123,12 @@ func _draw_scene(font: Font) -> void:
 				float((cpp as PlanetProgress).district_upgrading[(cpoi as POIData).label]), alpha)
 		elif cpoi is POIData and extra_progress.has((cpoi as POIData).label):
 			_draw_construct_bar(sp, line_px, float(extra_progress[(cpoi as POIData).label]), alpha)
-		if cpoi is POIData and cpp is PlanetProgress:
-			_draw_big_buildings(sp, line_px, -horiz_dir, cpoi as POIData, cpp as PlanetProgress, alpha)
+		if is_city:   # its Capital District, selectable from the map
+			var cap_at := _snap_local(sp + Vector2(0.0, -vert_dir * line_px * 8.0))
+			var cap_hover: bool = hovered_capital == i
+			_draw_pixel_icon(cap_at, _ICONS["capital_badge"], line_px,
+				Color(CAPITAL_BADGE_COL.lightened(0.45) if cap_hover else CAPITAL_BADGE_COL, alpha), alpha)
+			poi["capital_sp"] = cap_at + global_position
 		if active:
 			var frame_col := Color(1.0, 0.95, 0.5, alpha * (0.9 if selected else 0.6))
 			_draw_pixel_brackets(sp, line_px * (6.0 if is_city else 4.5), line_px, frame_col)
@@ -1154,8 +1204,19 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventMouseMotion:
 		_hover_port = _port_at(event.global_position)
+		var prev_w: String = _hover_wonder.get("name", "")
+		_hover_wonder = _wonder_at(event.global_position)
+		if String(_hover_wonder.get("name", "")) != prev_w:
+			queue_redraw()
 		var prev := _hovered_index
-		var on_marker := _get_poi_at(event.global_position)
+		var prev_cap := hovered_capital
+		hovered_capital = _get_capital_at(event.global_position)
+		if hovered_capital != prev_cap:
+			queue_redraw()
+			if hovered_capital >= 0:
+				AudioManager.play("poi_ping")
+				CursorManager.set_state(CursorManager.State.POINTER)
+		var on_marker := _get_poi_at(event.global_position) if hovered_capital < 0 else -1
 		_hovered_index = on_marker
 		# Hovering a district's territory highlights it too (border glow in the shader).
 		if _hovered_index < 0 and territory_lookup.is_valid() \
@@ -1167,10 +1228,20 @@ func _unhandled_input(event: InputEvent) -> void:
 				if on_marker >= 0:
 					AudioManager.play("poi_ping")
 				CursorManager.set_state(CursorManager.State.POINTER)
-			else:
+			elif hovered_capital < 0:
 				CursorManager.set_state(CursorManager.State.NORMAL)
+		elif prev_cap >= 0 and hovered_capital < 0 and _hovered_index < 0:
+			CursorManager.set_state(CursorManager.State.NORMAL)
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var cap := _get_capital_at(event.global_position)
+		if cap >= 0:
+			AudioManager.play("poi_select")
+			_selected_index = cap
+			queue_redraw()
+			capital_clicked.emit(cap)
+			get_viewport().set_input_as_handled()
+			return
 		var idx := _get_poi_at(event.global_position)
 		if idx >= 0:
 			AudioManager.play("poi_select")
@@ -1192,6 +1263,16 @@ func get_poi_lon_lat(label: String) -> Vector2:
 		if poi["label"] == label:
 			return Vector2(poi["lon"], poi["lat"])
 	return Vector2.ZERO
+
+func _get_capital_at(global_pos: Vector2) -> int:
+	if marker_vis < 0.5:
+		return -1
+	for i in _pois.size():
+		var poi: Dictionary = _pois[i]
+		if poi.has("capital_sp") and poi["visible"] and poi["alpha"] >= 0.3 \
+				and global_pos.distance_to(poi["capital_sp"]) <= DOT_HOVER_RADIUS * 0.6:
+			return i
+	return -1
 
 func _get_poi_at(global_pos: Vector2) -> int:
 	for i in _pois.size():

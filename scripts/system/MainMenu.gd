@@ -187,6 +187,8 @@ func _build_menu() -> void:
 		_update_continue_btn()
 		GameState.save_deleted.connect(_update_continue_btn)
 
+	if not demo:
+		_add_button(root, "LOAD GAME", _on_load)
 	_add_button(root, "PLAY DEMO" if demo else "NEW GAME", _on_new_game)
 
 	_add_button(root, "SETTINGS",  _on_settings)
@@ -205,7 +207,7 @@ func _build_menu() -> void:
 	root.add_child(ver)
 
 ## Menu item: icon-left Default button (NEW GAME, CONTINUE, SETTINGS, QUIT).
-const MENU_ICONS := {"CONTINUE": "save", "NEW GAME": "new", "PLAY DEMO": "new", "SETTINGS": "settings", "QUIT": "close"}
+const MENU_ICONS := {"CONTINUE": "save", "LOAD GAME": "save", "NEW GAME": "new", "PLAY DEMO": "new", "SETTINGS": "settings", "QUIT": "close"}
 
 func _add_button(parent: Control, label: String, cb: Callable) -> Button:
 	var btn := IconButton.create(label, MENU_ICONS.get(label, "unknown"))
@@ -297,15 +299,86 @@ func _update_continue_btn() -> void:
 
 func _on_new_game() -> void:
 	AudioManager.play("click", 0.0)
-	# a short goal card before the first scene (scenes/ui/IntroCard.tscn)
+	if GameState.demo_build:
+		_show_intro(func() -> void: GameState.delete_save())
+		return
+	_show_slots(true)
+
+## The short goal card before the first scene (scenes/ui/IntroCard.tscn);
+## `start` runs on BEGIN, before the galaxy opens.
+func _show_intro(start: Callable) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 235
 	add_child(layer)
 	var card: Control = (load("res://scenes/ui/IntroCard.tscn") as PackedScene).instantiate()
 	card.connect("begun", func() -> void:
-		GameState.delete_save()
+		start.call()
 		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn"))
 	layer.add_child(card)
+
+func _on_load() -> void:
+	AudioManager.play("click", 0.0)
+	_show_slots(false)
+
+## Save slots: `for_new` picks where a new game starts (a used slot is
+## overwritten after a confirm); otherwise loads one. Each used slot can be deleted.
+func _show_slots(for_new: bool) -> void:
+	var p := ModalPopup.open(self, "New game — pick a slot" if for_new else "Load game", "save")
+	p.confirm_button().visible = false
+	for slot in GameState.SAVE_SLOTS:
+		var info := GameState.slot_info(slot)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		var item := ListItem.create("SLOT %d" % (slot + 1), "save",
+			"CURRENT" if slot == GameState.save_slot and not info.is_empty() else "", [], _slot_text(info))
+		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var usable := for_new or (not info.is_empty() and info.get("ok", false))
+		item.clickable = usable
+		if not usable:
+			item.modulate.a = 0.45
+		var cap_slot := slot
+		item.pressed.connect(func() -> void:
+			AudioManager.play("click", 0.0)
+			if for_new:
+				if info.is_empty():
+					p.close()
+					_show_intro(func() -> void: GameState.new_game_in(cap_slot))
+				else:
+					ConfirmPanel.ask(self, "Overwrite slot %d?" % (cap_slot + 1),
+						"Its game (%s) is replaced by the new one." % _slot_text(info), "OVERWRITE",
+						func() -> void:
+							p.close()
+							_show_intro(func() -> void: GameState.new_game_in(cap_slot)))
+			else:
+				p.close()
+				GameState.open_slot(cap_slot)
+				SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn"))
+		row.add_child(item)
+		if not info.is_empty():
+			var del := IconButton.create("", "danger", IconButton.Variant.NEGATIVE)
+			del.tooltip_text = "Delete this save"
+			del.pressed.connect(func() -> void:
+				ConfirmPanel.ask(self, "Delete slot %d?" % (cap_slot + 1),
+					"%s\n\nThis can't be undone." % _slot_text(info), "DELETE", func() -> void:
+						GameState.delete_slot(cap_slot)
+						_update_continue_btn()
+						p.close()
+						_show_slots(for_new)))
+			row.add_child(del)
+		p.add_content(row)
+
+## "Civ 0 · 1h 12m played · 28.10 14:05", "Empty", or why it can't load.
+static func _slot_text(info: Dictionary) -> String:
+	if info.is_empty():
+		return "Empty"
+	if not info.get("ok", false):
+		return String(info.get("why", "Can't be loaded"))
+	var secs := int(info.get("play_seconds", 0.0))
+	var played := "%dh %02dm" % [secs / 3600, (secs / 60) % 60] if secs >= 3600 else "%dm" % (secs / 60)
+	var t := int(info.get("saved_at", 0.0)) + Time.get_time_zone_from_system().get("bias", 0) * 60
+	var d := Time.get_datetime_dict_from_unix_time(t)
+	return "Civ %d  ·  %s played  ·  %02d.%02d %02d:%02d" % [int(info.get("civilization_type", 0)), played,
+		d["day"], d["month"], d["hour"], d["minute"]]
 
 func _on_continue() -> void:
 	AudioManager.play("click", 0.0)

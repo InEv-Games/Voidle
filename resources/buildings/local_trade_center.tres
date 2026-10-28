@@ -11,7 +11,6 @@ tick_duration = 20.0
 unlocked_by_default = true
 display_name = "Local Trade Center"
 tier = 1
-slot_cost = 2
 base_cost = 375.0
 outputs = {"credits": 50.0}
 inputs = {"goods": 0.25}

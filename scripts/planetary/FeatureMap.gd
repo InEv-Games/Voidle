@@ -135,7 +135,14 @@ static func family_of(resource_id: String, energy_tag: String = "") -> String:
 		Economy.ENERGY:     return "energy_" + energy_tag if energy_tag != "" else "energy"
 	return "production"   # raw, goods, fuel, rare
 
-## Bonus fraction of a set of feature shares for one family, e.g. 0.25 = +25%.
+## Bonus fraction of one feature share: on it (1.0) or near it (0.5).
+static func step_bonus(share: float) -> float:
+	if share >= 1.0:
+		return Balance.cfg.terrain_on_bonus
+	return Balance.cfg.terrain_near_bonus if share > 0.0 else 0.0
+
+## Bonus fraction of a set of feature shares for one family: the best single
+## feature (on ×2, near ×1.5 — no stacking), e.g. 0.5 = ×1.5.
 ## A district's generic "energy" takes the best single energy source.
 static func bonus_for(site: Dictionary, family: String) -> float:
 	if family == "energy":
@@ -144,11 +151,28 @@ static func bonus_for(site: Dictionary, family: String) -> float:
 			best = maxf(best, bonus_for(site, tag))
 		return best
 	var table: Dictionary = Balance.cfg.terrain_bonuses
-	var total := 0.0
+	var best := 0.0
 	for fid: String in site:
 		var row: Dictionary = table.get(fid, {})
-		total += float(row.get(family, 0.0)) * float(site[fid]) * SkillTree.get_feature_mult(fid)   # Geography Specialisation
-	return total
+		best = maxf(best, float(row.get(family, 0.0)) * step_bonus(float(site[fid])) \
+			* SkillTree.get_feature_mult(fid))   # Geography Specialisation
+	return best
+
+## Families a feature helps, as labels: "Production, Science".
+static func helped_families(fid: String) -> String:
+	var row: Dictionary = Balance.cfg.terrain_bonuses.get(fid, {})
+	var out: Array[String] = []
+	for fam: String in row:
+		out.append(family_label(fam))
+	return ", ".join(out)
+
+static func family_label(fam: String) -> String:
+	match fam:
+		"energy_solar":      return "Solar"
+		"energy_wind":       return "Wind"
+		"energy_tidal":      return "Tidal"
+		"energy_geothermal": return "Geothermal"
+	return fam.capitalize()
 
 ## A district's site, merged with its City's: each feature counts once at the
 ## stronger of the two shares (the City's location carries to its districts).
@@ -190,13 +214,13 @@ static func requirement_block(site: Dictionary, features: Array[String]) -> Stri
 # ── Role overlay (role buttons) ──────────────────────────────────────────────
 
 ## Role buttons of the planet view, with the output family each one asks about.
-const ROLES := {
-	"energy":      {"label": "Energy",     "family": "energy",      "tint": Color(1.0, 0.85, 0.30)},
-	"residential": {"label": "Population", "family": "residential", "tint": Color(0.55, 0.85, 1.0)},
-	# magenta: orange is taken by Cities and mining districts on the map
-	"production":  {"label": "Production", "family": "production",  "tint": Color(1.0, 0.40, 0.80)},
-	"science":     {"label": "Science",    "family": "science",     "tint": Color(0.45, 0.65, 1.0)},
-	"commercial":  {"label": "Commercial", "family": "commercial",  "tint": Color(0.45, 1.0, 0.55)},
+## Tints are the family colours (Economy.family_color): lens, district and symbol match.
+static var ROLES := {
+	"energy":      {"label": "Energy",     "family": "energy",      "tint": Economy.INFO[Economy.ENERGY]["color"]},
+	"residential": {"label": "Population", "family": "residential", "tint": Economy.INFO[Economy.POPULATION]["color"]},
+	"production":  {"label": "Production", "family": "production",  "tint": Economy.PRODUCTION_COLOR},
+	"science":     {"label": "Science",    "family": "science",     "tint": Economy.INFO[Economy.SCIENCE]["color"]},
+	"commercial":  {"label": "Commercial", "family": "commercial",  "tint": Economy.INFO[Economy.CREDITS]["color"]},
 }
 ## Overlay levels: a cell's terrain bonus for the role ≥ STRONG is "strong",
 ## ≥ GOOD "good" (shown fainter and dotted), below that nothing.
@@ -262,7 +286,7 @@ static func _role_cell(site: Dictionary, fam: String, tint: Color) -> Array:
 			col = ENERGY_LENS[src]
 	return [best, col]
 
-## Features that help a role, for its button tooltip: "Desert (Solar +30%) …".
+## Features that help a role, for its button tooltip: "Desert (Solar) …".
 static func role_features_text(role: String) -> String:
 	if not ROLES.has(role):
 		return ""
@@ -273,7 +297,7 @@ static func role_features_text(role: String) -> String:
 		var row: Dictionary = table.get(fid, {})
 		for k: String in row:
 			if k == fam or (fam == "energy" and k.begins_with("energy_")):
-				parts.append("%s +%d%%%s" % [feature_name(fid), int(round(float(row[k]) * 100.0)),
+				parts.append("%s%s" % [feature_name(fid),
 					" (%s)" % k.trim_prefix("energy_").capitalize() if fam == "energy" else ""])
 	if fam == "energy":
 		parts.append("Lens: yellow solar · blue tidal · orange geothermal · white currents = wind (denser where it blows harder)")

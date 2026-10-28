@@ -12,7 +12,6 @@ description = "+10% credits in this City (the City and its districts)."
 allowed_poi_types = Array[int]([0])
 allowed_planet_types = Array[int]([])
 base_cost = 600.0
-slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
 tick_duration = 20.0

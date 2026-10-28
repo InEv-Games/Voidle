@@ -11,7 +11,6 @@ tick_duration = 20.0
 unlocked_by_default = true
 display_name = "Surface Quarry"
 tier = 1
-slot_cost = 1
 base_cost = 100.0
 outputs = {"raw": 5.0}
 inputs = {}

@@ -11,7 +11,6 @@ description = "Sells Consumer Goods to the people — far more credits than a pl
 allowed_poi_types = Array[int]([8])
 allowed_planet_types = Array[int]([])
 base_cost = 450.0
-slot_cost = 2
 min_planet_lv = 1
 construct_duration = 5.0
 tick_duration = 20.0

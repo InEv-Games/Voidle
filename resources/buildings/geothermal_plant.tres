@@ -12,7 +12,6 @@ description = "Taps the heat below. Must stand on a volcanic field or a geotherm
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([])
 base_cost = 750.0
-slot_cost = 2
 min_planet_lv = 1
 construct_duration = 4.0
 tick_duration = 20.0

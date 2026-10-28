@@ -206,7 +206,7 @@ func _cell_tip(id: String, base: String) -> String:
 			var pm: Node = get_node_or_null("/root/ProductionManager")
 			var net: float = pm.get_global_energy() if pm != null else 0.0
 			var sp: Vector2 = pm.get_global_energy_split() if pm != null else Vector2.ZERO
-			var lines: Array[String] = ["Shown as the balance (made − used) on this world."]
+			var lines: Array[String] = ["Shown as the balance (made − used) of all your worlds — they share one grid."]
 			var wpp := _rate_planet()
 			if wpp != null and pm != null:
 				var wsp: Vector2 = pm.planet_energy_split(wpp)
@@ -225,8 +225,8 @@ func _cell_tip(id: String, base: String) -> String:
 			lines.append(_energy_breakdown_text())
 			return "\n".join(lines)
 		Economy.POPULATION:
-			var pd: PlanetData = GameState.get_planet_data(GameState.active_planet_seed) \
-				if GameState.active_planet_seed != -1 else null
+			# one pool for every world: the home world answers for all of them
+			var pd: PlanetData = GameState.get_planet_data(GameState.home_planet_seed)
 			var pp: PlanetProgress = GameState.get_planet(pd.seed) if pd != null else null
 			var head := ""
 			var penalty := ""
@@ -235,8 +235,8 @@ func _cell_tip(id: String, base: String) -> String:
 					Economy.fmt(Economy.used_population(pd, pp)), Economy.fmt(Economy.max_population(pd, pp))]
 				var spd := Economy.pop_speed(pd, pp)
 				if spd < 0.999:
-					penalty = "\n\n[color=#e36a6a]Overcrowded — every building and district on this planet makes %d%% of its output.[/color]" % int(round(spd * 100.0))
-			return head + "Shown as available / max.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, every finished cycle on the planet makes less (down to %d%% at worst) until you build homes." % [
+					penalty = "\n\n[color=#e36a6a]Overcrowded — every building and district on every world makes %d%% of its output.[/color]" % int(round(spd * 100.0))
+			return head + "Shown as available / max, for all your worlds together.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, every finished cycle on every world makes less (down to %d%% at worst) until you build homes." % [
 				Economy.fmt(Balance.cfg.city_base_pop), Economy.fmt(Economy.district_found_pop(0)), int(round((1.0 - Balance.cfg.pop_max_slowdown) * 100.0))] + penalty + _idle_pop_text()
 	var r: float = ProductionManager.resource_rates().get(id, 0.0)
 	var txt := "%s\n\nStored  %s  (max %s, shared by all worlds)" % [base, Economy.fmt(Economy.amount(id)), Economy.fmt(Economy.cap(id))]
@@ -293,16 +293,15 @@ func _refresh_resource_cells() -> void:
 	var e_lbl: Label = _res_lbls.get(Economy.ENERGY)
 	if is_instance_valid(e_lbl):
 		# the balance (made − used) as a signed number; a deficit also shows as the chip's alert
-		var esp: Vector2 = ProductionManager.planet_energy_split(wpp) if wpp != null \
-			else ProductionManager.get_global_energy_split()
+		var esp: Vector2 = ProductionManager.get_global_energy_split()   # one grid for every world
 		var bal := snappedf(esp.x - esp.y, 0.1)
 		_set_value(e_lbl, "%s%s" % ["+" if bal > 0.0 else "", Economy.fmt(bal)])
 		_set_chip_state(Economy.ENERGY, esp.y > esp.x, esp.x <= 0.0 and esp.y <= 0.0)
 
 	var pop_lbl: Label = _res_lbls.get(Economy.POPULATION)
 	if is_instance_valid(pop_lbl):
-		var pd: PlanetData = GameState.get_planet_data(GameState.active_planet_seed) \
-			if GameState.active_planet_seed != -1 else null
+		# one pool for every world: the home world answers for all of them
+		var pd: PlanetData = GameState.get_planet_data(GameState.home_planet_seed)
 		var pp: PlanetProgress = GameState.get_planet(pd.seed) if pd != null else null
 		if pd != null and pp != null and pp.is_colonized:
 			var used := Economy.used_population(pd, pp)

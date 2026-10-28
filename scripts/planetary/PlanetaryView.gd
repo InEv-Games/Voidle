@@ -192,6 +192,7 @@ func _ready() -> void:
 		if planet_renderer.material:
 			(planet_renderer.material as ShaderMaterial).set_shader_parameter("night_shadow", v))
 	poi_layer.poi_clicked.connect(_on_district_clicked)
+	poi_layer.capital_clicked.connect(_on_capital_clicked)
 	get_tree().root.size_changed.connect(_on_resize)
 	# back button removed — navigation handled via system dock / unlock flow
 	GameState.unlock_changed.connect(_on_unlock_changed)
@@ -487,7 +488,8 @@ func _district_commands(poi: POIData) -> Array:
 
 # ── Settlement management (GDD §15, KARARLAR §6) ─────────────────────────────
 
-## Remove buildings, clear, reset, move and demolish for a City or district.
+## Remove buildings, move and demolish for a City or district (Clear / Reset
+## were dropped in the 28.10 playtest: demolish one thing at a time instead).
 func _manage_commands(poi: POIData) -> Array:
 	var out: Array = []
 	if GameState.showcase_mode or poi.is_orbital():
@@ -513,25 +515,18 @@ func _manage_commands(poi: POIData) -> Array:
 		 "cost": "◈ " + HUDManager.fmt_credits(Settlement.move_fee(current_data, poi)),
 		 "tooltip": "Pick a new site. Fee: 10%% of the credits paid for it%s." % (
 			" and its districts — they move with it" if poi.is_city() else "")}))
-	out.append(GameCommand.make("clear", "Clear buildings…", _confirm_settlement.bind("clear", poi),
-		Settlement.block.bind("clear", current_data, poi), {"icon": "⌫", "color": CMD_DANGER_COL,
-		 "tooltip": "Removes every building%s; the shell, name, place and levels stay." % (" in the City and its districts" if poi.is_city() else "")}))
-	out.append(GameCommand.make("reset", "Reset to Lv1…", _confirm_settlement.bind("reset", poi),
-		Settlement.block.bind("reset", current_data, poi), {"icon": "↺", "color": CMD_DANGER_COL,
-		 "tooltip": "Back to an empty Lv1 shell%s." % (" — its districts are removed" if poi.is_city() else "")}))
 	out.append(GameCommand.make("demolish", "Demolish %s…" % what, _confirm_settlement.bind("demolish", poi),
 		Settlement.block.bind("demolish", current_data, poi), {"icon": "✖", "color": CMD_DANGER_COL,
 		 "tooltip": "Removes it%s. The planet itself stays." % (" with all its districts" if poi.is_city() else "")}))
 	return out
 
-## Clear / Reset / Demolish as visible buttons (the same commands as the
-## right-click menu, so players find them — playtest 23.10).
+## Demolish as a visible button (the same command as the right-click menu, so
+## players find it — playtest 23.10).
 func _build_manage_row(poi: POIData) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
-	for kind: String in ["clear", "reset", "demolish"]:
-		var b := IconButton.create({"clear": "CLEAR", "reset": "RESET", "demolish": "DEMOLISH"}[kind],
-			{"clear": "negative", "reset": "downgrade", "demolish": "danger"}[kind], IconButton.Variant.NEGATIVE)
+	for kind: String in ["demolish"]:
+		var b := IconButton.create("DEMOLISH " + ("CITY" if poi.is_city() else "DISTRICT"), "danger", IconButton.Variant.NEGATIVE)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var cap_kind := kind
 		var block := Settlement.block(kind, current_data, poi)
@@ -540,7 +535,7 @@ func _build_manage_row(poi: POIData) -> Control:
 			AudioManager.play("click")
 			_confirm_settlement(cap_kind, poi))
 		var tip := String(Settlement.preview(kind, current_data, poi)["text"]) if block == "" else block
-		b.mouse_entered.connect(func() -> void: TooltipManager.show_tip(b.label_text.capitalize(), tip + "\n\nRight-click it on the map for every action."))
+		b.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Demolish", tip + "\n\nRight-click it on the map for every action."))
 		b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 		row.add_child(b)
 	return row
@@ -562,8 +557,8 @@ func _cancel_commands(poi: POIData, pp: PlanetProgress) -> Array:
 			out.append(GameCommand.make("cancel_level_" + ("city" if city_lv else "district"),
 				"Cancel %s level-up" % ("City" if city_lv else ("Capital" if poi.is_city() else "district")),
 				_cancel_level.bind(poi, city_lv), Callable(),
-				{"icon": "✖", "color": CMD_DANGER_COL, "cost": "+◈ " + HUDManager.fmt_credits(paid),
-				 "tooltip": "Calls off the level-up. Its full price comes back."}))
+				{"icon": "✖", "color": CMD_DANGER_COL, "cost": "+◈ " + HUDManager.fmt_credits(paid * Settlement.refund_rate()),
+				 "tooltip": "Calls off the level-up. %d%% of its price comes back." % _refund_pct()}))
 	for b: Dictionary in pp.buildings_in_district(poi.label):
 		var def := BuildingDef.find(b.get("building_id", ""))
 		if def == null or not b.get("constructing", false):
@@ -586,6 +581,21 @@ func _cancel_district(poi: POIData) -> void:
 	if _panel_open and (_active_district_poi == poi or _city_panel_poi == poi):
 		_set_panel_open(false)
 	load_planet(current_data)
+
+static func _refund_pct() -> int:
+	return int(round(Settlement.refund_rate() * 100.0))
+
+## Confirms calling off a level-up in progress; `cancel` does it and returns
+## what came back, as text.
+func _ask_cancel_upgrade(what: String, cancel: Callable) -> void:
+	AudioManager.play("click")
+	ConfirmPanel.ask(self, "Cancel the %s?" % what,
+		"It stops now and %d%% of what it cost comes back (more with the Recycling skills)." % _refund_pct(),
+		"CANCEL IT", func() -> void:
+			var got: String = cancel.call()
+			AudioManager.play("click")
+			_show_unlock_toast("Level-up called off", "+%s refunded" % got)
+			_refresh_active_panel())
 
 func _cancel_level(poi: POIData, city_lv: bool) -> void:
 	var back := Settlement.cancel_level(GameState.get_planet(current_data.seed), poi, city_lv)
@@ -2850,6 +2860,34 @@ func _push_shader_spokes() -> void:
 	if mat != null:
 		mat.set_shader_parameter("district_spokes", buf)
 
+## Built wonders of a world for the map: each gets a random spot inside its
+## district's borders as they were when it went up (kept in the building entry,
+## so it never moves), clear of the district's own marker.
+func _wonder_sites(data: PlanetData) -> Array:
+	var out: Array = []
+	var pp := GameState.get_planet(data.seed)
+	if pp == null:
+		return out
+	for b: Dictionary in pp.buildings:
+		var def := BuildingDef.find(String(b.get("building_id", "")))
+		if def == null or not def.is_wonder or b.get("constructing", false):
+			continue
+		var poi := _find_poi(data, String(b.get("district_id", "")))
+		if poi == null or poi.is_orbital():
+			continue
+		if not b.has("wonder_lon"):
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash(String(b.get("uid", def.building_id)))
+			var r := _territory_radius_deg(data, poi)
+			var ang := rng.randf() * TAU
+			var d := r * rng.randf_range(0.45, 0.85)   # off the marker, inside the border
+			var lat0 := poi.lat_deg
+			b["wonder_lat"] = clampf(lat0 + d * sin(ang), -80.0, 80.0)
+			b["wonder_lon"] = poi.lon_deg + d * cos(ang) / maxf(cos(deg_to_rad(lat0)), 0.2)
+		out.append({"lon": deg_to_rad(float(b["wonder_lon"])), "lat": deg_to_rad(float(b["wonder_lat"])),
+			"name": def.display_name, "spaceport": def.building_id.contains("spaceport")})
+	return out
+
 ## Territory index → shader slot (-1 when not drawn).
 func _shader_slot(ti: int) -> int:
 	return _slot_of[ti] if ti >= 0 and ti < _slot_of.size() else -1
@@ -2867,6 +2905,7 @@ func _upload_territories(data: PlanetData) -> void:
 			else _territory_light(_district_night_size(data, pd.label))
 		_territories.append({"n": n, "r": r, "poi": pd,
 			"col": Vector4(c.r, c.g, c.b, light), "sea": 1.0 if _is_sea_site(pd) else 0.0})
+	poi_layer.wonders = _wonder_sites(data)
 	# Neighbour pairs drive the arcs and label merging in POILayer; roads are
 	# routed separately (_rebuild_roads).
 	var pairs := _neighbor_pairs()
@@ -3245,6 +3284,17 @@ func _update_panel(data: PlanetData) -> void:
 # ── Hero header (scenes/ui/components/HeroHeader.tscn in PlanetaryView.tscn) ──
 ## Tags are HeroTag nodes under SidePanel/Layout/PanelContent/Tags/Tags; this fills
 ## them in order and hides the rest. Each item: [text, HeroTag.Tone, tooltip].
+## Puts `row` above the panel's hero (name) for as long as `owner_root` lives.
+func _mount_above_hero(row: Control, owner_root: Control) -> void:
+	var hero := get_node_or_null("SidePanel/Layout/PanelContent/Hero")
+	if hero == null:
+		owner_root.add_child(row)
+		owner_root.move_child(row, 0)
+		return
+	hero.get_parent().add_child(row)
+	hero.get_parent().move_child(row, hero.get_index())
+	owner_root.tree_exiting.connect(row.queue_free)
+
 func _set_hero(caption: String, title: String, items: Array) -> void:
 	var hero := get_node_or_null("SidePanel/Layout/PanelContent/Hero") as HeroHeader
 	if hero == null:
@@ -4679,9 +4729,10 @@ func _rebuild_lens_bar() -> void:
 		if not GameState.is_scanned(current_data.seed):
 			b.modulate = Color(0.5, 0.5, 0.55, 0.6)   # locked until the surface is scanned
 		b.set_meta("tint", tint)
-		var tip := "Where %s thrives here:\n%s\n\nSolid: +%d%% or more  ·  dotted: +%d%% or more.\nHalf the bonus applies within %d km of a feature." % [
+		var tip := "Where %s thrives here:\n%s\n\nOn a painted feature: %s  ·  within %d km of one: %s." % [
 			String(info["label"]).to_lower(), FeatureMap.role_features_text(role),
-			int(FeatureMap.ROLE_STRONG * 100.0), int(FeatureMap.ROLE_GOOD * 100.0), int(Balance.cfg.terrain_near_km)]
+			Economy.mult_text(1.0 + Balance.cfg.terrain_on_bonus), int(Balance.cfg.terrain_near_km),
+			Economy.mult_text(1.0 + Balance.cfg.terrain_near_bonus)]
 		b.mouse_entered.connect(func() -> void: TooltipManager.show_tip(String(info["label"]), tip))
 		b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 		_lens_buttons[role] = b
@@ -4799,10 +4850,10 @@ func _tick_lens_tip() -> void:
 			continue
 		var v := FeatureMap.bonus_for({fid: site[fid]}, fam)
 		if v > 0.004:
-			lines.append("%s %s  +%s%%" % ["On" if float(site[fid]) >= 1.0 else "Near",
-				FeatureMap.feature_name(fid), _pct(v)])
+			lines.append("%s %s  %s" % ["On" if float(site[fid]) >= 1.0 else "Near",
+				FeatureMap.feature_name(fid), Economy.mult_text(1.0 + v)])
 	var head := "No bonus for %s here." % String(info["label"]).to_lower() if total <= 0.004 \
-		else "%s here  +%s%%" % [info["label"], _pct(total)]
+		else "%s here  %s" % [info["label"], Economy.mult_text(1.0 + total)]
 	if not lines.is_empty():
 		head += "\n\n" + "\n".join(lines)
 	TooltipManager.show_tip(String(info["label"]) + " lens", head)
@@ -5005,8 +5056,29 @@ func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void
 	poi_layer.deselect_all()
 	CursorManager.set_state(CursorManager.State.NORMAL)
 	_show_place_hint(def)
+	# show where this district type thrives; the lens the player had comes back after
+	var lens := _placement_lens(def)
+	if lens != "" and GameState.is_scanned(current_data.seed) and _role != lens:
+		_role_before_place = _role
+		_set_role(lens)
+
+## The lens of a district type's family ("" = none, e.g. a City).
+static func _placement_lens(def: DistrictDef) -> String:
+	match def.id:
+		DistrictDef.Type.GENERATOR:   return "energy"
+		DistrictDef.Type.MINING:      return "production"
+		DistrictDef.Type.RESIDENTIAL: return "residential"
+		DistrictDef.Type.COMMERCIAL:  return "commercial"
+		DistrictDef.Type.SCIENCE:     return "science"
+	return ""
+
+## Lens active before placement switched it, or "-" when placement didn't.
+var _role_before_place := "-"
 
 func _end_district_placement() -> void:
+	if _role_before_place != "-":
+		_set_role(_role_before_place)
+		_role_before_place = "-"
 	if _reopen_panel_after_place:
 		_reopen_panel_after_place = false
 		_set_panel_open(true)
@@ -5116,8 +5188,6 @@ func _update_placement_hover() -> void:
 		chk["reason"] = mb
 	var t: Dictionary = chk["terrain"]
 	var site_name := TerrainSampler.label(t["terrain"], current_data.planet_type)
-	if t["coastal"] and t["terrain"] != TerrainSampler.Terrain.COAST:
-		site_name += "  ·  Coastal"
 	var sys := _placement_system_check(_placing_def, hit["lon"], hit["lat"])
 	var lines := _placement_detail_lines(_placing_def, chk, sys)
 	lines.append_array(_site_resource_lines(_placing_def,
@@ -5258,31 +5328,22 @@ func _placement_detail_lines(def: DistrictDef, chk: Dictionary, sys: Dictionary)
 		lines.append(["District of %s" % sys["anchor"], info])
 	return lines
 
-## Feature lines for a site ({ feature_id: share }): one per feature, with what
-## it boosts, e.g. ["On Mountain: +30% Production, +10% Science", colour].
+## Feature lines for a site ({ feature_id: share }): one per feature, with its
+## step and what it boosts, e.g. ["Mountain x2: Production, Science", colour].
 func _feature_lines(site: Dictionary) -> Array:
 	var out: Array = []
-	var table: Dictionary = Balance.cfg.terrain_bonuses
 	for fid: String in FeatureMap.IDS:
-		if not site.has(fid):
+		if not site.has(fid) or FeatureMap.helped_families(fid) == "":
 			continue
 		var share := float(site[fid])
-		var parts: Array[String] = []
-		var row: Dictionary = table.get(fid, {})
-		for fam: String in row:
-			parts.append("+%s%% %s" % [_pct(float(row[fam]) * share), _family_label(fam)])
-		var where := "On" if share >= 1.0 else "Near"
-		out.append(["%s %s: %s" % [where, FeatureMap.feature_name(fid), ", ".join(parts)],
+		out.append(["%s %s: %s" % [FeatureMap.feature_name(fid), _feature_step_text(share),
+			FeatureMap.helped_families(fid)],
 			Color(0.95, 0.85, 0.55) if share >= 1.0 else Color(0.80, 0.74, 0.55)])
 	return out
 
-static func _family_label(fam: String) -> String:
-	match fam:
-		"energy_solar":      return "Solar"
-		"energy_wind":       return "Wind"
-		"energy_tidal":      return "Tidal"
-		"energy_geothermal": return "Geothermal"
-	return fam.capitalize()
+## "x2" on a feature, "x1.5" near it.
+static func _feature_step_text(share: float) -> String:
+	return Economy.mult_text(1.0 + FeatureMap.step_bonus(share))
 
 ## The site multiplier a district's base outputs get here (Economy.site_mult:
 ## terrain × location, snapped to half steps) — the best over its outputs.
@@ -5328,7 +5389,6 @@ func _site_resource_lines(def: DistrictDef, tags: Dictionary, coastal: bool, ter
 	if tags.is_empty():
 		return lines
 	var dim := Color(0.70, 0.74, 0.86)
-	lines.append([_tags_text(tags, coastal), Color(0.95, 0.85, 0.55)])
 	var mins := _minerals_text(tags)
 	if mins != "":
 		lines.append([mins, dim])
@@ -5369,15 +5429,6 @@ func _site_resource_lines(def: DistrictDef, tags: Dictionary, coastal: bool, ter
 	if not missing.is_empty():
 		lines.append(["Not here: " + ", ".join(missing), Color(0.60, 0.62, 0.72)])
 	return lines
-
-## "Coastal · Geo 62% · Solar 80% · Wind 30% · Tidal 0%"
-func _tags_text(tags: Dictionary, coastal: bool) -> String:
-	var parts: Array[String] = []
-	if coastal:
-		parts.append("Coastal")
-	for key: String in ResourceMap.ENERGY_KEYS:
-		parts.append("%s %d%%" % [BuildingDef.tag_label(key).left(5), int(round(float(tags.get(key, 0.0)) * 100.0))])
-	return "  ·  ".join(parts)
 
 ## "Ferrite 70% · Cobalt 20%" (strongest first, top 3)
 func _minerals_text(tags: Dictionary) -> String:
@@ -5604,10 +5655,12 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 				return false
 		return true)
 	up_btn.pressed.connect(func():
+		var paid := {}   # what was actually taken, for a cancel
 		for k in cost.keys():
 			var k_str: String = str(k)
 			if k_str == "credits":
 				GameState.spend_credits(cost[k])
+				paid[Economy.CREDITS] = float(cost[k])
 			elif k_str.begins_with("ANY_T"):
 				var tier := k_str.trim_prefix("ANY_T").to_int()
 				var remain: float = cost[k]
@@ -5621,13 +5674,16 @@ func _show_level_up_popup(pp: PlanetProgress) -> void:
 					var rid := rd.resource_id()
 					var take: float = minf(remain, GameState.global_resources.get(rid, 0.0))
 					GameState.global_resources[rid] = GameState.global_resources.get(rid, 0.0) - take
+					paid[rid] = float(paid.get(rid, 0.0)) + take
 					remain -= take
 					if remain <= 0.01:
 						break
 				GameState.global_resources_changed.emit()
 			else:
 				GameState.consume_resource(k_str, cost[k])
+				paid[k_str] = float(cost[k])
 		AudioManager.play("level_up")
+		pp.upgrade_paid = paid
 		pp.is_upgrading = true
 		pp.upgrade_progress = 0.0
 		pp.upgrade_duration = 5.0 * pp.level  # Lv2=5s, Lv3=10s, etc.
@@ -5926,6 +5982,17 @@ func _build_planet_overview(data: PlanetData) -> void:
 		up_lbl.theme_type_variation = &"TitleLabel"
 		up_lbl.add_theme_color_override("font_color", UIStyle.color(&"good"))
 		up_card.add_child(up_lbl)
+		up_card.mouse_filter = Control.MOUSE_FILTER_STOP
+		up_card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		up_card.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Upgrading",
+			"Click to call it off: %d%% of what it cost comes back." % _refund_pct()))
+		up_card.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+		up_card.gui_input.connect(func(e: InputEvent) -> void:
+			if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
+					and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+				TooltipManager.hide_tip()
+				_ask_cancel_upgrade("planet upgrade", func() -> String:
+					return Economy.cost_text(Settlement.cancel_planet_level(pp))))
 		root.add_child(up_card)
 	else:
 		var up_btn := IconButton.create("UPGRADE PLANET", "upgrade", IconButton.Variant.POSITIVE,
@@ -6127,13 +6194,13 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	if poi.constructing:
 		card.description = "Constructing..."
 		card.stats = PackedStringArray()
-		_poll_progress(card, func() -> float: return c_poi.construct_progress, UIStyle.color(&"neutral_stroke"))
+		_poll_progress(card, func() -> float: return c_poi.construct_progress, UIStyle.color(&"neutral_stroke"), true)
 	elif as_city and pp.city_upgrading.has(poi.label):
 		card.description = "City levelling up…"
 		card.stats = PackedStringArray()
-		_poll_progress(card, func() -> float: return float(pp.city_upgrading.get(c_poi.label, 1.0)), UIStyle.color(&"neutral_stroke"))
+		_poll_progress(card, func() -> float: return float(pp.city_upgrading.get(c_poi.label, 1.0)), UIStyle.color(&"neutral_stroke"), true)
 	elif not as_city and pp.is_district_upgrading(poi.label):
-		_poll_progress(card, func() -> float: return float(pp.district_upgrading.get(c_poi.label, 1.0)), UIStyle.color(&"neutral_stroke"))
+		_poll_progress(card, func() -> float: return float(pp.district_upgrading.get(c_poi.label, 1.0)), UIStyle.color(&"neutral_stroke"), true)
 	elif not poi.is_orbital() and ProductionManager.district_def(poi) != null:
 		var d_inc := ProductionManager.district_income(pp, poi)
 		if ProductionManager._has_stock_income(d_inc):
@@ -6211,8 +6278,10 @@ func _income_stats(pp: PlanetProgress, poi: POIData) -> PackedStringArray:
 	return out
 
 ## Keeps a ListItem's bar on `progress` (0..1), polled a few times a second.
-func _poll_progress(item: ListItem, progress: Callable, col: Color) -> void:
+## `striped`: building / levelling (crawling stripes), unlike a production cycle's plain fill.
+func _poll_progress(item: ListItem, progress: Callable, col: Color, striped := false) -> void:
 	item.progress_color = col
+	item.progress_striped = striped
 	item.progress = clampf(float(progress.call()), 0.0, 1.0)
 	var t := Timer.new()
 	t.wait_time = 0.1
@@ -6481,6 +6550,18 @@ func _on_district_clicked(index: int, _data: Dictionary) -> void:
 	else:
 		_build_district_panel(poi, current_data)
 
+## The Capital badge beside a City's marker: opens that City's Capital District.
+func _on_capital_clicked(index: int) -> void:
+	if GameState.showcase_mode or current_data == null or index >= poi_layer._pois.size():
+		return
+	var poi := _find_poi(current_data, String(poi_layer._pois[index].get("label", "")))
+	if poi == null or poi.constructing:
+		return
+	if _orbital_layer != null and is_instance_valid(_orbital_layer):
+		_orbital_layer.set_selected_station("")
+	_reveal_panel()
+	_build_district_panel(poi, current_data)
+
 ## Hides a click tooltip once the mouse moves away from where it was shown
 ## (or after a few seconds) — map clicks have no mouse_exited to do it.
 func _hide_tip_when_mouse_leaves(at: Vector2) -> void:
@@ -6547,6 +6628,9 @@ func _on_production_update(_planet_seed: int, key: String, progress: float) -> v
 		return
 	var m: Dictionary = _bar_meta[key]
 	var item: ListItem = m.get("item", null)
+	for extra in m.get("also", []):
+		if is_instance_valid(extra):
+			(extra as ListItem).progress = progress
 	if is_instance_valid(item):
 		item.progress = progress
 		# construction: the percentage — the status line otherwise updates via building_ticked
@@ -6650,6 +6734,9 @@ func _refresh_bar_label_status(key: String) -> void:
 	var item: ListItem = m.get("item", null)
 	if is_instance_valid(item):
 		_refresh_building_item(key, m, item)
+		for extra in m.get("also", []):
+			if is_instance_valid(extra):
+				_refresh_building_item(key, m, extra as ListItem)
 		return
 	# Spaceport stub — no live labels to refresh
 	if not m.has("out_lbl"):
@@ -7827,11 +7914,14 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 	var block := Leveling.district_level_block(planet, pp, poi)
 	var tip := ""
 	if pp.is_district_upgrading(poi.label):
-		btn.label_text = "UPGRADING…"
+		btn.label_text = "UPGRADING…  (click to cancel)"
 		btn.counter = "Lv %d → %d" % [lv, lv + 1]
-		btn.disabled = true
 		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),
 			func() -> float: return float(pp.district_upgrading.get(poi.label, 1.0)), true)
+		btn.pressed.connect(func() -> void:
+			_ask_cancel_upgrade("Capital level-up" if poi.is_city() else "district level-up", func() -> String:
+				return "%s cr" % Economy.fmt(Settlement.cancel_level(pp, poi, false))))
+		return btn
 	elif lv >= Balance.cfg.max_district_level:
 		btn.label_text = "MAX LEVEL"
 		btn.counter = "Lv %d" % lv
@@ -7861,9 +7951,10 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 			_build_district_panel(poi, planet))
 	return btn
 
+## `single`: one card of an unstacked list — no [+], its [−] demolishes this one.
 func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		count: int, poi: POIData, planet: PlanetData, pp: PlanetProgress,
-		entry: Dictionary = {}) -> PanelContainer:
+		entry: Dictionary = {}, single := false) -> PanelContainer:
 	var paused := ProductionManager.is_paused(pm_key)
 	var fc     := def.output_color()
 
@@ -7874,7 +7965,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	# ListItem look (scenes/ui/components/ListItem.tscn): icon │ NAME [xN] / stats / [-][+] / cycle bar
 	var badges: Array[String] = []
 	if count > 1: badges.append("X%d" % count)
-	if def.slot_cost > 1: badges.append("%d SLOTS" % def.slot_cost)   # large model: two slots each
+	if def.is_wonder: badges.append("WONDER")   # takes BuildingDef.WONDER_SLOTS slots
 	var b_lv: int = entry.get("level", 1)
 	if b_lv > 1: badges.append("Lv%d" % b_lv)
 	var card := ListItem.create(def.display_name.to_upper(), _building_icon(def), "  ".join(badges))
@@ -7948,6 +8039,8 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		if _buy_buildings(cap_poi, cap_planet, cap_def, _bulk_count()) > 0:
 			_build_district_panel(cap_poi, cap_planet))
 
+	if single:
+		add_btn.visible = false
 	var tip_rem_title := "Remove one %s" % def.display_name if count > 1 else "Demolish %s" % def.display_name
 	var _cap_pp := pp
 	var _cap_planet2 := planet
@@ -7969,22 +8062,22 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
 	rem_btn.pressed.connect(func() -> void:
-		var amt: int = cap_entry.get("amount", 1)
-		if amt <= 1:
-			pp.buildings.erase(cap_entry)
-		else:
-			cap_entry["amount"] = amt - 1
+		_remove_one_building(cap_entry)   # refunds at the Recycling rate
 		GameState.planet_progress_changed.emit(cap_planet.seed)
 		_build_district_panel(cap_poi, cap_planet))
 
-	_bar_meta[pm_key] = {
-		"item":        card,
-		"planet_seed": pp.planet_seed,
-		"def":         def,
-		"fc":          fc,
-		"entry":       entry,
-		"count":       count,
-	}
+	# unstacked: the stack's other cards share its entry and cycle, so they ride along
+	if single and _bar_meta.has(pm_key) and is_instance_valid(_bar_meta[pm_key].get("item", null)):
+		(_bar_meta[pm_key].get_or_add("also", []) as Array).append(card)
+	else:
+		_bar_meta[pm_key] = {
+			"item":        card,
+			"planet_seed": pp.planet_seed,
+			"def":         def,
+			"fc":          fc,
+			"entry":       entry,
+			"count":       count,
+		}
 	_refresh_bar_label_status(pm_key)
 	return card
 
@@ -9789,10 +9882,14 @@ func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
 		"%d/%d" % [lv, Leveling.max_orbit_level()] if at_max else HUDManager.fmt_credits(credits))
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if pp.orbit_upgrading >= 0.0:
-		btn.label_text = "LEVELLING UP…"
+		btn.label_text = "LEVELLING UP…  (click to cancel)"
 		btn.counter = "Lv %d → %d" % [lv, next]
 		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),
 			func() -> float: return pp.orbit_upgrading if pp.orbit_upgrading >= 0.0 else 1.0, true)
+		btn.pressed.connect(func() -> void:
+			_ask_cancel_upgrade("Orbit level-up", func() -> String:
+				return "%s cr" % Economy.fmt(Settlement.cancel_orbit_level(pp))))
+		return btn
 	_live_enable(btn, func() -> bool:
 		return Leveling.orbit_level_block(planet, pp) == "" and GameState.credits >= credits)
 	var tip := "Raise the Orbit to Lv %d:\n%s\n\nCost  %s\n%s" % [next,
@@ -9870,15 +9967,24 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	body_scroll.add_child(body)
 	body.add_child(SectionHeader.create("DISTRICTS", "%d/%d" % [count, max_d]))
 	var add_card := _build_add_district_card(planet, count < max_d, false, city)
-	if count >= max_d and add_card.get_child_count() > 0:
-		(add_card.get_child(0) as IconButton).label_text = "CITY FULL — LEVEL UP THE CITY"
+	if count >= max_d:
+		# a hint, not a button: it must not look like ADD DISTRICT
+		add_card.queue_free()
+		add_card = VBoxContainer.new()
+		var full := Label.new()
+		full.text = "City full — level up the City (below) to add districts."
+		full.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		full.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_apply_orbitron(full, 9)
+		full.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
+		add_card.add_child(full)
 	body.add_child(add_card)
 	_poi_overview_cards.clear()
 	body.add_child(_build_district_overview_card(city, planet, pp, panel_content, body, true))
 	for child: POIData in planet.custom_pois:
 		if child.parent_city == city.label and not child.is_orbital():
 			body.add_child(_build_district_overview_card(child, planet, pp, panel_content, body))
-	if TutorialManager.get_action_step_type() == "district" and add_card.get_child_count() > 0:
+	if TutorialManager.get_action_step_type() == "district" and count < max_d and add_card.get_child_count() > 0:
 		_tut_highlight_node = add_card.get_child(0) as Control
 		_start_tut_node_pulse(_tut_highlight_node)
 
@@ -9901,10 +10007,14 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 		"%s · %s pop" % [HUDManager.fmt_credits(credits), Economy.fmt(pop)])
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if upgrading:
-		btn.label_text = "LEVELLING UP…"
+		btn.label_text = "LEVELLING UP…  (click to cancel)"
 		btn.counter = "Lv %d → %d" % [lv, next]
 		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),
 			func() -> float: return float(pp.city_upgrading.get(city.label, 1.0)), true)
+		btn.pressed.connect(func() -> void:
+			_ask_cancel_upgrade("City level-up", func() -> String:
+				return "%s cr" % Economy.fmt(Settlement.cancel_level(pp, city, true))))
+		return btn
 	_live_enable(btn, func() -> bool:
 		return Leveling.city_level_block(planet, pp, city) == "" and GameState.credits >= credits)
 	var tip := "Raise %s to Lv %d:\n%s\n\nCost  %s\n%s" % [city.shown_name(), next,
@@ -10011,14 +10121,19 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 8)
 
-	# Districts (and the Capital District) live in a City: offer the way back up.
+	# Above the name: the way back up (districts and the Capital District live in
+	# a City) and the rename button.
+	var top_row := HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 6)
+	top_row.alignment = BoxContainer.ALIGNMENT_END
 	var parent_city := _find_poi(planet, poi.parent_city) if not poi.is_city() else poi
 	if poi.is_orbital():
 		var oback := IconButton.create_text("‹  ORBIT")
+		oback.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		oback.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_build_orbit_panel(planet))
-		root.add_child(oback)
+		top_row.add_child(oback)
 	if parent_city != null:
 		var back := IconButton.create_text("‹  " + parent_city.shown_name().to_upper())
 		back.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
@@ -10029,27 +10144,30 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 			_select_district_on_planet(cap_parent.label)
 			_focus_on_site(cap_parent.lon_deg, cap_parent.lat_deg)
 			_build_city_panel(cap_parent, planet))
-		root.add_child(back)
+		back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		top_row.add_child(back)
 
 	# Hero: the district, its level and what its site offers (coast, energy potential)
 	var dist_lv: int = pp.district_levels.get(poi.label, 1)
 	var kind := "Capital District" if poi.is_city() else poi.type_label()
+	# the features it stands on (x2) or near (x1.5); nothing for the rest
 	var site_tags: Array = []
-	if poi.coastal:
-		site_tags.append(["Coastal", HeroTag.Tone.GOOD, "Next to the sea: coastal buildings can be built here."])
-	for key: String in ResourceMap.ENERGY_KEYS:
-		var pct := int(round(float(poi.resource_tags.get(key, 0.0)) * 100.0))
-		if pct > 0:
-			site_tags.append(["%s %d%%" % [BuildingDef.tag_label(key).left(5), pct], HeroTag.Tone.PLAIN,
-				"%s potential at this site." % BuildingDef.tag_label(key)])
+	for fid: String in FeatureMap.IDS:
+		if not poi.site_features.has(fid) or FeatureMap.helped_families(fid) == "":
+			continue
+		var share := float(poi.site_features[fid])
+		site_tags.append(["%s %s" % [FeatureMap.feature_name(fid), _feature_step_text(share)],
+			HeroTag.Tone.GOOD if share >= 1.0 else HeroTag.Tone.PLAIN,
+			"%s %s: %s %s here." % ["On" if share >= 1.0 else "Near", FeatureMap.feature_name(fid),
+				FeatureMap.helped_families(fid), _feature_step_text(share)]])
 	_set_hero("%s - Level %d" % [kind, dist_lv], poi.shown_name(), site_tags)
 
 	# Rename (opens a small popup)
 	var cap_poi_rename  := poi
 	var cap_planet_ren  := planet
-	var rename_row := HBoxContainer.new()
-	rename_row.alignment = BoxContainer.ALIGNMENT_END
-	var rename_btn := IconButton.create("RENAME", "rename")
+	var rename_btn := IconButton.create("", "rename")
+	rename_btn.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Rename", "Give this district a new name."))
+	rename_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	rename_btn.pressed.connect(func() -> void:
 		var rp := ModalPopup.open(self, "Rename District", "rename")
 		var edit := LineEdit.new()
@@ -10070,8 +10188,8 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		edit.text_submitted.connect(func(_t: String) -> void: commit.call())
 		edit.grab_focus.call_deferred()
 		edit.select_all.call_deferred())
-	rename_row.add_child(rename_btn)
-	root.add_child(rename_row)
+	top_row.add_child(rename_btn)
+	_mount_above_hero(top_row, root)
 
 	var slots_used  := pp.slots_used_in_district(poi.label)
 	var slots_total := pp.district_slots(poi)
@@ -10164,7 +10282,24 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 
 	# ── Installed buildings as ListItem cards ─────────────────────────────────
 	# One card per building entry; amount field drives ×N display and output scaling
-	body.add_child(SectionHeader.create("BUILDINGS", "%d/%d" % [slots_used, slots_total]))
+	var bhead := HBoxContainer.new()
+	var bsec := SectionHeader.create("BUILDINGS", "%d/%d" % [slots_used, slots_total])
+	bsec.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bhead.add_child(bsec)
+	var stack_tick := CheckBox.new()
+	stack_tick.text = "Stack"
+	stack_tick.focus_mode = Control.FOCUS_NONE
+	stack_tick.button_pressed = SettingsManager.stack_lowest_layer
+	stack_tick.add_theme_font_size_override("font_size", 10)
+	stack_tick.toggled.connect(func(on: bool) -> void:
+		SettingsManager.set_stack_lowest_layer(on)
+		_build_district_panel(poi, planet))
+	stack_tick.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Stack buildings",
+		"On: one card per building type (×N), [−] [+] remove / add one.\nOff: one card per building, each with its own demolish button."))
+	stack_tick.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	bhead.add_child(stack_tick)
+	body.add_child(bhead)
+	var stacked := SettingsManager.stack_lowest_layer
 	var installed := pp.buildings_in_district(poi.label)
 	for entry: Dictionary in installed:
 		var bid: String = entry.get("building_id", "")
@@ -10176,8 +10311,11 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		var amount: int    = entry.get("amount", 1)
 		if entry.get("constructing", false):
 			body.add_child(_build_construction_bar(def, pm_key, entry))
-		else:
+		elif stacked or amount <= 1 or def.building_id == "spaceport":
 			body.add_child(_build_production_bar(def, pm_key, planet.seed, amount, poi, planet, pp, entry))
+		else:
+			for _k in amount:   # one card each; their [−] demolishes one of the stack
+				body.add_child(_build_production_bar(def, pm_key, planet.seed, 1, poi, planet, pp, entry, true))
 
 	# ── Empty slot "+" cards ──────────────────────────────────────────────────
 	var total_slots := pp.district_slots(poi)

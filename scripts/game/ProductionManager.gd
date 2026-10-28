@@ -159,6 +159,7 @@ func _tick_all(delta: float) -> void:
 				if pp.upgrade_progress >= 1.0:
 					pp.is_upgrading = false
 					pp.upgrade_progress = 0.0
+					pp.upgrade_paid = {}
 					pp.level += 1
 					pp.recalculate_limits()
 					GameState.planet_progress_changed.emit(planet_seed)
@@ -668,8 +669,8 @@ func empire_idle() -> Vector2:
 			var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
 			if pd == null:
 				continue
-			cap += float(Economy.max_population(pd, pp))
-			used += float(Economy.used_population(pd, pp))
+			cap += float(Economy.world_max_population(pd, pp))
+			used += float(Economy.world_used_population(pd, pp))
 			if not Balance.cfg.idle_pop_counts_city_base:
 				for poi: POIData in pd.custom_pois:
 					if poi.is_city() and not poi.is_orbital() and not poi.constructing:

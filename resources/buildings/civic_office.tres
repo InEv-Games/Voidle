@@ -11,7 +11,6 @@ description = "The Capital's first office: permits, taxes and a few clerks doing
 allowed_poi_types = Array[int]([0])
 allowed_planet_types = Array[int]([])
 base_cost = 150.0
-slot_cost = 1
 max_per_district = 1
 min_planet_lv = 1
 construct_duration = 4.0

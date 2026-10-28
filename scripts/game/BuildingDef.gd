@@ -12,7 +12,14 @@ enum OutputType { NONE, ENERGY, CREDITS, RAW_MINERAL, REFINED_MINERAL, SCIENCE, 
 @export var allowed_poi_types: Array[POIData.POIType] = []
 @export var allowed_planet_types: Array[PlanetData.Type] = []
 @export var base_cost:         float    = 100.0
-@export var slot_cost:         int      = 1
+## Wonders (playtest 28.10): rare buildings that take WONDER_SLOTS slots, stand
+## once per planet (in any one City) and show on the map inside their district's
+## borders. Every other building takes one slot. Which ones are wonders is set
+## per building (the team's building table).
+@export var is_wonder:         bool     = false
+const WONDER_SLOTS := 2
+var slot_cost: int:
+	get: return WONDER_SLOTS if is_wonder else 1
 @export var min_planet_lv:     int      = 1
 ## If > 0, restricts how many of this building can be built in a single district.
 @export var max_per_district:  int      = 0
@@ -30,7 +37,11 @@ func count_on_planet(pp: PlanetProgress) -> int:
 
 ## True when the planet already has as many as it may.
 func planet_limit_reached(pp: PlanetProgress) -> bool:
-	return max_per_planet > 0 and count_on_planet(pp) >= max_per_planet
+	return planet_cap() > 0 and count_on_planet(pp) >= planet_cap()
+
+## Most of this model one planet may hold (0 = no limit); a wonder: one.
+func planet_cap() -> int:
+	return 1 if is_wonder else max_per_planet
 ## Required skill node to unlock this building. Empty = unlocked by default.
 @export var unlock_skill:      String   = ""
 ## Lowest civilization type (0–5) that can build it. Tier 4 models belong to
@@ -89,11 +100,11 @@ func pop_use() -> int:
 
 func output_color() -> Color:
 	match output_type:
-		OutputType.ENERGY:         return Color(0.95, 0.88, 0.25)
-		OutputType.CREDITS:        return Color(0.35, 0.95, 0.55)
-		OutputType.RAW_MINERAL:    return Color(0.15, 0.75, 0.50) # Cyan-emerald green for raw mining
+		OutputType.ENERGY:         return Economy.family_color("energy")
+		OutputType.CREDITS:        return Economy.family_color("commercial")
+		OutputType.RAW_MINERAL:    return Economy.family_color("production")
 		OutputType.REFINED_MINERAL:return Color(0.75, 0.55, 1.00)
-		OutputType.SCIENCE:        return Color(0.20, 0.60, 1.00) # Science Blue
+		OutputType.SCIENCE:        return Economy.family_color("science")
 		OutputType.POPULATION:     return Economy.color_of(Economy.POPULATION)
 		OutputType.GOODS:          return Economy.color_of(Economy.GOODS)
 		OutputType.FUEL:           return Economy.color_of(Economy.FUEL)

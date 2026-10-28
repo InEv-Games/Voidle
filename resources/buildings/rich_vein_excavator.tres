@@ -11,7 +11,6 @@ description = "Heavy surface excavation: more raw output per slot than a Mine."
 allowed_poi_types = Array[int]([1])
 allowed_planet_types = Array[int]([])
 base_cost = 800.0
-slot_cost = 2
 min_planet_lv = 1
 construct_duration = 6.0
 tick_duration = 20.0
