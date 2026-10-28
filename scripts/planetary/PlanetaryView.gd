@@ -6158,8 +6158,10 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 		_panel_content: VBoxContainer, _root: VBoxContainer, as_capital: bool = false) -> PanelContainer:
 	var as_city := poi.is_city() and not as_capital
 	var lv: int = Leveling.city_level(pp, poi) if as_city else pp.district_levels.get(poi.label, 1)
-	var title := ("Capital District" if as_capital else poi.shown_name()).to_upper()
-	var card := ListItem.create(title, _district_icon(poi, as_city, as_capital), "" if poi.is_orbital() else "Level %d" % lv)
+	var title := (poi.capital_shown_name() if as_capital else poi.shown_name()).to_upper()
+	# the Capital's role stays readable next to its lore name
+	var card := ListItem.create(title, _district_icon(poi, as_city, as_capital),
+		"" if poi.is_orbital() else ("Capital  ·  Level %d" if as_capital else "Level %d") % lv)
 	card.set_meta("poi_label", poi.label)
 	_poi_overview_cards[poi.label] = card
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -10160,7 +10162,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 			HeroTag.Tone.GOOD if share >= 1.0 else HeroTag.Tone.PLAIN,
 			"%s %s: %s %s here." % ["On" if share >= 1.0 else "Near", FeatureMap.feature_name(fid),
 				FeatureMap.helped_families(fid), _feature_step_text(share)]])
-	_set_hero("%s - Level %d" % [kind, dist_lv], poi.shown_name(), site_tags)
+	_set_hero("%s - Level %d" % [kind, dist_lv], poi.capital_shown_name() if poi.is_city() else poi.shown_name(), site_tags)
 
 	# Rename (opens a small popup)
 	var cap_poi_rename  := poi
@@ -10169,9 +10171,10 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	rename_btn.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Rename", "Give this district a new name."))
 	rename_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	rename_btn.pressed.connect(func() -> void:
-		var rp := ModalPopup.open(self, "Rename District", "rename")
+		var capital := cap_poi_rename.is_city()   # renames the Capital, not its City
+		var rp := ModalPopup.open(self, "Rename Capital" if capital else "Rename District", "rename")
 		var edit := LineEdit.new()
-		edit.text = cap_poi_rename.shown_name()
+		edit.text = cap_poi_rename.capital_shown_name() if capital else cap_poi_rename.shown_name()
 		edit.max_length = 28
 		rp.add_content(edit)
 		var ok := rp.confirm_button()
@@ -10179,7 +10182,9 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		ok.icon_name = "rename"
 		var commit := func() -> void:
 			var trimmed := edit.text.strip_edges()
-			if not trimmed.is_empty():
+			if not trimmed.is_empty() and capital:
+				cap_poi_rename.capital_name = trimmed
+			elif not trimmed.is_empty():
 				cap_poi_rename.display_name = trimmed   # names may repeat; the id stays
 			rp.close()
 			GameState.planet_progress_changed.emit(cap_planet_ren.seed)

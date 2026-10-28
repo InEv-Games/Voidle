@@ -1,0 +1,8 @@
+﻿District (id);Name;Base income / cycle;Cycle (s);Team notes
+city_district;City;credits 20, science 1.33333;20.0;
+commercial_district;Commercial District;credits 10;20.0;
+generator_district;Energy District;energy 3;20.0;
+mining_district;Industrial District;raw 10;20.0;
+residential_district;Residential District;population 3000;20.0;
+science_district;Science District;science 2;20.0;
+space_station_district;Space Station;;30.0;

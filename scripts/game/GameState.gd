@@ -378,6 +378,7 @@ func _apply_pending_pois() -> void:
 			var poi := POIData.new()
 			poi.label              = pd_entry.get("label",              "District")
 			poi.display_name       = pd_entry.get("display_name",       "")
+			poi.capital_name       = pd_entry.get("capital_name",       "")
 			poi.neighbors          = pd_entry.get("neighbors",          [])
 			poi.neighbor_weight    = pd_entry.get("neighbor_weight",    {})
 			poi.poi_type           = pd_entry.get("poi_type",           0) as POIData.POIType
@@ -1201,6 +1202,7 @@ func save() -> void:
 				pois_save.append({
 					"label":              poi.label,
 					"display_name":       poi.display_name,
+					"capital_name":       poi.capital_name,
 					"neighbors":          poi.neighbors,
 					"neighbor_weight":    poi.neighbor_weight,
 					"poi_type":           int(poi.poi_type),

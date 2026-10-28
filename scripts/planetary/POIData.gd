@@ -76,6 +76,19 @@ static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⚗", "�
 func shown_name() -> String:
 	return display_name if display_name != "" else label
 
+## A City's own district keeps its role name ("Capital District") and gets a
+## lore name of its own, picked once (playtest 28.10) and saved; renameable.
+@export var capital_name: String = ""
+const CAPITAL_NAMES: Array[String] = ["Founders' Hall", "First Light", "The Spire", "Ember Court",
+	"Old Anchor", "Meridian Hall", "Hearthstone", "The Keel", "Lantern Square", "Concord Plaza",
+	"Dawnpillar", "Wardens' Rest", "Signal Hill", "The Crucible", "Landing Stone", "Beacon Yard",
+	"Covenant Hall", "Starwell", "The Old Mast", "Archive Row"]
+
+func capital_shown_name() -> String:
+	if capital_name == "":
+		capital_name = CAPITAL_NAMES[absi(hash(label + display_name)) % CAPITAL_NAMES.size()]
+	return capital_name
+
 ## A fresh internal id, unique on the planet.
 static func make_key(data: PlanetData) -> String:
 	var taken := {}

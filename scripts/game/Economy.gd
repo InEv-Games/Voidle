@@ -27,7 +27,7 @@ const PROCESSED := [GOODS, FUEL, RARE]
 
 ## Display info for non-raw resources.
 const INFO := {
-	CREDITS:    {"name": "Credits",        "short": "cr",   "color": Color(0.95, 0.82, 0.35)},
+	CREDITS:    {"name": "Credits",        "short": "cr",   "color": Color(1.0, 0.72, 0.20)},   # orange-gold: apart from Energy's yellow
 	ENERGY:     {"name": "Energy",         "short": "⚡",   "color": Color(0.95, 0.88, 0.25)},
 	SCIENCE:    {"name": "Science",        "short": "sci",  "color": Color(0.35, 0.65, 1.00)},
 	POPULATION: {"name": "Population",     "short": "pop",  "color": Color(0.60, 0.95, 0.60)},

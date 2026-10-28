@@ -1,0 +1,15 @@
+﻿Feature (id);Feature;Production;Science;Residential;Commercial;Energy: Solar;Energy: Wind;Energy: Tidal;Energy: Geothermal;Team notes
+terrain_mountain;Mountain;x;x;;;;;;;
+terrain_plain;Plain;;;x;x;;;;;
+terrain_forest;Forest;;x;x;;;;;;
+terrain_seacoast;Sea coast;;;x;x;;;x;;
+terrain_lakeside;Lakeside;;x;x;;;;;;
+terrain_river;River;;;x;x;;;;;
+terrain_desert;Desert;;x;;;x;;;;
+terrain_tundra;Tundra;;x;x;;;;;;
+terrain_glacier;Glacier;;x;;;;;;;
+terrain_volcanic;Volcanic field;x;;;;;;;x;
+terrain_geothermal;Geothermal rift;;;;;;;;x;
+terrain_wind;Windy region;;;;;;x;;;
+terrain_ruins;Old ruins;;x;;x;;;;;
+terrain_crater;Crater;x;x;;;;;;;
