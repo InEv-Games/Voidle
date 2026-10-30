@@ -4,22 +4,28 @@
 
 [resource]
 script = ExtResource("1_def")
-pop_cost = 250
-required_features = Array[String](["terrain_wind"])
 building_id = "wind_turbine"
 display_name = "Wind Turbine"
-description = "Harvests wind. Must stand on a windy region (pale streaks on the map); +30% output there."
+description = "Wind power. Must stand on a Mountain or Tundra of a world with an atmosphere."
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([])
-base_cost = 200.0
+base_cost = 75.0
 min_planet_lv = 1
+max_per_district = 0
+max_per_planet = 0
 construct_duration = 4.0
 tick_duration = 20.0
 energy_per_tick = 0.0
-outputs = {"energy": 4.0}
-inputs = {"goods": 0.25}
+outputs = {"energy": 6.0}
+inputs = {}
 planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 125
 tier = 1
+cost_tier = 0
+min_civilization = 0
+required_features = Array[String](["terrain_mountain", "terrain_tundra"])
+requires_atmosphere = true
 unlocked_by_default = true
-output_tag = "wind"
-build_materials = {"ferrite": 15.0}

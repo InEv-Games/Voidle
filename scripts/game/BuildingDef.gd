@@ -44,6 +44,23 @@ func planet_cap() -> int:
 	return 1 if is_wonder else max_per_planet
 ## Required skill node to unlock this building. Empty = unlocked by default.
 @export var unlock_skill:      String   = ""
+## Out of the active catalogue (integration decisions 29.10 §17): never offered
+## for building, but instances in older saves keep working.
+@export var retired:           bool     = false
+## Tier whose economy (credits, workers, build materials) the model uses; -1 =
+## its own tier. Geographic models pay one tier below their real tier, the
+## Moon's three Tier 3 models pay Tier 2 (§8.1, §19.2).
+@export var cost_tier:         int      = -1
+## Needs a world with an atmosphere (Wind Turbine) / a liquid sea (Tidal Generator).
+@export var requires_atmosphere: bool   = false
+@export var requires_liquid_sea: bool   = false
+
+func econ_tier() -> int:
+	return tier if cost_tier < 0 else cost_tier
+
+## True for models only the Moon allows ("Moon-only" in the build list).
+func is_moon_only() -> bool:
+	return allowed_planet_types.size() == 1 and allowed_planet_types[0] == PlanetData.Type.MOON
 ## Lowest civilization type (0–5) that can build it. Tier 4 models belong to
 ## the upper scales' plans and stay closed in Tip 0.
 @export var min_civilization:  int      = 0
@@ -90,12 +107,11 @@ func pop_use() -> int:
 	if outputs.has(Economy.POPULATION):
 		return 0
 	if not planet_bonus.is_empty():
-		return 1000
-	# Tier 1 is the workforce-light option: higher tiers make more per slot,
-	# tier 1 makes more per worker (and per credit)
-	return [250, 1500, 3000, 6000][clampi(tier - 1, 0, 3)]
+		return 250
+	return [125, 250, 750, 2250][clampi(econ_tier(), 0, 3)]
 
-## Building tier within its district (1 = basic). Display / ordering only.
+## Building tier 0–3 (§8.1: 0 = no research, 3 = advanced). Separate from the
+## civilization type: Civilization 0 holds Tier 0–3 models.
 @export var tier: int = 1
 
 func output_color() -> Color:
@@ -126,9 +142,14 @@ func output_label() -> String:
 	for id: String in storage:
 		parts.append("+%s %s storage" % [Economy.fmt(float(storage[id])),
 			Economy.INFO.get(id, {}).get("short", id)])
+	var shown := {}
 	for id: String in planet_bonus:
-		parts.append("+%d%% %s %s" % [int(round(float(planet_bonus[id]) * 100.0)),
-			Economy.INFO.get(id, {}).get("short", id),
+		var label: String = "raw & processed" if id in [Economy.RAW, Economy.GOODS, Economy.FUEL, Economy.RARE] \
+			else Economy.INFO.get(id, {}).get("short", id)
+		if shown.has(label):
+			continue
+		shown[label] = true
+		parts.append("+%d%% %s %s" % [int(round(float(planet_bonus[id]) * 100.0)), label,
 			"planet-wide" if planet_wide else "in this city"])
 	return " · ".join(parts)
 
@@ -227,7 +248,8 @@ static func terrain_label(t: int) -> String:
 	return String(names[t]).capitalize() if t >= 0 and t < names.size() else "?"
 
 ## Why this building can't be built at the district, or "" if it can.
-func site_block_reason(poi: POIData) -> String:
+## `pd` (the district's world) is needed for the atmosphere / liquid-sea rules.
+func site_block_reason(poi: POIData, pd: PlanetData = null) -> String:
 	if poi == null:
 		return ""
 	var feat := FeatureMap.requirement_block(poi.site_features, required_features)
@@ -235,6 +257,11 @@ func site_block_reason(poi: POIData) -> String:
 		return feat
 	if requires_coastal and not poi.coastal:
 		return "Needs a coastal site"
+	if requires_atmosphere or requires_liquid_sea:
+		if pd != null and requires_atmosphere and not pd.has_atmosphere:
+			return "Needs a world with an atmosphere"
+		if pd != null and requires_liquid_sea and not has_liquid_sea(pd):
+			return "Needs a liquid sea"
 	if not required_terrain.is_empty() and not (poi.terrain in required_terrain):
 		return "Needs %s" % " or ".join(PackedStringArray(required_terrain.map(func(t: int) -> String: return terrain_label(t))))
 	if required_tag != "":
@@ -243,6 +270,10 @@ func site_block_reason(poi: POIData) -> String:
 			return "Needs %s %d%% (site %d%%)" % [tag_label(required_tag),
 				int(round(required_min * 100.0)), int(round(v * 100.0))]
 	return ""
+
+## Worlds with open water (seas that move with the tides): terran ones.
+static func has_liquid_sea(pd: PlanetData) -> bool:
+	return pd != null and pd.planet_type == PlanetData.Type.TERRAN
 
 ## Output multiplier from the site's resources (1.0 when not site-dependent).
 func site_mult(poi: POIData) -> float:
@@ -307,6 +338,8 @@ static func available_buildings() -> Array[BuildingDef]:
 	var st = Engine.get_main_loop().root.get_node_or_null("SkillTree")
 	var result: Array[BuildingDef] = []
 	for b in all():
+		if b.retired:
+			continue
 		if b.unlock_skill != "" and (st == null or not st.is_unlocked(b.unlock_skill)):
 			continue
 		if b.min_civilization > GameState.playable_content_type:   # Civ 1 content stays closed in the demo

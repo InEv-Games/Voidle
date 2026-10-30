@@ -4,19 +4,27 @@
 
 [resource]
 script = ExtResource("1_def")
-pop_cost = 2250
 building_id = "mantle_cracker"
 display_name = "Mantle Cracker"
-description = "Cracks the mantle open. Burns Fuel Rods."
+description = "Cracks the mantle for huge mineral yields. Burns Fuel."
 allowed_poi_types = Array[int]([1])
 allowed_planet_types = Array[int]([])
 base_cost = 1800.0
 min_planet_lv = 1
-construct_duration = 4.0
+max_per_district = 0
+max_per_planet = 0
+construct_duration = 12.0
 tick_duration = 20.0
-energy_per_tick = -9.0
+energy_per_tick = -18.0
 outputs = {"raw": 90.0}
-inputs = {"fuel": 0.333333}
+inputs = {"fuel": 1.0}
 planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 2250
 tier = 3
-unlocked_by_default = false
+cost_tier = -1
+min_civilization = 0
+required_features = Array[String]([])
+unlocked_by_default = true

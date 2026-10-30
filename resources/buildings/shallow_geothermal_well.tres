@@ -21,3 +21,4 @@ required_features = Array[String](["terrain_volcanic", "terrain_geothermal"])
 construct_duration = 4.0
 description = "A small first well on hot ground. Must stand on a volcanic field or a geothermal rift."
 build_materials = {"ferrite": 20.0}
+retired = true

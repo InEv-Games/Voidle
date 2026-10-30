@@ -20,3 +20,4 @@ storage = {"fuel": 300.0}
 construct_duration = 2.0
 description = "+300 Fuel storage."
 build_materials = {"ferrite": 15.0}
+retired = true

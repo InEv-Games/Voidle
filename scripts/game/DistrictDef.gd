@@ -3,9 +3,14 @@
 class_name DistrictDef
 extends Resource
 
-## Display names: GENERATOR = Energy, MINING = Industrial, RESIDENTIAL = Residential.
-## (Enum names stay so saved district types and type_tags keep working.)
-enum Type { CITY, GENERATOR, MINING, SPACE_STATION, RESIDENTIAL, COMMERCIAL, SCIENCE }
+## Display names: CITY = Capital District, GENERATOR = Energy, MINING =
+## Production, SPACE_STATION = Orbit City (the Orbit's centre, not a district).
+## (Enum names stay so saved district types and type_tags keep working; new
+## types are appended.) The ORBITAL_* types are the Orbit's five support
+## districts; INTERSTELLAR_PORT is future (Civilization 1) content.
+enum Type { CITY, GENERATOR, MINING, SPACE_STATION, RESIDENTIAL, COMMERCIAL, SCIENCE,
+	ORBITAL_RESIDENTIAL, ORBITAL_COMMERCIAL, ORBITAL_SCIENCE, ORBITAL_ENERGY, ORBITAL_PRODUCTION,
+	INTERSTELLAR_PORT }
 
 @export var id:           Type
 @export var display_name: String
@@ -28,6 +33,27 @@ enum Type { CITY, GENERATOR, MINING, SPACE_STATION, RESIDENTIAL, COMMERCIAL, SCI
 @export var name_suffixes: Array[String] = []
 ## Required skill node to unlock this district. Empty = unlocked by default.
 @export var unlock_skill: String = ""
+## Lowest civilization type that may build it (Interstellar Port: 1).
+@export var min_civilization: int = 0
+
+## ── Orbit (integration decisions 29.10 §6) ─────────────────────────────────
+## The Orbit's centre (Orbit City): founded with the Orbit, never offered as a
+## district, holds no buildings; makes the same base as a Capital.
+@export var is_orbit_city: bool = false
+## Surface district family whose buildings an Orbit district holds (a
+## POIData.POIType; -1 = its own type).
+@export var hosts_poi_type: int = -1
+## Planet-wide support: { resource_id: +fraction } for the whole planet's
+## total, from the district itself — whatever buildings it holds (§6.2).
+@export var planet_support: Dictionary = {}
+## Storage the district itself adds: { resource_id: +amount } ("raw" = each raw mineral).
+@export var storage: Dictionary = {}
+## The district's own workers and energy use (⚡/s), apart from its buildings.
+@export var own_workers: int = 0
+@export var own_energy_use: float = 0.0
+## Buildings it comes with: [[building_id, count], …], each paid at its own
+## repeat price when the district is placed (§6.3).
+@export var prefab: Array = []
 ## Bonuses this district gets from neighbouring districts, keyed by the
 ## neighbour's type key ("city", "generator", "mining", "space_station") →
 ## player-facing description, e.g. {"generator": "+10% credits"}.
@@ -116,6 +142,8 @@ static func for_planet(planet_type: PlanetData.Type) -> Array[DistrictDef]:
 	for d: DistrictDef in all():
 		if d.unlock_skill != "" and (st == null or not st.is_unlocked(d.unlock_skill)):
 			continue
+		if d.min_civilization > GameState.playable_content_type:
+			continue   # future content stays closed in the demo
 		if d.allowed_planet_types.is_empty() or planet_type in d.allowed_planet_types:
 			result.append(d)
 	return result
@@ -141,7 +169,7 @@ static func find(district_type: Type) -> DistrictDef:
 
 static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: String = "") -> float:
 	if def.is_orbital:
-		return def.base_cost
+		return def.base_cost + float(prefab_cost(def, data).get(Economy.CREDITS, 0.0))
 	if def.is_system_anchor():
 		var cities := 0
 		for poi: POIData in data.custom_pois:
@@ -152,12 +180,48 @@ static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: Stri
 		districts_in_city(data, parent_city)))
 
 ## Named materials a district costs on top of credits (GDD §20.6): a Production
-## district on the Moon asks for 30 Ferrite and no Moonstone.
+## district on the Moon asks for 30 Ferrite and no Moonstone; an Orbit district,
+## its prefab buildings' materials.
 static func placement_materials(def: DistrictDef, data: PlanetData) -> Dictionary:
 	if def != null and data != null and not def.is_orbital and data.planet_type == PlanetData.Type.MOON \
-			and def.base_outputs.has(Economy.RAW):
+			and def.id == Type.MINING:
 		return {"ferrite": 30.0}
+	if def != null and def.is_orbital:
+		var mats := prefab_cost(def, data)
+		mats.erase(Economy.CREDITS)
+		return mats
 	return {}
+
+## Each prefab building of `def` with its price: [[building_id, {credits, mats…}], …].
+## Every copy pays the normal repeat price as if built one after another in
+## the new (empty) district (Economy.building_cost rules).
+static func prefab_items(def: DistrictDef) -> Array:
+	var out: Array = []
+	if def == null or def.prefab.is_empty():
+		return out
+	var c: BalanceConfig = Balance.cfg
+	var placed: Array[String] = []
+	for row: Array in def.prefab:
+		var bdef := BuildingDef.find(String(row[0]))
+		if bdef == null:
+			continue
+		for i in int(row[1]):
+			var owned := placed.size() if c.building_counter_scope != "model" else placed.count(bdef.building_id)
+			var cost := {Economy.CREDITS: roundf(Balance.geometric(bdef.base_cost, c.building_cost_growth, owned))}
+			var mats := Economy.building_materials(bdef)
+			for id: String in mats:
+				cost[id] = ceilf(Balance.geometric(float(mats[id]), c.building_cost_growth, owned) - 0.0001)
+			out.append([bdef.building_id, cost])
+			placed.append(bdef.building_id)
+	return out
+
+## Total price of `def`'s prefab buildings: { credits, material: amount }.
+static func prefab_cost(def: DistrictDef, _data: PlanetData = null) -> Dictionary:
+	var total := {}
+	for item: Array in prefab_items(def):
+		for id: String in item[1]:
+			total[id] = float(total.get(id, 0.0)) + float(item[1][id])
+	return total
 
 ## Full placement price: { credits, material: amount }.
 static func placement_full_cost(def: DistrictDef, data: PlanetData, parent_city: String = "") -> Dictionary:
@@ -208,12 +272,16 @@ func to_poi_type() -> POIData.POIType:
 		Type.RESIDENTIAL:   return POIData.POIType.RESIDENTIAL
 		Type.COMMERCIAL:    return POIData.POIType.COMMERCIAL
 		Type.SCIENCE:       return POIData.POIType.SCIENCE
+		Type.ORBITAL_RESIDENTIAL, Type.ORBITAL_COMMERCIAL, Type.ORBITAL_SCIENCE, \
+				Type.ORBITAL_ENERGY, Type.ORBITAL_PRODUCTION, Type.INTERSTELLAR_PORT:
+			return POIData.POIType.STATION
 		_:                  return POIData.POIType.CITY
 
 ## Returns how many of this district type exist on the planet.
 static func count_on_planet(def: DistrictDef, data: PlanetData) -> int:
 	var n := 0
+	var key := def.type_key()
 	for poi: POIData in data.custom_pois:
-		if poi.poi_type == def.to_poi_type():
+		if poi.type_tag == key or (poi.type_tag == "" and poi.poi_type == def.to_poi_type()):
 			n += 1
 	return n

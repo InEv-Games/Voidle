@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="DistrictDef" load_steps=2 format=3 uid="uid://d_11_orbital_production"]
+
+[ext_resource type="Script" path="res://scripts/game/DistrictDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = 11
+display_name = "Orbital Production"
+description = "Orbit support district: +10% raw and processed output for the whole planet, whatever buildings it holds. Comes with a starter set of buildings (paid with it); swap them as you like. Adds its own storage package."
+icon = "◈"
+placement = 3
+base_cost = 600.0
+construction_duration = 4.0
+is_orbital = true
+unlock_skill = "orbital_assembly"
+building_ids = Array[String]([])
+name_pool = Array[String](["Orbital Production"])
+hosts_poi_type = 1
+planet_support = {"raw": 0.1, "goods": 0.1, "fuel": 0.1, "rare_elements": 0.1}
+storage = {"raw": 1000.0, "goods": 150.0, "fuel": 150.0, "rare_elements": 75.0}
+own_workers = 250
+own_energy_use = 1.0
+prefab = [["surface_quarry", 1], ["ore_sorting_workshop", 1], ["warehouse", 1]]
+base_outputs = {}
+base_tick = 20.0

@@ -86,7 +86,7 @@ func _sync_mineral_discoveries() -> void:
 		if not found and pd != null:
 			for poi: POIData in pd.custom_pois:
 				var ddef := ProductionManager.district_def(poi)
-				if ddef != null and not poi.constructing and ddef.base_outputs.has(Economy.RAW):
+				if ddef != null and not poi.constructing and ddef.id == DistrictDef.Type.MINING:   # the Capital's small share doesn't survey
 					found = true
 					break
 		if found:
@@ -623,7 +623,7 @@ func colonize_planet(planet_seed: int, cost: float = 1000.0) -> bool:
 #   lander  Earth Spaceport → Moon. Paid once when preparation starts (30 s),
 #           then it flies MOON_TRANSIT_SEC, parks in lunar orbit (lander_state 1),
 #           the player picks the landing site and the first lunar City is free.
-#   rocket  Lunar Spaceport → another natural planet of the home system. Paid
+#   rocket  the Moon's Spaceport → another natural planet of the home system. Paid
 #           once (60 s preparation); the target can change until it launches;
 #           the flight takes 60 s and its arrival completes Civilization 0.
 # States: preparing → ready → in_transit → arrived. A state change never
@@ -776,7 +776,7 @@ func moon_colonize_block(planet_seed: int) -> String:
 	if not has_finished_building(home_planet_seed, "spaceport"):
 		return "Build a Spaceport on your home world"
 	if not SkillTree.event_met("orbit_station"):
-		return "Put a Space Station into orbit first"
+		return "Found your Orbit first (its Orbit City in orbit)"
 	var short := Economy.cost_block(LANDER_COST)
 	return short
 
@@ -867,8 +867,10 @@ func rocket_block() -> String:
 	if not get_node("/root/SkillTree").is_unlocked("advanced_planet_rocket"):
 		return "Research Advanced Planetary Rocket"
 	var moon := home_moon()
-	if moon == null or not has_finished_building(moon.seed, "lunar_spaceport"):
-		return "Build a Lunar Spaceport on the Moon"
+	# the normal Spaceport on the Moon (§18); an older save's Lunar Spaceport still counts
+	if moon == null or not (has_finished_building(moon.seed, "spaceport") \
+			or has_finished_building(moon.seed, "lunar_spaceport")):
+		return "Build a Spaceport on the Moon"
 	return Economy.cost_block(ROCKET_COST)
 
 func start_rocket(target_seed: int = -1) -> bool:

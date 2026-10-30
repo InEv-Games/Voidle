@@ -4,21 +4,28 @@
 
 [resource]
 script = ExtResource("1_def")
-pop_cost = 750
-required_features = Array[String](["terrain_seacoast"])
 building_id = "tidal_generator"
 display_name = "Tidal Generator"
-description = "Turns the tides into energy. Must stand on a sea coast; +20% output there."
+description = "Turns the tides into energy. Must stand on a Sea Coast of a liquid sea."
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([])
-base_cost = 600.0
+base_cost = 75.0
 min_planet_lv = 1
+max_per_district = 0
+max_per_planet = 0
 construct_duration = 4.0
 tick_duration = 20.0
 energy_per_tick = 0.0
-outputs = {"energy": 12.0}
-inputs = {"goods": 0.333333}
+outputs = {"energy": 6.0}
+inputs = {}
 planet_bonus = {}
-tier = 2
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 125
+tier = 1
+cost_tier = 0
+min_civilization = 0
+required_features = Array[String](["terrain_seacoast"])
+requires_liquid_sea = true
 unlocked_by_default = true
-output_tag = "tidal"

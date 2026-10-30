@@ -4,19 +4,27 @@
 
 [resource]
 script = ExtResource("1_def")
-pop_cost = 750
 building_id = "plasma_smelter"
 display_name = "Fuel Refinery"
-description = "Turns raw resources into Fuel Rods. Rarer raws yield more."
+description = "Fuel in bulk from Ferrite."
 allowed_poi_types = Array[int]([1])
 allowed_planet_types = Array[int]([])
 base_cost = 1350.0
 min_planet_lv = 1
-construct_duration = 4.0
+max_per_district = 0
+max_per_planet = 0
+construct_duration = 8.0
 tick_duration = 20.0
 energy_per_tick = -6.0
-outputs = {"fuel": 6.0}
-inputs = {"ferrite": 24.0, "goods": 0.333333}
+outputs = {"fuel": 2.0}
+inputs = {"ferrite": 12.0}
 planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 750
 tier = 2
+cost_tier = -1
+min_civilization = 0
+required_features = Array[String]([])
 unlocked_by_default = true

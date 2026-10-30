@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://bid_volcanic_mine"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "volcanic_mine"
+display_name = "Volcanic Mine"
+description = "Mines fresh volcanic rock. Must stand on a Volcanic Field."
+allowed_poi_types = Array[int]([1])
+allowed_planet_types = Array[int]([])
+base_cost = 200.0
+min_planet_lv = 1
+max_per_district = 0
+max_per_planet = 0
+construct_duration = 8.0
+tick_duration = 20.0
+energy_per_tick = -2.0
+outputs = {"raw": 30.0}
+inputs = {}
+planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 250
+tier = 2
+cost_tier = 1
+min_civilization = 0
+required_features = Array[String](["terrain_volcanic"])
+unlocked_by_default = true

@@ -22,3 +22,4 @@ storage = {"goods": 150.0, "fuel": 150.0}
 build_materials = {"ferrite": 20.0}
 tier = 1
 unlocked_by_default = true
+retired = true

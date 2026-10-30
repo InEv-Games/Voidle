@@ -1,3 +1,8 @@
+# OUTDATED (2026-10-30): resources/buildings and resources/districts now hold
+# the 53-model catalogue of the integration decisions of 2026-10-29. Running
+# this would bring back removed models and overwrite the new values.
+raise SystemExit("%s is outdated — edit the .tres resources instead." % __file__)
+
 import os
 
 files = {

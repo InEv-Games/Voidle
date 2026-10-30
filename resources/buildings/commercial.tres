@@ -4,19 +4,27 @@
 
 [resource]
 script = ExtResource("1_def")
-pop_cost = 250
 building_id = "commercial"
 display_name = "Market"
-description = "Local commerce. Produces credits."
+description = "A local market."
 allowed_poi_types = Array[int]([8])
 allowed_planet_types = Array[int]([])
-base_cost = 150.0
+base_cost = 75.0
 min_planet_lv = 1
+max_per_district = 0
+max_per_planet = 0
 construct_duration = 4.0
 tick_duration = 20.0
 energy_per_tick = -1.0
-outputs = {"credits": 20.0}
+outputs = {"credits": 10.0}
 inputs = {}
 planet_bonus = {}
-tier = 1
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 125
+tier = 0
+cost_tier = -1
+min_civilization = 0
+required_features = Array[String]([])
 unlocked_by_default = true

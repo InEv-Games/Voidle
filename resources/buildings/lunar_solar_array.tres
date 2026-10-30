@@ -21,3 +21,4 @@ planet_bonus = {}
 tier = 1
 unlocked_by_default = false
 output_tag = "solar"
+retired = true

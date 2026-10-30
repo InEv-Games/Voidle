@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_def")
 id = 2
-display_name = "Industrial District"
+display_name = "Production District"
 description = "Mines raw resources and refines them into Consumer Goods, Fuel Rods and Rare Elements."
 icon = "⛏"
 placement = 0
@@ -17,5 +17,5 @@ unlock_skill = "start_production"
 name_suffixes = Array[String](["Quarry", "Mines", "Deep Shafts", "Ore Fields"])
 base_outputs = {"raw": 10.0}
 base_tick = 20.0
-site_bonus = {"minerals": 1.0, "mountains": 0.3, "highlands": 0.15}
+site_bonus = {}
 neighbor_income = {"generator": {"raw": 1.0}, "mining": {"raw": 0.5}, "city": {"raw": 0.5}}

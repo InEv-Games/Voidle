@@ -19,3 +19,4 @@ inputs = {"fuel": 0.666667}
 planet_bonus = {}
 tier = 3
 unlocked_by_default = false
+retired = true

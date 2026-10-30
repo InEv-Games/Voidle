@@ -19,12 +19,14 @@ extends Resource
 @export var building_cost_growth: float = 1.35
 ## What counts toward that price: every building in the district, or only the same model.
 @export_enum("district_all", "model") var building_counter_scope: String = "district_all"
-## Named materials a building asks for on top of credits, by tier (Tier 1: none).
-## Fixed per building — the repeat counter grows credits only. A model's own
-## BuildingDef.build_materials overrides these.
-@export var build_materials_tier2: Dictionary = {"ferrite": 30.0, "goods": 5.0}
-@export var build_materials_tier3: Dictionary = {"ferrite": 90.0, "goods": 15.0, "fuel": 5.0, "rare_elements": 2.0}
-@export var build_materials_tier4: Dictionary = {"ferrite": 90.0, "goods": 15.0, "fuel": 5.0, "rare_elements": 2.0}
+## Named materials a building asks for on top of credits, by its economic tier
+## (BuildingDef.econ_tier; Tier 0: none). Integration decisions 29.10 §8.1. A
+## model's own BuildingDef.build_materials overrides these.
+@export var build_materials_tier1: Dictionary = {"ferrite": 30.0, "goods": 5.0}
+@export var build_materials_tier2: Dictionary = {"ferrite": 90.0, "goods": 15.0, "fuel": 5.0}
+@export var build_materials_tier3: Dictionary = {"ferrite": 180.0, "goods": 45.0, "fuel": 15.0, "rare_elements": 5.0}
+## Civilization 1 models (not playable in the demo).
+@export var build_materials_tier4: Dictionary = {"ferrite": 180.0, "goods": 45.0, "fuel": 15.0, "rare_elements": 5.0}
 
 @export_group("Districts")
 @export var district_base_cost: float = 300.0
@@ -108,31 +110,32 @@ extends Resource
 @export_group("Terrain")
 ## Within this distance of a visible feature's edge a site counts as near it (FeatureMap).
 @export var terrain_near_km: float = 250.0
-## Three steps only (playtest 28.10): ON a feature that helps a family ×2, NEAR
-## one ×1.5, otherwise nothing. Features don't stack — the best one counts.
+## Steps (integration decisions 29.10 §3.1): ON a feature that helps a family
+## +100% (×2), NEAR one +50% (×1.5). Different feature types add up; the same
+## type never counts twice. Same on Earth, the Moon and every other world.
 @export var terrain_on_bonus: float = 1.0
 @export var terrain_near_bonus: float = 0.5
-## Which visible feature helps which output family (GDD §6.1), as a weight on
-## the step above (1.0 = the full ×2 / ×1.5). Families: production, science,
-## residential, commercial, energy_solar, energy_wind, energy_tidal, energy_geothermal.
+## Which feature boosts which specialist district family's base output (§3).
+## Families: production, science, residential, commercial, energy. The Capital
+## gets no geography bonus. A feature may also host special buildings
+## (BuildingDef.required_features) — that is separate data and adds no bonus.
 @export var terrain_bonuses: Dictionary = {
-	# Mountains and craters lean to Production, so the Production and Science
-	# lenses don't paint the same places (playtest 23.10); peaks still suit the
-	# Mountain Observatory.
 	"terrain_mountain":   {"production": 1.0, "science": 1.0},
-	"terrain_plain":      {"residential": 1.0, "commercial": 1.0},
-	"terrain_forest":     {"residential": 1.0, "science": 1.0},
-	"terrain_seacoast":   {"residential": 1.0, "commercial": 1.0, "energy_tidal": 1.0},
-	"terrain_lakeside":   {"residential": 1.0, "science": 1.0},
-	"terrain_river":      {"residential": 1.0, "commercial": 1.0},
-	"terrain_desert":     {"energy_solar": 1.0, "science": 1.0},
-	"terrain_tundra":     {"science": 1.0, "residential": 1.0},
+	"terrain_plain":      {},
+	"terrain_forest":     {"production": 1.0},
+	"terrain_seacoast":   {"residential": 1.0, "commercial": 1.0},
+	"terrain_lakeside":   {"residential": 1.0},
+	"terrain_river":      {"residential": 1.0, "commercial": 1.0, "energy": 1.0},
+	"terrain_desert":     {"energy": 1.0},
+	"terrain_tundra":     {"science": 1.0},
 	"terrain_glacier":    {"science": 1.0},
-	"terrain_volcanic":   {"energy_geothermal": 1.0, "production": 1.0},
-	"terrain_geothermal": {"energy_geothermal": 1.0},
-	"terrain_wind":       {"energy_wind": 1.0},
-	"terrain_ruins":      {"science": 1.0, "commercial": 1.0},
-	"terrain_crater":     {"production": 1.0, "science": 1.0},
+	"terrain_volcanic":   {"production": 1.0},
+	"terrain_geothermal": {"energy": 1.0},
+	"terrain_ruins":      {"production": 1.0, "science": 1.0, "residential": 1.0, "commercial": 1.0, "energy": 1.0},
+	# Moon only
+	"terrain_crater":     {"production": 1.0},
+	"terrain_caves":      {"residential": 1.0},
+	"terrain_ion_storm":  {"energy": 1.0},
 }
 
 @export_group("Storage")

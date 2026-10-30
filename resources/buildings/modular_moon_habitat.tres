@@ -19,3 +19,4 @@ pop_cost = 0
 build_materials = {"moonstone": 50.0, "goods": 10.0}
 construct_duration = 4.0
 description = "Pressurised modules built from regolith. Moon only."
+retired = true

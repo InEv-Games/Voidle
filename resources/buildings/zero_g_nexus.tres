@@ -19,3 +19,4 @@ inputs = {}
 planet_bonus = {}
 tier = 1
 unlocked_by_default = true
+retired = true

@@ -4,20 +4,27 @@
 
 [resource]
 script = ExtResource("1_def")
-pop_cost = 250
 building_id = "molecular_forge"
 display_name = "Rare Element Forge"
-description = "Extracts Rare Elements from raw resources. Rarer raws yield more."
+description = "Extracts Rare Elements from Ferrite."
 allowed_poi_types = Array[int]([1])
 allowed_planet_types = Array[int]([])
-base_cost = 600.0
+base_cost = 1800.0
 min_planet_lv = 1
-construct_duration = 4.0
+max_per_district = 0
+max_per_planet = 0
+construct_duration = 8.0
 tick_duration = 20.0
-energy_per_tick = -3.0
+energy_per_tick = -9.0
 outputs = {"rare_elements": 1.0}
-inputs = {"ferrite": 12.0}
+inputs = {"ferrite": 18.0}
 planet_bonus = {}
-tier = 1
-unlocked_by_default = false
-build_materials = {"ferrite": 30.0, "goods": 5.0}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 750
+tier = 2
+cost_tier = -1
+min_civilization = 0
+required_features = Array[String]([])
+unlocked_by_default = true

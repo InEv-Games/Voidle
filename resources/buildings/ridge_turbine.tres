@@ -20,3 +20,4 @@ output_tag = "wind"
 required_features = Array[String](["terrain_wind"])
 construct_duration = 4.0
 description = "Tall turbines on windy ground: four Wind Turbines' worth in two slots. Must stand on a windy region; best on mountains."
+retired = true

@@ -5,20 +5,31 @@
 
 [sub_resource type="Resource" id="Resource_logic"]
 script = ExtResource("1_logic")
-pop_cost = 250
 
 [resource]
 script = ExtResource("2_def")
+logic = SubResource("Resource_logic")
 building_id = "spaceport"
 display_name = "Spaceport"
-description = "Orbital launch facility. Enables ship construction and interplanetary trade routes."
+description = "Launch facility: founds the Orbit and reaches other worlds, the Moon included. One per world."
 allowed_poi_types = Array[int]([0])
+allowed_planet_types = Array[int]([])
 base_cost = 2500.0
-construct_duration = 3.0
+min_planet_lv = 1
+max_per_district = 0
+max_per_planet = 1
+construct_duration = 12.0
 tick_duration = 45.0
 energy_per_tick = 0.0
-logic = SubResource("Resource_logic")
+outputs = {}
+inputs = {}
+planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 250
+tier = 3
+cost_tier = -1
+min_civilization = 0
+required_features = Array[String]([])
 unlocked_by_default = false
-max_per_planet = 1
-build_materials = {"ferrite": 50.0, "goods": 10.0}
-allowed_planet_types = Array[int]([0, 1, 2, 3, 4, 5, 7])

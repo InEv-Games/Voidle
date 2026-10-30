@@ -21,3 +21,4 @@ storage = {"raw": 1000.0, "goods": 400.0, "fuel": 400.0, "rare_elements": 200.0}
 tier = 3
 unlocked_by_default = false
 planet_wide = true
+retired = true

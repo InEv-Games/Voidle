@@ -4,19 +4,27 @@
 
 [resource]
 script = ExtResource("1_def")
-pop_cost = 250
 building_id = "refinery"
 display_name = "Goods Factory"
-description = "Turns raw resources into Consumer Goods. Rarer raws yield more."
+description = "Turns Ferrite into Goods."
 allowed_poi_types = Array[int]([1])
 allowed_planet_types = Array[int]([])
 base_cost = 300.0
 min_planet_lv = 1
+max_per_district = 0
+max_per_planet = 0
 construct_duration = 4.0
 tick_duration = 20.0
 energy_per_tick = -2.0
 outputs = {"goods": 2.0}
 inputs = {"ferrite": 4.0}
 planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 250
 tier = 1
+cost_tier = -1
+min_civilization = 0
+required_features = Array[String]([])
 unlocked_by_default = true

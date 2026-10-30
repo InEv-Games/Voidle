@@ -11,7 +11,8 @@ extends RefCounted
 ##
 ## Mountains, plains, sea coasts and polar ice come from the height bands the
 ## planet already shows; forests, deserts, tundra, rivers, lakes, volcanic
-## fields, geothermal rifts, windy regions, ruins and craters are added here and
+## fields, geothermal rifts, ruins and — on the Moon — craters, caves and ion
+## storm regions are added here and
 ## drawn by the shaders from texture().
 ##
 ## Districts store their shares in POIData.site_features when placed (and when
@@ -22,29 +23,43 @@ extends RefCounted
 ##   FeatureMap.shares(data, lon, lat)          # { "terrain_mountain": 1.0, "terrain_seacoast": 0.5, … }
 ##   FeatureMap.texture(data.seed)              # for the planet shader
 
+## Bit order of the grid mask. WIND keeps its slot so the bits stay put, but
+## the windy region is no longer a feature (integration decisions 29.10 §3):
+## nothing marks it any more.
 enum F { MOUNTAIN, PLAIN, FOREST, SEACOAST, LAKESIDE, RIVER, DESERT, TUNDRA,
-	GLACIER, VOLCANIC, GEOTHERMAL, WIND, RUINS, CRATER }
+	GLACIER, VOLCANIC, GEOTHERMAL, WIND, RUINS, CRATER, CAVES, ION_STORM }
 
+## Ids by F (index = bit). Use CATALOGUE for the features that exist.
 const IDS: Array[String] = ["terrain_mountain", "terrain_plain", "terrain_forest",
 	"terrain_seacoast", "terrain_lakeside", "terrain_river", "terrain_desert",
 	"terrain_tundra", "terrain_glacier", "terrain_volcanic", "terrain_geothermal",
-	"terrain_wind", "terrain_ruins", "terrain_crater"]
+	"terrain_wind", "terrain_ruins", "terrain_crater", "terrain_caves", "terrain_ion_storm"]
 const NAMES: Array[String] = ["Mountain", "Plain", "Forest", "Sea coast", "Lakeside",
 	"River", "Desert", "Tundra", "Glacier", "Volcanic field", "Geothermal rift",
-	"Windy region", "Old ruins", "Crater"]
+	"Windy region", "Old ruins", "Crater", "Caves", "Ion storm region"]
+
+## The 15 geography types: 12 general ones and three found only on the Moon.
+const CATALOGUE: Array[String] = ["terrain_mountain", "terrain_plain", "terrain_forest",
+	"terrain_seacoast", "terrain_lakeside", "terrain_river", "terrain_desert",
+	"terrain_tundra", "terrain_glacier", "terrain_volcanic", "terrain_geothermal",
+	"terrain_ruins", "terrain_crater", "terrain_caves", "terrain_ion_storm"]
+## Shown with a "Moon only" tag (tables, build list, tooltips).
+const MOON_ONLY: Array[String] = ["terrain_crater", "terrain_caves", "terrain_ion_storm"]
 
 const WIDTH:  int = 384
 const HEIGHT: int = 192
 
 # Texture encoding (RGBA8, sampled with filter_nearest):
-#   R  land cover   0 none · 1 forest · 2 desert · 3 tundra · 4 volcanic
+#   R  land cover   0 none · 1 forest · 2 desert · 3 tundra · 4 volcanic · 5 caves · 6 ion storm
 #   G  lines        0 none · 1 river  · 2 geothermal rift
 #   B  spots        0 none · 1 crater floor · 2 crater rim · 3 ruins
-#   A  windy region 0 / 255
+#   A  unused (the windy region is no longer a feature)
 const COVER_FOREST := 1
 const COVER_DESERT := 2
 const COVER_TUNDRA := 3
 const COVER_VOLCANIC := 4
+const COVER_CAVES := 5
+const COVER_ION_STORM := 6
 const LINE_RIVER := 1
 const LINE_RIFT := 2
 const SPOT_CRATER_FLOOR := 1
@@ -83,6 +98,10 @@ static func feature_name(id: String) -> String:
 	var i := IDS.find(id)
 	return NAMES[i] if i >= 0 else id
 
+## "Crater (Moon only)" for the Moon's three, else the plain name.
+static func feature_label(id: String) -> String:
+	return feature_name(id) + (" (Moon only)" if id in MOON_ONLY else "")
+
 # ── Queries ──────────────────────────────────────────────────────────────────
 
 static func _index(lon: float, lat: float) -> int:
@@ -116,6 +135,8 @@ static func shares(data: PlanetData, lon: float, lat: float) -> Dictionary:
 			var plon := lon + cos(a) * d / maxf(cos(lat), 0.2)
 			near |= mask_at(data.seed, plon, plat)
 	for f in IDS.size():
+		if f == F.WIND:
+			continue
 		var bit := 1 << f
 		if on & bit:
 			out[IDS[f]] = 1.0
@@ -125,14 +146,14 @@ static func shares(data: PlanetData, lon: float, lat: float) -> Dictionary:
 
 # ── Economy ──────────────────────────────────────────────────────────────────
 
-## Output family of a resource for terrain bonuses. Energy splits by source
-## ("energy_solar" …); a district's generic energy picks its best source.
-static func family_of(resource_id: String, energy_tag: String = "") -> String:
+## Output family of a resource for terrain bonuses (the five specialist
+## district families; `_energy_tag` is no longer used — energy is one family).
+static func family_of(resource_id: String, _energy_tag: String = "") -> String:
 	match resource_id:
 		Economy.CREDITS:    return "commercial"
 		Economy.SCIENCE:    return "science"
 		Economy.POPULATION: return "residential"
-		Economy.ENERGY:     return "energy_" + energy_tag if energy_tag != "" else "energy"
+		Economy.ENERGY:     return "energy"
 	return "production"   # raw, goods, fuel, rare
 
 ## Bonus fraction of one feature share: on it (1.0) or near it (0.5).
@@ -141,22 +162,19 @@ static func step_bonus(share: float) -> float:
 		return Balance.cfg.terrain_on_bonus
 	return Balance.cfg.terrain_near_bonus if share > 0.0 else 0.0
 
-## Bonus fraction of a set of feature shares for one family: the best single
-## feature (on ×2, near ×1.5 — no stacking), e.g. 0.5 = ×1.5.
-## A district's generic "energy" takes the best single energy source.
+## Bonus fraction of a set of feature shares for one family (§3.1): every
+## distinct feature type that helps it adds its step — on +1 (×2), near +0.5
+## (×1.5) — and the steps add up, e.g. on a Mountain and near a Volcanic field
+## = +1.5 (×2.5). A site holds each type once (shares()), so the same type
+## never counts twice; on and near of one type is its "on".
 static func bonus_for(site: Dictionary, family: String) -> float:
-	if family == "energy":
-		var best := 0.0
-		for tag: String in ["energy_solar", "energy_wind", "energy_tidal", "energy_geothermal"]:
-			best = maxf(best, bonus_for(site, tag))
-		return best
 	var table: Dictionary = Balance.cfg.terrain_bonuses
-	var best := 0.0
+	var total := 0.0
 	for fid: String in site:
 		var row: Dictionary = table.get(fid, {})
-		best = maxf(best, float(row.get(family, 0.0)) * step_bonus(float(site[fid])) \
-			* SkillTree.get_feature_mult(fid))   # Geography Specialisation
-	return best
+		total += float(row.get(family, 0.0)) * step_bonus(float(site[fid])) \
+			* SkillTree.get_feature_mult(fid)   # Geography Specialisation
+	return total
 
 ## Families a feature helps, as labels: "Production, Science".
 static func helped_families(fid: String) -> String:
@@ -167,11 +185,6 @@ static func helped_families(fid: String) -> String:
 	return ", ".join(out)
 
 static func family_label(fam: String) -> String:
-	match fam:
-		"energy_solar":      return "Solar"
-		"energy_wind":       return "Wind"
-		"energy_tidal":      return "Tidal"
-		"energy_geothermal": return "Geothermal"
 	return fam.capitalize()
 
 ## A district's site, merged with its City's: each feature counts once at the
@@ -186,30 +199,32 @@ static func merged_site(pd: PlanetData, poi: POIData) -> Dictionary:
 				break
 	return site
 
-## Terrain multiplier for one output of a district or one of its buildings.
-static func terrain_mult(pd: PlanetData, poi: POIData, resource_id: String, energy_tag: String = "") -> float:
-	if poi == null or poi.is_orbital():
+## Geography multiplier of a specialist district's base output (§3, §7.1): 1 +
+## the summed steps of the features at its own site. The Capital (a City) and
+## the Orbit get none, and buildings never get one — only the district's base.
+static func terrain_mult(pd: PlanetData, poi: POIData, resource_id: String, _energy_tag: String = "") -> float:
+	if poi == null or poi.is_orbital() or poi.is_city():
 		return 1.0
-	return 1.0 + bonus_for(merged_site(pd, poi), family_of(resource_id, energy_tag))
+	return 1.0 + bonus_for(poi.site_features, family_of(resource_id))
 
-## Shorelines and rivers are one grid cell thin, so a district almost never
-## stands exactly ON them: buildings that need one are also allowed NEAR it.
+## Shorelines and rivers are one grid cell thin. The decisions (§3.2) ask for
+## a site ON the feature for its special building — 250 km near is not enough.
+## Flip this to also accept NEAR for these thin edge features if playtests show
+## they are too hard to hit.
 const EDGE_FEATURES: Array[String] = ["terrain_seacoast", "terrain_lakeside", "terrain_river"]
+const EDGE_NEAR_OK := false
 
-## Why a site can't host a building that needs one of `features` ("" if it can):
-## in full, or near for EDGE_FEATURES.
+## Why a site can't host a building that needs one of `features` ("" if it can).
 static func requirement_block(site: Dictionary, features: Array[String]) -> String:
 	if features.is_empty():
 		return ""
 	var names: Array[String] = []
-	var edge := true
 	for fid: String in features:
 		var share := float(site.get(fid, 0.0))
-		if share >= 1.0 or (share > 0.0 and fid in EDGE_FEATURES):
+		if share >= 1.0 or (EDGE_NEAR_OK and share > 0.0 and fid in EDGE_FEATURES):
 			return ""
 		names.append(feature_name(fid))
-		edge = edge and fid in EDGE_FEATURES
-	return ("Needs to be on or near: " if edge else "Needs to stand on: ") + " or ".join(names)
+	return "Needs to stand on: " + " or ".join(names)
 
 # ── Role overlay (role buttons) ──────────────────────────────────────────────
 
@@ -265,26 +280,9 @@ static func role_texture(planet_seed: int, role: String) -> ImageTexture:
 	m["roles"][role] = tex
 	return tex
 
-## Energy sources the Energy lens paints, each in its own colour. Wind isn't
-## painted: windy regions show as drifting wisps under the lens instead (shader).
-const ENERGY_LENS := {
-	"energy_solar":      Color(1.0, 0.85, 0.30),
-	"energy_tidal":      Color(0.35, 0.85, 1.0),
-	"energy_geothermal": Color(1.0, 0.45, 0.25),
-}
-
 ## [bonus, colour] a cell shows under a role's lens.
 static func _role_cell(site: Dictionary, fam: String, tint: Color) -> Array:
-	if fam != "energy":
-		return [bonus_for(site, fam), tint]
-	var best := 0.0
-	var col := tint
-	for src: String in ENERGY_LENS:
-		var v := bonus_for(site, src)
-		if v > best:
-			best = v
-			col = ENERGY_LENS[src]
-	return [best, col]
+	return [bonus_for(site, fam), tint]
 
 ## Features that help a role, for its button tooltip: "Desert (Solar) …".
 static func role_features_text(role: String) -> String:
@@ -293,14 +291,10 @@ static func role_features_text(role: String) -> String:
 	var fam: String = ROLES[role]["family"]
 	var table: Dictionary = Balance.cfg.terrain_bonuses
 	var parts: Array[String] = []
-	for fid: String in IDS:
+	for fid: String in CATALOGUE:
 		var row: Dictionary = table.get(fid, {})
-		for k: String in row:
-			if k == fam or (fam == "energy" and k.begins_with("energy_")):
-				parts.append("%s%s" % [feature_name(fid),
-					" (%s)" % k.trim_prefix("energy_").capitalize() if fam == "energy" else ""])
-	if fam == "energy":
-		parts.append("Lens: yellow solar · blue tidal · orange geothermal · white currents = wind (denser where it blows harder)")
+		if row.has(fam):
+			parts.append(feature_label(fid))
 	return "\n".join(parts)
 
 # ── Build ────────────────────────────────────────────────────────────────────
@@ -384,17 +378,13 @@ static func _compute(data: PlanetData) -> Dictionary:
 	var river_paths: Array = []
 	if rocky:
 		river_paths = _build_rocky(data, rng, height, land, cover, lines, mask)
-	# craters: rare on living worlds, common on barren ones and moons
-	var craters := 3
-	if moon or data.planet_type == PlanetData.Type.BARREN:
-		craters = 10
-	elif data.planet_type == PlanetData.Type.TERRAN:
-		craters = 2
-	_place_craters(data, rng, land, spots, mask, craters)
+	# Crater, Caves and Ion storm region exist only on the Moon (§3.3)
+	if data.planet_type == PlanetData.Type.MOON:
+		_place_craters(data, rng, land, spots, mask, 10)
+		_place_patches(rng, cover, mask, F.CAVES, COVER_CAVES, 7, 1.4, 2.6)
+		_place_patches(rng, cover, mask, F.ION_STORM, COVER_ION_STORM, 4, 3.0, 5.5)
 	if rocky and data.planet_type == PlanetData.Type.TERRAN:
 		_place_ruins(rng, land, height, spots, mask, 4)
-	if rocky:
-		_mark_windy(data, land, windy, mask)
 	var out := {"mask": mask, "img": _pack(cover, lines, spots, windy)}
 	if not river_paths.is_empty():
 		out["river_img"] = _bake_rivers(river_paths, data.seed, land)
@@ -718,6 +708,32 @@ static func _place_craters(data: PlanetData, rng: RandomNumberGenerator, land: P
 				mask[j] |= 1 << F.CRATER
 		placed += 1
 
+## Round patches of a Moon land cover (caves, ion storm regions), apart from
+## each other: `count` patches of radius r_min..r_max cells.
+static func _place_patches(rng: RandomNumberGenerator, cover: PackedByteArray, mask: PackedInt32Array,
+		f: int, value: int, count: int, r_min: float, r_max: float) -> void:
+	var placed := 0
+	var tries := 0
+	while placed < count and tries < count * 40:
+		tries += 1
+		var cx := rng.randi() % WIDTH
+		var cy := rng.randi_range(int(HEIGHT * 0.18), int(HEIGHT * 0.82))
+		if cover[cy * WIDTH + cx] != 0:
+			continue
+		var r := rng.randf_range(r_min, r_max)
+		var ri := ceili(r) + 1
+		for dy in range(-ri, ri + 1):
+			for dx in range(-ri, ri + 1):
+				var y := cy + dy
+				if y < 0 or y >= HEIGHT or sqrt(float(dx * dx + dy * dy)) > r:
+					continue
+				var j := y * WIDTH + posmod(cx + dx, WIDTH)
+				if cover[j] != 0 and cover[j] != value:
+					continue
+				cover[j] = value
+				mask[j] |= 1 << f
+		placed += 1
+
 static func _place_ruins(rng: RandomNumberGenerator, land: PackedByteArray, height: PackedFloat32Array,
 		spots: PackedByteArray, mask: PackedInt32Array, count: int) -> void:
 	var placed := 0
@@ -733,30 +749,6 @@ static func _place_ruins(rng: RandomNumberGenerator, land: PackedByteArray, heig
 				spots[j] = SPOT_RUINS
 				mask[j] |= 1 << F.RUINS
 		placed += 1
-
-static func _mark_windy(data: PlanetData, land: PackedByteArray, windy: PackedByteArray, mask: PackedInt32Array) -> void:
-	if not ResourceMap.has_map(data.seed) or not data.has_atmosphere:
-		return
-	# Relative to the world's own wind: a thin atmosphere scales the whole field
-	# down, and a fixed cut left some terran worlds with no windy region at all.
-	var vals := PackedFloat32Array(); vals.resize(WIDTH * HEIGHT)
-	var lands := PackedFloat32Array()
-	for y in HEIGHT:
-		for x in WIDTH:
-			var i := y * WIDTH + x
-			if land[i] == 0:
-				continue
-			var ll := _cell_lonlat(x, y)
-			vals[i] = ResourceMap.field(data.seed, "wind", ll.x, ll.y)
-			lands.append(vals[i])
-	if lands.is_empty():
-		return
-	lands.sort()
-	var cut := maxf(lands[int(float(lands.size() - 1) * (1.0 - WINDY_SHARE))], WINDY_MIN)
-	for i in WIDTH * HEIGHT:
-		if land[i] != 0 and vals[i] >= cut:
-			windy[i] = 255
-			mask[i] |= 1 << F.WIND
 
 static func _pack(cover: PackedByteArray, lines: PackedByteArray,
 		spots: PackedByteArray, windy: PackedByteArray) -> Image:

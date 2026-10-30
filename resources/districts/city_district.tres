@@ -5,15 +5,15 @@
 [resource]
 script = ExtResource("1_def")
 id = 0
-display_name = "City"
-description = "Residential and commercial hub. Generates credits and houses population."
+display_name = "Capital District"
+description = "The City's automatic centre. A little of everything: Credits, Science, housing, energy and the world's mineral. Takes no geography bonus; holds the Capital support buildings and the Spaceport."
 icon = "⬡"
 placement = 0
 base_cost = 500.0
 allowed_planet_types = Array[int]([0, 1, 2, 3, 4, 5, 6])
 building_ids = Array[String](["residential", "apartments", "commercial", "luxury_complex", "lab", "advanced_lab"])
 name_pool = Array[String](["New Carthage", "Iron Shore", "Veylan", "Kelast", "Dusk Harbor", "Aelstrom", "Fort Virion", "Mirelith", "Sunfall", "Coldmere", "Outpost Hera", "New Delos", "Vanta Port", "Ashfield", "Creston"])
-base_outputs = {"credits": 20.0, "science": 1.333333}
+base_outputs = {"credits": 2.0, "science": 1.0, "population": 600.0, "energy": 1.0, "raw": 2.0}
 base_tick = 20.0
-site_bonus = {"coastal": 0.25, "lowlands": 0.15}
+site_bonus = {}
 neighbor_income = {"residential": {"credits": 2.0}, "commercial": {"credits": 3.333333}, "science": {"science": 0.333333}, "generator": {"energy": 0.5}, "mining": {"raw": 0.666667}}

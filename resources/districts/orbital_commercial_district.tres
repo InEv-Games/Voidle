@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="DistrictDef" load_steps=2 format=3 uid="uid://d_8_orbital_commercial"]
+
+[ext_resource type="Script" path="res://scripts/game/DistrictDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = 8
+display_name = "Orbital Commercial"
+description = "Orbit support district: +10% Credits for the whole planet, whatever buildings it holds. Comes with a starter set of buildings (paid with it); swap them as you like."
+icon = "◈"
+placement = 3
+base_cost = 600.0
+construction_duration = 4.0
+is_orbital = true
+unlock_skill = "orbital_assembly"
+building_ids = Array[String]([])
+name_pool = Array[String](["Orbital Commercial"])
+hosts_poi_type = 8
+planet_support = {"credits": 0.1}
+storage = {}
+own_workers = 250
+own_energy_use = 1.0
+prefab = [["commercial", 3]]
+base_outputs = {}
+base_tick = 20.0

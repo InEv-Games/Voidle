@@ -21,3 +21,4 @@ inputs = {"goods": 0.333333}
 planet_bonus = {}
 tier = 2
 unlocked_by_default = true
+retired = true

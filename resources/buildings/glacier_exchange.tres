@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://bid_glacier_exchange"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "glacier_exchange"
+display_name = "Glacier Exchange"
+description = "Ice trade. Must stand on a Glacier."
+allowed_poi_types = Array[int]([8])
+allowed_planet_types = Array[int]([])
+base_cost = 75.0
+min_planet_lv = 1
+max_per_district = 0
+max_per_planet = 0
+construct_duration = 4.0
+tick_duration = 20.0
+energy_per_tick = -1.0
+outputs = {"credits": 20.0}
+inputs = {}
+planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 125
+tier = 1
+cost_tier = 0
+min_civilization = 0
+required_features = Array[String](["terrain_glacier"])
+unlocked_by_default = true

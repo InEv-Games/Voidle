@@ -19,3 +19,4 @@ pop_cost = 0
 unlocked_by_default = false
 max_per_district = 1
 max_per_planet = 1
+retired = true

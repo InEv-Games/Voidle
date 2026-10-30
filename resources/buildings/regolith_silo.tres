@@ -21,3 +21,4 @@ planet_bonus = {}
 tier = 1
 unlocked_by_default = false
 storage = {"raw": 1000.0, "goods": 150.0, "fuel": 150.0, "rare_elements": 75.0}
+retired = true

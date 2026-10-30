@@ -112,6 +112,15 @@ static func make_key(data: PlanetData) -> String:
 func is_orbital() -> bool:
 	return poi_type == POIType.STATION
 
+## The district family whose buildings this district holds: its own type on
+## the surface; an Orbit district's surface family (DistrictDef.hosts_poi_type).
+func build_poi_type() -> POIType:
+	if is_orbital():
+		var d := DistrictDef.find_by_key(type_tag)
+		if d != null and d.hosts_poi_type >= 0:
+			return d.hosts_poi_type as POIType
+	return poi_type
+
 ## Cities (and a moon's outpost colony, their equivalent) are parent districts.
 func is_city() -> bool:
 	return poi_type == POIType.CITY or poi_type == POIType.OUTPOST

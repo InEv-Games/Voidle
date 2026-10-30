@@ -145,10 +145,10 @@ vec3 apply_lens(vec3 surf, vec3 rn) {
 }
 
 // Visible surface features (FeatureMap.texture, equirectangular RGBA8):
-//   R land cover 1 forest · 2 desert · 3 tundra · 4 volcanic
+//   R land cover 1 forest · 2 desert · 3 tundra · 4 volcanic · 5 caves · 6 ion storm (Moon)
 //   G lines      1 river  · 2 geothermal rift
 //   B spots      1 crater floor · 2 crater rim · 3 ruins
-//   A windy region (255)
+//   A unused (was the windy region, no longer a feature)
 // The economy reads the same grid, so what is drawn is what counts.
 uniform sampler2D feature_tex : filter_nearest, repeat_enable;
 uniform float feature_on = 0.0;
@@ -190,8 +190,8 @@ float river_cover(vec3 rn) {
 // Soft coverage of every feature around a point: a jittered 3×3 tap average of
 // the grid, so edges fade over about a cell instead of stepping.
 //   cover  forest, desert, tundra, volcanic · lines river, rift
-//   spots  crater floor, crater rim, ruins  · wind
-void feature_cover(vec3 rn, out vec4 cover, out vec2 lines, out vec3 spots, out float wind) {
+//   spots  crater floor, crater rim, ruins  · lunar  caves, ion storm
+void feature_cover(vec3 rn, out vec4 cover, out vec2 lines, out vec3 spots, out vec2 lunar) {
 	float lon = atan(rn.x, rn.z);
 	float lat = asin(clamp(-rn.y, -1.0, 1.0));
 	vec2 uv = vec2(fract(lon / TAU), 0.5 - lat / PI);
@@ -201,7 +201,7 @@ void feature_cover(vec3 rn, out vec4 cover, out vec2 lines, out vec3 spots, out 
 	cover = vec4(0.0);
 	lines = vec2(0.0);
 	spots = vec3(0.0);
-	wind = 0.0;
+	lunar = vec2(0.0);
 	for (int dy = -1; dy <= 1; dy++) {
 		for (int dx = -1; dx <= 1; dx++) {
 			vec2 o = vec2(float(dx), float(dy)) * px * 1.25 + jit;
@@ -210,21 +210,21 @@ void feature_cover(vec3 rn, out vec4 cover, out vec2 lines, out vec3 spots, out 
 			cover += w * vec4(f.r == 1 ? 1.0 : 0.0, f.r == 2 ? 1.0 : 0.0, f.r == 3 ? 1.0 : 0.0, f.r == 4 ? 1.0 : 0.0);
 			lines += w * vec2(f.g == 1 ? 1.0 : 0.0, f.g == 2 ? 1.0 : 0.0);
 			spots += w * vec3(f.b == 1 ? 1.0 : 0.0, f.b == 2 ? 1.0 : 0.0, f.b == 3 ? 1.0 : 0.0);
-			wind += w * (f.a > 127 ? 1.0 : 0.0);
+			lunar += w * vec2(f.r == 5 ? 1.0 : 0.0, f.r == 6 ? 1.0 : 0.0);
 		}
 	}
 	cover /= 10.0;
 	lines /= 10.0;
 	spots /= 10.0;
-	wind /= 10.0;
+	lunar /= 10.0;
 }
 
 // Paints the features onto the (unlit) surface — muted tints that blend into
 // the terrain. `land` is 1 where land shows; `t` is TIME (wind streaks drift).
 vec3 apply_features(vec3 surf, vec3 rn, float land, float t) {
 	if (feature_on <= 0.0 || feature_strength <= 0.0) return surf;
-	vec4 cover; vec2 lines; vec3 spots; float wind;
-	feature_cover(rn, cover, lines, spots, wind);
+	vec4 cover; vec2 lines; vec3 spots; vec2 lunar;
+	feature_cover(rn, cover, lines, spots, lunar);
 	float k = feature_strength * land;
 	vec4 c = smoothstep(vec4(0.05), vec4(0.85), cover);
 	// forest: a darker green, in clumps
@@ -259,6 +259,13 @@ vec3 apply_features(vec3 surf, vec3 rn, float land, float t) {
 	surf = mix(surf, vec3(0.66, 0.63, 0.58), smoothstep(0.2, 0.8, spots.y) * 0.4 * feature_strength);
 	float blk = step(0.45, feature_hash(floor(rn * 260.0), vec3(3.7, 91.1, 17.3)));
 	surf = mix(surf, vec3(0.58, 0.54, 0.46), smoothstep(0.2, 0.8, spots.z) * 0.6 * blk * feature_strength);
+	// Moon-only: caves as dark pitted ground, ion storm regions as a faint
+	// shifting blue-violet glow
+	vec2 l = smoothstep(vec2(0.05), vec2(0.85), lunar);
+	float pit = step(0.6, feature_hash(floor(rn * 240.0), vec3(5.3, 61.7, 29.9)));
+	surf = mix(surf, surf * 0.45, l.x * (0.55 + 0.35 * pit) * feature_strength);
+	float storm = 0.5 + 0.5 * sin(t * 0.8 + dot(rn, vec3(45.0, 80.0, 25.0)));
+	surf = mix(surf, vec3(0.45, 0.50, 0.95), l.y * (0.35 + 0.25 * storm) * feature_strength);
 	return surf;
 }
 

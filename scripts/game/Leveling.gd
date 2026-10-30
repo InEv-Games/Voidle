@@ -34,7 +34,10 @@ static func district_level_block(pd: PlanetData, pp: PlanetProgress, poi: POIDat
 	if lv >= Balance.cfg.max_district_level:
 		return "Max level"
 	if poi.is_orbital():
-		return "Stations don't level — level the Orbit for more stations"
+		var d := DistrictDef.find_by_key(poi.type_tag)
+		if d == null or d.is_orbit_city:
+			return "The Orbit City levels with the Orbit"
+		return ""   # Orbit districts have no roads: no neighbour rule
 	if poi.is_city():
 		return ""   # the Capital District leads
 	for nb: String in poi.neighbors:
@@ -100,13 +103,14 @@ static func city_level_block(pd: PlanetData, pp: PlanetProgress, city: POIData) 
 	return ""
 
 # ── Orbit ────────────────────────────────────────────────────────────────────
-## The Orbit takes no City slot (it is the world's Central Orbit). Lv n holds n Space Stations, each with a
-## single module; it levels once every station is up with its module built.
+## The Orbit takes no City slot (it is the world's Central Orbit). Its centre is
+## the Orbit City (the hub); Lv n holds n + 1 support districts (§6.1). It
+## levels once every district it holds is built.
 static func max_orbit_level() -> int:
 	return Balance.cfg.max_orbit_level
 
-## The world's Central Orbit: its first station — the hub of the trade network
-## (Spaceports below link to it, other stations orbit as satellites, hubs of
+## The world's Central Orbit: its Orbit City — the hub of the trade network
+## (Spaceports below link to it, the districts orbit as satellites, hubs of
 ## other worlds link to each other). null without an Orbit.
 static func orbit_hub(pd: PlanetData) -> POIData:
 	if pd == null:
@@ -116,12 +120,28 @@ static func orbit_hub(pd: PlanetData) -> POIData:
 			return p
 	return null
 
+## True for a world's Orbit City (its first orbital POI).
+static func is_orbit_city(pd: PlanetData, poi: POIData) -> bool:
+	return poi != null and poi.is_orbital() and orbit_hub(pd) == poi
+
+## The Orbit's POIs: the Orbit City first, then its districts.
 static func orbit_stations(pd: PlanetData) -> Array[POIData]:
 	var out: Array[POIData] = []
 	for p: POIData in pd.custom_pois:
 		if p.is_orbital():
 			out.append(p)
 	return out
+
+## The Orbit's districts (the Orbit City not counted).
+static func orbit_districts(pd: PlanetData) -> Array[POIData]:
+	var out := orbit_stations(pd)
+	if not out.is_empty():
+		out.remove_at(0)
+	return out
+
+## How many districts the Orbit may hold: its level + 1.
+static func orbit_capacity(pp: PlanetProgress) -> int:
+	return pp.orbit_level + 1 if pp.orbit_level > 0 else 0
 
 static func orbit_level_credits(next: int) -> float:
 	return city_level_credits(next) * Balance.cfg.orbit_level_credit_mult
@@ -131,13 +151,13 @@ static func orbit_level_block(pd: PlanetData, pp: PlanetProgress) -> String:
 		return "Max level"
 	if pp.orbit_upgrading >= 0.0:
 		return "Already levelling up"
-	var stations := orbit_stations(pd)
-	if stations.size() < pp.orbit_level:
-		return "Launch all %d station%s first" % [pp.orbit_level, "" if pp.orbit_level == 1 else "s"]
-	for st: POIData in stations:
-		if st.constructing or pp.buildings_in_district(st.label).filter(
-				func(b: Dictionary) -> bool: return not b.get("constructing", false)).is_empty():
-			return "Every station needs its module built"
+	var districts := orbit_districts(pd)
+	var cap := orbit_capacity(pp)
+	if districts.size() < cap:
+		return "Fill all %d Orbit districts first" % cap
+	for st: POIData in orbit_stations(pd):
+		if st.constructing:
+			return "Every Orbit district needs to be built"
 	return ""
 
 ## Cities plus the Orbit — what counts against max_cities.

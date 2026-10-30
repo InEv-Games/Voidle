@@ -209,7 +209,7 @@ func _tick_all(delta: float) -> void:
 						district_changed = true
 						# a finished Mining district surveys the body's minerals
 						var built_def := district_def(poi)
-						if built_def != null and built_def.base_outputs.has(Economy.RAW):
+						if built_def != null and built_def.id == DistrictDef.Type.MINING:
 							GameState.discover_body_minerals(planet_seed)
 					building_progress_changed.emit(planet_seed, poi.label, poi.construct_progress)
 			if district_changed:
@@ -336,7 +336,7 @@ func _tick_district_base(pp: PlanetProgress, pd: PlanetData, delta: float) -> vo
 	var speed: float = get_node("/root/SkillTree").get_global_speed_mult()
 	var eff: float = planet_pop_speed(pp.planet_seed)   # overpopulation lowers output, not speed
 	for poi: POIData in pd.custom_pois:
-		if poi.constructing or poi.is_orbital():
+		if not makes_base(pd, poi):
 			continue
 		var ddef := district_def(poi)
 		if ddef == null or ddef.base_tick <= 0.0:
@@ -355,7 +355,10 @@ func _tick_district_base(pp: PlanetProgress, pd: PlanetData, delta: float) -> vo
 				continue
 			var v: float = float(income[id]) * eff
 			if id == Economy.RAW:
-				_produce_raw(pp, poi.label, v)
+				# the Capital's / Orbit City's share waits for the first Production
+				# district or mine to survey the body (no early discovery)
+				if ddef.id == DistrictDef.Type.MINING or GameState.is_body_surveyed(pp.planet_seed):
+					_produce_raw(pp, poi.label, v)
 				continue
 			Economy.add(id, v)
 			if v > 0.0:
@@ -391,6 +394,13 @@ static func _has_stock_income(income: Dictionary) -> bool:
 static func district_def(poi: POIData) -> DistrictDef:
 	return DistrictDef.find_by_key(poi.type_tag) if poi != null else null
 
+## True when a finished POI makes its own base income: every surface district
+## and the Orbit City (Orbit support districts make none of their own, §6.2).
+static func makes_base(pd: PlanetData, poi: POIData) -> bool:
+	if poi == null or poi.constructing:
+		return false
+	return not poi.is_orbital() or Leveling.is_orbit_city(pd, poi)
+
 ## Per-planet lookups rebuilt when the district list changes: label -> POI and
 ## City label -> its districts.
 static var _poi_index: Dictionary = {}   # seed -> { "n": count, "by_label": {}, "children": {} }
@@ -419,7 +429,7 @@ static func district_income_raw(pd: PlanetData, poi: POIData) -> Dictionary:
 	var ddef := district_def(poi)
 	if ddef == null:
 		return out
-	var loc := Location.mult(pd, poi)
+	var loc := 1.0 if poi.is_orbital() else Location.mult(pd, poi)
 	for id: String in ddef.base_outputs:
 		out[id] = float(ddef.base_outputs[id]) * Economy.site_mult(FeatureMap.terrain_mult(pd, poi, id), loc)
 	return out
@@ -436,7 +446,7 @@ func _invalidate_income(_seed: int = 0) -> void:
 	_income_cache.clear()
 
 func district_income(pp: PlanetProgress, poi: POIData) -> Dictionary:
-	if poi == null or poi.constructing or poi.is_orbital():
+	if not makes_base(GameState.get_planet_data(pp.planet_seed), poi):
 		return {}
 	var ck := "%d:%s" % [pp.planet_seed, poi.label]
 	var now := Time.get_ticks_msec()
@@ -454,6 +464,46 @@ func _district_income_now(pp: PlanetProgress, poi: POIData) -> Dictionary:
 	for id: String in raw:
 		raw[id] = _skill_mods(pp, id, float(raw[id]) * lv_m * Economy.scope_bonus(pp, poi.label, id), "")
 	return raw
+
+## What a district or building shows as its own output (§7.2): the real value
+## without the City / planet supports, which the City and planet totals show
+## on their own lines instead (City panel, Orbit panel).
+func district_income_shown(pp: PlanetProgress, poi: POIData) -> Dictionary:
+	var out := district_income(pp, poi).duplicate()
+	for id: String in out:
+		out[id] = float(out[id]) / maxf(Economy.scope_bonus(pp, poi.label, id), 0.0001)
+	return out
+
+func output_before_support(pp: PlanetProgress, entry: Dictionary, def: BuildingDef, id: String) -> float:
+	return output_per_cycle(pp, entry, def, id) \
+		/ maxf(Economy.scope_bonus(pp, entry.get("district_id", ""), id), 0.0001)
+
+## A City's contributions before and after its supports: { resource_id:
+## [before, city multiplier] } per cycle (energy per second, housing as
+## capacity) — districts' base and every building, the City's free housing included.
+func city_support_breakdown(pp: PlanetProgress, pd: PlanetData, city: POIData) -> Dictionary:
+	var before := {}
+	var members: Array[String] = []
+	for p: POIData in pd.custom_pois:
+		if p == city or (p.parent_city == city.label and not p.is_orbital()):
+			members.append(p.label)
+			var inc := district_income_shown(pp, p)
+			for id: String in inc:
+				before[id] = float(before.get(id, 0.0)) + float(inc[id])
+	if not city.constructing:
+		before[Economy.POPULATION] = float(before.get(Economy.POPULATION, 0.0)) + float(Balance.cfg.city_base_pop)
+	for b: Dictionary in pp.buildings:
+		if b.get("constructing", false) or not String(b.get("district_id", "")) in members:
+			continue
+		var def := BuildingDef.find(b.get("building_id", ""))
+		if def == null:
+			continue
+		for id: String in def.outputs:
+			before[id] = float(before.get(id, 0.0)) + output_before_support(pp, b, def, id)
+	var out := {}
+	for id: String in before:
+		out[id] = [float(before[id]), Economy.city_support(pp, city.label, id, pd)]
+	return out
 
 func district_base(pp: PlanetProgress, poi: POIData, id: String) -> float:
 	return float(district_income(pp, poi).get(id, 0.0))
@@ -493,7 +543,7 @@ func resource_rates(only_seed: int = -1) -> Dictionary:
 		if pd != null:
 			for poi: POIData in pd.custom_pois:
 				var ddef := district_def(poi)
-				if ddef == null or poi.is_orbital() or ddef.base_tick <= 0.0:
+				if ddef == null or not makes_base(pd, poi) or ddef.base_tick <= 0.0:
 					continue
 				var inc := district_income(pp, poi)
 				for id: String in inc:
@@ -611,13 +661,15 @@ func _produce_raw(pp: PlanetProgress, poi_lbl: String, total: float) -> void:
 			var txt := "+%.1f" % share if share < 1.0 else "+%.0f" % share
 			resource_produced.emit(pp.planet_seed, poi_lbl, txt, col, MineralIcon.make(1, col))
 
-## One cycle's worth of `id` from a building entry (count, site, planet bonus,
-## location, skills) — before population/energy efficiency. Energy is per second of flow.
+## One cycle's worth of `id` from a building entry (count, location, City and
+## planet supports, skills) — before population/energy efficiency. Energy is per
+## second of flow. Geography never boosts a building (§3, §19.3): only its
+## district's own base output.
 func output_per_cycle(pp: PlanetProgress, entry: Dictionary, def: BuildingDef, id: String) -> float:
 	if not def.outputs.has(id):
 		return 0.0
 	var v: float = float(def.outputs[id]) * float(entry.get("amount", 1))
-	v *= Economy.site_mult(get_site_mult(pp, entry, def, id), location_mult(pp, entry.get("district_id", ""))) \
+	v *= Economy.site_mult(1.0, location_mult(pp, entry.get("district_id", ""))) \
 		* Economy.scope_bonus(pp, entry.get("district_id", ""), id)
 	return _skill_mods(pp, id, v, def.output_tag)
 
@@ -742,18 +794,10 @@ func _district_poi(pp: PlanetProgress, district_id: String) -> POIData:
 			return poi
 	return null
 
-## Terrain multiplier for one output of a building: the visible features at its
-## district (and City), by output family; energy by the building's source tag
-## (solar, wind, tidal, geothermal — BuildingDef.output_tag). FeatureMap.terrain_mult.
-func get_site_mult(pp: PlanetProgress, entry: Dictionary, def: BuildingDef, id: String = "") -> float:
-	var poi := _district_poi(pp, entry.get("district_id", ""))
-	if poi == null:
-		return 1.0
-	if id == "":
-		for oid: String in def.outputs:
-			id = oid
-			break
-	return FeatureMap.terrain_mult(GameState.get_planet_data(pp.planet_seed), poi, id, def.output_tag)
+## Terrain multiplier of a building's output: always 1 — geography raises only
+## its district's base (§3, §19.3). Kept for the UI that shows it.
+func get_site_mult(_pp: PlanetProgress, _entry: Dictionary, _def: BuildingDef, _id: String = "") -> float:
+	return 1.0
 
 # ── Energy grid ───────────────────────────────────────────────────────────────
 
@@ -802,7 +846,21 @@ func _planet_energy(pp: PlanetProgress) -> Vector2:
 		if def.energy_per_tick < 0.0:
 			demand += -def.energy_per_tick * float(entry.get("amount", 1)) * float(st.get_energy_consume_mult())
 	prod += districts_energy(pp)
+	demand += orbit_districts_energy_use(pp) * float(st.get_energy_consume_mult())
 	return Vector2(prod, demand)
+
+## The Orbit districts' own energy use (⚡/s), apart from their buildings.
+func orbit_districts_energy_use(pp: PlanetProgress) -> float:
+	var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+	if pd == null:
+		return 0.0
+	var e := 0.0
+	for poi: POIData in pd.custom_pois:
+		if poi.is_orbital() and not poi.constructing:
+			var d := district_def(poi)
+			if d != null:
+				e += d.own_energy_use
+	return e
 
 ## Base energy (⚡/s) of a planet's finished districts.
 func districts_energy(pp: PlanetProgress) -> float:
@@ -811,7 +869,7 @@ func districts_energy(pp: PlanetProgress) -> float:
 		return 0.0
 	var e := 0.0
 	for poi: POIData in pd.custom_pois:
-		if not poi.is_orbital():
+		if makes_base(pd, poi):
 			e += district_base(pp, poi, Economy.ENERGY)
 	return e
 

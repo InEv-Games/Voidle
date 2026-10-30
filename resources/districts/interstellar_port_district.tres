@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="DistrictDef" load_steps=2 format=3 uid="uid://d_12_interstellar_port"]
+
+[ext_resource type="Script" path="res://scripts/game/DistrictDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+id = 12
+display_name = "Interstellar Port"
+description = "The Spaceport of the next scale: an Orbit district with no buildings, for the Dyson Sphere and travel between stars. Civilization 1 content."
+icon = "◈"
+placement = 3
+base_cost = 0.0
+is_orbital = true
+min_civilization = 1
+unlock_skill = "orbital_assembly"
+building_ids = Array[String]([])
+name_pool = Array[String](["Interstellar Port"])
+base_outputs = {}

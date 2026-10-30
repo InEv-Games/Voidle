@@ -159,7 +159,7 @@ func deserialize(arr: Array) -> void:
 			add_ship(s)
 
 # ── Spaceport traffic ─────────────────────────────────────────────────────────
-# Every pair of worlds with a finished Spaceport (or Lunar Spaceport) gets a
+# Every pair of worlds with a finished Spaceport (or an older save's Lunar Spaceport) gets a
 # fleet of freighters shuttling between them: real ships, saved with the game,
 # but purely visual — they carry nothing and pay nothing. The fleet grows with
 # the Cities on both ends: a picture of how developed the settlements are,
@@ -187,7 +187,7 @@ func _tick_traffic(delta: float) -> void:
 		_traffic_t = 0.0
 		_balance_fleets()
 
-## Worlds with a finished Spaceport or Lunar Spaceport.
+## Worlds with a finished Spaceport (or an older save's Lunar Spaceport).
 func _port_worlds() -> Array[int]:
 	var out: Array[int] = []
 	for pp: PlanetProgress in GameState._planet_progress.values():

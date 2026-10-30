@@ -178,6 +178,14 @@ static func cap(id: String) -> float:
 			var def := BuildingDef.find(b.get("building_id", ""))
 			if def != null and def.storage.has(key):
 				total += float(def.storage[key]) * float(b.get("amount", 1))
+		# Orbit districts with a storage package of their own (Orbital Production)
+		var pd := GameState.get_planet_data(pp.planet_seed)
+		if pd != null:
+			for p: POIData in pd.custom_pois:
+				if p.is_orbital() and not p.constructing:
+					var ddef := DistrictDef.find_by_key(p.type_tag)
+					if ddef != null and ddef.storage.has(key):
+						total += float(ddef.storage[key])
 	_cap_cache[id] = total
 	return total
 
@@ -240,12 +248,17 @@ static func building_cost(pp: PlanetProgress, def: BuildingDef, district_label: 
 	return roundf(Balance.geometric(def.base_cost, c.building_cost_growth, owned))
 
 ## Named materials the first building of this model costs on top of credits
-## (repeats grow like credits, see building_full_cost). Its own list, else its tier's.
+## (repeats grow like credits, see building_full_cost). Its own list, else the
+## package of its economic tier (§19.2): Tier 0 — Capital supports and the
+## geographic models costed at Tier 0 included — pays none on purpose; Tier 1,
+## 2 and 3 pay their shared packages.
 static func building_materials(def: BuildingDef) -> Dictionary:
 	if not def.build_materials.is_empty():
 		return def.build_materials
 	var c: BalanceConfig = Balance.cfg
-	match def.tier:
+	match def.econ_tier():
+		0: return {}
+		1: return c.build_materials_tier1
 		2: return c.build_materials_tier2
 		3: return c.build_materials_tier3
 		4: return c.build_materials_tier4
@@ -441,6 +454,7 @@ static func world_max_population(pd: PlanetData, pp: PlanetProgress) -> int:
 	var total := 0.0
 	for poi: POIData in pd.custom_pois:
 		if poi.is_orbital():
+			total += ProductionManager.district_base(pp, poi, POPULATION)   # the Orbit City's
 			continue
 		if poi.is_city() and not poi.constructing:   # a City houses nobody until it stands
 			total += Balance.cfg.city_base_pop * scope_bonus(pp, poi.label, POPULATION, pd)
@@ -468,6 +482,7 @@ static func world_used_population(pd: PlanetData, pp: PlanetProgress) -> int:
 	var nth := {}   # city label -> non-Residential districts counted so far (founding order)
 	for poi: POIData in pd.custom_pois:
 		if poi.is_orbital():
+			used += orbit_district_pop(pp, poi)
 			continue
 		var lv: int = pp.district_levels.get(poi.label, 1)
 		if pp.district_upgrading.has(poi.label):
@@ -490,10 +505,25 @@ static func world_used_population(pd: PlanetData, pp: PlanetProgress) -> int:
 			used += def.pop_use() * int(b.get("amount", 1))
 	return used
 
+## An Orbit district's own population: its workers (§6.2) and the levels it
+## has gained (levels in progress count already). The Orbit City: none.
+static func orbit_district_pop(pp: PlanetProgress, poi: POIData) -> int:
+	var d := DistrictDef.find_by_key(poi.type_tag)
+	if d == null or d.is_orbit_city:
+		return 0
+	var lv: int = pp.district_levels.get(poi.label, 1)
+	if pp.district_upgrading.has(poi.label):
+		lv += 1
+	var used := d.own_workers
+	for l in range(1, lv):
+		used += level_up_pop(l)
+	return used
+
 ## Population allocated to one district: its founding + levels + building workers.
 static func district_pop_used(pp: PlanetProgress, poi: POIData) -> int:
 	var lv: int = pp.district_levels.get(poi.label, 1)
-	var used := district_pop_cost(poi, lv, GameState.get_planet_data(pp.planet_seed))
+	var used := orbit_district_pop(pp, poi) if poi.is_orbital() \
+		else district_pop_cost(poi, lv, GameState.get_planet_data(pp.planet_seed))
 	for b: Dictionary in pp.buildings_in_district(poi.label):
 		var def := BuildingDef.find(b.get("building_id", ""))
 		if def != null:
@@ -522,11 +552,16 @@ static func _housing_mult() -> float:
 static func free_population(pd: PlanetData, pp: PlanetProgress) -> int:
 	return max_population(pd, pp) - used_population(pd, pp)
 
-# ── City & planet-wide bonuses ──────────────────────────────────────────────
-## Capital/City buildings boost a resource: BuildingDef.planet_bonus =
-## { resource_id: +fraction per building }. Most boost only their own City (the
-## City and every district built under it); rare BuildingDef.planet_wide ones
-## (and orbital stations) boost the whole planet.
+# ── City & planet supports ───────────────────────────────────────────────────
+## Integration decisions 29.10 §7.1: the five Capital supports
+## (BuildingDef.planet_bonus = { resource_id: +fraction per building }) raise
+## their own City's total — the Capital, its districts and every building there;
+## the five Orbit districts (DistrictDef.planet_support) raise the whole
+## planet's. Within one scale the fractions add up; the scales multiply:
+## 100 × (1 + 0.20 City) × (1 + 0.10 planet) = 132. Applying the product to
+## every contribution gives the same totals as applying it to the sums.
+## Legacy planet_wide buildings (retired models in older saves) count at the
+## planet scale.
 
 ## The City a district belongs to (its own id for a City), or "".
 ## Per-frame caches (bonus lookups run for every district, every frame).
@@ -552,8 +587,8 @@ static func city_key(pd: PlanetData, district_label: String) -> String:
 		_city_maps[pd.seed] = m
 	return m.get(district_label, "")
 
-## Multiplier for `id` produced in `district_label`: 1 + its City's bonuses +
-## planet-wide bonuses.
+## Multiplier for `id` produced in `district_label`: (1 + its City's supports)
+## × (1 + the planet's supports).
 static func scope_bonus(pp: PlanetProgress, district_label: String, id: String, pd: PlanetData = null) -> float:
 	if pd == null:
 		pd = GameState.get_planet_data(pp.planet_seed)
@@ -561,22 +596,41 @@ static func scope_bonus(pp: PlanetProgress, district_label: String, id: String, 
 	var ck := "%d|%s|%s" % [pp.planet_seed, city, id]
 	if _bonus_cache.has(ck):
 		return _bonus_cache[ck]
+	var mult := city_support(pp, city, id, pd) * planet_bonus(pp, id, pd)
+	_bonus_cache[ck] = mult
+	return mult
+
+## 1 + the Capital supports for `id` built in the City `city` (its label).
+static func city_support(pp: PlanetProgress, city: String, id: String, pd: PlanetData = null) -> float:
+	if city == "":
+		return 1.0
+	if pd == null:
+		pd = GameState.get_planet_data(pp.planet_seed)
 	var mult := 1.0
 	for b: Dictionary in pp.buildings:
 		if b.get("constructing", false):
 			continue
 		var def := BuildingDef.find(b.get("building_id", ""))
-		if def == null or not def.planet_bonus.has(id):
+		if def == null or def.planet_wide or not def.planet_bonus.has(id):
 			continue
-		var bd: String = b.get("district_id", "")
-		if def.planet_wide or (city != "" and city_key(pd, bd) == city):
+		if city_key(pd, b.get("district_id", "")) == city:
 			mult += float(def.planet_bonus[id]) * float(b.get("amount", 1))
-	_bonus_cache[ck] = mult
 	return mult
 
-## Planet-wide bonuses only (kept for callers without a district).
-static func planet_bonus(pp: PlanetProgress, id: String) -> float:
+## 1 + the planet-scale supports for `id`: every finished Orbit district's
+## DistrictDef.planet_support (whatever buildings it holds), plus legacy
+## planet_wide buildings.
+static func planet_bonus(pp: PlanetProgress, id: String, pd: PlanetData = null) -> float:
+	if pd == null:
+		pd = GameState.get_planet_data(pp.planet_seed)
 	var mult := 1.0
+	if pd != null:
+		for p: POIData in pd.custom_pois:
+			if not p.is_orbital() or p.constructing:
+				continue
+			var ddef := DistrictDef.find_by_key(p.type_tag)
+			if ddef != null and ddef.planet_support.has(id):
+				mult += float(ddef.planet_support[id])
 	for b: Dictionary in pp.buildings:
 		if b.get("constructing", false):
 			continue

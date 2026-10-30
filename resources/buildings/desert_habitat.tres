@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3 uid="uid://bid_desert_habitat"]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "desert_habitat"
+display_name = "Desert Habitat"
+description = "Shaded desert housing. Must stand on a Desert."
+allowed_poi_types = Array[int]([7])
+allowed_planet_types = Array[int]([])
+base_cost = 120.0
+min_planet_lv = 1
+max_per_district = 0
+max_per_planet = 0
+construct_duration = 8.0
+tick_duration = 20.0
+energy_per_tick = -1.0
+outputs = {"population": 7500.0}
+inputs = {"goods": 1.0}
+planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 0
+tier = 2
+cost_tier = 1
+min_civilization = 0
+required_features = Array[String](["terrain_desert"])
+unlocked_by_default = true

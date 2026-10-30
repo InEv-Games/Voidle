@@ -16,5 +16,5 @@ name_pool = Array[String]([])
 name_suffixes = Array[String](["Market Quarter", "Trade District", "Bazaar", "Exchange Row"])
 base_outputs = {"credits": 10.0}
 base_tick = 20.0
-site_bonus = {"coastal": 0.4, "lowlands": 0.1}
+site_bonus = {}
 neighbor_income = {"residential": {"credits": 4.0}, "city": {"credits": 3.0}, "mining": {"credits": 2.0}, "commercial": {"credits": 1.0}}

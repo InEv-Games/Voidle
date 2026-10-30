@@ -19,3 +19,4 @@ pop_cost = 750
 build_materials = {"moonstone": 100.0, "goods": 20.0}
 construct_duration = 4.0
 description = "Processes lunar regolith into Goods — Moonstone stretches further (×1.75)."
+retired = true

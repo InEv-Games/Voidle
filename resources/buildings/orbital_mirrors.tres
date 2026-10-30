@@ -20,3 +20,4 @@ planet_bonus = {"energy": 0.15}
 tier = 2
 unlocked_by_default = false
 planet_wide = true
+retired = true

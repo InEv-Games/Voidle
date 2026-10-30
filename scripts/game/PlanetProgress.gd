@@ -48,8 +48,8 @@ func has_building(bid: String) -> bool:
 @export var moons_unlocked: bool = false
 ## Moon landing: 0 none, 1 lander parked in orbit, 2 landed (GameState).
 @export var lander_state: int = 0
-## The planet's Orbit — a unique City-like hub whose districts are Space
-## Stations. 0 = not founded; each level opens one more station (Leveling).
+## The planet's Orbit — its Orbit City (centre) plus support districts.
+## 0 = not founded; it holds orbit_level + 1 districts (Leveling).
 @export var orbit_level: int = 0
 
 # ── District upgrade levels ──────────────────────────────────────────────────
@@ -97,7 +97,7 @@ func get_upgrade_cost() -> Dictionary:
 
 func recalculate_limits() -> void:
 	max_districts         = BASE_DISTRICTS + (level - 1)
-	max_orbital_districts = orbit_level   # one Space Station per Orbit level
+	max_orbital_districts = orbit_level + 1 if orbit_level > 0 else 0   # Orbit districts, the Orbit City not counted (§6.1)
 
 	var st = null
 	if Engine.has_singleton("SceneTree") and Engine.get_main_loop():
@@ -125,12 +125,16 @@ func buildings_in_district(district_label: String) -> Array[Dictionary]:
 	return result
 
 ## Building slots: 3 + 2 per level; the Capital District (a City) holds only a
-## few hand-picked buildings — 2 + 1 per level (its Civic Office and a 2-slot
-## Spaceport fit at Lv2).
+## few hand-picked buildings — 1 + 1 per level. Orbit support districts follow
+## the normal 3 + 2 per level (§6.1); the Orbit City holds none (an older
+## save's extra Space Station keeps its single module slot).
 func district_slots(poi: POIData) -> int:
 	var lv: int = district_levels.get(poi.label, 1)
 	if poi.is_orbital():
-		return 1   # a station holds one module; the Orbit levels instead
+		var d := DistrictDef.find_by_key(poi.type_tag)
+		if d == null or d.is_orbit_city:
+			return 0 if Leveling.is_orbit_city(GameState.get_planet_data(planet_seed), poi) else 1
+		return 0 if d.prefab.is_empty() and d.planet_support.is_empty() else 3 + (lv - 1) * 2
 	if poi.is_city():
 		return lv + 1
 	return 3 + (lv - 1) * 2
@@ -138,7 +142,8 @@ func district_slots(poi: POIData) -> int:
 ## Slots one more level adds to this district.
 static func slots_per_level(poi: POIData) -> int:
 	if poi.is_orbital():
-		return 0
+		var d := DistrictDef.find_by_key(poi.type_tag)
+		return 2 if d != null and not d.is_orbit_city and not d.planet_support.is_empty() else 0
 	return 1 if poi.is_city() else 2
 
 ## Cities a planet may hold: one per planet level (a soft cap the player lifts
@@ -199,6 +204,16 @@ func build_in_district(district: POIData, building_id: String,
 	if building_id == "spaceport":
 		has_spaceport = true
 	return true
+
+## Puts an Orbit district's prefab buildings in it (already paid with the
+## district: DistrictDef.placement_cost), each entry carrying its own price for
+## the refund ledger. They go through normal construction.
+func place_prefab(district: POIData, def: DistrictDef) -> void:
+	for item: Array in DistrictDef.prefab_items(def):
+		var cost: Dictionary = item[1]
+		var mats := cost.duplicate()
+		mats.erase(Economy.CREDITS)
+		build_in_district(district, String(item[0]), "", float(cost.get(Economy.CREDITS, 0.0)), mats)
 
 ## Stack one more of an existing building — goes through construction before merging.
 func stack_building_unchecked(district_label: String, building_id: String, merge_into_entry: Dictionary = {}) -> bool:

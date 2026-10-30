@@ -19,3 +19,4 @@ pop_cost = 750
 build_materials = {"moonstone": 75.0, "goods": 10.0, "rare_elements": 5.0}
 construct_duration = 4.0
 description = "Studies lunar samples on site. Moon only."
+retired = true

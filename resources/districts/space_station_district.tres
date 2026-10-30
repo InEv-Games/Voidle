@@ -5,14 +5,17 @@
 [resource]
 script = ExtResource("1_def")
 id = 3
-display_name = "Space Station"
-description = "An orbital platform above the planet. Houses advanced facilities unavailable on the surface."
+display_name = "Orbit City"
+description = "The Orbit's centre, founded with it: the same base as a Capital (Credits, Science, housing, energy, mineral). Holds no buildings; its support districts orbit around it."
 icon = "◈"
 placement = 3
 base_cost = 800.0
 construction_duration = 30.0
 is_orbital = true
-max_per_planet = 3
+max_per_planet = 1
 building_ids = Array[String]([])
 name_pool = Array[String](["Alpha Station", "Beta Station", "Orbital Hub", "Outpost Prime", "Helix Platform", "Apex Outpost", "Zenith Base"])
 unlock_skill = "orbital_assembly"
+base_outputs = {"credits": 2.0, "science": 1.0, "population": 600.0, "energy": 1.0, "raw": 2.0}
+base_tick = 20.0
+is_orbit_city = true

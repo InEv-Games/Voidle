@@ -4,19 +4,27 @@
 
 [resource]
 script = ExtResource("1_def")
-pop_cost = 750
 building_id = "advanced_lab"
 display_name = "Research Institute"
-description = "Larger research programmes."
+description = "A dedicated research institute."
 allowed_poi_types = Array[int]([4])
 allowed_planet_types = Array[int]([])
 base_cost = 450.0
 min_planet_lv = 1
-construct_duration = 4.0
+max_per_district = 0
+max_per_planet = 0
+construct_duration = 8.0
 tick_duration = 20.0
-energy_per_tick = -3.0
+energy_per_tick = -6.0
 outputs = {"science": 12.0}
-inputs = {"goods": 0.333333}
+inputs = {"goods": 3.0}
 planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 750
 tier = 2
-unlocked_by_default = false
+cost_tier = -1
+min_civilization = 0
+required_features = Array[String]([])
+unlocked_by_default = true

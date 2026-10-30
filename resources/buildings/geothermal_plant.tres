@@ -4,21 +4,27 @@
 
 [resource]
 script = ExtResource("1_def")
-pop_cost = 750
-required_features = Array[String](["terrain_volcanic", "terrain_geothermal"])
 building_id = "geothermal_plant"
 display_name = "Geothermal Plant"
-description = "Taps the heat below. Must stand on a volcanic field or a geothermal rift (+30% / +40%)."
+description = "Taps the world's heat. Must stand on a Volcanic Field or Geothermal Rift."
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([])
-base_cost = 750.0
+base_cost = 150.0
 min_planet_lv = 1
-construct_duration = 4.0
+max_per_district = 0
+max_per_planet = 0
+construct_duration = 8.0
 tick_duration = 20.0
 energy_per_tick = 0.0
-outputs = {"energy": 15.0}
-inputs = {"goods": 0.333333}
+outputs = {"energy": 18.0}
+inputs = {"goods": 1.0}
 planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 250
 tier = 2
-unlocked_by_default = false
-output_tag = "geothermal"
+cost_tier = 1
+min_civilization = 0
+required_features = Array[String](["terrain_volcanic", "terrain_geothermal"])
+unlocked_by_default = true
