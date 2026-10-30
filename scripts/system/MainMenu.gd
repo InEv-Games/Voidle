@@ -332,7 +332,7 @@ func _show_slots(for_new: bool) -> void:
 		var item := ListItem.create("SLOT %d" % (slot + 1), "save",
 			"CURRENT" if slot == GameState.save_slot and not info.is_empty() else "", [], _slot_text(info))
 		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var usable := for_new or (not info.is_empty() and info.get("ok", false))
+		var usable: bool = for_new or (not info.is_empty() and info.get("ok", false))
 		item.clickable = usable
 		if not usable:
 			item.modulate.a = 0.45
@@ -375,7 +375,7 @@ static func _slot_text(info: Dictionary) -> String:
 		return String(info.get("why", "Can't be loaded"))
 	var secs := int(info.get("play_seconds", 0.0))
 	var played := "%dh %02dm" % [secs / 3600, (secs / 60) % 60] if secs >= 3600 else "%dm" % (secs / 60)
-	var t := int(info.get("saved_at", 0.0)) + Time.get_time_zone_from_system().get("bias", 0) * 60
+	var t: int = int(info.get("saved_at", 0.0)) + Time.get_time_zone_from_system().get("bias", 0) * 60
 	var d := Time.get_datetime_dict_from_unix_time(t)
 	return "Civ %d  ·  %s played  ·  %02d.%02d %02d:%02d" % [int(info.get("civilization_type", 0)), played,
 		d["day"], d["month"], d["hour"], d["minute"]]
