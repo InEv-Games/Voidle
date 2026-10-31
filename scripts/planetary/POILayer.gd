@@ -3,6 +3,8 @@ extends Node2D
 signal poi_clicked(index: int, data: Dictionary)
 ## The small Capital badge beside a City's marker was clicked (opens its Capital District).
 signal capital_clicked(index: int)
+## A relic site was clicked (Relics): its relic id.
+signal relic_clicked(relic_id: String)
 
 const DOT_RADIUS       := 5.0
 const DOT_HOVER_RADIUS := 8.0
@@ -441,6 +443,59 @@ func _draw_wonders() -> void:
 			draw_rect(box, Color(BIG_ICON_COL, 0.6), false, 1.0)
 			draw_string(font, box.position + Vector2(5.0, 11.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, BIG_ICON_COL)
 
+## Relic sites (Relics.sites_on): [{ id, name, lon, lat (radians) }].
+var relics: Array = []
+var _hover_relic: Dictionary = {}
+const RELIC_COL := Color(1.0, 0.80, 0.35)
+const _RELIC_ICON := [
+	"...#...",
+	"..###..",
+	".##.##.",
+	"##...##",
+	".##.##.",
+	"..###..",
+	"...#...",
+]
+
+func _draw_relics() -> void:
+	if relics.is_empty() or marker_vis <= 0.02:
+		return
+	var p := _get_planet_params()
+	if p.is_empty():
+		return
+	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
+	var pulse := 0.65 + 0.35 * sin(Time.get_ticks_msec() / 260.0)
+	for r: Dictionary in relics:
+		var at = _wonder_screen(r, p)
+		if at == null:
+			continue
+		var sp := _snap_local((at as Vector2) - global_position)
+		var hov: bool = _hover_relic.get("id", "") == r["id"]
+		_draw_pixel_glow(sp, block * (5.0 + 2.0 * pulse), 0.35 * pulse * marker_vis)
+		_draw_pixel_icon(sp, _RELIC_ICON, block, Color(RELIC_COL.lightened(0.35) if hov else RELIC_COL, marker_vis), marker_vis)
+		if hov:
+			var font: Font = _orbitron if _orbitron else ThemeDB.fallback_font
+			var text := "RELIC SITE · CLICK"
+			const SIZE := 9
+			var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE).x
+			var box := Rect2(sp + Vector2(-tw * 0.5 - 5.0, -block * 3.0 - 15.0), Vector2(tw + 10.0, 15.0))
+			draw_rect(box, Color(0.04, 0.07, 0.14, 0.88))
+			draw_rect(box, Color(RELIC_COL, 0.7), false, 1.0)
+			draw_string(font, box.position + Vector2(5.0, 11.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, RELIC_COL)
+
+func _relic_at(global_pos: Vector2) -> Dictionary:
+	if marker_vis < 0.5 or relics.is_empty():
+		return {}
+	var p := _get_planet_params()
+	if p.is_empty():
+		return {}
+	var reach := maxf(9.0, _pixel_size() * 2.5)
+	for r: Dictionary in relics:
+		var at = _wonder_screen(r, p)
+		if at != null and (at as Vector2).distance_to(global_pos) <= reach:
+			return r
+	return {}
+
 func _wonder_at(global_pos: Vector2) -> Dictionary:
 	if marker_vis < 0.5 or wonders.is_empty():
 		return {}
@@ -871,6 +926,8 @@ func _get_rotation() -> float:
 func _process(_delta: float) -> void:
 	if not _planet:
 		return
+	if not relics.is_empty():
+		queue_redraw()   # relic marks pulse (never from _draw: queue_redraw there loops)
 	var p := _get_planet_params()
 	if p.is_empty():
 		return
@@ -1016,6 +1073,7 @@ func _draw_scene(font: Font) -> void:
 	var merges := _label_merges()
 	_draw_roads()
 	_draw_wonders()
+	_draw_relics()
 	_draw_links()
 
 	for ft in _floating_texts:
@@ -1204,6 +1262,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventMouseMotion:
 		_hover_port = _port_at(event.global_position)
+		var prev_r: String = _hover_relic.get("id", "")
+		_hover_relic = _relic_at(event.global_position)
+		if String(_hover_relic.get("id", "")) != prev_r:
+			queue_redraw()
+			if not _hover_relic.is_empty():
+				AudioManager.play("poi_ping")
+				CursorManager.set_state(CursorManager.State.POINTER)
 		var prev_w: String = _hover_wonder.get("name", "")
 		_hover_wonder = _wonder_at(event.global_position)
 		if String(_hover_wonder.get("name", "")) != prev_w:
@@ -1234,6 +1299,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			CursorManager.set_state(CursorManager.State.NORMAL)
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var rel := _relic_at(event.global_position)
+		if not rel.is_empty():
+			AudioManager.play("poi_select")
+			relic_clicked.emit(String(rel["id"]))
+			get_viewport().set_input_as_handled()
+			return
 		var cap := _get_capital_at(event.global_position)
 		if cap >= 0:
 			AudioManager.play("poi_select")

@@ -39,6 +39,7 @@ SettingsManager="*res://scripts/system/SettingsManager.gd"
 ScreenshotManager="*res://scripts/system/ScreenshotManager.gd"
 NavigationManager="*res://scripts/system/NavigationManager.gd"
 CommandRegistry="*res://scripts/commands/CommandRegistry.gd"
+NewsFeed="*res://scripts/system/NewsFeed.gd"
 
 [display]
 

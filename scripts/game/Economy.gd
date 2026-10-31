@@ -569,6 +569,10 @@ static var _cache_frame: int = -1
 static var _city_maps: Dictionary = {}     # planet seed -> { district label -> city label }
 static var _bonus_cache: Dictionary = {}   # "seed|city|id" -> multiplier
 
+## Drops this frame's support multipliers (a trait or relic changed them).
+static func invalidate_bonus_cache() -> void:
+	_cache_frame = -1
+
 static func _frame_caches() -> void:
 	var f := Engine.get_process_frames()
 	if f != _cache_frame:
@@ -596,7 +600,7 @@ static func scope_bonus(pp: PlanetProgress, district_label: String, id: String, 
 	var ck := "%d|%s|%s" % [pp.planet_seed, city, id]
 	if _bonus_cache.has(ck):
 		return _bonus_cache[ck]
-	var mult := city_support(pp, city, id, pd) * planet_bonus(pp, id, pd)
+	var mult := city_support(pp, city, id, pd) * planet_bonus(pp, id, pd) * Relics.global_mult(id)
 	_bonus_cache[ck] = mult
 	return mult
 
@@ -618,12 +622,12 @@ static func city_support(pp: PlanetProgress, city: String, id: String, pd: Plane
 	return mult
 
 ## 1 + the planet-scale supports for `id`: every finished Orbit district's
-## DistrictDef.planet_support (whatever buildings it holds), plus legacy
-## planet_wide buildings.
+## DistrictDef.planet_support (whatever buildings it holds), the world's
+## traits (PlanetTags), plus legacy planet_wide buildings.
 static func planet_bonus(pp: PlanetProgress, id: String, pd: PlanetData = null) -> float:
 	if pd == null:
 		pd = GameState.get_planet_data(pp.planet_seed)
-	var mult := 1.0
+	var mult := 1.0 + PlanetTags.planet_fraction(pp.planet_seed, id)
 	if pd != null:
 		for p: POIData in pd.custom_pois:
 			if not p.is_orbital() or p.constructing:

@@ -76,7 +76,7 @@ Branch: `Development/AI-FastBuild`. Değişiklikler **stage'li ama commit edilme
 2. **Kıyı / göl / nehir binaları artık "tam üzerinde" istiyor.** Bu çizgiler bir hücre ince olduğundan Tidal Generator, Coastal Apartments, Lakeside Market ve River Extractor için yer bulmak zorlaşabilir. Playtest'te sorun çıkarsa tek satır: `FeatureMap.EDGE_NEAR_OK = true`.
 3. **District'in coğrafyası artık yalnız kendi konumundan okunuyor.** Önceden City'nin coğrafyası da district'e taşınıyordu ("City'nin konumu dahil").
 4. **Konum (proximity / mesafe) etkileri binalarda korundu.** Belge yalnız coğrafyayı binalardan kaldırıyor.
-5. **Orbit district kuruluşu roket animasyonu kadar sürüyor (~20 sn), 4 sn değil.** Görsel akışı bozmamak için dokunmadım.
+5. ~~Orbit district kuruluşu roket animasyonu kadar sürüyor.~~ 31.10'da değişti (§8): artık normal district gibi süre sayıyor; animasyon onu izliyor.
 6. **Orbit district fiyatı sabit 600 + prefab.** Tekrar artışı yok; bu mevcut davranış.
 7. **"Sıvı deniz" yalnız Terran dünyalar** olarak yorumlandı. Ice dünyaların kıyısı var ama Tidal kurulamıyor.
 8. **Ay coğrafyaları** `PlanetData.Type.MOON` tipindeki gövdelerde oluşuyor.
@@ -110,3 +110,55 @@ Branch: `Development/AI-FastBuild`. Değişiklikler **stage'li ama commit edilme
 Integrate the building / district / geography decisions of 2026-10-29
 ```
 (Ayrıntılı gövde, `git commit` sırasında bu raporun §2'sinden alınabilir.)
+
+## 8. Ek değişiklikler (2026-10-31, kullanıcı isteği)
+
+1. **Rüzgâr çizgileri geri geldi.** Windy Region coğrafya olarak yok, ama Energy merceğinde rüzgâr akıntıları yine çiziliyor. Artık yalnız **Dağ ve Tundra** hücrelerinde, atmosferi olan dünyalarda (Wind Turbine'in kurulabildiği yerler) görünüyorlar. Rüzgârlı yerlerde daha yoğunlar ve her uygun hücrede en az biraz akıntı var (`FeatureMap.WIND_LENS_MIN = 0.45`).
+2. **Orbit roket animasyonu inşa ilerlemesine bağlandı.**
+   - Orbit district'leri (Orbit City dahil) artık yüzey district'leri gibi `ProductionManager` içinde ilerliyor.
+   - Süre `construction_duration × ORBIT_BUILD_TIME_MULT` (1.25). Orbit district'lerinin süresi 15 sn yapıldı, yani yaklaşık 19 sn; yüzeydekiler 15 sn.
+   - Belgedeki "Orbit district 4 sn" değerini kullanıcının "diğer district gibi" isteği geçersiz kıldı.
+   - Uçuş sürenin %85'i (`ORBIT_LAUNCH_SHARE`), yörüngeye yerleşme %15'i.
+   - Animasyon kendi saatini değil district'in ilerlemesini okuyor. İnşa hızı tek yerden değişiyor (`ProductionManager.district_build_speed()`); bunu hızlandırınca roket de hızlanıyor.
+   - Yan fayda: roket uçarken kayıt alınıp yüklense de district tamamlanıyor. Eskiden animasyon kaybolunca district yarım kalabiliyordu.
+
+## 9. Yeni mekanikler (2026-10-31): Relics, Planetary Tags, News
+
+Hepsi veri tabanlı. Sayılar ve metinler dosyanın başındaki tablolardan değiştirilebilir. Oyun içinde test edilmedi; yalnız headless derleme ve küçük bir mantık testi yapıldı.
+
+### Planetary Tags (`scripts/game/PlanetTags.gd`)
+- Her dünyada iki sabit pill var: **boyut** ve **atmosfer**. Bunlar yalnız bilgi verir. Atmosfer ipucu Wind Turbine şartını hatırlatır.
+- Trait'lerin etkisi açıkça yazıyor ("+10% Science"). Etki gezegen ölçeğinde, Orbit desteğiyle birlikte sayılır (`Economy.planet_bonus`).
+- **Dünya** "Cradle World" (+10% housing) trait'iyle başlar; eski kayıtlara da yüklemede eklenir.
+- **Diğer dünyalar** scan edilince 3 kart çıkar (survivors tarzı seçim ekranı) ve oyuncu birini seçer. "Later" ile ertelenebilir; o zaman üstte "CHOOSE A PLANET TRAIT" butonu ve gezegen panelinde "+ Choose a trait" pill'i kalır.
+- **Planet level 3 ve 5** birer ek seçim verir (`BONUS_LEVELS`).
+- Teklifler kayda yazılır, yeniden yükleyerek kartları değiştirmek mümkün değil.
+- 13 trait var. Bazıları karışık etkili ("+15% Science · −5% Credits"), üçü yalnız Ay / çorak dünyalarda çıkar.
+- Eski tür bazlı modifier'lar ("Fertile Soil +2" vb.) artık gösterilmiyor. Ekonomideki tek etkileri (Ay'ın +30% maden çarpanı vb.) kaldırıldı. **Not:** bu, Ay madenciliğini %30 azaltır. Telafi istenirse Ay'ın trait havuzunda Regolith Seas (+15% hammadde) var.
+
+### Relics (`scripts/game/Relics.gd`, `scripts/ui/GameOverlays.gd`)
+- Toplam **5 relic** var, sırayla bulunuyor:
+  1. **The First Compass** — Dünya, Old Ruins içinde. +5% Credits her yerde. 250 Science.
+  2. **The Selene Seal** — Ay. District'ler %25 daha hızlı kurulur (Orbit roketi dahil; `district_build_speed()` hook'una bağlı). 600 Science.
+  3–5. Arid, Ice ve Volcanic dünyalarda: Rust Tablet (+5% raw & processed), Frost Choir (+5% Science), Ember Heart (+5% enerji). Demoda ulaşılamazlar; müzede "???" ve ipucu olarak görünürler.
+- Haritada nabız atan altın renkli bir işaret var. Tıklanınca hikâye kartı açılıyor, Science ile "EXCAVATE" ediliyor. Bulunan relic'in bonusu ve **sonraki relic'in ipucu** gösteriliyor.
+- Sıradaki relic'in işareti, öncekisi bulunduktan ve dünyası scan edildikten sonra görünüyor.
+- **Ay'da Old Ruins yok** (coğrafya kararına dokunmadım). Ay relic'i bu yüzden bir Krater'in içinde.
+- Bonuslar `Economy.scope_bonus` içinde City ve gezegenden sonra üçüncü, global ölçek olarak çarpılıyor.
+- **Museum:** sol paneldeki kısayol satırına kütüphane ikonlu bir buton eklendi. 5 slotu gösteriyor: bulunanlar (bonus + hikâye), sıradaki (ipucu), bilinmeyenler.
+
+### News (`scripts/system/NewsFeed.gd`, yeni autoload `NewsFeed`)
+- Ekranın altında, sol panel ile sağ kenar arasında kayan bir haber şeridi var.
+- **Olay haberleri** (altın, "◆"): district kuruldu, bina açıldı (6 sn içindekiler tek haberde toplanıyor), araştırma bitti, City seviye atladı, gezegen seviyesi, mineral keşfi, trait seçildi, relic bulundu, lander ve final roket.
+- **Flavour haberleri** (gri): oyuncunun kendi City ve district adlarıyla 20 şablon, ayrıca 4 genel satır. Bekleyen olay yoksa 6 sn arayla geliyor. Örnek: "Three workers lost their lives in an accident at {district}…"
+- Herhangi bir koddan haber eklenebilir: `NewsFeed.post("…")`.
+- Lens çubuğu, şeridin üstünde kalsın diye 30 px yukarı alındı.
+
+### Açık sorular
+- Relic kazı bedeli yalnız Science. "Yakında district olmalı" gibi bir şart eklenebilir.
+- Trait değerleri (+10% / +15%) ve relic bonusları (+5%, %25 hız) ilk tahmin; denge geçişi gerekir.
+
+### Düzeltmeler (2026-10-31, ilk deneme sonrası)
+- **Donma düzeltildi.** Relic işaretinin nabız animasyonu `_draw()` içinden `queue_redraw.call_deferred()` çağırıyordu. Godot 4'te `queue_redraw` da ertelendiği için bu tek karede sonsuz döngüye giriyordu. Döngü, Dünya'daki relic işareti görününce (harita kurulunca) başlıyordu. Yeniden çizim artık `POILayer._process` içinden yapılıyor.
+- **News şeridi** artık tam genişlikte ve NEWS etiketi sağda. Şerit view'in left panel'inin hemen altında çiziliyor; panel üstüne açılıyor, şerit kaymıyor. Left panel olmayan view'lerde şerit kendi katmanında duruyor.
+- **News boş kalmıyor.** Haberler arka arkaya akıyor, aralarında "◈" ayırıcı var. Bekleyen olay yoksa yerine bir flavour haber (artık 28 tane) ya da canlı durum satırı geliyor (hazine, Science, nüfus/kapasite, enerji dengesi, City/district sayısı). Son 8 dolgu haberi hemen tekrar etmiyor.

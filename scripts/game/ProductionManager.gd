@@ -162,6 +162,8 @@ func _tick_all(delta: float) -> void:
 					pp.upgrade_paid = {}
 					pp.level += 1
 					pp.recalculate_limits()
+					PlanetTags.on_planet_level(GameState.get_planet_data(planet_seed), pp.level)
+					NewsFeed.post_planet_level(planet_seed, pp.level)
 					GameState.planet_progress_changed.emit(planet_seed)
 
 			# City level-ups
@@ -198,11 +200,12 @@ func _tick_all(delta: float) -> void:
 					GameState.planet_progress_changed.emit(planet_seed)
 					break  # dict modified — next frame handles remaining
 
+			var build_speed := district_build_speed()
 			for poi in pd.custom_pois:
 				if poi.constructing:
-					if poi.is_orbital():
-						continue  # Orbital progress is driven by rocket animation in PlanetaryView
-					poi.construct_progress += delta / max(0.1, poi.construct_duration)
+					# Orbit districts too: their rocket animation follows this progress
+					# (PlanetaryView), so a faster build is a faster flight
+					poi.construct_progress += delta * build_speed / max(0.1, poi.construct_duration)
 					if poi.construct_progress >= 1.0:
 						poi.constructing = false
 						poi.construct_progress = 1.0
@@ -328,6 +331,12 @@ func _tick_all(delta: float) -> void:
 
 		if pd:
 			_tick_district_base(pp, pd, delta)
+
+## How fast districts are built (1 = their construction_duration). The one
+## place a construction speed-up (research, rush …) hooks in: surface districts
+## and Orbit districts — and with them the Orbit rocket animation — follow it.
+func district_build_speed() -> float:
+	return Relics.build_speed()
 
 ## Every finished surface district makes its base income (DistrictDef.base_outputs)
 ## on its own cycle. Energy and population are flows / capacity, handled in
@@ -680,8 +689,7 @@ func _skill_mods(pp: PlanetProgress, id: String, v: float, output_tag: String) -
 		Economy.CREDITS:
 			v *= st.get_credits_mult()
 		Economy.RAW:
-			v *= st.get_mine_output_mult() * PlanetModifier.combined(
-				PlanetModifier.for_planet(_planet_type(pp.planet_seed)), PlanetModifier.Effect.MINE_OUTPUT_MULT)
+			v *= st.get_mine_output_mult()   # planet traits work through Economy.planet_bonus (PlanetTags)
 			v *= st.reserve_mult(idle_ratio())
 		Economy.GOODS, Economy.RARE:
 			v *= st.reserve_mult(idle_ratio())

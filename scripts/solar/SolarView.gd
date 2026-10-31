@@ -145,6 +145,8 @@ func _draw_rocket_fx() -> void:
 
 func _ready() -> void:
 	CursorManager.set_state(CursorManager.State.NORMAL)
+	if has_node("Background"):
+		Starfield.apply(get_node("Background") as ColorRect)
 	
 	# back button removed — right-click navigates back
 	get_tree().root.size_changed.connect(_on_resize)

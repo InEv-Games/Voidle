@@ -11,6 +11,17 @@ signal planet_progress_changed(seed_val: int)
 signal asteroid_discovered(slot: int, count: int)
 signal global_resources_changed
 signal district_placed(planet_seed: int, district_type_id: int)
+## Planet traits (PlanetTags): a pick was queued or taken.
+signal tag_offers_changed
+## A relic was found (Relics).
+signal relics_changed
+
+## Planet traits: { "seed": [trait id, …] } and picks waiting { "seed": [[id ×3], …] }.
+var planet_tags: Dictionary = {}
+var tag_offers: Dictionary = {}
+## Relics: { relic id: unix time found } and their sites { relic id: [lon, lat] }.
+var relics_found: Dictionary = {}
+var relic_sites: Dictionary = {}
 
 # ── Starting Config (edit these to change new-game defaults) ─────────────────
 ## Starting credits / Science for a new game come from the balance profile
@@ -353,6 +364,7 @@ func _bootstrap_world() -> void:
 	_seed_starting_resources()
 	_apply_pending_pois()
 	_sync_mineral_discoveries()
+	PlanetTags.ensure_home(get_home_planet())   # the home world's trait (older saves too)
 	world_ready.emit()
 
 ## Starting budget and unlocks of a brand-new game (Balance.cfg + Starting Config).
@@ -1173,6 +1185,10 @@ func save() -> void:
 		"world_gen":            world_gen,
 		"scanned_bodies":       scanned_bodies,
 		"landing_paid":         landing_paid,
+		"planet_tags":          planet_tags,
+		"tag_offers":           tag_offers,
+		"relics_found":         relics_found,
+		"relic_sites":          relic_sites,
 		"balance_profile":      Balance.profile_name,
 		"credits":              credits,
 		"science_points":       science_points,
@@ -1310,6 +1326,10 @@ func load_save() -> bool:
 	world_gen = int(data.get("world_gen", 1))
 	scanned_bodies = data.get("scanned_bodies", {})
 	landing_paid = data.get("landing_paid", {})
+	planet_tags = data.get("planet_tags", {})
+	tag_offers = data.get("tag_offers", {})
+	relics_found = data.get("relics_found", {})
+	relic_sites = data.get("relic_sites", {})
 	# time away (KARARLAR §4): only measured and shown — no offline economy yet.
 	# A clock that went backwards counts as no time away (GDD §19.27).
 	var saved_at := float(data.get("saved_at", 0.0))
@@ -1471,6 +1491,10 @@ func delete_save(remove_file := true, rebuild := true) -> void:
 	civilization_type = 0
 	surveyed_bodies.clear()
 	discovered_minerals.clear()
+	planet_tags.clear()
+	tag_offers.clear()
+	relics_found.clear()
+	relic_sites.clear()
 	planet_view_unlocked = false
 	global_resources.clear()
 	_planet_progress.clear()

@@ -58,6 +58,8 @@ const COVER_FOREST := 1
 const COVER_DESERT := 2
 const COVER_TUNDRA := 3
 const COVER_VOLCANIC := 4
+## Lowest wind value a Mountain / Tundra cell gets in the lens texture.
+const WIND_LENS_MIN := 0.45
 const COVER_CAVES := 5
 const COVER_ION_STORM := 6
 const LINE_RIVER := 1
@@ -84,8 +86,8 @@ static func has_map(planet_seed: int) -> bool:
 static func texture(planet_seed: int) -> ImageTexture:
 	return _maps[planet_seed]["tex"] if _maps.has(planet_seed) else null
 
-## Wind strength (ResourceMap "wind", the "Wind %" of a site) on the feature
-## grid, for the Energy lens's wind currents; null without a wind field.
+## Wind strength on the feature grid for the Energy lens's wind currents —
+## Mountain and Tundra cells only (see _compute); null without a wind field.
 static func wind_texture(planet_seed: int) -> ImageTexture:
 	return _maps[planet_seed].get("wind", null) if _maps.has(planet_seed) else null
 
@@ -114,6 +116,19 @@ static func mask_at(planet_seed: int, lon: float, lat: float) -> int:
 	if not _maps.has(planet_seed):
 		return 0
 	return (_maps[planet_seed]["mask"] as PackedInt32Array)[_index(lon, lat)]
+
+## Centres (lon, lat radians) of every grid cell holding feature `f`; empty
+## when the map isn't built yet.
+static func cells_with(planet_seed: int, f: int) -> Array:
+	var out: Array = []
+	if not _maps.has(planet_seed):
+		return out
+	var mask: PackedInt32Array = _maps[planet_seed]["mask"]
+	var bit := 1 << f
+	for i in mask.size():
+		if mask[i] & bit:
+			out.append(_cell_lonlat(i % WIDTH, i / WIDTH))
+	return out
 
 ## Share of each feature's bonus a site gets: 1.0 on it, 0.5 within
 ## terrain_near_km of its visible edge, nothing otherwise (only keys > 0).
@@ -388,13 +403,21 @@ static func _compute(data: PlanetData) -> Dictionary:
 	var out := {"mask": mask, "img": _pack(cover, lines, spots, windy)}
 	if not river_paths.is_empty():
 		out["river_img"] = _bake_rivers(river_paths, data.seed, land)
+	# Wind currents for the Energy lens: only where wind is used — on Mountains
+	# and Tundra of a world with an atmosphere (the Wind Turbine's sites; the
+	# windy region is no longer a feature). Every such cell shows some current,
+	# windier ones more (the shader draws from 0.35 up).
 	if ResourceMap.has_map(data.seed) and data.has_atmosphere:
 		var wb := PackedByteArray(); wb.resize(n)
+		var windy_bits := (1 << F.MOUNTAIN) | (1 << F.TUNDRA)
 		for y in HEIGHT:
 			for x in WIDTH:
 				var i := y * WIDTH + x
+				if land[i] == 0 or (mask[i] & windy_bits) == 0:
+					continue
 				var ll := _cell_lonlat(x, y)
-				wb[i] = int(clampf(ResourceMap.field(data.seed, "wind", ll.x, ll.y), 0.0, 1.0) * 255.0) if land[i] == 1 else 0
+				var w := clampf(ResourceMap.field(data.seed, "wind", ll.x, ll.y), 0.0, 1.0)
+				wb[i] = int((WIND_LENS_MIN + (1.0 - WIND_LENS_MIN) * w) * 255.0)
 		out["wind_img"] = Image.create_from_data(WIDTH, HEIGHT, false, Image.FORMAT_R8, wb)
 	return out
 

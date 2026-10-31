@@ -112,11 +112,13 @@ var _explore_btns: Array[Button] = []
 func fill_shortcuts(row: HBoxContainer) -> void:
 	var skill_btn := _make_skill_button()
 	var trade_btn := _make_trade_button()
+	var museum_btn := _make_museum_button()
 	var explore_btn := _make_explore_button()
 	explore_btn.visible = GameState.explore_available()
-	for b: Button in [skill_btn, trade_btn, explore_btn]:
+	for b: Button in [skill_btn, trade_btn, museum_btn, explore_btn]:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # share the row evenly
 		row.add_child(b)
+	museum_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # square, icon only
 	for list: Array[Button] in [_skill_btns, _explore_btns]:   # drop rows freed with their view
 		for i in range(list.size() - 1, -1, -1):
 			if not is_instance_valid(list[i]):
@@ -193,6 +195,50 @@ func _make_trade_button() -> Button:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
 	return b
+
+## Museum: every relic of the game, found or not (GameOverlays.open_museum).
+func _make_museum_button() -> Button:
+	var b := IconButton.create("", "library", IconButton.Variant.DEFAULT)
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
+	b.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		GameOverlays.open_museum(self))
+	b.mouse_entered.connect(func() -> void:
+		AudioManager.play("hover")
+		CursorManager.set_state(CursorManager.State.POINTER)
+		TooltipManager.show_tip("Museum", "Relics found: %d / %d. Each gives a bonus everywhere and a hint to the next." % [Relics.found_count(), Relics.count()]))
+	b.mouse_exited.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		TooltipManager.hide_tip())
+	return b
+
+## A pill under the top bar while a world has a trait pick waiting.
+var _trait_btn: IconButton = null
+var _trait_poll := 0.0
+
+func _update_trait_notice(delta: float) -> void:
+	_trait_poll -= delta
+	if _trait_poll > 0.0 or _top_layer == null or not is_instance_valid(_top_layer):
+		return
+	_trait_poll = 0.5
+	var seeds := PlanetTags.pending_seeds()
+	var want := visible and not seeds.is_empty() and not TutorialManager.blocks_hud()
+	if not want:
+		if _trait_btn != null and is_instance_valid(_trait_btn):
+			_trait_btn.queue_free()
+		_trait_btn = null
+		return
+	if _trait_btn != null and is_instance_valid(_trait_btn):
+		return
+	_trait_btn = IconButton.create("CHOOSE A PLANET TRAIT", "planet", IconButton.Variant.POSITIVE)
+	_trait_btn.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_trait_btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_trait_btn.offset_top = 96.0
+	_trait_btn.pressed.connect(func() -> void:
+		var s := PlanetTags.pending_seeds()
+		if not s.is_empty():
+			GameOverlays.open_trait_picker(self, s[0]))
+	_top_layer.add_child(_trait_btn)
 
 ## Explore: a read-only look at every map from inside the game, once the
 ## tutorial is done (GameState.start_explore). Hidden until then.
@@ -384,6 +430,7 @@ func _on_science_changed(_new_val: float) -> void:
 
 func _process(delta: float) -> void:
 	_update_shortcut_fallback()
+	_update_trait_notice(delta)
 	_res_poll += delta
 	if _res_poll >= 0.25:
 		_res_poll = 0.0

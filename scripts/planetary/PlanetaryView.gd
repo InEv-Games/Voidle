@@ -176,6 +176,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	if has_node("Background"):
 		get_node("Background").mouse_filter = Control.MOUSE_FILTER_IGNORE
+		Starfield.apply(get_node("Background") as ColorRect)
 	if planet_renderer:
 		planet_renderer.mouse_filter = Control.MOUSE_FILTER_PASS
 		if planet_renderer.get_parent() is Control:
@@ -193,10 +194,20 @@ func _ready() -> void:
 			(planet_renderer.material as ShaderMaterial).set_shader_parameter("night_shadow", v))
 	poi_layer.poi_clicked.connect(_on_district_clicked)
 	poi_layer.capital_clicked.connect(_on_capital_clicked)
+	poi_layer.relic_clicked.connect(func(id: String) -> void: GameOverlays.open_relic_site(self, id))
+	GameState.relics_changed.connect(_refresh_relic_sites)
+	GameState.tag_offers_changed.connect(func() -> void:
+		if current_data != null:
+			_set_planet_hero(current_data)
+			_refresh_active_panel())
 	get_tree().root.size_changed.connect(_on_resize)
 	# back button removed — navigation handled via system dock / unlock flow
 	GameState.unlock_changed.connect(_on_unlock_changed)
 	GameState.expedition_changed.connect(_on_expedition_changed)
+	if GameState.has_meta("focus_news"):   # came here from a news item (NewsFeed.go_to)
+		var fn: Dictionary = GameState.get_meta("focus_news")
+		GameState.remove_meta("focus_news")
+		(func() -> void: focus_news_location(fn)).call_deferred()
 	if GameState.has_meta("focus_lander"):   # came here from the HUD's lander notice
 		var fl_seed := int(GameState.get_meta("focus_lander"))
 		GameState.remove_meta("focus_lander")
@@ -2335,6 +2346,48 @@ func focus_lander_at(moon_seed: int) -> void:
 	_reveal_panel()
 	_show_planet_overview()
 
+## A news item was clicked (NewsFeed.go_to): { seed, label } turns the camera
+## to that district / City and opens its panel; { seed, lon, lat } turns to a
+## spot (a relic site); { seed } shows the world. Another world is opened first
+## (its Moon or parent in place, any other through a scene change).
+func focus_news_location(loc: Dictionary) -> void:
+	var seed_val := int(loc.get("seed", -1))
+	var pd := GameState.get_planet_data(seed_val)
+	if pd == null:
+		return
+	if current_data == null or current_data.seed != seed_val:
+		var related := current_data != null and (pd.planet_type == PlanetData.Type.MOON \
+			or current_data.planet_type == PlanetData.Type.MOON)
+		if not related or _switching_body:
+			GameState.set_meta("focus_news", loc)
+			pd.set_meta("__solar_data", GameState.get_home_solar())
+			SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", pd)
+			return
+		await _switch_to_body(pd, Rect2())
+		if current_data == null or current_data.seed != seed_val:
+			return
+	_reveal_panel()
+	var globe_c := planet_renderer.global_position + planet_renderer.size * 0.5
+	var poi := _find_poi(current_data, String(loc.get("label", "")))
+	if poi != null and not poi.constructing:
+		if poi.is_orbital():
+			_build_orbit_panel(current_data)
+		elif poi.is_city():
+			_build_city_panel(poi, current_data)
+			_focus_city(poi)
+		else:
+			_focus_on_site(poi.lon_deg, poi.lat_deg, 0.5)
+			_set_zoom_target(maxf(_zoom_target, CITY_FOCUS_ZOOM), globe_c)
+			_build_district_panel(poi, current_data)
+	elif poi != null:
+		_focus_on_site(poi.lon_deg, poi.lat_deg, 0.5)
+		_set_zoom_target(maxf(_zoom_target, CITY_FOCUS_ZOOM), globe_c)
+	elif loc.has("lon"):
+		_focus_on_site(rad_to_deg(float(loc["lon"])), rad_to_deg(float(loc["lat"])), 0.5)
+		_set_zoom_target(maxf(_zoom_target, CITY_FOCUS_ZOOM), globe_c)
+	else:
+		_show_planet_overview()
+
 func _begin_lunar_landing() -> void:
 	var city_def := DistrictDef.find(DistrictDef.Type.CITY)
 	if city_def == null or current_data == null:
@@ -2908,6 +2961,7 @@ func _upload_territories(data: PlanetData) -> void:
 		_territories.append({"n": n, "r": r, "poi": pd,
 			"col": Vector4(c.r, c.g, c.b, light), "sea": 1.0 if _is_sea_site(pd) else 0.0})
 	poi_layer.wonders = _wonder_sites(data)
+	poi_layer.relics = Relics.sites_on(data)
 	# Neighbour pairs drive the arcs and label merging in POILayer; roads are
 	# routed separately (_rebuild_roads).
 	var pairs := _neighbor_pairs()
@@ -3324,18 +3378,9 @@ func _set_planet_hero(data: PlanetData) -> void:
 	if data == null:
 		return
 	var pp := GameState.get_planet(data.seed)
-	var size_str := "Small" if data.planet_size < 0.8 else ("Large" if data.planet_size > 1.3 else "Medium")
-	var atm_str := "None"
-	if data.has_atmosphere:
-		atm_str = "Thin" if data.atmosphere_density < 0.4 else ("Dense" if data.atmosphere_density > 0.7 else "Standard")
-	var items: Array = [
-		[size_str, HeroTag.Tone.PLAIN, "%s planet." % size_str],
-		["Atm. " + atm_str, HeroTag.Tone.PLAIN, "No atmosphere." if atm_str == "None" else "%s atmosphere." % atm_str],
-	]
-	for m: PlanetModifier in PlanetModifier.for_planet(data.planet_type):
-		items.append(["%s %s" % [m.display_name, m.value_label()],
-			HeroTag.Tone.GOOD if m.is_positive() else HeroTag.Tone.BAD,
-			m.description + "\n\n" + m.value_label()])
+	var items: Array = []
+	for t: Array in _planet_tag_items(data):
+		items.append([t[0], t[1], t[2]])
 	var caption: String = PLANET_TYPE_NAMES[data.planet_type] + (" - Level %d" % pp.level if pp.is_colonized else "")
 	_set_hero(caption, data.planet_name, items)
 
@@ -3474,12 +3519,9 @@ func _spawn_district(data: PlanetData, lbl: String, def: DistrictDef, site: Vect
 		AudioManager.play("construct")
 		AchievementManager.notify_trigger(AchievementDef.Trigger.FIRST_DISTRICT)
 		AchievementManager.notify_trigger(AchievementDef.Trigger.FIRST_ORBITAL)
-		# Set construct_duration to match rocket animation BEFORE appending so ProductionManager
-		# never reads the stale def.construction_duration value.
-		const _BASE_LD: float = 22.0
-		const _REF_R:   float = 200.0
-		const _DEPLOY:  float = 2.2
-		poi.construct_duration = (planet_renderer._planet_radius_px / _zoom / _REF_R) * _BASE_LD + _DEPLOY
+		# Built like any district (ProductionManager ticks it), a little longer;
+		# the rocket animation follows its progress (_play_rocket_animation)
+		poi.construct_duration = def.construction_duration * ORBIT_BUILD_TIME_MULT
 		# Add immediately so panel shows "Constructing"; OrbitalLayer skips constructing=true pois
 		data.custom_pois.append(poi)
 		# its prefab buildings, paid with it, start building now — so a save
@@ -3892,26 +3934,66 @@ func _planet_energy_breakdown(pp: PlanetProgress, data: PlanetData) -> Dictionar
 func _planet_energy_balance(_pp: PlanetProgress) -> float:
 	return ProductionManager.get_global_energy()
 
+## A world's tags (PlanetTags): its size and atmosphere (always), its traits
+## with their effect, and a "choose a trait" tag while a pick waits.
+## [[text, HeroTag.Tone, tooltip, kind ("info" | "trait" | "pick")], …]
+func _planet_tag_items(data: PlanetData) -> Array:
+	var st := PlanetTags.size_tag(data)
+	var at := PlanetTags.atmosphere_tag(data)
+	var out: Array = [[st[0], HeroTag.Tone.PLAIN, st[1], "info"], [at[0], HeroTag.Tone.PLAIN, at[1], "info"]]
+	for tid in PlanetTags.traits_of(data.seed):
+		var info := PlanetTags.info(String(tid))
+		out.append(["%s  %s" % [info.get("name", tid), PlanetTags.effect_text(String(tid))],
+			HeroTag.Tone.GOOD if PlanetTags.is_positive(String(tid)) else HeroTag.Tone.PLAIN,
+			"%s\n\n%s on this world — counted on its whole total, with the Orbit's support." % [
+				info.get("desc", ""), PlanetTags.effect_text(String(tid))], "trait"])
+	if not PlanetTags.offers_of(data.seed).is_empty():
+		out.append(["+ Choose a trait", HeroTag.Tone.GOOD, "A trait waits for this world: pick one of three.", "pick"])
+	elif data.seed != GameState.home_planet_seed and not GameState.is_scanned(data.seed):
+		out.append(["? Trait unknown", HeroTag.Tone.PLAIN, "Scan this world from orbit to find its trait.", "info"])
+	return out
+
+## The world's tags as pills (rounded): grey info, green traits, a clickable pick.
 func _fill_modifiers_section(vbox: VBoxContainer, data: PlanetData) -> void:
-	var mods := PlanetModifier.for_planet(data.planet_type)
-	if mods.is_empty():
-		return
 	var tag_row := HFlowContainer.new()
 	tag_row.add_theme_constant_override("h_separation", 4)
 	tag_row.add_theme_constant_override("v_separation", 5)
 	tag_row.size_flags_horizontal = Control.SIZE_FILL
-	for m: PlanetModifier in mods:
-		var tag := Button.new()
-		tag.text = "%s %s" % [m.display_name, m.value_label()]
-		# good modifiers green, bad ones red (theme button types)
-		UIStyle.style_button(tag, UIStyle.POSITIVE if m.is_positive() else UIStyle.NEGATIVE, 8)
-		var cap_m := m
-		tag.mouse_entered.connect(func() -> void:
-			TooltipManager.show_tip(cap_m.display_name, cap_m.description))
-		tag.mouse_exited.connect(func() -> void:
-			TooltipManager.hide_tip())
-		tag_row.add_child(tag)
+	for t: Array in _planet_tag_items(data):
+		var pill := Button.new()
+		pill.text = String(t[0])
+		pill.add_theme_font_size_override("font_size", 10)
+		var col: Color = Color(0.70, 0.75, 0.88) if t[1] == HeroTag.Tone.PLAIN else Color(0.55, 0.95, 0.60)
+		for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(col, 0.22 if state == "hover" else 0.12)
+			sb.border_color = Color(col, 0.75)
+			sb.set_border_width_all(1)
+			sb.set_corner_radius_all(9)
+			sb.content_margin_left = 9.0
+			sb.content_margin_right = 9.0
+			sb.content_margin_top = 2.0
+			sb.content_margin_bottom = 2.0
+			pill.add_theme_stylebox_override(state, sb)
+		for fc: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+			pill.add_theme_color_override(fc, col.lightened(0.15))
+		var cap_t := t
+		pill.mouse_entered.connect(func() -> void: TooltipManager.show_tip(String(cap_t[0]), String(cap_t[2])))
+		pill.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+		if t[3] == "pick":
+			pill.pressed.connect(func() -> void:
+				TooltipManager.hide_tip()
+				GameOverlays.open_trait_picker(self, data.seed))
+		else:
+			pill.mouse_default_cursor_shape = Control.CURSOR_ARROW
+		tag_row.add_child(pill)
 	vbox.add_child(tag_row)
+
+## Relic marks on the open world (Relics.sites_on).
+func _refresh_relic_sites() -> void:
+	if current_data != null and poi_layer != null and is_instance_valid(poi_layer):
+		poi_layer.relics = Relics.sites_on(current_data)
+		poi_layer.queue_redraw()
 
 func _build_system_panel() -> void:
 	if _system_dock and is_instance_valid(_system_dock):
@@ -4756,7 +4838,7 @@ func _rebuild_lens_bar() -> void:
 
 ## The lens bar comes and goes with the left panel: it slides down out of view
 ## and fades as the panel closes (follows _panel_t, so the panel's tween drives it).
-const LENS_BAR_MARGIN := 16.0
+const LENS_BAR_MARGIN := 30.0   # clears the news crawl (NewsFeed.HEIGHT)
 
 func _place_lens_bar() -> void:
 	if _lens_bar == null or not is_instance_valid(_lens_bar):
@@ -4798,6 +4880,12 @@ func _tick_surface_scan(delta: float) -> void:
 		var seed_val: int = _scan_fx["seed"]
 		_scan_fx = {}
 		GameState.scanned_bodies[seed_val] = true
+		# a newly scanned world draws its trait: pick one of three (PlanetTags)
+		var scanned := GameState.get_planet_data(seed_val)
+		if scanned != null and PlanetTags.traits_of(seed_val).is_empty() and PlanetTags.offers_of(seed_val).is_empty():
+			PlanetTags.queue_offer(scanned)
+			GameOverlays.open_trait_picker(self, seed_val)
+		_refresh_relic_sites()
 		GameState.save()
 		AudioManager.play("building_done")
 		_show_unlock_toast("Surface scanned", "Pick a lens at the bottom (Energy, Production …) and hover the surface to see what each spot gives.")
@@ -4883,7 +4971,7 @@ func _refresh_lens() -> void:
 		tex = FeatureMap.role_texture(current_data.seed, _role)
 	mat.set_shader_parameter("lens_tex", tex)
 	mat.set_shader_parameter("lens_alpha", 1.0 if tex != null else 0.0)
-	mat.set_shader_parameter("wind_vis", 0.0)   # the windy region is no longer a feature (§3)
+	mat.set_shader_parameter("wind_vis", 1.0 if _role == "energy" else 0.0)   # Mountain / Tundra currents (FeatureMap.wind_texture)
 	var wind_tex: ImageTexture = FeatureMap.wind_texture(current_data.seed) if current_data != null else null
 	mat.set_shader_parameter("wind_tex", wind_tex)
 	mat.set_shader_parameter("wind_on", 1.0 if wind_tex != null else 0.0)
@@ -6850,6 +6938,13 @@ func _refresh_overview_energy() -> void:
 		UIStyle.color(&"neutral_stroke") if bal >= 0.0 else UIStyle.color(&"bad"))
 
 ## Starts a rocket launch animation. Multiple can run concurrently.
+## An Orbit district takes this × its DistrictDef.construction_duration — close
+## to a surface district, a little longer for the flight.
+const ORBIT_BUILD_TIME_MULT := 1.25
+## Share of an Orbit district's build time the rocket's flight takes; the
+## deployment in orbit takes the rest.
+const ORBIT_LAUNCH_SHARE := 0.85
+
 func _play_rocket_animation(planet_seed: int, poi: POIData, on_complete: Callable,
 		sp_pm_key: String = "", ship_name: String = "Pioneer", ship_type: String = "shuttle",
 		ship_cargo: Dictionary = {}, destination_ship_id: String = "",
@@ -6865,10 +6960,11 @@ func _play_rocket_animation(planet_seed: int, poi: POIData, on_complete: Callabl
 	# zoom-independent: the globe's on-screen size grows with zoom, the flight doesn't
 	var launch_dur: float = (planet_r / maxf(_zoom, 0.01) / REF_RADIUS) * BASE_LAUNCH_DUR * LAUNCH_TIME_SCALE
 
-	# For orbital district POIs, sync construct_duration to the exact animation time
-	const _DEPLOY_ANIM_DUR: float = 2.2
+	# An Orbit district's flight follows its construction progress instead of a
+	# clock: it takes ORBIT_LAUNCH_SHARE of the build at the current build speed
 	if station_district_poi != null:
-		station_district_poi.construct_duration = launch_dur + _DEPLOY_ANIM_DUR
+		launch_dur = station_district_poi.construct_duration * ORBIT_LAUNCH_SHARE \
+			/ maxf(ProductionManager.district_build_speed(), 0.01)
 
 	# Planet center — same reference as POILayer (_planet.global_position + size*0.5)
 	var planet_center_global: Vector2 = planet_renderer.global_position + planet_renderer.size * 0.5
@@ -7094,18 +7190,22 @@ func _tick_one_rocket(d: Dictionary, delta: float) -> void:
 	var finished := false
 	match phase:
 		0:
-			t += delta / LAUNCH_DUR
+			var _st_poi: POIData = d.get("station_district_poi", null)
+			if _st_poi != null:
+				# an Orbit district: the flight is its construction progress
+				# (ProductionManager), so it speeds up with the build
+				t = 1.0 if not _st_poi.constructing \
+					else clampf(_st_poi.construct_progress / ORBIT_LAUNCH_SHARE, 0.0, 1.0)
+			else:
+				t += delta / LAUNCH_DUR
 			if t >= 1.0:
 				t = 1.0
 				finished = true
 			d["phase_t"] = t
-			# Drive orbital district progress bar from rocket t (launch takes ~91% of total)
-			const _DEPLOY_DUR: float = 2.2
-			var _st_poi: POIData = d.get("station_district_poi", null)
-			if _st_poi != null and _st_poi.constructing:
-				var _launch_frac: float = LAUNCH_DUR / (LAUNCH_DUR + _DEPLOY_DUR)
-				_st_poi.construct_progress = t * _launch_frac
 			var _eta_sec: int = int(ceil((1.0 - t) * LAUNCH_DUR))
+			if _st_poi != null and _st_poi.constructing:
+				_eta_sec = int(ceil((1.0 - _st_poi.construct_progress) * _st_poi.construct_duration \
+					/ maxf(ProductionManager.district_build_speed(), 0.01)))
 			if is_instance_valid(d.get("eta_lbl")):
 				(d["eta_lbl"] as Label).text = "eta %02d:%02d" % [_eta_sec / 60, _eta_sec % 60]
 
@@ -7491,7 +7591,7 @@ func _spawn_station_deploy_poi(poi: POIData, container: Control, on_complete: Ca
 		"ctrl":         ctrl,
 		"t":            0.0,
 		"duration":     2.2,
-		"launch_frac":  poi.construct_progress,
+		"launch_frac":  ORBIT_LAUNCH_SHARE,
 		"on_complete":  on_complete,
 	}
 	ctrl.draw.connect(func() -> void:
@@ -7526,17 +7626,20 @@ func _spawn_station_deploy_poi(poi: POIData, container: Control, on_complete: Ca
 func _tick_deploy_anims(delta: float) -> void:
 	var done: Array[Dictionary] = []
 	for da: Dictionary in _deploy_anims:
-		da["t"] = da["t"] + delta
 		if not is_instance_valid(da.get("ctrl")):
 			done.append(da)
 			continue
 		var ctrl2: Control = da["ctrl"]
-		# Drive orbital district progress bar through deploy phase (launch_frac → 1.0)
+		# The deployment follows the district's construction (launch_frac → 1.0,
+		# ProductionManager): it ends when the district is built
 		var dp_poi: POIData = da.get("poi", null)
-		if dp_poi != null and dp_poi.constructing:
-			const _DEP: float = 2.2
-			var _lf: float = da.get("launch_frac", 1.0 - _DEP / (_DEP + 1.0))
-			dp_poi.construct_progress = lerpf(_lf, 1.0, minf(da["t"] / da["duration"], 1.0))
+		if dp_poi != null:
+			var _lf: float = da.get("launch_frac", ORBIT_LAUNCH_SHARE)
+			var share: float = 1.0 if not dp_poi.constructing \
+				else clampf((dp_poi.construct_progress - _lf) / maxf(1.0 - _lf, 0.001), 0.0, 1.0)
+			da["t"] = share * float(da["duration"])
+		else:
+			da["t"] = da["t"] + delta
 		if da["t"] >= da["duration"]:
 			ctrl2.queue_free()
 			done.append(da)
