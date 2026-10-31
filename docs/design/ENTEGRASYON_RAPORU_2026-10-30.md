@@ -228,3 +228,50 @@ Kararlar: Science geliri ×0.25 (`BalanceConfig.science_income_mult`). Logistics
 - İç içe tooltip terimleri.
 - Demo bitiş sekansı (designer tasarlayacak).
 - Ay Spaceport zorunluluğu (soru bekliyor).
+
+## 11. Trade ekranı (2026-10-31)
+
+- **Konum:** Panel solda, sol panelin sütununda, üst çubuğun altından haber şeridine kadar. Oyunun geri kalanı yanında kullanılabiliyor; görünümler fareyi yalnız panelin üstündeyken yok sayıyor (`TradePanel.covers`).
+- **Satır düzeni:** `[ikon] stok │ fiyat grafiği │ satış/alış fiyatı │ [hedef][mod] │ [SELL][BUY]`. İkonun tooltip'i ürünün adını, referans fiyatını ve stoğunu gösteriyor.
+- **SELL / BUY:**
+  - Tıklama bir lot (fiyatı tamamen oynatan miktarın yaklaşık %1'i), Shift ×10, Ctrl/Cmd hepsi.
+  - Tooltip'te üç seçeneğin de miktarı ve kredisi yazıyor.
+- **Otomasyon** (Trade Automation araştırmasıyla): tek bir hedef alanı ve kare bir mod butonu.
+  - Modlar: Off / Sell until / Buy until / Keep it at.
+  - Keep it at, hedefin ±%5 bandında ticaret yapmıyor.
+  - Otomatik işlemler elle yapılandan %10 kötü fiyatla yapılıyor (`BalanceConfig.trade_auto_penalty`).
+  - Otomasyon bir turda (20 sn) fiyatı en fazla %5 oynatıyor; böylece fiyatı sürekli aşağı çekemiyor.
+  - Depo taşması artık yalnız Sell veya Keep modundaki ürünlerde satılıyor; diğerlerinde taşan kısım kayboluyor.
+  - Eski kayıtlardaki otomasyon emirleri Off olarak açılıyor.
+- **Fiyat geçmişi:** 5 sn'de bir kayıt, son 6 dakika. Satırdaki küçük grafik referansı noktalı çizgiyle gösteriyor; çizgi referansın üstündeyse turuncu, altındaysa yeşil. Geçmiş kayda yazılıyor.
+- **Haberler:** Fiyat referansın 1.5 katına çıkınca ya da 0.6 katına düşünce, her sert harekette bir kez, tooltip'li bir haber çıkıyor.
+- **Force Buy:** Trade Automation'dan sonra gelen yeni araştırma, 300 Science.
+  - Bina listesinde yalnız malzeme eksikse tooltip "Force Buy: X cr" gösteriyor.
+  - Satırın üstündeyken F'ye basınca eksik malzemeler alınıp bina kuruluyor.
+  - Log'da "force buy" olarak görünüyor.
+- **Kaldırılanlar:** Eski "Reserve" alanı arayüzden kalktı. Kod tarafında duruyor; elle satış eski kayıtlardaki rezervlere hâlâ uyuyor.
+
+### Trade, ikinci tur (2026-10-31)
+- **Sol panelin içinde:** Trade artık sol panelin kendi içeriği. `LeftPanel.show_overlay` paneli sola kaydırıyor, içeriği Trade ile değiştiriyor ve geri kaydırıyor. "‹ BACK" veya Esc aynı animasyonla önceki içeriğe dönüyor.
+  - Görünümün içeriği bu sırada yalnız gizleniyor. Görünüm araya yeni içerik kurarsa o da gizli kalıyor.
+  - Panel kapalıyken Trade açılırsa panel Trade'i göstermek için açılıyor, BACK'te eski durumuna dönüyor.
+  - Sol paneli olmayan görünümlerde (Galaxy) aynı sütunda yüzen panel olarak açılıyor.
+- **Sabit düzen:** Panel içeriğe göre genişlemiyor. Satırdaki her öğe sabit boyutta: ikon kutusu 24, grafik 58, fiyat 92, hedef 52, mod 24, SELL/BUY 50. Araştırma ya da fiyat değişince hiçbir şey kaymıyor.
+- **Kilitli ürünler:** Satır aynı düzende kalıyor; soluk görünüyor ve üstünde etkileşimi kesen bir "Research …" bandı var. Trade Automation yokken hedef ve mod alanları duruyor, yalnız etkileşime kapalı.
+- **Satır içeriği:** İkon kare bir item kutusunda. Fiyat kredi ikonuyla "satış / alış" birim fiyatı olarak gösteriliyor, eğilim yüzdesi tooltip'te. Stok ve limitler kalktı (üst çubukta var).
+- **Fiyat dalgalanması:** Her ürüne yaklaşık ±%3'lük, kendi kendine geri dönen bir gürültü eklendi (`Trade.NOISE_SIZE`, `NOISE_PULL`). Fiyatları ve grafiği etkiliyor, kayıttaki baskıya yazılmıyor.
+- **Performans:** PlanetaryView sol paneli her karede yeniden konumluyordu; artık yalnız HUD yüksekliği değişince konumluyor.
+- **Tek fiyat:** Trade satırı tek bir piyasa fiyatı gösteriyor (`Trade.unit_price`). Alım ve satım aynı fiyattan yapılıyor: `trade_sell_ratio` ve `trade_buy_ratio` 1.0, yani satış/alış farkı yok. Büyük işlemler fiyatı işlem boyunca kaydırıyor; otomasyon %10 ceza ödüyor.
+- **Lot:** Deponun yaklaşık %5'i kadar (Science'ta stoğun), 1-2-5 dizisine yuvarlanmış: 200'lük depoda 10, 1K'da 50, 10K'da 500, 100K'da 5K. Shift ×10, Ctrl/Cmd hepsi. Oyuncuya yalnız miktar gösteriliyor (`TradePanel.LOT_SHARE`).
+- **Sıkıştırılmış satır:**
+  - Ölçüler: ikon 22, grafik 42, fiyat 50, hedef 42, mod 22, SELL/BUY 40, aralık 4.
+  - Butonlar iç boşluğu kırpılmış düz butonlar; tema boşluğu yüzünden genişlemiyorlar.
+- **SELL/BUY tooltip'i:**
+  - İçerik: "You pay / You get" ve "You give / You get", büyük ve renkli. Ödenen kırmızı, alınan kaynağın ya da kredinin renginde.
+  - Shift veya Ctrl/Cmd basıldığı anda güncelleniyor.
+  - Yapılamıyorsa nedenini yazıyor: satacak bir şey yok, depo dolu ya da kredi yetmiyor.
+- **İşlem geçmişi** panelden kaldırıldı; `GameState.trade_log` kaydetmeye devam ediyor.
+- **Borsa göstergesi:**
+  - NEWS etiketinin yanında küçük bir kutu. Her 2.5 sn'de bir ürün gösteriyor: ikon, fiyat ve son bir dakikadaki değişim (yeşil ▲ / kırmızı ▼ ve %).
+  - Üstüne gelince tüm liste çıkıyor, tıklayınca Trade açılıyor.
+  - Trade Access yokken gizli.

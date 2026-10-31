@@ -344,7 +344,7 @@ func _draw_callout(pos: Vector2, label: String, col: Color, r: float, bright: bo
 		Color(col.r, col.g, col.b, 0.90 if bright else 0.50))
 
 func _input(event: InputEvent) -> void:
-	if SkillTreeView.is_open or TradePanel.is_open or _entering:
+	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()) or _entering:
 		return
 
 	if event is InputEventMouseButton:

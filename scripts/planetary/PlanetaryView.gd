@@ -1070,8 +1070,38 @@ func _on_right_click(at: Vector2) -> void:
 	else:
 		_open_context_menu(at)
 
+## The build-list row under the mouse that Force Buy can complete ({} when none).
+var _force_row: Dictionary = {}
+
+## F on a hovered build-list row: buys the missing materials (Trade.force_buy),
+## then builds one.
+func _try_force_buy() -> bool:
+	if _force_row.is_empty():
+		return false
+	var poi: POIData = _force_row["poi"]
+	var planet: PlanetData = _force_row["planet"]
+	var def: BuildingDef = _force_row["def"]
+	var pp := GameState.get_planet(planet.seed)
+	if not Trade.force_buy(Economy.building_full_cost(pp, def, poi.label)):
+		AudioManager.play("error")
+		return true
+	if _buy_buildings(poi, planet, def, 1) > 0:
+		var ov = _force_row.get("overlay")
+		if ov != null and is_instance_valid(ov):
+			(ov as Node).queue_free()
+		_active_slot_dropdown = null
+		_force_row = {}
+		TooltipManager.hide_tip()
+		_build_district_panel(poi, planet)
+	return true
+
 func _input(event: InputEvent) -> void:
-	if SkillTreeView.is_open or TradePanel.is_open:   # full-screen modals own the input
+	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
+			and (event as InputEventKey).keycode == KEY_F and _try_force_buy():
+		get_viewport().set_input_as_handled()
+		return
+	# the Upgrade Tree owns the input; the docked Trade panel only where it is
+	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()):
 		if not _rmb.is_empty() and _rmb["drag"]:
 			planet_renderer.end_drag()
 		_rmb = {}
@@ -1426,7 +1456,7 @@ static func _hidden_by(v: Vector3, b: Dictionary) -> bool:
 ## in the console, or with the Upgrade Tree open. Slower when zoomed in.
 const KEY_SPIN_SPEED := 1.6   # rad/s at the widest zoom
 func _tick_key_spin(delta: float) -> void:
-	if SkillTreeView.is_open or TradePanel.is_open or _naming_open or _switching_body:
+	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()) or _naming_open or _switching_body:
 		return
 	var focus := get_viewport().gui_get_focus_owner()
 	if focus is LineEdit or focus is TextEdit:
@@ -4597,6 +4627,8 @@ func _add_orbit_toggle(planet_cont: Control, layer: OrbitalLayer) -> void:
 	t.timeout.connect(show_if_orbit)
 	btn.add_child(t)
 
+var _last_hud_h := -1.0
+
 func _process(delta: float) -> void:
 	_poll_slot_dropdown(delta)
 	_tick_spaceport_focus()
@@ -4604,7 +4636,11 @@ func _process(delta: float) -> void:
 	_tick_lander_watch()
 	_tick_departure_fx(delta)
 	_tick_cam_follow(delta)
-	if absf(($SidePanel as Control).offset_top - _hud_bar_height()) > 0.5:
+	# the panel places itself (its offset_top stays 0), so re-apply only when the
+	# HUD bar's height changes — comparing offset_top re-ran this every frame
+	var hud_h := _hud_bar_height()
+	if absf(hud_h - _last_hud_h) > 0.5:
+		_last_hud_h = hud_h
 		_apply_panel_t(_panel_t)
 	_update_tutorial_highlight()
 	_update_aspect()
@@ -8007,6 +8043,7 @@ func _entry_input_text(entry: Dictionary, def: BuildingDef) -> String:
 
 # ── Coloured tooltip text (BBCode) ──────────────────────────────────────────
 const BB_BAD  := "#e36a6a"
+const BB_GOOD := "#8ef59a"
 const BB_WARN := "#ffb04a"
 const BB_DIM  := "#8a93b0"
 
@@ -9868,13 +9905,28 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		var tip_cost := Economy.cost_text(full_cost)
 		tip_body_parts.append("\n" + _bb(BULK_HINT, BB_DIM))
 
+		# Force Buy (research): short only of tradeable materials → buy them and
+		# build in one go with F while hovering the row
+		var can_force := not enabled and not can_afford and has_slots and not at_limit and known \
+			and Trade.has_force_buy()
+		if can_force:
+			var fb := Trade.force_buy_cost(full_cost)
+			if fb < INF:
+				tip_body_parts.append("\n" + _bb("Force Buy: %s cr in all (missing materials bought now) — press F" % Economy.fmt(fb),
+					BB_GOOD if fb <= GameState.credits else BB_BAD))
+			else:
+				can_force = false
+		var cap_force := can_force
 		row_panel.mouse_entered.connect(func() -> void:
 			AudioManager.play("poi_hover")
 			if enabled and not _is_at_edge():
 				CursorManager.set_state(CursorManager.State.POINTER)
+			if cap_force:
+				_force_row = {"poi": cap_poi, "planet": cap_planet, "def": cap_def, "overlay": outer}
 			TooltipManager.show_tip(tip_title, tip_body_parts, tip_cost))
 		row_panel.mouse_exited.connect(func() -> void:
 			CursorManager.set_state(CursorManager.State.NORMAL)
+			_force_row = {}
 			TooltipManager.hide_tip())
 
 		var cap_overlay := outer

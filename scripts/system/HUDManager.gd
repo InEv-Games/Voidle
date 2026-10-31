@@ -262,6 +262,21 @@ func _make_explore_button() -> Button:
 var _trade_layer: CanvasLayer = null
 
 func toggle_trade_panel() -> void:
+	# inside the view's left panel when it has one (slides out, swaps, slides in)
+	var lp: LeftPanel = null
+	for n in get_tree().get_nodes_in_group(LeftPanel.GROUP):
+		if n is LeftPanel and (n as LeftPanel).is_inside_tree():
+			lp = n
+			break
+	if lp != null:
+		if lp.overlay() is TradePanel:
+			lp.close_overlay()
+			TradePanel.is_open = false
+		else:
+			var tp := TradePanel.new()
+			tp.embedded = true
+			lp.show_overlay(tp)
+		return
 	if _trade_layer != null and is_instance_valid(_trade_layer):
 		_trade_layer.queue_free()
 		_trade_layer = null

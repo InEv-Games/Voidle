@@ -367,6 +367,9 @@ func _init() -> void:
 	_n("trade_automation", "Trade Automation", "Standing orders: sell above a reserve, buy up to a target stock. Storage overflow is sold instead of lost.",
 		300.0, _at("trade_access", 60, 1.0), ["trade_access"], "trade", "Standing orders and overflow sales",
 		{})
+	_n("force_buy", "Force Buy", "Short of a few materials? Buy exactly what a build is missing, paid in Credits, in one go.",
+		300.0, _at("trade_automation", 30, 1.0), ["trade_automation"], "trade", "Force-buy a build's missing materials (F on a build-list row)",
+		{})
 	_n("harbor_trade", "Volcanic Trade", "Markets in volcanic stone. The district must stand on a Volcanic Field.",
 		350.0, _at("trade_networks", 45, 1.15), ["local_business", "lakeside_trade", "glacier_trade"], "trade", "Unlocks Volcanic Market",
 		{"grants": ["volcanic_market"]})

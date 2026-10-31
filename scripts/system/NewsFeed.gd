@@ -290,7 +290,7 @@ func _build_ui(host: Node) -> void:
 	_clip.anchor_right = 1.0
 	_clip.anchor_bottom = 1.0
 	_clip.offset_left = 6
-	_clip.offset_right = -56
+	_clip.offset_right = -(TICKER_W + 4.0) - 50.0 - 8.0   # news │ NEWS │ market
 	_bar.add_child(_clip)
 	var tag := Label.new()
 	tag.text = " NEWS "
@@ -302,13 +302,14 @@ func _build_ui(host: Node) -> void:
 	tag.add_theme_stylebox_override("normal", tag_bg)
 	tag.anchor_left = 1.0
 	tag.anchor_right = 1.0
-	tag.offset_left = -50
-	tag.offset_right = -4
+	tag.offset_left = -(TICKER_W + 4.0) - 50.0
+	tag.offset_right = -(TICKER_W + 4.0) - 4.0
 	tag.offset_top = 3
 	tag.offset_bottom = HEIGHT - 3
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_bar.add_child(tag)
+	_build_ticker()
 	_labels.clear()
 
 ## The bar sits in the left panel's parent, just before the panel; without one,
@@ -342,6 +343,7 @@ func _process(delta: float) -> void:
 		return
 	_ensure_bar()
 	_bar.visible = true
+	_tick_ticker(delta)
 	var width := _clip.size.x
 	if width <= 1.0:
 		return
@@ -382,6 +384,152 @@ func _process(delta: float) -> void:
 		l.reset_size()
 		_labels.append(l)
 		end = l.position.x + _shown_width(l)
+
+# ── Market ticker (playtest 31.10) ───────────────────────────────────────────
+## Beside NEWS, like a news channel's market box: one tradeable product at a
+## time — its icon, price and where it went over the last minute (green ▲ /
+## red ▼). Hover lists them all; a click opens Trade.
+const TICKER_W := 104.0
+const TICKER_SEC := 6.0   # a calm market box: each product stays a while
+var _ticker: Control = null
+var _tk_icon: TextureRect = null
+var _tk_price: Label = null
+var _tk_move: Label = null
+var _tk_row: Control = null
+var _tk_i := 0
+var _tk_t := 0.0
+
+func _build_ticker() -> void:
+	_ticker = PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.09, 0.18, 0.95)
+	sb.border_color = Color(0.45, 0.60, 0.85, 0.45)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(2)
+	sb.content_margin_left = 4
+	sb.content_margin_right = 4
+	_ticker.add_theme_stylebox_override("panel", sb)
+	_ticker.anchor_left = 1.0
+	_ticker.anchor_right = 1.0
+	_ticker.offset_left = -TICKER_W - 2.0
+	_ticker.offset_right = -2.0
+	_ticker.offset_top = 2.0
+	_ticker.offset_bottom = HEIGHT - 2.0
+	_ticker.clip_contents = true
+	_ticker.mouse_filter = Control.MOUSE_FILTER_STOP
+	_bar.add_child(_ticker)
+	# a fixed window the row slides through, up and out, in from below
+	var view := Control.new()
+	view.clip_contents = true
+	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ticker.add_child(view)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	view.add_child(row)
+	_tk_row = row
+	_tk_icon = TextureRect.new()
+	_tk_icon.custom_minimum_size = Vector2(12, 12)
+	_tk_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_tk_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_tk_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_tk_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_tk_icon)
+	_tk_price = Label.new()
+	_tk_price.add_theme_font_size_override("font_size", 11)
+	_tk_price.custom_minimum_size = Vector2(40, 0)
+	_tk_price.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_tk_price.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_tk_price)
+	_tk_move = Label.new()
+	_tk_move.add_theme_font_size_override("font_size", 11)
+	_tk_move.custom_minimum_size = Vector2(38, 0)
+	_tk_move.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_tk_move.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_tk_move.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_tk_move)
+	_ticker.mouse_entered.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.POINTER)
+		TooltipManager.show_tip("Market", _ticker_tip()))
+	_ticker.mouse_exited.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		TooltipManager.hide_tip())
+	_ticker.gui_input.connect(func(ev: InputEvent) -> void:
+		var mb := ev as InputEventMouseButton
+		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			AudioManager.play("click")
+			TooltipManager.hide_tip()
+			HUDManager.toggle_trade_panel()
+			_ticker.accept_event())
+	_tk_t = TICKER_SEC   # fill it at once
+
+## Products the ticker may show (tradeable now).
+static func _ticker_ids() -> Array[String]:
+	var out: Array[String] = []
+	if not Trade.has_access():
+		return out
+	for id: String in Trade.products():
+		if Trade.can_trade(id):
+			out.append(id)
+	return out
+
+## Price change over about the last minute (share; 0 without history).
+static func _move(id: String) -> float:
+	var h := Trade.history(id)
+	if h.is_empty():
+		return 0.0
+	var back := int(60.0 / Trade.HISTORY_STEP)
+	var then := float(h[maxi(h.size() - back, 0)])
+	return Trade.price_mult(id) / maxf(then, 0.0001) - 1.0
+
+## "▲ 3%" in green, "▼ 2%" in red, "■" when flat.
+static func _move_text(m: float) -> Array:
+	if m > 0.005:
+		return ["▲ %d%%" % maxi(roundi(m * 100.0), 1), Color(0.45, 0.95, 0.55)]
+	if m < -0.005:
+		return ["▼ %d%%" % maxi(roundi(-m * 100.0), 1), Color(1.0, 0.45, 0.42)]
+	return ["■", Color(0.65, 0.70, 0.85)]
+
+func _tick_ticker(delta: float) -> void:
+	if _ticker == null or not is_instance_valid(_ticker):
+		return
+	var ids := _ticker_ids()
+	_ticker.visible = not ids.is_empty()
+	if ids.is_empty():
+		return
+	_tk_t += delta
+	if _tk_t < TICKER_SEC:
+		return
+	_tk_t = 0.0
+	_tk_i = (_tk_i + 1) % ids.size()
+	var id := ids[_tk_i]
+	# the old row slides up and out, the new one comes in from below
+	var h := maxf((_tk_row.get_parent() as Control).size.y, 1.0)
+	var tw := _tk_row.create_tween()
+	tw.tween_property(_tk_row, "position:y", -h, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func() -> void:
+		_fill_ticker(id)
+		_tk_row.position.y = h)
+	tw.tween_property(_tk_row, "position:y", 0.0, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+func _fill_ticker(id: String) -> void:
+	_tk_row.size = Vector2((_tk_row.get_parent() as Control).size.x, (_tk_row.get_parent() as Control).size.y)
+	_tk_icon.texture = UIIcons.get_icon(id if not Economy.is_raw(id) else UIIcons.RAW_PLACEHOLDER)
+	_tk_icon.self_modulate = Economy.color_of(id)
+	var p := Trade.unit_price(id)
+	_tk_price.text = ("%.2f" % p) if p < 10.0 else Economy.fmt(p)
+	var mv := _move_text(_move(id))
+	_tk_move.text = mv[0]
+	_tk_move.add_theme_color_override("font_color", mv[1])
+
+func _ticker_tip() -> String:
+	var lines: Array[String] = []
+	for id: String in _ticker_ids():
+		var mv := _move_text(_move(id))
+		var p := Trade.unit_price(id)
+		lines.append("%s  %s cr  [color=#%s]%s[/color]" % [Economy.display_name(id),
+			("%.2f" % p) if p < 10.0 else Economy.fmt(p), (mv[1] as Color).to_html(false), mv[0]])
+	return "\n".join(lines) + "\n\nOver the last minute. Click to trade."
 
 ## Slows the crawl while the mouse is over the bar (not over the left panel
 ## covering it), grows the item under it and, after TIP_DELAY, shows its detail.

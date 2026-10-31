@@ -158,8 +158,11 @@ extends Resource
 @export var idle_pop_uses_level_mult: bool = false
 
 @export_group("Trade")
-@export var trade_sell_ratio: float = 0.9
-@export var trade_buy_ratio: float = 1.1
+## One market price for both ways (playtest 31.10: players see a single price);
+## 1 / 1 = no spread. A trade still moves the price as it goes, and automation
+## pays trade_auto_penalty.
+@export var trade_sell_ratio: float = 1.0
+@export var trade_buy_ratio: float = 1.0
 ## Dynamic prices (KARARLAR §10): buying raises a product's price, selling lowers
 ## it; this many credits' worth of trade moves the price by 100%.
 @export var trade_depth_credits: float = 4000.0
@@ -168,6 +171,9 @@ extends Resource
 ## Price multiplier limits (×reference): never below / above these.
 @export var trade_price_min: float = 0.4
 @export var trade_price_max: float = 3.0
+## Automatic trades (standing orders, overflow sales) get this much worse a
+## price than manual ones: sell for 10% less, buy for 10% more (playtest 30.10).
+@export var trade_auto_penalty: float = 0.10
 
 @export_group("Research")
 ## Price surcharge per distinct strategy node bought in another branch (GDD §17.5).
