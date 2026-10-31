@@ -31,6 +31,18 @@ const TARGET_W := 42.0
 const BTN_W := 40.0
 const GAP := 4
 const MODE_GLYPH := {"off": "–", "sell": "▼", "buy": "▲", "keep": "◆"}
+## The small line under BACK: a bit of the market's life, one picked per opening.
+const MARKET_LINES := [
+	"Haulers dock and undock all day; every crate you trade moves the board.",
+	"Brokers shout over the hum of the cargo lifts. Prices settle as the shifts change.",
+	"The exchange never sleeps — big orders make waves that fade within minutes.",
+	"Traders watch the screens and each other. Buy cheap, sell dear, don't flood the floor.",
+	"A freighter captain swears the Goods price moved because she sneezed.",
+]
+## Up green, down red — prices and their charts (playtest 31.10).
+const UP_COL := Color(0.45, 0.95, 0.55)
+const DOWN_COL := Color(1.0, 0.45, 0.42)
+const FLAT_COL := Color(0.80, 0.85, 1.0)
 
 var _font: Font
 var _panel: PanelContainer
@@ -62,18 +74,20 @@ func _ready() -> void:
 		_place()
 		get_viewport().size_changed.connect(_place)
 
-	# BACK (to the panel's own content) — the way out, like the panels' back buttons
+	# the market's name on top, then BACK (to the panel's own content)
+	var title := _label("MARKET", 22, Color(0.65, 0.85, 1.0))
+	v.add_child(title)
 	var back := IconButton.create_text("‹  BACK")
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	back.pressed.connect(close)
 	v.add_child(back)
-	var title := _label("⇄  TRADE", 15, Color(0.65, 0.85, 1.0))
-	v.add_child(title)
+	# one small line of colour under it (warnings show here for a moment)
 	_status = _label("", 9, Color(0.6, 0.68, 0.85))
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.custom_minimum_size = Vector2(10, 0)
 	v.add_child(_status)
 	v.add_child(HSeparator.new())
+	v.add_child(_column_head())
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -163,22 +177,30 @@ func _show_trade_tip() -> void:
 		return
 	_trade_tip_key = key
 	var pname := Economy.display_name(id)
-	var res_col := Economy.color_of(id).to_html(false)
-	var cr_col := Economy.color_of(Economy.CREDITS).to_html(false)
 	var lines: Array[String] = []
+	# the three click sizes on top, the one in force lit
+	var mode := 2 if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META) \
+		else (1 if Input.is_key_pressed(KEY_SHIFT) else 0)
+	var opts: Array[String] = []
+	for i in 3:
+		opts.append(("[color=#e8ecf6]%s[/color]" if i == mode else "%s") % ["one lot", "Shift ×10", "Ctrl/Cmd all"][i])
+	lines.append("[color=#8a93b0]%s[/color]" % " · ".join(opts))
+	# then the deal on one line: what comes in, then what goes out
 	if qty <= 0.0:
-		lines.append("[color=#e36a6a][font_size=13]%s[/font_size][/color]" % (
+		lines.append("[color=#e36a6a]%s[/color]" % (
 			"Nothing to sell" if selling else ("Storage is full" if Trade.room(id) <= 0.0 else "Not enough Credits")))
 	elif selling:
-		lines.append("[color=#e36a6a][font_size=14]− %s %s[/font_size][/color]" % [Economy.fmt(qty), pname])
-		lines.append("[color=#%s][font_size=14]+ %s cr[/font_size][/color]" % [cr_col, Economy.fmt(credits)])
+		lines.append(_amount_bb("+", Economy.CREDITS, credits, false) + "    " + _amount_bb("−", id, qty, true))
 	else:
-		lines.append("[color=#e36a6a][font_size=14]− %s cr[/font_size][/color]" % Economy.fmt(credits))
-		lines.append("[color=#%s][font_size=14]+ %s %s[/font_size][/color]" % [res_col, Economy.fmt(qty), pname])
-	var which := "Ctrl/Cmd: all" if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META) \
-		else ("Shift: ×10" if Input.is_key_pressed(KEY_SHIFT) else "one lot")
-	lines.append("[color=#8a93b0]%s · Shift ×10 · Ctrl/Cmd all[/color]" % which)
+		lines.append(_amount_bb("+", id, qty, false) + "    " + _amount_bb("−", Economy.CREDITS, credits, true))
 	TooltipManager.show_tip(("Sell " if selling else "Buy ") + pname, "\n".join(lines))
+
+## "− [icon] 22K": an amount by its resource icon, red when it is paid,
+## the resource's colour when it is gained (body size: the title stays larger).
+static func _amount_bb(sign: String, rid: String, amount: float, paid: bool) -> String:
+	var col := Color(0.89, 0.42, 0.42) if paid else Economy.color_of(rid)
+	return "[color=#%s]%s %s %s[/color]" % [col.to_html(false), sign,
+		UIIcons.bb(rid, 13, Economy.color_of(rid)), Economy.fmt(amount)]
 
 func _process(delta: float) -> void:
 	_show_trade_tip()   # Shift / Ctrl change the amount while hovering
@@ -193,13 +215,33 @@ func _build_rows() -> void:
 	for c in _list.get_children():
 		c.queue_free()
 	_rows.clear()
-	if not Trade.has_access():
-		_status.text = "Research Trade Access (150 Science) to buy and sell."
-	else:
-		_status.text = "Click one lot · Shift ×10 · Ctrl/Cmd all. Buying raises a price, selling lowers it."
+	_status.text = "Research Trade Access (150 Science) to buy and sell." if not Trade.has_access() \
+		else MARKET_LINES[randi() % MARKET_LINES.size()]
 	for id: String in Trade.products():
 		_list.add_child(_product_row(id))
 	_refresh()
+
+## A label row over the columns: "AUTOMATION" above the target and mode.
+func _column_head() -> Control:
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", GAP)
+	var fill := Control.new()
+	fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(fill)
+	var auto := _label("AUTOMATION", 8, Color(0.55, 0.62, 0.80))
+	auto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_fixed(auto, TARGET_W + GAP + ROW_H - 2.0, 12.0)
+	auto.mouse_filter = Control.MOUSE_FILTER_STOP
+	_tip(auto, "Automation", func() -> String:
+		return "Set a target and a mode: the market trades for you every 20 s, a little worse than by hand." \
+			if Trade.has_automation() else "Research Trade Automation for standing orders.")
+	head.add_child(auto)
+	var trade_sp := Control.new()   # over SELL / BUY
+	_fixed(trade_sp, BTN_W * 2.0 + GAP, 12.0)
+	trade_sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(trade_sp)
+	return head
 
 ## One lot of a product, grown with the player's stockpile (playtest 31.10):
 ## about LOT_SHARE of its storage (or of the stock, for uncapped Science),
@@ -262,7 +304,7 @@ func _product_row(id: String) -> Control:
 	box.add_child(icon)
 	box.mouse_filter = Control.MOUSE_FILTER_STOP
 	_tip(box, Economy.display_name(id), func() -> String:
-		return "%s cr a unit now (usually %s).%s" % [_price(Trade.unit_price(id)),
+		return "%s %s a unit now (usually %s).%s" % [UIIcons.bb(Economy.CREDITS, 11, Economy.color_of(Economy.CREDITS)), _price(Trade.unit_price(id)),
 			_price(Trade.reference_price(id)), _trend(id)])
 	row.add_child(box)
 
@@ -297,7 +339,8 @@ func _product_row(id: String) -> Control:
 	prow.add_child(price)
 	pbox.mouse_filter = Control.MOUSE_FILTER_STOP
 	_tip(pbox, "Price", func() -> String:
-		return "%s cr a unit, buying or selling. Big trades move it as they go.%s" % [_price(Trade.unit_price(id)), _trend(id)])
+		return "%s %s a unit, buying or selling. Big trades move it as they go.%s" % [
+			UIIcons.bb(Economy.CREDITS, 11, Economy.color_of(Economy.CREDITS)), _price(Trade.unit_price(id)), _trend(id)])
 	row.add_child(pbox)
 
 	var chart := _Sparkline.new()
@@ -307,7 +350,7 @@ func _product_row(id: String) -> Control:
 	chart.mouse_filter = Control.MOUSE_FILTER_STOP
 	_tip(chart, "%s price" % Economy.display_name(id), func() -> String:
 		var minutes := float(Trade.history(id).size()) * Trade.HISTORY_STEP / 60.0
-		return "The last %.0f min of its price against the reference (dotted).\nAbove it: dearer than usual — good to sell. Below: cheap — good to buy." % maxf(minutes, 1.0))
+		return "The last %.0f min of its price against the usual price (dotted).\nGreen: up, dearer than usual — good to sell. Red: down, cheap — good to buy." % maxf(minutes, 1.0))
 	row.add_child(chart)
 
 	# automation: a target and the square mode button (greyed until researched)
@@ -328,6 +371,9 @@ func _product_row(id: String) -> Control:
 		if why != "":
 			AudioManager.play("error")
 			_status.text = "⚠ %s: %s" % [Economy.display_name(id), why]
+			get_tree().create_timer(4.0).timeout.connect(func() -> void:
+				if is_instance_valid(_status) and _status.text.begins_with("⚠"):
+					_status.text = MARKET_LINES[randi() % MARKET_LINES.size()])
 		_refresh()
 	target.text_submitted.connect(func(_t: String) -> void: apply.call(String(Trade.order(id)["mode"])))
 	target.focus_exited.connect(func() -> void:
@@ -344,7 +390,7 @@ func _product_row(id: String) -> Control:
 	row.add_child(target)
 	row.add_child(mode)
 
-	var sell := _compact_button("SELL", UIStyle.POSITIVE)
+	var sell := _compact_button("SELL", UIStyle.NEGATIVE)   # sell red, buy green
 	_fixed(sell, BTN_W, ROW_H - 2.0)
 	sell.disabled = not live
 	sell.pressed.connect(func() -> void:
@@ -352,7 +398,7 @@ func _product_row(id: String) -> Control:
 		_trade_tip_key = "")   # the tip shows the next click
 	_trade_tip(sell, id, true)
 	row.add_child(sell)
-	var buy := _compact_button("BUY", &"ButtonNeutral")
+	var buy := _compact_button("BUY", UIStyle.POSITIVE)
 	_fixed(buy, BTN_W, ROW_H - 2.0)
 	buy.disabled = not live
 	buy.pressed.connect(func() -> void:
@@ -437,7 +483,7 @@ func _refresh() -> void:
 		if not is_instance_valid(e["price"]):
 			continue
 		var m := Trade.price_mult(id)
-		var tc := Color(1.0, 0.70, 0.40) if m > 1.01 else (Color(0.55, 0.95, 0.60) if m < 0.99 else Color(0.80, 0.85, 1.0))
+		var tc := UP_COL if m > 1.01 else (DOWN_COL if m < 0.99 else FLAT_COL)
 		(e["price"] as Label).text = _price(Trade.unit_price(id))
 		(e["price"] as Label).add_theme_color_override("font_color", tc)
 		(e["chart"] as Control).queue_redraw()
@@ -543,6 +589,6 @@ class _Sparkline extends Control:
 		for i in pts.size():
 			line.append(Vector2(float(i) / float(pts.size() - 1) * w, y_of.call(float(pts[i]))))
 		var last := float(pts[pts.size() - 1])
-		var col := Color(1.0, 0.70, 0.40) if last > 1.01 else (Color(0.55, 0.95, 0.60) if last < 0.99 else Color(0.80, 0.85, 1.0))
+		var col := TradePanel.UP_COL if last > 1.01 else (TradePanel.DOWN_COL if last < 0.99 else TradePanel.FLAT_COL)
 		draw_polyline(line, col, 1.5, true)
 		draw_circle(line[line.size() - 1], 2.0, col)

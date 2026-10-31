@@ -27,7 +27,7 @@ const PROCESSED := [GOODS, FUEL, RARE]
 
 ## Display info for non-raw resources.
 const INFO := {
-	CREDITS:    {"name": "Credits",        "short": "cr",   "color": Color(1.0, 0.72, 0.20)},   # orange-gold: apart from Energy's yellow
+	CREDITS:    {"name": "Credits",        "short": "credits",   "color": Color(1.0, 0.72, 0.20)},   # orange-gold: apart from Energy's yellow
 	ENERGY:     {"name": "Energy",         "short": "⚡",   "color": Color(0.95, 0.88, 0.25)},
 	SCIENCE:    {"name": "Science",        "short": "sci",  "color": Color(0.35, 0.65, 1.00)},
 	POPULATION: {"name": "Population",     "short": "pop",  "color": Color(0.60, 0.95, 0.60)},
@@ -320,11 +320,12 @@ static func pay(cost: Dictionary) -> bool:
 			_:       GameState.consume_resource(id, v)
 	return true
 
-## Short cost text: "450 cr · 30 Ferrite · 5 goods".
+## Short cost text for plain labels: "450 credits · 30 Ferrite · 5 goods"
+## (where icons can stand, PlanetaryView._cost_items / _full_cost_bb).
 static func cost_text(cost: Dictionary) -> String:
 	var parts: Array[String] = []
 	if cost.has(CREDITS):
-		parts.append("%s cr" % fmt(float(cost[CREDITS])))
+		parts.append("%s credits" % fmt(float(cost[CREDITS])))
 	for id: String in cost:
 		if id != CREDITS:
 			parts.append("%s %s" % [fmt(float(cost[id])), INFO.get(id, {}).get("short", display_name(id))])

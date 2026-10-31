@@ -1,5 +1,5 @@
 ## Design-system list row (city / district / building / orbit / issue):
-##   [icon] │ TITLE ................. [badge]
+##   [icon] │ TITLE ......... [⟳ cycle] [badge]
 ##          │ ─────
 ##          │ stats or description      [-][+]
 ## Cycle / construction progress fills the card's background (ProgressFill).
@@ -19,6 +19,10 @@ signal stepped(delta: int)
 	set(v): title = v; _sync()
 @export var badge: String = "":
 	set(v): badge = v; _sync()
+## Icon amounts in the badge instead of its text, "icon:text" each (a cost:
+## ["credits:101", "worker:125"]); an empty icon shows the text alone.
+@export var badge_items: PackedStringArray = []:
+	set(v): badge_items = v; _sync()
 ## Shown under the title when there are no stats.
 @export var description: String = "":
 	set(v): description = v; _sync()
@@ -26,7 +30,11 @@ signal stepped(delta: int)
 	set(v): icon_name = v; _sync()
 @export var icon_color: Color = Color(0.898, 0.831, 0.675):
 	set(v): icon_color = v; _sync()
-## "icon_name:text" per entry, e.g. "district:3", "population:12", "credits:+30/20s".
+## Cycle length beside the badge ("20s"; empty hides it): stats are per cycle,
+## so they read "+30" and the cycle stands once here (playtest 31.10).
+@export var cycle: String = "":
+	set(v): cycle = v; _sync()
+## "icon_name:text" per entry, e.g. "district:3", "population:12", "credits:+30".
 ## Resource icons take their resource colour.
 @export var stats: PackedStringArray = []:
 	set(v): stats = v; _sync()
@@ -52,6 +60,9 @@ signal stepped(delta: int)
 @onready var _desc: Label = $Row/Body/Bottom/Description
 @onready var _stepper: Control = $Row/Body/Bottom/Stepper
 var _fill: ProgressFill = null
+var _cycle_box: HBoxContainer = null
+var _badge_box: HBoxContainer = null
+var _cycle_lbl: Label = null
 var _hovered := false
 
 static func create(t: String, icon_id: String, badge_text := "", stat_list: PackedStringArray = [], desc := "") -> ListItem:
@@ -65,6 +76,7 @@ static func create(t: String, icon_id: String, badge_text := "", stat_list: Pack
 
 func _ready() -> void:
 	_fill = ProgressFill.attach(self, progress_color)
+	_build_cycle_box()
 	if not Engine.is_editor_hint():
 		# long titles and stat rows glide inside the row instead of widening
 		# the left panel or running under the badge (playtest 30.10)
@@ -91,7 +103,11 @@ func _sync() -> void:
 		return
 	_title.text = title
 	_badge_lbl.text = badge
-	_badge.visible = badge != ""
+	_badge.visible = badge != "" or not badge_items.is_empty()
+	_sync_badge_items()
+	if _cycle_box != null:
+		_cycle_lbl.text = cycle
+		_cycle_box.visible = cycle != ""
 	_icon.texture = UIIcons.get_icon(icon_name)
 	_icon.self_modulate = icon_color
 	for c in _stats.get_children():
@@ -113,6 +129,47 @@ func _sync() -> void:
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if clickable else Control.CURSOR_ARROW
 	_apply_box()
 
+func _sync_badge_items() -> void:
+	if _badge_box != null:
+		_badge.remove_child(_badge_box)
+		_badge_box.queue_free()
+		_badge_box = null
+	_badge_lbl.visible = badge_items.is_empty()
+	if badge_items.is_empty():
+		return
+	_badge_box = HBoxContainer.new()
+	_badge_box.add_theme_constant_override("separation", 6)
+	_badge_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for s: String in badge_items:
+		var parts := s.split(":", true, 1)
+		var chip := _make_stat(parts[0] if parts.size() > 1 else "", parts[-1])
+		(chip.get_child(chip.get_child_count() - 1) as Label).theme_type_variation = &"BadgeLabel"
+		_badge_box.add_child(chip)
+	_badge.add_child(_badge_box)
+
+func _build_cycle_box() -> void:
+	_cycle_box = HBoxContainer.new()
+	_cycle_box.add_theme_constant_override("separation", 2)
+	_cycle_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cycle_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var ic := TextureRect.new()
+	ic.texture = UIIcons.get_icon("cycle")
+	ic.custom_minimum_size = Vector2(9, 9)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	ic.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	ic.self_modulate = Color(0.62, 0.70, 0.82)
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cycle_box.add_child(ic)
+	_cycle_lbl = Label.new()
+	_cycle_lbl.theme_type_variation = &"StatLabel"
+	_cycle_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cycle_box.add_child(_cycle_lbl)
+	var top := _badge.get_parent()
+	top.add_child(_cycle_box)
+	top.move_child(_cycle_box, _badge.get_index())
+
 func _make_stat(icon_id: String, txt: String) -> Control:
 	var box := HBoxContainer.new()
 	box.add_theme_constant_override("separation", 2)
@@ -125,7 +182,10 @@ func _make_stat(icon_id: String, txt: String) -> Control:
 		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		ic.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-		ic.self_modulate = Economy.color_of(icon_id) if Economy.INFO.has(icon_id) else icon_color
+		ic.self_modulate = Economy.color_of(icon_id) if Economy.INFO.has(icon_id) \
+			else (Color(0.85, 0.88, 1.0) if icon_id == "worker" else (Color.WHITE if Economy.is_raw(icon_id) else icon_color))
+		if Economy.is_raw(icon_id):
+			ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # pixel mineral icon
 		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(ic)
 	var l := Label.new()

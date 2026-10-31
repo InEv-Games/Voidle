@@ -135,9 +135,10 @@ func district_slots(poi: POIData) -> int:
 		if d == null or d.is_orbit_city:
 			return 0 if Leveling.is_orbit_city(GameState.get_planet_data(planet_seed), poi) else 1
 		return 0 if d.prefab.is_empty() and d.planet_support.is_empty() else 3 + (lv - 1) * 2
+	var bonus := PlanetTags.planet_count(planet_seed, "district_slots")   # planet traits
 	if poi.is_city():
-		return lv + 1
-	return 3 + (lv - 1) * 2
+		return lv + 1 + bonus
+	return 3 + (lv - 1) * 2 + bonus
 
 ## Slots one more level adds to this district.
 static func slots_per_level(poi: POIData) -> int:

@@ -31,13 +31,120 @@ var _since_lock := 0.0
 var _ring: Control = null
 var _last_mouse := Vector2.ZERO
 var _lock_at := Vector2.ZERO
+## The last show_tip was refused (a locked tip under the mouse); its follow-up
+## calls (set_title_icon …) are refused too.
+var _ignored := false
 
 ## Where a locked tip stays open: the tip itself, a small area where the mouse
 ## rested when it locked, and the corridor between them.
 func _lock_zone() -> Rect2:
 	var tip := (_panel.get_parent() as Control).get_global_rect().grow(8.0)
 	var spot := Rect2(_lock_at - Vector2(28, 28), Vector2(56, 56))
-	return tip.merge(spot)
+	var zone := tip.merge(spot)
+	for n in _nests:
+		if n.visible:
+			zone = zone.merge(n.get_global_rect().grow(8.0))   # reading a nested term
+	return zone
+
+# ── Nested tips (playtest 31.10) ──────────────────────────────────────────────
+## A [url] term (Glossary) in a locked tip opens a small tip of its own beside
+## the mouse; a term inside that one opens the next, and so on (a stack). Each
+## stays while the mouse is on its term or on it.
+const NEST_MAX := 4
+var _nests: Array[PanelContainer] = []
+var _nest_hide := 0.0
+var _nest_hide_from := 0   # the first level the running hide timer would close
+
+func _nest_at(level: int) -> PanelContainer:
+	while _nests.size() <= level:
+		var lv := _nests.size()
+		var p := PanelContainer.new()
+		p.theme_type_variation = &"TooltipPanel"
+		p.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.visible = false
+		var vb := VBoxContainer.new()
+		vb.add_theme_constant_override("separation", 4)
+		vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.add_child(vb)
+		var head := HBoxContainer.new()   # title │ corner (an entry's third part)
+		head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vb.add_child(head)
+		var t := Label.new()
+		t.theme_type_variation = &"HeaderLabel"
+		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(t)
+		var corner := RichTextLabel.new()
+		corner.bbcode_enabled = true
+		corner.fit_content = true
+		corner.scroll_active = false
+		corner.autowrap_mode = TextServer.AUTOWRAP_OFF
+		corner.theme_type_variation = &"TooltipBody"
+		corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		corner.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		head.add_child(corner)
+		var b := RichTextLabel.new()
+		b.bbcode_enabled = true
+		b.fit_content = true
+		b.scroll_active = false
+		b.theme_type_variation = &"TooltipBody"
+		b.mouse_filter = Control.MOUSE_FILTER_PASS   # its own terms open the next level
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.custom_minimum_size = Vector2(240, 0)
+		b.meta_hover_started.connect(func(m: Variant) -> void: _show_nest(lv + 1, String(m)))
+		b.meta_hover_ended.connect(func(_m: Variant) -> void: _leave_term(lv + 1))
+		vb.add_child(b)
+		add_child(p)
+		_nests.append(p)
+	return _nests[level]
+
+func _on_term_hovered(term: String) -> void:
+	_show_nest(0, term)
+
+func _on_term_left(_term: String) -> void:
+	_leave_term(0)
+
+func _show_nest(level: int, term: String) -> void:
+	var e := Glossary.entry(term)
+	if e.is_empty() or not _locked or level >= NEST_MAX:
+		return
+	var p := _nest_at(level)
+	var vb := p.get_child(0)
+	var head := vb.get_child(0)
+	(head.get_child(0) as Label).text = String(e[0]).to_upper()
+	(head.get_child(1) as RichTextLabel).text = String(e[2]) if e.size() > 2 else ""
+	(vb.get_child(1) as RichTextLabel).text = String(e[1])
+	_hide_nests_from(level + 1)
+	p.visible = true
+	p.reset_size()
+	var m := get_viewport().get_mouse_position()
+	var vp := get_viewport().get_visible_rect().size
+	var sz := p.get_combined_minimum_size()
+	var pos := m + Vector2(14, 10)
+	if pos.x + sz.x > vp.x - 4.0:
+		pos.x = m.x - sz.x - 14.0
+	pos.y = clampf(pos.y, 4.0, maxf(4.0, vp.y - sz.y - 4.0))
+	p.position = pos
+	_nest_hide = 0.0
+
+func _leave_term(level: int) -> void:
+	_nest_hide = 0.25   # time to reach the nested tip
+	_nest_hide_from = level
+
+## The deepest open nested tip under the mouse, -1 when none.
+func _nest_under_mouse() -> int:
+	var m := get_viewport().get_mouse_position()
+	for i in range(_nests.size() - 1, -1, -1):
+		if _nests[i].visible and _nests[i].get_global_rect().has_point(m):
+			return i
+	return -1
+
+func _hide_nests_from(level: int) -> void:
+	for i in range(level, _nests.size()):
+		_nests[i].visible = false
+
+func _hide_nest() -> void:
+	_hide_nests_from(0)
+	_nest_hide = 0.0
 
 func _ready() -> void:
 	layer = 300
@@ -54,26 +161,69 @@ func _ready() -> void:
 	_hbox.visible = false
 	add_child(_hbox)
 	_ring = Control.new()
-	_ring.custom_minimum_size = Vector2(12, 12)
-	_ring.size = Vector2(12, 12)
 	_ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ring.draw.connect(_draw_ring)
 	add_child(_ring)
 	_ring.visible = false
+	_panel.term_hovered.connect(_on_term_hovered)
+	_panel.term_left.connect(_on_term_left)
 
+## The lock charge as an outline filling around the card, clockwise from its
+## top-left corner (playtest 31.10: in place of a ring in the corner); the
+## whole frame turns gold once locked. `_ring` covers the card's rect.
 func _draw_ring() -> void:
 	var k := 1.0 if _locked else clampf((_charge - LOCK_DELAY) / LOCK_SEC, 0.0, 1.0)
-	var c := Vector2(6, 6)
-	_ring.draw_arc(c, 4.5, 0.0, TAU, 20, Color(1, 1, 1, 0.18), 1.5, true)
-	if k > 0.0:
-		_ring.draw_arc(c, 4.5, -PI * 0.5, -PI * 0.5 + TAU * k, 24,
-			Color(1.0, 0.85, 0.40, 0.95) if _locked else Color(0.65, 0.85, 1.0, 0.85), 1.5, true)
+	if k <= 0.0:
+		return
+	# follows the card's rounded frame (its stylebox radius), never sharp corners
+	var sb := _panel.get_theme_stylebox("panel") as StyleBoxFlat
+	var rad := float(sb.corner_radius_top_left) if sb != null else 3.0
+	var path := _rounded_path(Rect2(Vector2(1, 1), _ring.size - Vector2(2, 2)), rad)
+	var total := 0.0
+	for i in path.size() - 1:
+		total += path[i].distance_to(path[i + 1])
+	var left := k * total
+	var pts := PackedVector2Array([path[0]])
+	for i in path.size() - 1:
+		var seg := path[i].distance_to(path[i + 1])
+		if left >= seg:
+			pts.append(path[i + 1])
+			left -= seg
+		else:
+			pts.append(path[i].lerp(path[i + 1], left / maxf(seg, 0.001)))
+			break
+	_ring.draw_polyline(pts, Color(1.0, 0.85, 0.40, 0.95) if _locked else Color(0.65, 0.85, 1.0, 0.85), 2.0, true)
+
+## A rounded rectangle as a closed point path, clockwise from the top-left
+## edge's start.
+static func _rounded_path(r: Rect2, rad: float) -> PackedVector2Array:
+	rad = minf(rad, minf(r.size.x, r.size.y) * 0.5)
+	var pts := PackedVector2Array()
+	var centres := [Vector2(r.end.x - rad, r.position.y + rad), Vector2(r.end.x - rad, r.end.y - rad),
+		Vector2(r.position.x + rad, r.end.y - rad), Vector2(r.position.x + rad, r.position.y + rad)]
+	pts.append(Vector2(r.position.x + rad, r.position.y))
+	for c in 4:
+		var a0 := -PI * 0.5 + c * PI * 0.5
+		for s in 5:
+			var a := a0 + PI * 0.5 * float(s) / 4.0
+			pts.append((centres[c] as Vector2) + Vector2(cos(a), sin(a)) * rad)
+	pts.append(Vector2(r.position.x + rad, r.position.y))
+	return pts
+
+## Lays the outline over the card where it is now.
+func _place_ring() -> void:
+	var r := _panel.get_global_rect()
+	_ring.position = r.position
+	_ring.size = r.size
+	_ring.queue_redraw()
 
 func _unlock() -> void:
 	_locked = false
 	_charge = 0.0
 	_since_lock = 0.0
 	_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel.set_terms_active(false)
+	_hide_nest()
 
 func _process(delta: float) -> void:
 	if _hide_timer > 0.0:
@@ -95,6 +245,12 @@ func _process(delta: float) -> void:
 		# mouse is elsewhere
 		_since_lock += delta
 		root_now.size = root_now.get_combined_minimum_size()   # content may change (Shift …)
+		_place_ring()
+		if _nest_hide > 0.0:
+			_nest_hide -= delta
+			if _nest_hide <= 0.0:
+				# keep what the mouse reached; close the levels past it
+				_hide_nests_from(maxi(_nest_hide_from, _nest_under_mouse() + 1))
 		if not _lock_zone().has_point(get_viewport().get_mouse_position()) and _since_lock > LOCK_GRACE:
 			_hide_timer = 0.12
 		return
@@ -110,6 +266,7 @@ func _process(delta: float) -> void:
 		_since_lock = 0.0
 		_lock_at = m
 		_hbox.mouse_filter = Control.MOUSE_FILTER_STOP   # the mouse may rest on it
+		_panel.set_terms_active(true)   # its underlined terms open nested tips now
 	_ring.queue_redraw()
 	# get_combined_minimum_size() is synchronous — no frame delay needed
 	var root_node := _panel.get_parent() as Control
@@ -132,9 +289,8 @@ func _process(delta: float) -> void:
 	if pos.y < 4.0:       pos.y = mouse.y + 14.0
 	root_node.position = pos
 	root_node.visible  = true
-	_ring.visible = _locked or _charge > LOCK_DELAY   # no ring during the first second
-	_ring.position = pos + Vector2(_panel.size.x - 16.0, 4.0) if not _flipped \
-		else pos + Vector2(root_node.size.x - 16.0, 4.0)
+	_ring.visible = _locked or _charge > LOCK_DELAY   # nothing before the charge starts
+	_place_ring.call_deferred()   # after this frame's layout puts the card
 	# When flipped left: sub_panel (small) goes to left, _panel (big) to right
 	if should_flip != _flipped:
 		_flipped = should_flip
@@ -150,10 +306,12 @@ func _process(delta: float) -> void:
 ## body: String or Array — Array elements may be String or Texture2D (rendered inline).
 ## cost: String, Array[String], or Array[Variant] mixing strings and textures.
 func show_tip(title: String, body = "", cost = "", sub_body = "") -> void:
-	# a locked tip keeps the floor while the mouse is in its zone; its own
-	# owner may still update it (same title — e.g. Shift changing an amount)
-	if _locked and _visible and _lock_zone().has_point(get_viewport().get_mouse_position()) \
-			and title.to_upper() != _panel.title:
+	# a locked tip keeps the floor only while the mouse is ON it (reading or
+	# pointing at it); any other control takes over as usual — a neighbour's
+	# tip opens at once. Its own owner may still update it (same title).
+	_ignored = _locked and _visible and title.to_upper() != _panel.title \
+		and (_panel.get_parent() as Control).get_global_rect().grow(6.0).has_point(get_viewport().get_mouse_position())
+	if _ignored:
 		return
 	if title.to_upper() != _panel.title:
 		_unlock()
@@ -172,6 +330,9 @@ func show_tip(title: String, body = "", cost = "", sub_body = "") -> void:
 			if item is String and (item as String) != "":
 				cost_lines.append(item as String)
 	_panel.cost = "\n".join(cost_lines)
+	_panel.set_footer("", "")
+	_panel.set_corner("")
+	_panel.set_detail("")
 
 	_panel.visible = true
 	# hide only for the first frame of a new tip (it is sized then shown);
@@ -208,8 +369,29 @@ func _limit_width(l: RichTextLabel) -> void:
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
 		l.custom_minimum_size.x = 0.0
 
+## Header's top-right corner in BBCode (stored / max …); call after show_tip.
+func set_corner(c: String) -> void:
+	if _ignored:
+		return
+	_panel.set_corner(c)
+
+## A block under the body, behind a separator (income lines …); call after show_tip.
+func set_detail(d: String) -> void:
+	if _ignored:
+		return
+	_panel.set_detail(d)
+
+## Bottom row in BBCode: `left` (e.g. what it makes) and `right` (the cost,
+## bottom-right corner); call after show_tip, like set_title_icon.
+func set_footer(left: String, right: String) -> void:
+	if _ignored:
+		return
+	_panel.set_footer(left, right)
+
 ## Icon before the title (UIIcons name or resource id); call after show_tip.
 func set_title_icon(icon_name: String) -> void:
+	if _ignored:
+		return   # the show_tip it belongs to didn't take
 	_panel.icon_name = icon_name
 
 ## Title of the tip on screen (upper-cased), "" when none is shown.

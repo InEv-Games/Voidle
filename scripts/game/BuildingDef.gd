@@ -135,7 +135,7 @@ func output_label() -> String:
 	for id: String in outputs:
 		var v: float = outputs[id]
 		match id:
-			Economy.ENERGY:     parts.append("+%s ⚡/s" % _num(v))
+			Economy.ENERGY:     parts.append("+%s ⚡" % _num(v))
 			Economy.POPULATION: parts.append("+%s pop" % Economy.fmt(v))
 			Economy.RAW:        parts.append("+%s raw" % _num(v))
 			_:                  parts.append("+%s %s" % [_num(v), Economy.INFO.get(id, {}).get("short", id)])

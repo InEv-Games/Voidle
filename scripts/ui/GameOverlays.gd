@@ -109,7 +109,9 @@ static func open_trait_picker(host: Node, planet_seed: int) -> void:
 		v.add_theme_constant_override("separation", 10)
 		card.add_child(v)
 		v.add_child(_text(String(info["name"]).to_upper(), 15))
-		v.add_child(_text(PlanetTags.effect_text(tid), 13, _good() if PlanetTags.is_positive(tid) else Color(1.0, 0.85, 0.45)))
+		var strong := int(info.get("min_slot", 0)) > 0
+		v.add_child(_text(PlanetTags.effect_text(tid), 13, Color(0.95, 0.82, 0.45) if strong \
+			else (_good() if PlanetTags.is_positive(tid) else Color(1.0, 0.85, 0.45))))
 		v.add_child(_text(String(info["desc"]), 11, UIStyle.color(&"text_subtle")))
 		var sp := Control.new()
 		sp.size_flags_vertical = Control.SIZE_EXPAND_FILL

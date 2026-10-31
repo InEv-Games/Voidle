@@ -17,11 +17,24 @@ var night_shadow: float = 1.0
 ## or one card each with its own demolish button (false).
 var stack_lowest_layer: bool = true
 
+## Frame cap (laptop heat, playtest 31.10): an idle game needs no 120 fps on a
+## ProMotion screen, and in the background it only has to keep ticking.
+const FPS_FOCUSED := 60
+const FPS_BACKGROUND := 12
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	Engine.max_fps = FPS_FOCUSED
 	_ensure_buses()
 	load_settings()
 	apply_settings()
+
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			Engine.max_fps = FPS_BACKGROUND
+		NOTIFICATION_APPLICATION_FOCUS_IN:
+			Engine.max_fps = FPS_FOCUSED
 
 func _ensure_buses() -> void:
 	for bus_name in ["Music", "UI", "SFX"]:

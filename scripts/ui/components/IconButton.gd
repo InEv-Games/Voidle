@@ -28,6 +28,11 @@ enum Layout { ICON_LEFT, TEXT_CENTER }
 	set(v): counter = v; _sync()
 ## Smallest size; the button grows to fit its text. Icon-only buttons stay square.
 ## (custom_minimum_size is computed from this — edit this one, not that.)
+## Icon amounts in place of the plain counter, "icon:text" each, e.g.
+## ["credits:9.4K", "worker:12K"]: each amount by its resource icon (playtest 31.10).
+@export var counter_items: PackedStringArray = []:
+	set(v): counter_items = v; _sync()
+var _counter_box: HBoxContainer = null
 @export var min_size: Vector2 = Vector2(0, 26):
 	set(v): min_size = v; _sync()
 ## Label / counter font size; 0 = the theme's TitleLabel / CounterLabel size.
@@ -80,7 +85,8 @@ func _sync() -> void:
 	_icon.visible = not centred and icon_name != ""
 	_sep.visible = _icon.visible and _label.visible   # icon-only: no divider
 	_counter.text = counter
-	_counter.visible = counter != ""
+	_counter.visible = counter != "" and counter_items.is_empty()
+	_sync_counter_items()
 	for l: Label in [_label, _counter]:
 		if font_size > 0:
 			l.add_theme_font_size_override("font_size", font_size)
@@ -99,10 +105,52 @@ func _apply_text_color() -> void:
 	var col := get_theme_color(&"font_color")
 	_label.add_theme_color_override("font_color", col)
 	_counter.add_theme_color_override("font_color", col)
+	if _counter_box != null:
+		for chip in _counter_box.get_children():
+			(chip.get_child(1) as Label).add_theme_color_override("font_color", col)
 
 ## Just an icon: no label and no counter.
 func _icon_only() -> bool:
-	return layout == Layout.ICON_LEFT and label_text == "" and counter == "" and icon_name != ""
+	return layout == Layout.ICON_LEFT and label_text == "" and counter == "" and counter_items.is_empty() and icon_name != ""
+
+func _sync_counter_items() -> void:
+	if _counter_box != null:
+		_row.remove_child(_counter_box)
+		_counter_box.queue_free()
+		_counter_box = null
+	if counter_items.is_empty():
+		return
+	_counter_box = HBoxContainer.new()
+	_counter_box.add_theme_constant_override("separation", 8)
+	_counter_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_counter_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	for s: String in counter_items:
+		var parts := s.split(":", true, 1)
+		var chip := HBoxContainer.new()
+		chip.add_theme_constant_override("separation", 3)
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var ic := TextureRect.new()
+		var id := parts[0] if parts.size() > 1 else ""
+		ic.texture = UIIcons.get_icon(id) if id != "" else null
+		ic.custom_minimum_size = Vector2(12, 12)
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var res := Economy.POPULATION if id == "worker" else id
+		ic.self_modulate = Economy.color_of(res) if Economy.INFO.has(res) else Color.WHITE
+		if Economy.is_raw(id):
+			ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # pixel mineral icon
+		chip.add_child(ic)
+		var l := Label.new()
+		l.text = parts[-1]
+		l.theme_type_variation = &"CounterLabel"
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if font_size > 0:
+			l.add_theme_font_size_override("font_size", font_size)
+		chip.add_child(l)
+		_counter_box.add_child(chip)
+	_row.add_child(_counter_box)
 
 ## The row sits inside the current stylebox's content margins.
 func _layout_row() -> void:

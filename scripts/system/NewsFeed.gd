@@ -64,7 +64,7 @@ const STATUS := [
 	"Treasury report: {credits} credits in the vaults.",
 	"Research desks have {science} Science waiting to be spent.",
 	"Census: {pop} people live in housing for {cap}.",
-	"Grid operator: the energy balance stands at {energy}/s.",
+	"Grid operator: the energy balance stands at {energy}.",
 	"{planet} now counts {cities} Cit{ies} and {districts} districts.",
 ]
 
@@ -113,10 +113,10 @@ func post(text: String, kind: Kind = Kind.EVENT, detail: String = "", title: Str
 func post_planet_level(planet_seed: int, level: int) -> void:
 	var pd := GameState.get_planet_data(planet_seed)
 	var pname := pd.planet_name if pd else "A world"
-	var new_pick := level in PlanetTags.BONUS_LEVELS
-	post("%s reaches planet level %d.%s" % [pname, level, "  A new planet trait can be chosen." if new_pick else ""],
+	var new_pick := level in Balance.cfg.trait_slot_levels.slice(1)
+	post("%s reaches planet level %d.%s" % [pname, level, "  A trait slot can be opened." if new_pick else ""],
 		Kind.EVENT, "The planet can now hold %d Cities.%s" % [Leveling.max_cities(GameState.get_planet(planet_seed)),
-			"\nPick its new trait from the button under the top bar." if new_pick else ""],
+			"\nOpen it on the planet page (Science + Rare Elements) and pick a trait." if new_pick else ""],
 		"%s · Level %d" % [pname, level], {"seed": planet_seed})
 
 # ── Sources ──────────────────────────────────────────────────────────────────
@@ -304,7 +304,7 @@ func _build_ui(host: Node) -> void:
 	tag.anchor_right = 1.0
 	tag.offset_left = -(TICKER_W + 4.0) - 50.0
 	tag.offset_right = -(TICKER_W + 4.0) - 4.0
-	tag.offset_top = 3
+	tag.offset_top = 4   # centred under the 1px top border
 	tag.offset_bottom = HEIGHT - 3
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -379,9 +379,12 @@ func _process(delta: float) -> void:
 		l.add_theme_color_override("font_color",
 			Color(1.0, 0.86, 0.50) if text.begins_with("◆") else Color(0.78, 0.84, 0.95))
 		l.text = text + SEPARATOR
-		l.position = Vector2(maxf(end, 0.0), 2.0)
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_clip.add_child(l)
 		l.reset_size()
+		# the full height under the bar's 1px top border, text centred in it
+		l.position = Vector2(maxf(end, 0.0), 1.0)
+		l.size.y = HEIGHT - 1.0
 		_labels.append(l)
 		end = l.position.x + _shown_width(l)
 
@@ -413,7 +416,7 @@ func _build_ticker() -> void:
 	_ticker.anchor_right = 1.0
 	_ticker.offset_left = -TICKER_W - 2.0
 	_ticker.offset_right = -2.0
-	_ticker.offset_top = 2.0
+	_ticker.offset_top = 3.0   # centred under the 1px top border
 	_ticker.offset_bottom = HEIGHT - 2.0
 	_ticker.clip_contents = true
 	_ticker.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -527,7 +530,8 @@ func _ticker_tip() -> String:
 	for id: String in _ticker_ids():
 		var mv := _move_text(_move(id))
 		var p := Trade.unit_price(id)
-		lines.append("%s  %s cr  [color=#%s]%s[/color]" % [Economy.display_name(id),
+		lines.append("%s  %s %s  [color=#%s]%s[/color]" % [Economy.display_name(id),
+			UIIcons.bb(Economy.CREDITS, 11, Economy.color_of(Economy.CREDITS)),
 			("%.2f" % p) if p < 10.0 else Economy.fmt(p), (mv[1] as Color).to_html(false), mv[0]])
 	return "\n".join(lines) + "\n\nOver the last minute. Click to trade."
 

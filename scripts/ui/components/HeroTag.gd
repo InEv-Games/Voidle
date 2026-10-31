@@ -20,6 +20,15 @@ enum Tone { PLAIN, GOOD, BAD }
 
 func _ready() -> void:
 	_sync()
+	if Engine.is_editor_hint():
+		return
+	# the game's own tooltip (the engine's plain one was huge and unstyled)
+	_label.mouse_entered.connect(func() -> void:
+		if tip != "":
+			TooltipManager.show_tip(text, tip))
+	_label.mouse_exited.connect(func() -> void:
+		if tip != "":
+			TooltipManager.hide_tip())
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_THEME_CHANGED:
@@ -33,5 +42,5 @@ func _sync() -> void:
 		_label.remove_theme_color_override("font_color")
 	else:
 		_label.add_theme_color_override("font_color", get_theme_color(&"good" if tone == Tone.GOOD else &"bad", &"Palette"))
-	_label.tooltip_text = tip
+	_label.tooltip_text = tip if Engine.is_editor_hint() else ""
 	_label.mouse_filter = Control.MOUSE_FILTER_STOP if tip != "" else Control.MOUSE_FILTER_IGNORE

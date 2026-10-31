@@ -388,10 +388,10 @@ func _build_tree_graph() -> void:
 				else:
 					body_str += "[right][color=#e5c24b]Level %d/%d[/color][/right]\n" % [cur_lv, max_lv]
 				
-			# Normal nodes
-			body_str += node.description
+			# Normal nodes — names of buildings and districts open nested tips
+			body_str += Glossary.link(node.description)
 			
-			var effect_text: String = st.call("effect_text", id)
+			var effect_text: String = Glossary.link(st.call("effect_text", id))
 			for bid: String in node.grants:
 				var def: BuildingDef = BuildingDef.find(bid)
 				if def:

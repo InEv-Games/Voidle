@@ -265,6 +265,13 @@ func _tick_all(delta: float) -> void:
 
 			if def.tick_duration <= 0.0:
 				continue   # passive building — no production cycle
+			# housing / energy only, nothing to pay: standing amounts, no cycle
+			# to run (its bar stays empty — playtest 31.10)
+			if def.inputs.is_empty() and not _has_stock(def) and def.logic == null:
+				if _progress.has(key):   # an older save's half-filled bar
+					_progress.erase(key)
+					_emit_progress(planet_seed, key)
+				continue
 
 			# ── User-toggled off ──────────────────────────────────────────────
 			if _user_paused.get(key, false):
@@ -335,6 +342,28 @@ func _tick_all(delta: float) -> void:
 ## How fast districts are built (1 = their construction_duration). The one
 ## place a construction speed-up (research, rush …) hooks in: surface districts
 ## and Orbit districts — and with them the Orbit rocket animation — follow it.
+## Seconds one production cycle of `def` takes now (research shortens it,
+## mines also by the mining speed) — the number every card and tip shows.
+func building_cycle_sec(def: BuildingDef) -> float:
+	var st = get_node("/root/SkillTree")
+	var m: float = st.get_global_speed_mult()
+	if def.outputs.has(Economy.RAW):
+		m *= st.get_mine_speed_mult()
+	return def.tick_duration / maxf(m, 0.0001)
+
+## Seconds one base-income cycle of a district takes now.
+func district_cycle_sec(ddef: DistrictDef) -> float:
+	return ddef.base_tick / maxf(float(get_node("/root/SkillTree").get_global_speed_mult()), 0.0001)
+
+## How a cycle is written everywhere (playtest 31.10: amounts are per cycle,
+## the cycle stands once beside them): "20s", "7.5s", "1m 05s".
+static func cycle_text(sec: float) -> String:
+	if sec >= 60.0:
+		return "%dm %02ds" % [int(sec) / 60, int(round(sec)) % 60]
+	if sec < 10.0 and absf(sec - roundf(sec)) > 0.05:
+		return "%.1fs" % sec
+	return "%ds" % roundi(sec)
+
 func district_build_speed() -> float:
 	return Relics.build_speed()
 
@@ -370,10 +399,9 @@ func _tick_district_base(pp: PlanetProgress, pd: PlanetData, delta: float) -> vo
 					_produce_raw(pp, poi.label, v)
 				continue
 			Economy.add(id, v)
-			if v > 0.0:
-				var short: String = Economy.INFO.get(id, {}).get("short", id)
+			if v > 0.0:   # the amount by its resource icon (playtest 31.10), no "cr"
 				resource_produced.emit(pp.planet_seed, poi.label,
-					("+%.1f %s" if v < 10.0 else "+%.0f %s") % [v, short], Economy.color_of(id), null)
+					("+%.1f" if v < 10.0 else "+%.0f") % v, Economy.color_of(id), UIIcons.get_icon(id))
 
 ## Output efficiency from population on a planet (1 = housed; < 1 = overpopulated).
 ## Cycles keep their length; a finished cycle makes this share of its output.
@@ -396,6 +424,13 @@ func base_progress(planet_seed: int, district_label: String) -> float:
 static func _has_stock_income(income: Dictionary) -> bool:
 	for id: String in income:
 		if id != Economy.ENERGY and id != Economy.POPULATION and float(income[id]) > 0.0:
+			return true
+	return false
+
+## True when a model makes something stored per cycle (not only housing / energy).
+static func _has_stock(def: BuildingDef) -> bool:
+	for id: String in def.outputs:
+		if id != Economy.ENERGY and id != Economy.POPULATION:
 			return true
 	return false
 
@@ -601,6 +636,13 @@ func resource_rates(only_seed: int = -1) -> Dictionary:
 ## its own share. Cached for BREAKDOWN_MS; the top bar's rates and tooltips read it.
 const BREAKDOWN_MS := 250
 var _breakdown: Dictionary = {}
+## The same, per unit: { id: { label: { "Market Quarter": per_s, … } } } —
+## what a breakdown line is made of (nested tips, playtest 31.10).
+var _breakdown_units: Dictionary = {}
+
+func resource_units(id: String, label: String) -> Dictionary:
+	resource_breakdowns()
+	return _breakdown_units.get(id, {}).get(label, {})
 var _breakdown_at := -100000
 
 func resource_breakdowns() -> Dictionary:
@@ -609,22 +651,28 @@ func resource_breakdowns() -> Dictionary:
 		return _breakdown
 	_breakdown_at = now
 	var out := {}
-	var add := func(id: String, label: String, v: float) -> void:
+	var units := {}
+	var add := func(id: String, label: String, v: float, unit: String) -> void:
 		if absf(v) < 0.00001:
 			return
 		if not out.has(id):
 			out[id] = {}
+			units[id] = {}
 		out[id][label] = float(out[id].get(label, 0.0)) + v
+		if unit != "":
+			if not units[id].has(label):
+				units[id][label] = {}
+			units[id][label][unit] = float(units[id][label].get(unit, 0.0)) + v
 	var st := get_node("/root/SkillTree")
 	for pp: PlanetProgress in _all_colonies():
 		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
 		if pd == null:
 			continue
 		var minerals: Array = Economy.raw_for_body(pd)
-		var spread := func(label: String, v: float) -> void:   # a mine's raw output over the body's minerals
-			add.call(Economy.RAW, label, v)
+		var spread := func(label: String, v: float, unit: String) -> void:   # a mine's raw output over the body's minerals
+			add.call(Economy.RAW, label, v, unit)
 			for r: Dictionary in minerals:
-				add.call(String(r["id"]), label, v / float(minerals.size()))
+				add.call(String(r["id"]), label, v / float(minerals.size()), unit)
 		for poi: POIData in pd.custom_pois:
 			var ddef := district_def(poi)
 			if ddef == null or not makes_base(pd, poi) or ddef.base_tick <= 0.0:
@@ -638,9 +686,9 @@ func resource_breakdowns() -> Dictionary:
 					continue
 				var v: float = float(inc[id]) * st.get_global_speed_mult() * planet_pop_speed(pp.planet_seed) / ddef.base_tick
 				if id == Economy.RAW:
-					spread.call(label, v)
+					spread.call(label, v, poi.shown_name())
 				else:
-					add.call(id, label, v)
+					add.call(id, label, v, poi.shown_name())
 		for entry: Dictionary in pp.buildings:
 			if entry.get("constructing", false):
 				continue
@@ -657,23 +705,27 @@ func resource_breakdowns() -> Dictionary:
 				speed *= st.get_mine_speed_mult()
 			var per_s := speed / def.tick_duration
 			var eff := output_efficiency(pp, def)
+			var dpoi := _district_poi(pp, entry.get("district_id", ""))
+			var n := int(entry.get("amount", 1))
+			var unit := (dpoi.shown_name() if dpoi != null else pd.planet_name) + (" ×%d" % n if n > 1 else "")
 			for id: String in def.outputs:
 				if id == Economy.ENERGY or id == Economy.POPULATION:
 					continue
 				var v := output_per_cycle(pp, entry, def, id) * eff * per_s
 				if id == Economy.RAW:
-					spread.call(def.display_name, v)
+					spread.call(def.display_name, v, unit)
 				else:
-					add.call(id, def.display_name, v)
+					add.call(id, def.display_name, v, unit)
 			for id: String in def.inputs:
 				var v := -float(def.inputs[id]) * float(entry.get("amount", 1)) * per_s
-				add.call(id, def.display_name + " upkeep", v)
+				add.call(id, def.display_name + " upkeep", v, unit)
 				if Economy.is_raw(id):
-					add.call(Economy.RAW, def.display_name + " upkeep", v)
+					add.call(Economy.RAW, def.display_name + " upkeep", v, unit)
 	var idle := idle_income_rates()
 	for id: String in idle:
-		add.call(id, "Idle population", float(idle[id]))
+		add.call(id, "Idle population", float(idle[id]), "")
 	_breakdown = out
+	_breakdown_units = units
 	return out
 
 ## Net per second of a resource from resource_breakdowns().
@@ -728,9 +780,8 @@ func _on_tick_complete(pp: PlanetProgress, def: BuildingDef,
 			continue
 		Economy.add(id, value)
 		if poi_lbl != "" and value > 0.0:
-			var short: String = Economy.INFO.get(id, {}).get("short", id)
-			var txt := "+%.1f %s" % [value, short] if value < 10.0 else "+%.0f %s" % [value, short]
-			resource_produced.emit(pp.planet_seed, poi_lbl, txt, Economy.color_of(id), null)
+			var txt := "+%.1f" % value if value < 10.0 else "+%.0f" % value
+			resource_produced.emit(pp.planet_seed, poi_lbl, txt, Economy.color_of(id), UIIcons.get_icon(id))
 
 ## Splits a mine's raw output evenly over the body's minerals (the ones this
 ## civilization can extract). No deposits or densities: every valid site on a
@@ -988,6 +1039,44 @@ func _calc_global_energy() -> void:
 
 ## Per-planet energy contribution (used by PlanetaryView for breakdown display).
 ## One world's energy: Vector2(produced, demanded) per second.
+## Where energy comes from and goes, every world: { group: { unit: amount } },
+## + made, − used (the energy tooltip's groups, playtest 31.10).
+func energy_sources() -> Dictionary:
+	var out := {}
+	var add := func(group: String, unit: String, v: float) -> void:
+		if absf(v) < 0.0001:
+			return
+		if not out.has(group):
+			out[group] = {}
+		out[group][unit] = float(out[group].get(unit, 0.0)) + v
+	var st := get_node("/root/SkillTree")
+	var consume: float = float(st.get_energy_consume_mult())
+	for pp: PlanetProgress in _all_colonies():
+		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+		if pd == null:
+			continue
+		for entry: Dictionary in _running_entries(pp):
+			var def := BuildingDef.find(entry.get("building_id", ""))
+			if def == null:
+				continue
+			var dpoi := _district_poi(pp, entry.get("district_id", ""))
+			var n := int(entry.get("amount", 1))
+			var unit := (dpoi.shown_name() if dpoi != null else pd.planet_name) + (" ×%d" % n if n > 1 else "")
+			if def.outputs.has(Economy.ENERGY):
+				add.call(def.display_name, unit, output_per_cycle(pp, entry, def, Economy.ENERGY))
+			if def.energy_per_tick < 0.0:
+				add.call(def.display_name, unit, def.energy_per_tick * float(n) * consume)
+		for poi: POIData in pd.custom_pois:
+			var ddef := district_def(poi)
+			if ddef == null:
+				continue
+			if makes_base(pd, poi):
+				var label := "Capital Districts" if poi.is_city() else ("Orbit City" if poi.is_orbital() else ddef.display_name + "s")
+				add.call(label, poi.shown_name(), district_base(pp, poi, Economy.ENERGY))
+			if poi.is_orbital() and not poi.constructing and ddef.own_energy_use > 0.0:
+				add.call("Orbit districts", poi.shown_name(), -ddef.own_energy_use * consume)
+	return out
+
 func planet_energy_split(pp: PlanetProgress) -> Vector2:
 	return _planet_energy(pp)
 

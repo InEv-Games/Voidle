@@ -69,7 +69,7 @@ const GUIDED_STEPS: Array = [
 		],
 		"reward_credits": 250.0,
 		"reward_science": 0.0,
-		"reward_text":   "+250 cr",
+		"reward_text":   "+250 credits",
 	},
 	{
 		"type":  "narr",
@@ -89,7 +89,7 @@ const GUIDED_STEPS: Array = [
 		],
 		"reward_credits": 250.0,
 		"reward_science": 0.0,
-		"reward_text":   "+250 cr",
+		"reward_text":   "+250 credits",
 	},
 	{
 		"type":  "narr",
@@ -109,7 +109,7 @@ const GUIDED_STEPS: Array = [
 		],
 		"reward_credits": 300.0,
 		"reward_science": 0.0,
-		"reward_text":   "+300 cr",
+		"reward_text":   "+300 credits",
 	},
 	{
 		"type":  "narr",
@@ -126,7 +126,7 @@ const GUIDED_STEPS: Array = [
 		"targets":     [{"type": "district_upgrade"}],
 		"reward_credits": 400.0,
 		"reward_science": 10.0,
-		"reward_text":   "+400 cr  +10 sci",
+		"reward_text":   "+400 credits  +10 sci",
 	},
 	{
 		"type":  "narr",
@@ -143,7 +143,7 @@ const GUIDED_STEPS: Array = [
 		"targets":     [{"type": "city_level_up"}],
 		"reward_credits": 500.0,
 		"reward_science": 0.0,
-		"reward_text":   "+500 cr",
+		"reward_text":   "+500 credits",
 	},
 	{
 		"type":  "narr",
@@ -180,7 +180,7 @@ const GUIDED_STEPS: Array = [
 		"targets":     [{"type": "skill", "id": "start_production"}],
 		"reward_credits": 500.0,
 		"reward_science": 0.0,
-		"reward_text":   "+500 cr",
+		"reward_text":   "+500 credits",
 		"finale":        true,
 	},
 ]
@@ -202,7 +202,7 @@ const QUESTS := [
 		],
 		"reward_credits": 250.0,
 		"reward_science": 0.0,
-		"reward_text":  "+250 cr",
+		"reward_text":  "+250 credits",
 	},
 	{
 		"id":           "open_for_business",
@@ -214,7 +214,7 @@ const QUESTS := [
 		],
 		"reward_credits": 250.0,
 		"reward_science": 0.0,
-		"reward_text":  "+250 cr",
+		"reward_text":  "+250 credits",
 	},
 	{
 		"id":           "power_grid",
@@ -226,7 +226,7 @@ const QUESTS := [
 		],
 		"reward_credits": 300.0,
 		"reward_science": 0.0,
-		"reward_text":  "+300 cr",
+		"reward_text":  "+300 credits",
 	},
 	{
 		"id":           "district_upgrade",
@@ -235,7 +235,7 @@ const QUESTS := [
 		"sub_steps":    [{"type": "district_upgrade"}],
 		"reward_credits": 400.0,
 		"reward_science": 10.0,
-		"reward_text":  "+400 cr  +10 sci",
+		"reward_text":  "+400 credits  +10 sci",
 	},
 	{
 		"id":           "city_level_up",
@@ -244,7 +244,7 @@ const QUESTS := [
 		"sub_steps":    [{"type": "city_level_up"}],
 		"reward_credits": 300.0,
 		"reward_science": 0.0,
-		"reward_text":  "+300 cr",
+		"reward_text":  "+300 credits",
 	},
 	{
 		"id":           "research_wing",
@@ -265,38 +265,38 @@ const QUESTS := [
 		"sub_steps":    [{"type": "skill", "target": "start_production"}],
 		"reward_credits": 500.0,
 		"reward_science": 0.0,
-		"reward_text":  "+500 cr",
+		"reward_text":  "+500 credits",
 	},
 	# ── The road to Civilization 1 (GDD §16, §20) — no economic rewards ──────────
 	{"id": "fuel", "title": "Fuel for the Journey", "desc": "Research Fuel Processing and make or buy Fuel.",
-		"reward_credits": 300.0, "reward_science": 100.0, "reward_text": "+300 cr  +100 sci",
+		"reward_credits": 300.0, "reward_science": 100.0, "reward_text": "+300 credits  +100 sci",
 		"sub_steps": [{"type": "skill", "target": "fuel_processing"}]},
 	{"id": "rocketry", "title": "Rocketry", "desc": "Research Rocketry and build a Spaceport in your Capital (one free slot — level the Capital up if they are taken).",
-		"reward_credits": 600.0, "reward_science": 150.0, "reward_text": "+600 cr  +150 sci",
+		"reward_credits": 600.0, "reward_science": 150.0, "reward_text": "+600 credits  +150 sci",
 		"sub_steps": [{"type": "skill", "target": "rocketry"}, {"type": "building", "target": "spaceport"}]},
 	{"id": "orbital", "title": "Into Orbit", "desc": "Research Orbital Assembly, then found your Orbit from the planet panel: the Spaceport launches its Orbit City. The Moon needs it.",
-		"reward_credits": 700.0, "reward_science": 150.0, "reward_text": "+700 cr  +150 sci",
+		"reward_credits": 700.0, "reward_science": 150.0, "reward_text": "+700 credits  +150 sci",
 		"sub_steps": [{"type": "skill", "target": "orbital_assembly"}, {"type": "event", "target": "orbit_station"}]},
 	{"id": "lunar_program", "title": "Lunar Program", "desc": "Research Lunar Program.",
-		"reward_credits": 800.0, "reward_science": 200.0, "reward_text": "+800 cr  +200 sci",
+		"reward_credits": 800.0, "reward_science": 200.0, "reward_text": "+800 credits  +200 sci",
 		"sub_steps": [{"type": "skill", "target": "lunar_program"}]},
-	{"id": "lander", "title": "To the Moon", "desc": "Open the Moon and prepare the lander (3,000 cr, 40 Ferrite, 20 Fuel).",
-		"reward_credits": 1000.0, "reward_science": 0.0, "reward_text": "+1000 cr",
+	{"id": "lander", "title": "To the Moon", "desc": "Open the Moon and prepare the lander (3,000 credits, 40 Ferrite, 20 Fuel).",
+		"reward_credits": 1000.0, "reward_science": 0.0, "reward_text": "+1000 credits",
 		"sub_steps": [{"type": "event", "target": "lander_arrived"}]},
 	{"id": "moon_city", "title": "First Lunar City", "desc": "The lander set up the Moon's Central Orbit. Scan the surface (free) and look around with the lenses, then initiate colonization and pick the site of the first City. Your Earth buildings work there too; three Moon-only buildings use its Craters, Caves and Ion storm regions.",
-		"reward_credits": 500.0, "reward_science": 150.0, "reward_text": "+500 cr  +150 sci",
+		"reward_credits": 500.0, "reward_science": 150.0, "reward_text": "+500 credits  +150 sci",
 		"sub_steps": [{"type": "event", "target": "moon_city"}]},
-	{"id": "moon_mining", "title": "Lunar Mining", "desc": "Build a Production district on the Moon (300 cr, 30 Ferrite). It finds the Moon's mineral; your extraction buildings mine Moonstone there.",
-		"reward_credits": 800.0, "reward_science": 0.0, "reward_text": "+800 cr",
+	{"id": "moon_mining", "title": "Lunar Mining", "desc": "Build a Production district on the Moon (300 credits, 30 Ferrite). It finds the Moon's mineral; your extraction buildings mine Moonstone there.",
+		"reward_credits": 800.0, "reward_science": 0.0, "reward_text": "+800 credits",
 		"sub_steps": [{"type": "event", "target": "moon_production"}]},
 	{"id": "lunar_materials", "title": "Lunar Materials", "desc": "Research Lunar Materials.",
-		"reward_credits": 1500.0, "reward_science": 300.0, "reward_text": "+1500 cr  +300 sci",
+		"reward_credits": 1500.0, "reward_science": 300.0, "reward_text": "+1500 credits  +300 sci",
 		"sub_steps": [{"type": "skill", "target": "lunar_materials"}]},
 	{"id": "moonstone_100", "title": "100 Local Moonstone", "desc": "Mine 100 Moonstone on the Moon. Bought Moonstone doesn't count.",
-		"reward_credits": 2000.0, "reward_science": 300.0, "reward_text": "+2000 cr  +300 sci",
+		"reward_credits": 2000.0, "reward_science": 300.0, "reward_text": "+2000 credits  +300 sci",
 		"sub_steps": [{"type": "event", "target": "moon_moonstone_100"}]},
 	{"id": "advanced_rocket", "title": "Advanced Rocket", "desc": "Research Advanced Planetary Rocket, then prepare the rocket from your home world's or the Moon's page (any Spaceport launches it).",
-		"reward_credits": 3000.0, "reward_science": 0.0, "reward_text": "+3000 cr",
+		"reward_credits": 3000.0, "reward_science": 0.0, "reward_text": "+3000 credits",
 		"sub_steps": [{"type": "skill", "target": "advanced_planet_rocket"}, {"type": "event", "target": "rocket_started"}]},
 	{"id": "civilization_1", "title": "Reach Civilization 1", "desc": "Right-click a planet in the Solar System view to set the rocket's target. Its arrival completes Civilization 0.",
 		"sub_steps": [{"type": "event", "target": "demo_completed"}]},
@@ -627,7 +627,7 @@ func _grant_step_needs(targets: Array, id_key: String) -> void:
 		GameState.add_science(sci)
 	if cr > 0.0 or sci > 0.0:
 		var parts: Array[String] = []
-		if cr > 0.0: parts.append("+%.0f cr" % cr)
+		if cr > 0.0: parts.append("+%.0f credits" % cr)
 		if sci > 0.0: parts.append("+%.0f sci" % sci)
 		_flash_reward("Tutorial grant  " + "  ".join(parts))
 

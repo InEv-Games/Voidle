@@ -15,6 +15,9 @@ uniform float pixel = 2.0;
 uniform float nebula = 0.06;
 // Shifts the field (parallax, e.g. from the view's pan); in pixels.
 uniform vec2 offset = vec2(0.0);
+// Nebula cloud size, in pixels of the render (Starfield renders at one texel
+// per logical pixel, so 450 there matches 900 physical on a Retina screen).
+uniform float nebula_scale = 900.0;
 
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -61,7 +64,7 @@ void fragment() {
 	vec2 px = floor((FRAGCOORD.xy + offset) / pixel);
 	vec3 col = base_color.rgb;
 	// faint nebula: two soft colour clouds
-	vec2 uv = (FRAGCOORD.xy + offset * 0.3) / 900.0;
+	vec2 uv = (FRAGCOORD.xy + offset * 0.3) / nebula_scale;
 	float n1 = fbm(uv * 1.3 + 3.1);
 	float n2 = fbm(uv * 1.7 - 5.4);
 	col += vec3(0.20, 0.10, 0.35) * smoothstep(0.55, 0.85, n1) * nebula;

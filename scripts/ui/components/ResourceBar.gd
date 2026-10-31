@@ -10,7 +10,7 @@ extends Panel
 
 const SCENE_PATH := "res://scenes/ui/components/ResourceBar.tscn"
 const FLOAT_FONT := preload("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
-## Tooltip text per chip; energy and population build theirs live (_cell_tip).
+## Plain descriptions (fallback); _show_cell_tip builds every tip live.
 const TIPS := {
 	"credits": "Earned by Commercial districts. Spent on districts and buildings.",
 	"science": "Produced by Science districts. Spent in the Upgrade Tree.",
@@ -169,7 +169,6 @@ func _set_rate(id: String, per_s: float) -> void:
 ## Raw chip's dropdown.
 func _bind_chip(cell: ResourceChip) -> void:
 	var id := cell.resource_id
-	var tip: String = TIPS.get(id, "")
 	_res_slots[id] = cell
 	_res_chips[id] = cell
 	_res_lbls[id] = cell.value_label
@@ -184,8 +183,7 @@ func _bind_chip(cell: ResourceChip) -> void:
 				TooltipManager.show_tip(title, "Click to show every raw resource.")
 				TooltipManager.set_title_icon(id)
 			return
-		TooltipManager.show_tip(title, _cell_tip(id, tip))
-		TooltipManager.set_title_icon(id))
+		_show_cell_tip(id, title))
 	cell.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
@@ -208,74 +206,196 @@ func _bind_chip(cell: ResourceChip) -> void:
 				HUDManager.toggle_trade_panel()
 				cell.accept_event())
 
-## Tooltip body of a top-bar cell, with live numbers.
-func _cell_tip(id: String, base: String) -> String:
+const GOOD_HEX := "8fe39a"
+const BAD_HEX := "e36a6a"
+const DIM_HEX := "8a93b0"
+
+## A cell's description, with its terms opening nested tips (Glossary).
+static func _desc(id: String) -> String:
+	match id:
+		Economy.CREDITS:
+			return "Earned by %s. Spent on districts and buildings." % Glossary.t("commercial", "Commercial districts")
+		Economy.SCIENCE:
+			return "Made by %s. Spent in the %s." % [Glossary.t("science_d", "Science districts"), Glossary.t("upgrade_tree", "Upgrade Tree")]
+		Economy.GOODS:
+			return "Consumer Goods — made from raw minerals in %s. Used by luxury housing and %s." % [
+				Glossary.t("industrial", "Production districts"), Glossary.t("trade", "Trade")]
+		Economy.FUEL:
+			return "Fuel Rods — made from raw minerals in %s. Used by advanced power plants." % Glossary.t("industrial", "Production districts")
+		Economy.RARE:
+			return "Rare Elements — made from raw minerals in %s. Used by advanced science and planet traits." % Glossary.t("industrial", "Production districts")
+	return String(TIPS.get(id, ""))
+
+## An inline icon for the corner (UIIcons name, tint as hex).
+static func _ic(icon: String, hex: String) -> String:
+	return UIIcons.bb(icon, 11, Color.html(hex))
+
+static func _c(txt: String, hex: String) -> String:
+	return "[color=#%s]%s[/color]" % [hex, txt]
+
+## Every top-bar tip in one shape (playtest 31.10): the description (terms open
+## nested tips once it locks); stored / max — energy used / made, population
+## working / max — in the top-right corner; coloured income lines and the net
+## behind a separator; a deficit and what it does in red at the bottom; the
+## least important line, "Click to open Trade", small at the very end.
+func _show_cell_tip(id: String, title: String) -> void:
+	var desc := _desc(id)
+	var corner := ""
+	var detail := ""
+	var foot := ""
 	match id:
 		Economy.ENERGY:
 			var pm: Node = get_node_or_null("/root/ProductionManager")
 			var net: float = pm.get_global_energy() if pm != null else 0.0
 			var sp: Vector2 = pm.get_global_energy_split() if pm != null else Vector2.ZERO
-			var lines: Array[String] = ["Shown as the balance (made − used) of all your worlds — they share one grid."]
-			var wpp := _rate_planet()
-			if wpp != null and pm != null:
-				var wsp: Vector2 = pm.planet_energy_split(wpp)
-				lines.append("%s  made +%s ⚡  ·  used −%s ⚡" % [_rate_planet_name(), Economy.fmt(wsp.x), Economy.fmt(wsp.y)])
-			lines.append("")
-			lines.append("All worlds:")
-			lines.append_array([
-				"Produced   +%s ⚡" % Economy.fmt(sp.x),
-				"Consumed   −%s ⚡" % Economy.fmt(sp.y),
-				"Balance    %s%s ⚡" % ["+" if net >= 0.0 else "", Economy.fmt(net)],
-				"",
-				"A deficit lowers what energy-using buildings make (down to %d%% at worst) — cycles keep their length." % int(round((1.0 - Balance.cfg.energy_max_slowdown) * 100.0))])
+			desc = "Made by generators, used by buildings. All your worlds share one %s." % Glossary.t("grid", "grid")
+			# icons, not words (playtest 31.10): generators make, buildings use
+			corner = "%s %s   %s %s" % [_ic("bolt", GOOD_HEX), _c("+" + Economy.fmt(sp.x), GOOD_HEX),
+				_ic("factory", BAD_HEX), _c("−" + Economy.fmt(sp.y), BAD_HEX)]
+			detail = _energy_groups_text()
+			# the civilization's type by the power it uses (1 energy = 1 MW)
+			var k := (log(maxf(sp.y, 0.000001) * 1_000_000.0) / log(10.0) - 6.0) / 10.0
+			detail += "\n\n%s  [b]Type %s[/b]" % [Glossary.t("kardashev", "Kardashev scale"), "%.3f" % maxf(k, 0.0)]
 			if net < 0.0:
-				lines.append("Now producing at %d%% output." % int(round(pm.get_energy_ratio() * 100.0)))
-			lines.append("")
-			lines.append(_energy_breakdown_text())
-			return "\n".join(lines)
+				detail += "\n\n" + _c("Energy %s: buildings that use energy make %d%% of their output." % [
+					Glossary.t("deficit", "deficit"), int(round(pm.get_energy_ratio() * 100.0))], BAD_HEX)
 		Economy.POPULATION:
 			# one pool for every world: the home world answers for all of them
 			var pd: PlanetData = GameState.get_planet_data(GameState.home_planet_seed)
 			var pp: PlanetProgress = GameState.get_planet(pd.seed) if pd != null else null
-			var head := ""
-			var penalty := ""
+			desc = "People live in %s and go to work as %s. One pool for every world." % [
+				Glossary.t("housing", "housing"), Glossary.t("workers", "workers")]
 			if pd != null and pp != null and pp.is_colonized:
-				head = "Available  %s\nUsed       %s\nMax        %s\n\n" % [Economy.fmt(Economy.free_population(pd, pp)),
-					Economy.fmt(Economy.used_population(pd, pp)), Economy.fmt(Economy.max_population(pd, pp))]
+				var used := Economy.used_population(pd, pp)
+				var mx := Economy.max_population(pd, pp)
+				corner = "%s %s   %s %s" % [_ic("worker", "d9e0ff"), Economy.fmt(used),
+					_ic("population", Economy.color_of(Economy.POPULATION).to_html(false)), Economy.fmt(mx)]
+				detail = _population_groups_text() + "\n[b]Free  %s[/b]" % _c(
+					("+" if mx >= used else "−") + Economy.fmt(absi(mx - used)), GOOD_HEX if mx >= used else BAD_HEX) + _idle_pop_text()
 				var spd := Economy.pop_speed(pd, pp)
 				if spd < 0.999:
-					penalty = "\n\n[color=#e36a6a]Overcrowded — every building and district on every world makes %d%% of its output.[/color]" % int(round(spd * 100.0))
-			return head + "Shown as available / max, for all your worlds together.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, every finished cycle on every world makes less (down to %d%% at worst) until you build homes." % [
-				Economy.fmt(Balance.cfg.city_base_pop), Economy.fmt(Economy.district_found_pop(0)), int(round((1.0 - Balance.cfg.pop_max_slowdown) * 100.0))] + penalty + _idle_pop_text()
-	var txt := base + "\n\n" + ("Stored  %s" % Economy.fmt(_stock_amount(id)) if not Economy.is_capped(id) and id != Economy.RAW \
-		else "Stored  %s  (max %s, shared by all worlds)" % [Economy.fmt(_stock_amount(id)),
-			Economy.fmt(Economy.cap(id if id != Economy.RAW else "ferrite"))])
-	return txt + "\n\n" + breakdown_text(id) + "\n\nClick to open Trade."
+					detail += "\n\n" + _c("Overcrowded — a %s: every cycle on every world makes %d%% of its output." % [
+						Glossary.t("deficit", "deficit"), int(round(spd * 100.0))], BAD_HEX)
+		_:
+			# a storage cap is worth the corner; a lone stock number is not
+			var cap_id := id if id != Economy.RAW else "ferrite"
+			if Economy.is_capped(id) or id == Economy.RAW:
+				corner = "%s %s %s" % [Economy.fmt(_stock_amount(id)), _ic("warehouse", DIM_HEX), Economy.fmt(Economy.cap(cap_id))]
+			detail = breakdown_text(id)
+			foot = "Click to open Trade"
+	TooltipManager.show_tip(title, desc)
+	TooltipManager.set_title_icon(id)
+	TooltipManager.set_corner(corner)
+	TooltipManager.set_detail(detail)
+	if foot != "":
+		TooltipManager.set_footer("[font_size=10]%s[/font_size]" % _c(foot, DIM_HEX), "")
 
 ## "+1.2 /s  Market" lines of a resource, largest first, then the net (all worlds).
 static func breakdown_text(id: String) -> String:
 	var parts: Dictionary = ProductionManager.resource_breakdowns().get(id, {})
 	var keys: Array = parts.keys()
 	keys.sort_custom(func(a, b) -> bool: return absf(float(parts[a])) > absf(float(parts[b])))
-	var lines: Array[String] = ["Per second, all worlds:"]
+	var lines: Array[String] = [_c("Per second, all worlds", DIM_HEX)]
 	var net := 0.0
 	for k in keys:
 		var v := float(parts[k])
 		net += v
 		if lines.size() <= 10:
-			lines.append("[color=#%s]%s%s[/color]  %s" % [("8fe39a" if v >= 0.0 else "e36a6a"),
-				"+" if v >= 0.0 else "−", Economy.fmt(absf(v)), k])
+			# a line made of several units opens them in a nested tip
+			var units: Dictionary = ProductionManager.resource_units(id, String(k))
+			var nm := Glossary.t("src:%s|%s" % [id, k], String(k)) if units.size() > 1 else String(k)
+			lines.append("%s  %s" % [_c(("+" if v >= 0.0 else "−") + Economy.fmt(absf(v)), GOOD_HEX if v >= 0.0 else BAD_HEX), nm])
 	if keys.size() > 10:
-		lines.append("… and %d more" % (keys.size() - 10))
+		lines.append(_c("… and %d more" % (keys.size() - 10), DIM_HEX))
 	if keys.is_empty():
-		lines.append("Nothing makes or uses it yet.")
-	lines.append("Net  %s%s /s" % ["+" if net >= 0.0 else "−", Economy.fmt(absf(net))])
+		lines.append(_c("Nothing makes or uses it yet.", DIM_HEX))
+	else:
+		lines.append("[b]Net  %s[/b]" % _c(("+" if net >= 0.0 else "−") + Economy.fmt(absf(net)) + " /s", GOOD_HEX if net >= 0.0 else BAD_HEX))
+	return "\n".join(lines)
+
+## Group lines "+32 Solar Arrays" (largest first), each opening its units in a
+## nested tip (Glossary.put), then the net. `groups`: { group: { unit: v } }.
+func _group_lines(key: String, groups: Dictionary, fmt: Callable) -> Array[String]:
+	var totals := {}
+	for g: String in groups:
+		var t := 0.0
+		for u: String in groups[g]:
+			t += float(groups[g][u])
+		totals[g] = t
+	var names: Array = totals.keys()
+	names.sort_custom(func(a, b) -> bool: return float(totals[a]) > float(totals[b]))
+	var lines: Array[String] = []
+	for g: String in names:
+		var v := float(totals[g])
+		var units: Dictionary = groups[g]
+		var ul: Array = units.keys()
+		ul.sort_custom(func(a, b) -> bool: return absf(float(units[a])) > absf(float(units[b])))
+		var sub: Array[String] = []
+		for u in ul:
+			var uv := float(units[u])
+			sub.append("%s  %s" % [_c(("+" if uv >= 0.0 else "−") + String(fmt.call(absf(uv))), GOOD_HEX if uv >= 0.0 else BAD_HEX), u])
+		var id := "grp:%s:%s" % [key, g]
+		Glossary.put(id, g, "\n".join(sub))
+		lines.append("%s  %s" % [_c(("+" if v >= 0.0 else "−") + String(fmt.call(absf(v))), GOOD_HEX if v >= 0.0 else BAD_HEX),
+			Glossary.t(id, g) if ul.size() > 1 or String(ul[0]) != g else g])
+	return lines
+
+## Energy by source (generators, districts) and by user (buildings), grouped;
+## the worlds behind the net in a nested tip when there are several.
+func _energy_groups_text() -> String:
+	var fmt := func(v: float) -> String: return BuildingDef._num(snappedf(v, 0.1))
+	var groups: Dictionary = ProductionManager.energy_sources()
+	if groups.is_empty():
+		return _c("Nothing makes or uses energy yet.", DIM_HEX)
+	var lines := _group_lines("energy", groups, fmt)
+	var net := 0.0
+	for g: String in groups:
+		for u: String in groups[g]:
+			net += float(groups[g][u])
+	var worlds := _energy_breakdown_text()
+	Glossary.put("grp:energy:worlds", "Worlds", worlds)
+	lines.append("[b]%s  %s[/b]" % [Glossary.t("grp:energy:worlds", "Net"),
+		_c(("+" if net >= 0.0 else "−") + String(fmt.call(absf(net))), GOOD_HEX if net >= 0.0 else BAD_HEX)])
+	return "\n".join(lines)
+
+## Housing by district type (+) and workers by district type (−), every world,
+## each line opening its districts in a nested tip.
+func _population_groups_text() -> String:
+	var housing := {}
+	var working := {}
+	for pp: PlanetProgress in GameState._planet_progress.values():
+		if not pp.is_colonized:
+			continue
+		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+		if pd == null:
+			continue
+		for poi: POIData in pd.custom_pois:
+			var ddef := ProductionManager.district_def(poi)
+			var g := "Capitals" if poi.is_city() else ("Orbit" if poi.is_orbital() else (ddef.display_name + "s" if ddef != null else "Districts"))
+			var h := float(Economy.district_housing(pd, pp, poi))
+			if h > 0.0:
+				if not housing.has(g):
+					housing[g] = {}
+				housing[g][poi.shown_name()] = h
+			var w := float(Economy.district_pop_used(pp, poi))
+			if w > 0.0:
+				if not working.has(g):
+					working[g] = {}
+				working[g][poi.shown_name()] = -w
+	var fmt := func(v: float) -> String: return Economy.fmt(v)
+	var lines: Array[String] = []
+	if not housing.is_empty():
+		lines.append(_ic("population", Economy.color_of(Economy.POPULATION).to_html(false)) + " " + _c(Glossary.t("housing", "Housing"), DIM_HEX))
+		lines.append_array(_group_lines("housing", housing, fmt))
+	if not working.is_empty():
+		lines.append(_ic("worker", "d9e0ff") + " " + _c(Glossary.t("workers", "Working"), DIM_HEX))
+		lines.append_array(_group_lines("working", working, fmt))
 	return "\n".join(lines)
 
 ## Idle housing across the empire and what research turns it into.
 func _idle_pop_text() -> String:
 	var idle := ProductionManager.empire_idle()
-	var out := "\n\nIdle across all worlds  %s (%d%%)" % [Economy.fmt(idle.x),
+	var out := "\n\n%s across all worlds  %s (%d%%)" % [Glossary.t("idle", "Idle"), Economy.fmt(idle.x),
 		int(round(ProductionManager.idle_ratio() * 100.0))]
 	var r := ProductionManager.idle_income_rates()
 	if float(r[Economy.CREDITS]) > 0.0:
@@ -431,8 +551,9 @@ func _fill_raw_dropdown() -> void:
 			chip.mouse_filter = Control.MOUSE_FILTER_STOP
 			chip.mouse_entered.connect(func() -> void:
 				if Economy.is_mineral_discovered(rid) or Economy.amount(rid) > 0.0:
-					TooltipManager.show_tip(nm, "Stored  %s  (max %s)\n\n%s" % [Economy.fmt(Economy.amount(rid)),
-						Economy.fmt(Economy.cap(rid)), breakdown_text(rid)])
+					TooltipManager.show_tip(nm, "A raw mineral, mined by %s." % Glossary.t("industrial", "Production districts"))
+					TooltipManager.set_corner("%s %s %s" % [Economy.fmt(Economy.amount(rid)), _ic("warehouse", DIM_HEX), Economy.fmt(Economy.cap(rid))])
+					TooltipManager.set_detail(breakdown_text(rid))
 				else:
 					TooltipManager.show_tip("Undiscovered", "A mineral you haven't found yet."))
 			chip.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
@@ -462,6 +583,8 @@ func _energy_breakdown_text() -> String:
 	var pm: Node = get_node_or_null("/root/ProductionManager")
 	if pm == null:
 		return "No data"
+	# one line per world, + green / − red, then the net (playtest 31.10:
+	# no separate Produced / Consumed blocks)
 	var lines: Array[String] = []
 	var total: float = 0.0
 	for pp: PlanetProgress in GameState._planet_progress.values():
@@ -472,15 +595,11 @@ func _energy_breakdown_text() -> String:
 			continue
 		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
 		var name_str: String = pd.planet_name if pd != null else "Colony"
-		var sign_s := "+" if net > 0.0 else ""
-		var net_fmt := ("%.1f" if absf(net - floorf(net)) > 0.01 else "%.0f") % net
-		lines.append("%s  %s%s" % [name_str, sign_s, net_fmt])
+		lines.append("%s  %s" % [_c(("+" if net > 0.0 else "−") + BuildingDef._num(snappedf(absf(net), 0.1)),
+			GOOD_HEX if net > 0.0 else BAD_HEX), name_str])
 		total += net
 	if lines.is_empty():
-		return "No active colonies"
-	lines.sort()
-	var sign_t := "+" if total > 0.0 else ""
-	var tot_fmt := ("%.1f" if absf(total - floorf(total)) > 0.01 else "%.0f") % total
-	lines.append("─────────────────")
-	lines.append("Net  %s%s" % [sign_t, tot_fmt])
+		return _c("No active colonies", DIM_HEX)
+	lines.append("[b]Net  %s[/b]" % _c(("+" if total >= 0.0 else "−") + BuildingDef._num(snappedf(absf(total), 0.1)),
+		GOOD_HEX if total >= 0.0 else BAD_HEX))
 	return "\n".join(lines)

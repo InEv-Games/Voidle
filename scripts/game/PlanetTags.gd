@@ -2,11 +2,13 @@ class_name PlanetTags
 extends RefCounted
 
 ## Planet traits (playtest 31.10): every world shows two plain tags — its size
-## and its atmosphere — and holds traits with one clear effect each. The home
-## world starts with CRADLE; any other world draws one when it is scanned: the
-## player picks one of three offered. Planet levels in BONUS_LEVELS offer one
-## more pick. A trait's effect is a planet-wide support, counted with the
-## Orbit's (Economy.planet_bonus): +10% Science on this world, etc.
+## and its atmosphere — and three trait slots. The first opens with the world
+## (the home world starts with CRADLE; any other draws a pick when scanned);
+## the others need a planet level (Balance trait_slot_levels) and are opened
+## by paying Science and Rare Elements (trait_slot_costs) — then the player
+## picks one of three, roguelite style. Most traits are a planet-wide support
+## counted with the Orbit's (Economy.planet_bonus): +10% Science on this world;
+## the strong ones of the later slots add districts per City or building slots.
 ##
 ## State lives in GameState: planet_tags { "seed": [trait id, …] } and
 ## tag_offers { "seed": [[id, id, id], …] } (offers waiting for a pick, kept in
@@ -14,8 +16,10 @@ extends RefCounted
 
 ## How many traits are offered per pick.
 const OFFER_SIZE := 3
-## Planet levels that offer one more trait.
-const BONUS_LEVELS: Array[int] = [3, 5]
+## Trait slots per world.
+const SLOTS := 3
+## Effects that are counts, not fractions ("+2 districts per City").
+const COUNT_EFFECTS: Array[String] = ["city_districts", "district_slots"]
 ## The home world's trait.
 const CRADLE := "cradle_world"
 
@@ -49,6 +53,13 @@ const CATALOGUE := {
 		"effect": {"population": 0.15}, "types": [PlanetData.Type.MOON], "weight": 6},
 	"stable_plates":    {"name": "Stable Plates", "desc": "Quiet ground: every scale works a little better.",
 		"effect": {"credits": 0.05, "science": 0.05, "raw": 0.05}, "types": [], "weight": 3},
+	# strong ones: only in the slots you pay for (min_slot)
+	"grand_plateaus":   {"name": "Grand Plateaus", "desc": "Wide, level land: cities spread without limits.",
+		"effect": {"city_districts": 2}, "types": [], "weight": 4, "min_slot": 1},
+	"deep_bedrock":     {"name": "Deep Bedrock", "desc": "Solid ground under every quarter: build taller.",
+		"effect": {"district_slots": 1}, "types": [], "weight": 4, "min_slot": 1},
+	"golden_age":       {"name": "Golden Age", "desc": "Everything here seems to go right.",
+		"effect": {"credits": 0.20, "science": 0.20}, "types": [], "weight": 2, "min_slot": 2},
 }
 
 # ── Queries ──────────────────────────────────────────────────────────────────
@@ -73,22 +84,54 @@ static func pending_seeds() -> Array[int]:
 ## The planet-wide fraction a world's traits give `id` (Economy.planet_bonus).
 static func planet_fraction(planet_seed: int, id: String) -> float:
 	var key := Economy.RAW if id in [Economy.RAW, Economy.GOODS, Economy.FUEL, Economy.RARE] else id
+	if GameState.get_planet_data(planet_seed) == null:
+		return 0.0
 	var total := 0.0
 	for tid: String in traits_of(planet_seed):
 		total += float(info(tid).get("effect", {}).get(key, 0.0))
 	return total
 
-## "+10% Science · −5% Credits".
+## "+10% Science · −5% Credits" / "+2 districts per City".
 static func effect_text(id: String) -> String:
 	var parts: Array[String] = []
 	var eff: Dictionary = info(id).get("effect", {})
 	for rid: String in eff:
-		var v := float(eff[rid])
-		parts.append("%s%d%% %s" % ["+" if v >= 0.0 else "−", roundi(absf(v) * 100.0), resource_label(rid)])
+		parts.append(_part_text(rid, float(eff[rid])))
 	return " · ".join(parts)
+
+static func _part_text(rid: String, v: float) -> String:
+	if rid in COUNT_EFFECTS:
+		return "%s%d %s" % ["+" if v >= 0.0 else "−", roundi(absf(v)), resource_label(rid)]
+	return "%s%d%% %s" % ["+" if v >= 0.0 else "−", roundi(absf(v) * 100.0), resource_label(rid)]
+
+## Whole-number effect of a world's traits ("city_districts" → +2).
+static func planet_count(planet_seed: int, key: String) -> int:
+	var total := 0
+	for tid: String in traits_of(planet_seed):
+		total += int(info(tid).get("effect", {}).get(key, 0))
+	return total
+
+## The effect as tooltip BBCode: one line per resource, its icon and colour,
+## at the body's size (the colour sets it apart); a malus in red. "on this
+## planet" closes it.
+static func effect_bb(id: String) -> String:
+	var lines: Array[String] = []
+	var eff: Dictionary = info(id).get("effect", {})
+	for rid: String in eff:
+		var v := float(eff[rid])
+		var col := Economy.color_of(rid) if rid != Economy.RAW else Color(0.85, 0.78, 0.70)
+		if v < 0.0:
+			col = Color(1.0, 0.45, 0.42)
+		var icon: String = {"city_districts": "district", "district_slots": "factory"}.get(rid, rid)
+		if rid in COUNT_EFFECTS:
+			col = Color(0.95, 0.82, 0.45)   # a strong trait reads gold
+		lines.append("%s [color=#%s]%s[/color]" % [UIIcons.bb(icon, 13, col), col.to_html(false), _part_text(rid, v)])
+	return "\n".join(lines) + "\n[color=#8a93b0]on this planet[/color]"
 
 static func resource_label(rid: String) -> String:
 	match rid:
+		"city_districts":   return "districts per City"
+		"district_slots":   return "building slot in every district"
 		Economy.RAW:        return "raw & processed output"
 		Economy.POPULATION: return "housing"
 		Economy.ENERGY:     return "energy output"
@@ -139,6 +182,8 @@ static func queue_offer(pd: PlanetData) -> void:
 		var types: Array = c["types"]
 		if not types.is_empty() and not (int(pd.planet_type) in types):
 			continue
+		if int(c.get("min_slot", 0)) > have.size() + offers.size():
+			continue   # strong traits come only with the slots you pay for
 		pool.append(id)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = pd.seed ^ (0x7A65 + (have.size() + offers.size()) * 7919)
@@ -179,14 +224,44 @@ static func choose(planet_seed: int, id: String) -> bool:
 	GameState.planet_progress_changed.emit(planet_seed)
 	var pd := GameState.get_planet_data(planet_seed)
 	NewsFeed.post("%s is now known for its %s (%s)." % [pd.planet_name if pd else "A world", info(id)["name"], effect_text(id)], NewsFeed.Kind.EVENT,
-		"%s\n\n%s on this world, counted on its whole total." % [info(id)["desc"], effect_text(id)], info(id)["name"],
+		"%s\n\n%s on this planet, counted on its whole total." % [info(id)["desc"], effect_text(id)], info(id)["name"],
 		{"seed": planet_seed})
 	return true
 
-## A world reached `level`: one more pick at BONUS_LEVELS.
-static func on_planet_level(pd: PlanetData, level: int) -> void:
-	if level in BONUS_LEVELS:
-		queue_offer(pd)
+## A world reached a level: its next slot may be opened now — paid, not given
+## (unlock_slot); the level news tells the player (NewsFeed.post_planet_level).
+static func on_planet_level(_pd: PlanetData, _level: int) -> void:
+	pass
+
+# ── Slots ────────────────────────────────────────────────────────────────────
+
+enum Slot { FILLED, PICKING, OPEN_TO_BUY, LOCKED, UNKNOWN }
+
+## What slot `i` of a world shows: its trait, a pick waiting, ready to be
+## bought, locked behind a level, or (first slot) unknown until scanned.
+static func slot_state(pd: PlanetData, i: int) -> Slot:
+	var have := traits_of(pd.seed).size()
+	var waiting := offers_of(pd.seed).size()
+	if i < have:
+		return Slot.FILLED
+	if i < have + waiting:
+		return Slot.PICKING
+	if i == 0:
+		return Slot.UNKNOWN
+	var pp := GameState.get_planet(pd.seed)
+	if i == have + waiting and pp != null and pp.is_colonized and pp.level >= Balance.cfg.trait_slot_levels[i]:
+		return Slot.OPEN_TO_BUY
+	return Slot.LOCKED
+
+static func slot_cost(i: int) -> Dictionary:
+	return Balance.cfg.trait_slot_costs[i] if i < Balance.cfg.trait_slot_costs.size() else {}
+
+## Pays for slot `i` and queues its pick of three. False when it can't be bought.
+static func unlock_slot(pd: PlanetData, i: int) -> bool:
+	if slot_state(pd, i) != Slot.OPEN_TO_BUY or not Economy.pay(slot_cost(i)):
+		return false
+	queue_offer(pd)
+	return true
 
 ## Gives the home world its trait (new games and older saves).
 static func ensure_home(pd: PlanetData) -> void:

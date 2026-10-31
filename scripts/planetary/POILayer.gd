@@ -69,6 +69,8 @@ func set_ghost(lon: float, lat: float, ok: bool, title: String, lines: Array = [
 func clear_ghost() -> void:
 	_ghost = {}
 	_ghost_info_at = Vector2.INF
+	if _card_panel != null and is_instance_valid(_card_panel):
+		_card_panel.visible = false
 	if _ghost_info_ctrl != null and is_instance_valid(_ghost_info_ctrl):
 		_ghost_info_ctrl.queue_redraw()
 
@@ -239,6 +241,8 @@ func _draw_placement_overlay(font: Font) -> void:
 	_ghost_info_at = sp + global_position
 	_ghost_info_ok = ok
 	_ghost_overlay()
+	if not ghost_card.is_empty():
+		_place_ghost_card.call_deferred()   # never add or move controls from inside _draw
 
 ## Title + detail lines in a dark box beside the cursor.
 ## Top-layer canvas for the placement info box (created on first use).
@@ -259,10 +263,83 @@ func _ghost_overlay() -> Control:
 	_ghost_info_layer.add_child(_ghost_info_ctrl)
 	_ghost_info_ctrl.draw.connect(func() -> void:
 		if not placement_mode or _ghost.is_empty() or not _ghost_info_at.is_finite():
+			if _card_panel != null and is_instance_valid(_card_panel):
+				_card_panel.visible = false
 			return
+		if not ghost_card.is_empty():
+			return   # the card panel shows it
 		var f: Font = _orbitron if _orbitron else ThemeDB.fallback_font
 		_draw_ghost_info(f, _ghost_info_at, _ghost_info_ok, _ghost_info_ctrl))
 	return _ghost_info_ctrl
+
+## The placement card (playtest 31.10), set by the view: sections of rows,
+## each row [left BBCode, right BBCode]; a separator between sections. Shown
+## in a tooltip-style panel beside the site, rebuilt only when it changes.
+var ghost_card: Array = []
+var _card_panel: PanelContainer = null
+var _card_key := ""
+
+func _place_ghost_card() -> void:
+	if ghost_card.is_empty() or _ghost.is_empty() or not placement_mode or not _ghost_info_at.is_finite() \
+			or _ghost_info_layer == null:
+		if _card_panel != null and is_instance_valid(_card_panel):
+			_card_panel.visible = false
+		return
+	if _card_panel == null or not is_instance_valid(_card_panel):
+		_card_panel = PanelContainer.new()
+		_card_panel.theme_type_variation = &"TooltipPanel"
+		_card_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_ghost_info_layer.add_child(_card_panel)
+		_card_key = ""
+	var key := str(ghost_card)
+	if key != _card_key:
+		_card_key = key
+		_rebuild_ghost_card()
+	_card_panel.visible = true
+	_card_panel.reset_size()
+	var sz := _card_panel.get_combined_minimum_size()
+	var sp := _ghost_info_at
+	var pos := sp + Vector2(22, -18)
+	var vp := get_viewport_rect().size
+	if pos.x + sz.x > vp.x - 8.0:
+		pos.x = sp.x - 22.0 - sz.x   # flip left of the site near the right edge
+	pos.y = clampf(pos.y, 8.0, maxf(8.0, vp.y - sz.y - 8.0))
+	_card_panel.position = pos
+
+func _rebuild_ghost_card() -> void:
+	for c in _card_panel.get_children():
+		_card_panel.remove_child(c)
+		c.queue_free()
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 3)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for si in ghost_card.size():
+		if si > 0:
+			var sep := HSeparator.new()
+			sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			vb.add_child(sep)
+		for row: Array in ghost_card[si]:
+			var h := HBoxContainer.new()
+			h.add_theme_constant_override("separation", 16)
+			h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var l := _card_text(String(row[0]))
+			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			h.add_child(l)
+			if row.size() > 1 and String(row[1]) != "":
+				h.add_child(_card_text(String(row[1])))
+			vb.add_child(h)
+	_card_panel.add_child(vb)
+
+static func _card_text(bb: String) -> RichTextLabel:
+	var l := RichTextLabel.new()
+	l.bbcode_enabled = true
+	l.fit_content = true
+	l.scroll_active = false
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.theme_type_variation = &"TooltipBody"
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.text = bb
+	return l
 
 ## `sp` in screen (global) coordinates; drawn onto `target` (the top layer).
 func _draw_ghost_info(font: Font, sp: Vector2, ok: bool, target: CanvasItem) -> void:
@@ -1117,7 +1194,10 @@ func _draw_scene(font: Font) -> void:
 		var text_x := start_x
 		if icon_tex != null:
 			var icon_pos := Vector2(start_x, pos.y - icon_size * 0.8)
-			draw_texture_rect(icon_tex, Rect2(icon_pos, Vector2(icon_size, icon_size)), false, Color(1, 1, 1, c.a), false)
+			# white UI icons take the text's colour; the pixel mineral icon (an
+			# ImageTexture) is already coloured
+			var tint := Color(1, 1, 1, c.a) if icon_tex is ImageTexture else c
+			draw_texture_rect(icon_tex, Rect2(icon_pos, Vector2(icon_size, icon_size)), false, tint, false)
 			text_x += icon_size + 4.0
 			
 		var text_pos := Vector2(text_x, pos.y)

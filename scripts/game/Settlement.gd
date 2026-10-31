@@ -366,7 +366,7 @@ static func move_block(pd: PlanetData, poi: POIData) -> String:
 		if p.constructing:
 			return "Wait until construction ends"
 	if GameState.credits < move_fee(pd, poi):
-		return "Need %s cr" % Economy.fmt(move_fee(pd, poi))
+		return "Need %s credits" % Economy.fmt(move_fee(pd, poi))
 	return ""
 
 ## New positions (lon/lat degrees) for the subtree when `poi` goes to `site`

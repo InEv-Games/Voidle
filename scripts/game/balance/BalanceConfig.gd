@@ -14,6 +14,12 @@ extends Resource
 ## Every Science income (districts, buildings, idle population) × this —
 ## playtest 30.10: Science came four times too fast; research prices stay.
 @export var science_income_mult: float = 0.25
+## Planet trait slots (playtest 31.10): the planet level each slot needs and
+## what opening it costs (the first opens with the world: free). Opening a
+## slot offers three traits to pick from.
+@export var trait_slot_levels: Array[int] = [1, 3, 5]
+@export var trait_slot_costs: Array[Dictionary] = [{}, {"science": 400.0, "rare_elements": 15.0},
+	{"science": 1500.0, "rare_elements": 50.0}]
 
 @export_group("Start")
 @export var start_credits: float = 1000.0

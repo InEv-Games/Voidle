@@ -89,6 +89,17 @@ static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 		var cached := _cached(pd, poi.label)
 		if not cached.is_empty():
 			return cached
+	var out := _compute(pd, poi, null)
+	if poi.label != "":
+		_store(pd, poi.label, out)
+	return out
+
+## What `poi`'s location would be if `extra` (a district being placed) stood
+## too — no cache (the placement card's effect on neighbours).
+static func breakdown_with(pd: PlanetData, poi: POIData, extra: POIData) -> Dictionary:
+	return _compute(pd, poi, extra)
+
+static func _compute(pd: PlanetData, poi: POIData, extra: POIData) -> Dictionary:
 	var c: BalanceConfig = Balance.cfg
 	var cluster: float = SkillTree.get_proximity_mult()
 	var linked: Array = SkillTree.cross_families(output_family(poi))
@@ -97,8 +108,12 @@ static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 	var nearest := INF
 	var sources: Array = []
 	var reach := reach_km(pd, poi)
-	for p: POIData in pd.custom_pois:
-		if p == poi or (poi.label != "" and p.label == poi.label) or not _counts(p):
+	var others: Array = pd.custom_pois
+	if extra != null:
+		others = pd.custom_pois.duplicate()
+		others.append(extra)
+	for p: POIData in others:
+		if p == poi or (poi.label != "" and p.label == poi.label) or (p != extra and not _counts(p)):
 			continue
 		var km := distance_km(pd, poi, p)
 		nearest = minf(nearest, km)
@@ -125,11 +140,8 @@ static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 	var dist := band_bonus(nb)
 	if dist > 0.0:   # Independent Centres never turns near into far
 		dist += SkillTree.get_distance_bonus_add()
-	var out := {"mult": 1.0 + prox + centre + dist, "proximity": prox, "centre": centre,
+	return {"mult": 1.0 + prox + centre + dist, "proximity": prox, "centre": centre,
 		"distance": dist, "nearest_km": nearest, "band": nb, "reach_km": reach, "sources": sources}
-	if poi.label != "":
-		_store(pd, poi.label, out)
-	return out
 
 ## The district's location multiplier (1 = no bonus).
 static func mult(pd: PlanetData, poi: POIData) -> float:

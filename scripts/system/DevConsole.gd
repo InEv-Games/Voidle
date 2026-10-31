@@ -328,6 +328,9 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]asteroids[/color]")
 			_log_info("[color=#33cc55]── SKILL TREE ───────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]skilltree unhide -all[/color]  [color=#88ddcc]hide -all[/color]  [color=#88ddcc]grant <id>|all[/color]")
+			_log_info("[color=#33cc55]── BUILDINGS ─────────────────────────────[/color]")
+			_log_info("  [color=#88ddcc]buildings[/color] [color=#aaaaaa][district][/color]      — every model by district: open or why not")
+			_log_info("  [color=#88ddcc]building[/color] [color=#aaaaaa]<name or id>[/color]     — one model in full (cost, output, needs)")
 			_log_info("[color=#33cc55]── SAVE ──────────────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]save[/color]              — force save now")
 			_log_info("  [color=#88ddcc]clear_save[/color]        — delete save file")
@@ -549,6 +552,10 @@ func _exec(line: String) -> void:
 			_cmd_seed()
 
 		# ── State ───────────────────────────────────────────────────────────
+		"buildings":
+			_cmd_buildings(" ".join(parts.slice(1)).to_lower())
+		"building":
+			_cmd_building(" ".join(parts.slice(1)))
 		"state":
 			var pp := GameState.get_planet(GameState.home_planet_seed)
 			var yn := func(b: bool) -> String:
@@ -586,6 +593,114 @@ func _exec(line: String) -> void:
 
 		_:
 			_log_err("Unknown: '[color=#ffcc55]%s[/color]' — type help" % cmd)
+
+# ── Buildings (playtest 31.10: "look at building X" while testing) ─────────────
+
+## Why a model can't be built yet ("" when it is open on the home world).
+func _building_block(b: BuildingDef) -> String:
+	if b.retired:
+		return "retired"
+	if b.min_civilization > GameState.playable_content_type:
+		return "Civilization %d content" % b.min_civilization
+	if b.unlock_skill != "" and not SkillTree.is_unlocked(b.unlock_skill):
+		return "research: %s" % b.unlock_skill
+	var home := GameState.get_planet_data(GameState.home_planet_seed)
+	if home != null and not b.allowed_planet_types.is_empty() and not (home.planet_type in b.allowed_planet_types):
+		return "not on this world type" + (" (Moon only)" if b.is_moon_only() else "")
+	return ""
+
+## What a site needs for it: "River or Lakeside", "coast", …
+static func _building_site_needs(b: BuildingDef) -> String:
+	var needs: Array[String] = []
+	if not b.required_features.is_empty():
+		needs.append(" or ".join(PackedStringArray(b.required_features.map(func(f: String) -> String: return FeatureMap.feature_name(f)))))
+	if b.requires_coastal:
+		needs.append("a coastal site")
+	if not b.required_terrain.is_empty():
+		needs.append(" or ".join(PackedStringArray(b.required_terrain.map(func(t: int) -> String: return BuildingDef.terrain_label(t)))))
+	if b.required_tag != "":
+		needs.append("%s %d%%" % [BuildingDef.tag_label(b.required_tag), int(round(b.required_min * 100.0))])
+	if b.requires_atmosphere:
+		needs.append("an atmosphere")
+	if b.requires_liquid_sea:
+		needs.append("a liquid sea")
+	return ", ".join(needs)
+
+func _cmd_buildings(filter: String) -> void:
+	var groups := {}
+	for b: BuildingDef in BuildingDef.all():
+		if b.retired:
+			continue
+		for t in b.allowed_poi_types:
+			var nm: String = POIData.TYPE_LABELS[int(t)]
+			if filter != "" and not nm.to_lower().begins_with(filter):
+				continue
+			if not groups.has(nm):
+				groups[nm] = []
+			groups[nm].append(b)
+	if groups.is_empty():
+		_log_err("No district '%s'. Try: city, industrial, energy, science, residential, commercial, spaceport." % filter)
+		return
+	for nm: String in groups:
+		_log_info("[color=#33cc55]── %s ──[/color]" % nm.to_upper())
+		for b: BuildingDef in groups[nm]:
+			var block := _building_block(b)
+			var site := _building_site_needs(b)
+			_log_info("  %s [color=#aaaaaa]T%d · %s[/color]%s%s" % [
+				("[color=#88ddaa]%s[/color]" % b.display_name) if block == "" else ("[color=#777f8a]%s[/color]" % b.display_name),
+				b.tier, b.building_id,
+				("  [color=#ee8855]%s[/color]" % block) if block != "" else "",
+				("  [color=#88aadd]site: %s[/color]" % site) if site != "" else ""])
+
+func _cmd_building(q: String) -> void:
+	if q.strip_edges() == "":
+		_log_err("Try: building market   (a name, part of one, or an id)")
+		return
+	var ql := q.strip_edges().to_lower()
+	var hit: BuildingDef = BuildingDef.find(ql)
+	if hit == null:
+		for b: BuildingDef in BuildingDef.all():
+			if b.display_name.to_lower() == ql:
+				hit = b
+				break
+	if hit == null:
+		var many: Array[String] = []
+		for b: BuildingDef in BuildingDef.all():
+			if b.display_name.to_lower().contains(ql) or b.building_id.contains(ql):
+				many.append(b.display_name)
+				if hit == null:
+					hit = b
+		if many.size() > 1:
+			_log_info("[color=#aaaaaa]Matches: %s — showing the first.[/color]" % ", ".join(many))
+	if hit == null:
+		_log_err("No building like '%s'." % q)
+		return
+	var b := hit
+	var block := _building_block(b)
+	var types: Array[String] = []
+	for t in b.allowed_poi_types:
+		types.append(POIData.TYPE_LABELS[int(t)])
+	_log_info("[color=#ffdd66]%s[/color]  [color=#aaaaaa]%s · T%d · %s[/color]" % [b.display_name, b.building_id, b.tier, ", ".join(types)])
+	_log_info("  %s" % (("[color=#88ddaa]open[/color]") if block == "" else ("[color=#ee8855]closed — %s[/color]" % block)))
+	if b.description != "":
+		_log_info("  [color=#aaaaaa]%s[/color]" % b.description)
+	_log_info("  makes   %s" % b.output_label())
+	if not b.inputs.is_empty():
+		var ins: Array[String] = []
+		for id: String in b.inputs:
+			ins.append("%s %s" % [BuildingDef._num(float(b.inputs[id])), Economy.display_name(id)])
+		_log_info("  uses    %s per cycle" % ", ".join(ins))
+	if b.energy_per_tick < 0.0:
+		_log_info("  energy  %s" % BuildingDef._num(b.energy_per_tick))
+	if b.pop_use() > 0:
+		_log_info("  workers %s" % Economy.fmt(b.pop_use()))
+	_log_info("  cycle   %s · build %ss · base cost %s credits" % [ProductionManager.cycle_text(ProductionManager.building_cycle_sec(b)),
+		BuildingDef._num(b.construct_duration if b.construct_duration > 0.0 else b.tick_duration), Economy.fmt(b.base_cost)])
+	var site := _building_site_needs(b)
+	if site != "":
+		_log_info("  site    needs %s" % site)
+	if b.unlock_skill != "":
+		_log_info("  research %s%s" % [b.unlock_skill, "  (done)" if SkillTree.is_unlocked(b.unlock_skill) else ""])
 
 # ── Logging helpers ───────────────────────────────────────────────────────────
 

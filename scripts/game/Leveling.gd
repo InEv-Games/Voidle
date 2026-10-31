@@ -51,8 +51,9 @@ static func city_level(pp: PlanetProgress, city: POIData) -> int:
 	return int(pp.city_levels.get(city.label, 1))
 
 ## Districts (Capital District not counted) a City of level `lv` may hold.
-static func city_max_districts(lv: int) -> int:
-	return 3 + 2 * (lv - 1)
+static func city_max_districts(lv: int, pd: PlanetData = null) -> int:
+	# planet traits may add districts per City (PlanetTags "city_districts")
+	return 3 + 2 * (lv - 1) + (PlanetTags.planet_count(pd.seed, "city_districts") if pd != null else 0)
 
 static func city_district_count(pd: PlanetData, city: POIData) -> int:
 	var n := 0

@@ -19,14 +19,16 @@ func set_game_hud(visible_state: bool) -> void:
 	visible = visible_state
 	if is_instance_valid(_top_layer):
 		_top_layer.visible = visible_state
+## A credit amount, "21.6k" — no "cr": the credits icon stands beside it
+## (playtest 31.10: "cr" is never written).
 static func fmt_credits(val: float) -> String:
 	if val >= 1_000_000_000.0:
-		return "%.2fb cr" % (val / 1_000_000_000.0)
+		return "%.2fb" % (val / 1_000_000_000.0)
 	elif val >= 1_000_000.0:
-		return "%.2fm cr" % (val / 1_000_000.0)
+		return "%.2fm" % (val / 1_000_000.0)
 	elif val >= 1_000.0:
-		return "%.1fk cr" % (val / 1_000.0)
-	return "%.0f cr" % val
+		return "%.1fk" % (val / 1_000.0)
+	return "%.0f" % val
 
 static func fmt_science(val: float) -> String:
 	if val >= 1_000_000_000.0:
