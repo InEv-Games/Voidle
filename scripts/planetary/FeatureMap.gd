@@ -295,9 +295,53 @@ static func role_texture(planet_seed: int, role: String) -> ImageTexture:
 	m["roles"][role] = tex
 	return tex
 
-## [bonus, colour] a cell shows under a role's lens.
+## Each feature's own colour under a lens (playtest 30.10): the lens tells the
+## features apart by hue, not by shade — a darker tint would read as "better".
+const FEATURE_COLORS := {
+	"terrain_mountain":   Color(0.80, 0.68, 0.55),
+	"terrain_forest":     Color(0.30, 0.80, 0.35),
+	"terrain_seacoast":   Color(0.30, 0.72, 1.00),
+	"terrain_lakeside":   Color(0.45, 0.92, 0.92),
+	"terrain_river":      Color(0.35, 0.50, 1.00),
+	"terrain_desert":     Color(1.00, 0.86, 0.35),
+	"terrain_tundra":     Color(0.78, 0.92, 0.80),
+	"terrain_glacier":    Color(0.92, 0.97, 1.00),
+	"terrain_volcanic":   Color(1.00, 0.35, 0.22),
+	"terrain_geothermal": Color(1.00, 0.62, 0.18),
+	"terrain_ruins":      Color(0.85, 0.55, 0.98),
+	"terrain_crater":     Color(0.72, 0.72, 0.80),
+	"terrain_caves":      Color(0.62, 0.48, 0.36),
+	"terrain_ion_storm":  Color(0.55, 0.55, 1.00),
+}
+
+static func feature_color(fid: String) -> Color:
+	return FEATURE_COLORS.get(fid, Color.WHITE)
+
+## [bonus, colour] a cell shows under a role's lens: the colour of the feature
+## that gives the role the most there.
 static func _role_cell(site: Dictionary, fam: String, tint: Color) -> Array:
-	return [bonus_for(site, fam), tint]
+	var table: Dictionary = Balance.cfg.terrain_bonuses
+	var best := 0.0
+	var col := tint
+	for fid: String in CATALOGUE:
+		if site.has(fid):
+			var w := float(table.get(fid, {}).get(fam, 0.0))
+			if w > best:
+				best = w
+				col = feature_color(fid)
+	return [bonus_for(site, fam), col]
+
+## The features that help a role, with their lens colours: [[name, colour], …].
+static func role_legend(role: String) -> Array:
+	var out: Array = []
+	if not ROLES.has(role):
+		return out
+	var fam: String = ROLES[role]["family"]
+	var table: Dictionary = Balance.cfg.terrain_bonuses
+	for fid: String in CATALOGUE:
+		if float(table.get(fid, {}).get(fam, 0.0)) > 0.0:
+			out.append([feature_label(fid), feature_color(fid)])
+	return out
 
 ## Features that help a role, for its button tooltip: "Desert (Solar) …".
 static func role_features_text(role: String) -> String:
@@ -396,8 +440,9 @@ static func _compute(data: PlanetData) -> Dictionary:
 	# Crater, Caves and Ion storm region exist only on the Moon (§3.3)
 	if data.planet_type == PlanetData.Type.MOON:
 		_place_craters(data, rng, land, spots, mask, 10)
-		_place_patches(rng, cover, mask, F.CAVES, COVER_CAVES, 7, 1.4, 2.6)
-		_place_patches(rng, cover, mask, F.ION_STORM, COVER_ION_STORM, 4, 3.0, 5.5)
+		# big enough to find and to build on (playtest 30.10: they were tiny)
+		_place_patches(rng, cover, mask, F.CAVES, COVER_CAVES, 7, 3.0, 5.0)
+		_place_patches(rng, cover, mask, F.ION_STORM, COVER_ION_STORM, 4, 6.0, 10.0)
 	if rocky and data.planet_type == PlanetData.Type.TERRAN:
 		_place_ruins(rng, land, height, spots, mask, 4)
 	var out := {"mask": mask, "img": _pack(cover, lines, spots, windy)}
@@ -457,6 +502,24 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 				var ll := _cell_lonlat(x, y)
 				geo[y * WIDTH + x] = ResourceMap.field(data.seed, "geothermal", ll.x, ll.y)
 
+	# Terran worlds always get some Mountains and Geothermal rifts (playtest
+	# 30.10): the cut is the world's own top heights / heat when the fixed
+	# bands would give none
+	var mountain_h := MOUNTAIN_H
+	var rift_cut := 0.72
+	if ptype == PlanetData.Type.TERRAN:
+		var hs := PackedFloat32Array()
+		var gs := PackedFloat32Array()
+		for i in n:
+			if land[i] == 1:
+				hs.append(height[i])
+				gs.append(geo[i])
+		if hs.size() > 100:
+			hs.sort()
+			gs.sort()
+			mountain_h = minf(MOUNTAIN_H, hs[int(hs.size() * 0.94)])
+			if gs[gs.size() - 1] > 0.0:
+				rift_cut = minf(rift_cut, gs[int(gs.size() * 0.985)])
 	for y in HEIGHT:
 		for x in WIDTH:
 			var i := y * WIDTH + x
@@ -470,7 +533,7 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 			# from the height bands the planet already shows
 			if lat_deg >= GLACIER_LAT_DEG or h >= SNOW_H:
 				m |= 1 << F.GLACIER
-			if h >= MOUNTAIN_H:
+			if h >= mountain_h:
 				m |= 1 << F.MOUNTAIN
 			for j in _neighbours8(i):
 				if land[j] == 0:
@@ -497,7 +560,7 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 						c = COVER_DESERT
 					elif h < MOUNTAIN_H and lat_deg < 60.0 and _n3(forest_n, ll.x, ll.y) > 0.08:
 						c = COVER_FOREST
-					elif h >= MOUNTAIN_H and _n3(volc_n, ll.x, ll.y) > 0.55:
+					elif h >= mountain_h and _n3(volc_n, ll.x, ll.y) > 0.55:
 						c = COVER_VOLCANIC
 			cover[i] = c
 			match c:
@@ -509,7 +572,7 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 				m |= 1 << F.PLAIN
 
 			# geothermal rifts: the strongest fault-line ridges on land
-			if geo[i] >= 0.72:
+			if geo[i] >= rift_cut:
 				lines[i] = LINE_RIFT
 				m |= 1 << F.GEOTHERMAL
 			mask[i] = m
@@ -714,7 +777,7 @@ static func _place_craters(data: PlanetData, rng: RandomNumberGenerator, land: P
 		var c := cy * WIDTH + cx
 		if not moon and land[c] == 0:
 			continue
-		var r := rng.randf_range(2.0, 4.5) if moon else rng.randf_range(1.6, 3.0)
+		var r := rng.randf_range(3.0, 6.0) if moon else rng.randf_range(1.6, 3.0)   # Moon craters big enough to build in
 		var ri := ceili(r) + 1
 		for dy in range(-ri, ri + 1):
 			for dx in range(-ri, ri + 1):

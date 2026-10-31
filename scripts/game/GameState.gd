@@ -635,7 +635,7 @@ func colonize_planet(planet_seed: int, cost: float = 1000.0) -> bool:
 #   lander  Earth Spaceport → Moon. Paid once when preparation starts (30 s),
 #           then it flies MOON_TRANSIT_SEC, parks in lunar orbit (lander_state 1),
 #           the player picks the landing site and the first lunar City is free.
-#   rocket  the Moon's Spaceport → another natural planet of the home system. Paid
+#   rocket  any Spaceport → another natural planet of the home system. Paid
 #           once (60 s preparation); the target can change until it launches;
 #           the flight takes 60 s and its arrival completes Civilization 0.
 # States: preparing → ready → in_transit → arrived. A state change never
@@ -878,11 +878,17 @@ func rocket_block() -> String:
 		return "Civilization 0 is complete"
 	if not get_node("/root/SkillTree").is_unlocked("advanced_planet_rocket"):
 		return "Research Advanced Planetary Rocket"
-	var moon := home_moon()
-	# the normal Spaceport on the Moon (§18); an older save's Lunar Spaceport still counts
-	if moon == null or not (has_finished_building(moon.seed, "spaceport") \
-			or has_finished_building(moon.seed, "lunar_spaceport")):
-		return "Build a Spaceport on the Moon"
+	# any finished Spaceport will do (decision 31.10); the Moon is still on the
+	# way: Advanced Planetary Rocket needs a Moon Production district and 100
+	# Moonstone mined there. An older save's Lunar Spaceport counts too.
+	var has_port := false
+	for pp: PlanetProgress in _planet_progress.values():
+		if pp.is_colonized and (has_finished_building(pp.planet_seed, "spaceport") \
+				or has_finished_building(pp.planet_seed, "lunar_spaceport")):
+			has_port = true
+			break
+	if not has_port:
+		return "Build a Spaceport"
 	return Economy.cost_block(ROCKET_COST)
 
 func start_rocket(target_seed: int = -1) -> bool:
@@ -892,6 +898,9 @@ func start_rocket(target_seed: int = -1) -> bool:
 		return false
 	expeditions["rocket"] = {"state": "preparing", "prep_left": ROCKET_PREP_SEC, "flight_left": ROCKET_FLIGHT_SEC,
 		"target_seed": target_seed if rocket_target_block(target_seed) == "" else -1}
+	if not solar_unlocked:   # its target is picked in the Solar System view (playtest 30.10)
+		solar_unlocked = true
+		unlock_changed.emit("solar", true)
 	expedition_changed.emit("rocket")
 	save()
 	return true
@@ -905,7 +914,7 @@ func rocket_target_block(target_seed: int) -> String:
 		return "Your home world isn't a new destination"
 	var moon := home_moon()
 	if moon != null and target_seed == moon.seed:
-		return "The Moon is where the rocket starts"
+		return "The Moon is already yours — pick a new world"
 	if _home_solar == null:
 		return "Unknown system"
 	for pd: PlanetData in _home_solar.planets:

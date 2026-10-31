@@ -35,6 +35,8 @@ const PORT_NEAR_RAD: float = 0.061   # ~3.5°
 const ROAD_REUSE_FACTOR: float = 0.4
 ## The same for sea cells a lane already crosses (strong: lanes should merge).
 const SEA_REUSE_FACTOR: float = 0.3
+## Old rule: two districts on one landmass are linked by road only.
+const LAND_ONLY_SAME_LANDMASS := false
 
 var _road_cells: Dictionary = {}   # land / sea cell id -> true once a road or lane uses it
 ## Land connectivity (union-find over green cells + bridges): same root = a
@@ -226,11 +228,14 @@ func route(lon_a: float, lat_a: float, lon_b: float, lat_b: float,
 	var b := _endpoint(lon_b, lat_b, sea_b)
 	if a < 0 or b < 0 or a == b:
 		return {}
-	# same landmass → land road only; otherwise sail (from a port near the start)
+	# the cheapest of road and sea lane wins, on one landmass too (playtest
+	# 30.10: a long coastal road looks worse than a short sea lane); ports are
+	# still only opened near the two ends. LAND_ONLY_SAME_LANDMASS restores the
+	# old rule (same landmass → road only).
 	_astar.cell_count = WIDTH * HEIGHT
 	_astar.kind = _kind
-	_astar.land_only = a < WIDTH * HEIGHT and b < WIDTH * HEIGHT and _kind[a] == 0 and _kind[b] == 0 \
-		and _land_root(a) == _land_root(b)
+	_astar.land_only = LAND_ONLY_SAME_LANDMASS and a < WIDTH * HEIGHT and b < WIDTH * HEIGHT \
+		and _kind[a] == 0 and _kind[b] == 0 and _land_root(a) == _land_root(b)
 	_astar.port_reach = 2.0 * sin(PORT_NEAR_RAD * 0.5)
 	_astar.port_end_a = _to_vec(lon_a, lat_a)
 	_astar.port_end_b = _to_vec(lon_b, lat_b)

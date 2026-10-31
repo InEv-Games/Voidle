@@ -316,6 +316,8 @@ func get_build_cost(target_level: int = 1) -> float:
 # ── Catalogue ─────────────────────────────────────────────────────────────────
 
 static var _cache: Array[BuildingDef] = []
+## building_id -> BuildingDef (find() runs thousands of times a frame).
+static var _by_id: Dictionary = {}
 
 static func all() -> Array[BuildingDef]:
 	if not _cache.is_empty():
@@ -331,6 +333,7 @@ static func all() -> Array[BuildingDef]:
 				if res:
 					res._derive_legacy_fields()
 					_cache.append(res)
+					_by_id[res.building_id] = res
 			file_name = dir.get_next()
 	return _cache
 
@@ -344,8 +347,8 @@ static func available_buildings() -> Array[BuildingDef]:
 			continue
 		if b.min_civilization > GameState.playable_content_type:   # Civ 1 content stays closed in the demo
 			continue
-		if not b.minerals_known():
-			continue   # never show a model whose recipe or cost names an undiscovered mineral
+		# a model whose recipe or cost names an undiscovered mineral is listed
+		# but can't be built (the build list says why, without the name)
 		# a building the research tree grants is available once that node is bought
 		if st != null and st.node_for_building(b.building_id) != "":
 			if st.building_unlocked(b.building_id):
@@ -355,10 +358,9 @@ static func available_buildings() -> Array[BuildingDef]:
 	return result
 
 static func find(bid: String) -> BuildingDef:
-	for b in all():
-		if b.building_id == bid:
-			return b
-	return null
+	if _cache.is_empty():
+		all()
+	return _by_id.get(bid, null)
 
 ## Buildings a district of `poi_type` can hold. Cities hold the Capital's
 ## planet-wide boost buildings; each other district type its own production line.
@@ -367,7 +369,20 @@ static func for_poi_and_planet(poi_type: POIData.POIType, planet_type: PlanetDat
 	for b in available_buildings():
 		if poi_type in b.allowed_poi_types and b.allows_planet(planet_type, poi_type):
 			result.append(b)
+	result.sort_custom(func(x: BuildingDef, y: BuildingDef) -> bool: return x.list_order() < y.list_order())
 	return result
+
+## Sort key of the build list and a district's buildings (playtest 30.10):
+## extraction, then processing, then storage; the highest tier first in each.
+func list_order() -> Vector3:
+	var group := 0
+	if outputs.has(Economy.GOODS) or outputs.has(Economy.FUEL) or outputs.has(Economy.RARE):
+		group = 1
+	elif outputs.is_empty() and not storage.is_empty():
+		group = 2
+	elif outputs.is_empty():
+		group = -1   # supports and the Spaceport lead the Capital's list
+	return Vector3(group, -tier, base_cost)
 
 ## Whether this building may stand on a planet of `planet_type` in a district
 ## of `poi_type`. An empty allowed_planet_types means any world, the Moon

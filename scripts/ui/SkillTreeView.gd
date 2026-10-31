@@ -433,12 +433,7 @@ func _build_tree_graph() -> void:
 			if cur_lv < max_lv:
 				var next_cost: float = st.call("get_next_cost", id)
 				tip_cost = "%s Science" % Economy.fmt(next_cost)
-				var cross: int = st.call("cross_branch_count", id)
-				if cross > 0:
-					body_str += "\n[color=#8899bb]Price +%d%%: you own %d research%s in other branches[/color]" % [
-						int(round(float(st.call("cross_branch_mult", id)) * 100.0 - 100.0)), cross, "" if cross == 1 else "es"]
-			if node.common and id != "root":
-				body_str += "\n[color=#b9a8ff]Main path — research in other branches never raises its price[/color]"
+			# (why a price is higher isn't shown: players don't need it — playtest 30.10)
 
 			# Requirements checking (ANY parent; every extra condition)
 			if cur_lv == 0:
@@ -542,6 +537,10 @@ func _draw_connections() -> void:
 		for parent_id in node.parents:
 			parent_idx += 1
 			if not st.get("nodes").has(parent_id) or not _in_view(st, parent_id):
+				continue
+			# only the main (first) parent is drawn: alternative ("any one of")
+			# parents tangled the tree (playtest 30.10); the tooltip lists them
+			if parent_idx > 0 and node.line != "bridge":
 				continue
 			# lines stay apart: a link to another line's node (an ANY alternative)
 			# isn't drawn — the tooltip still lists it

@@ -65,6 +65,12 @@ static func create(t: String, icon_id: String, badge_text := "", stat_list: Pack
 
 func _ready() -> void:
 	_fill = ProgressFill.attach(self, progress_color)
+	if not Engine.is_editor_hint():
+		# long titles and stat rows glide inside the row instead of widening
+		# the left panel or running under the badge (playtest 30.10)
+		_title.clip_text = false   # the marquee clips it now
+		MarqueeLabel.wrap(_title)
+		MarqueeLabel.wrap(_stats)   # (the description wraps onto more lines instead)
 	_sync()
 	if Engine.is_editor_hint():
 		return
@@ -97,6 +103,9 @@ func _sync() -> void:
 	_stats.visible = not stats.is_empty()
 	_desc.text = description
 	_desc.visible = stats.is_empty() and description != ""
+	if _stats.get_parent() is MarqueeLabel:
+		(_stats.get_parent() as Control).visible = _stats.visible
+
 	_stepper.visible = show_stepper
 	_fill.progress = progress
 	_fill.color = progress_color

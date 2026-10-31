@@ -143,7 +143,22 @@ static func invalidate(planet_seed: int = -1) -> void:
 
 # Cache: valid while the set of finished surface districts and the Cities'
 # levels (their reach sets the bands) are unchanged.
+static var _sig_frame := -1
+static var _sig_memo: Dictionary = {}   # planet seed -> signature, this frame
+
 static func _signature(pd: PlanetData) -> String:
+	# asked for every building every frame: worked out once per world per frame
+	var f := Engine.get_process_frames()
+	if f != _sig_frame:
+		_sig_frame = f
+		_sig_memo.clear()
+	if _sig_memo.has(pd.seed):
+		return _sig_memo[pd.seed]
+	var sig := _signature_now(pd)
+	_sig_memo[pd.seed] = sig
+	return sig
+
+static func _signature_now(pd: PlanetData) -> String:
 	var built := 0
 	var city_lv := 0
 	var pp := GameState.get_planet(pd.seed)

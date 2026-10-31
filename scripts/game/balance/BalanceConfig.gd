@@ -10,6 +10,11 @@ extends Resource
 ## Shown in the dev console and written to saves.
 @export var profile_name: String = "current"
 
+@export_group("Income")
+## Every Science income (districts, buildings, idle population) × this —
+## playtest 30.10: Science came four times too fast; research prices stay.
+@export var science_income_mult: float = 0.25
+
 @export_group("Start")
 @export var start_credits: float = 1000.0
 @export var start_science: float = 0.0

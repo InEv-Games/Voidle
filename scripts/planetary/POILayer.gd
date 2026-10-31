@@ -923,6 +923,28 @@ func _get_rotation() -> float:
 		return _planet.get_rotation_offset()
 	return 0.0
 
+## Puts every marker where its spot on the globe is now. Also called by the
+## planet view right after the left panel moves the globe (tweens run after
+## _process, so the markers would trail it by a frame — playtest 30.10).
+func update_screen_positions() -> void:
+	if not _planet:
+		return
+	var p := _get_planet_params()
+	if p.is_empty():
+		return
+	var center: Vector2 = p["center"]
+	var r_px: float     = p["r_px"]
+	var clip: Rect2     = _clip_rect()
+	for poi in _pois:
+		var v: Vector3 = _planet.lonlat_to_view(poi["lon"], poi["lat"])
+		poi["screen"]  = center + Vector2(v.x, v.y) * r_px
+		poi["view"]    = v             # view-space position, drives label direction
+		poi["sz"]      = v.z           # store raw depth for glow culling
+		poi["alpha"]   = clamp(v.z * 4.0, 0.0, 1.0)
+		# Zoomed in, the globe overflows its container — hide POIs scrolled out of view.
+		poi["visible"] = v.z > -0.05 and clip.has_point(poi["screen"])
+	queue_redraw()
+
 func _process(_delta: float) -> void:
 	if not _planet:
 		return
@@ -933,16 +955,7 @@ func _process(_delta: float) -> void:
 		return
 	var center: Vector2 = p["center"]
 	var r_px: float     = p["r_px"]
-	var clip: Rect2     = _clip_rect()
-
-	for poi in _pois:
-		var v: Vector3 = _planet.lonlat_to_view(poi["lon"], poi["lat"])
-		poi["screen"]  = center + Vector2(v.x, v.y) * r_px
-		poi["view"]    = v             # view-space position, drives label direction
-		poi["sz"]      = v.z           # store raw depth for glow culling
-		poi["alpha"]   = clamp(v.z * 4.0, 0.0, 1.0)
-		# Zoomed in, the globe overflows its container — hide POIs scrolled out of view.
-		poi["visible"] = v.z > -0.05 and clip.has_point(poi["screen"])
+	update_screen_positions()
 
 	var keep_texts: Array[Dictionary] = []
 	for ft in _floating_texts:
@@ -1182,7 +1195,7 @@ func _draw_scene(font: Font) -> void:
 		elif cpoi is POIData and extra_progress.has((cpoi as POIData).label):
 			_draw_construct_bar(sp, line_px, float(extra_progress[(cpoi as POIData).label]), alpha)
 		if is_city:   # its Capital District, selectable from the map
-			var cap_at := _snap_local(sp + Vector2(0.0, -vert_dir * line_px * 8.0))
+			var cap_at := _snap_local(sp + Vector2(0.0, -vert_dir * line_px * 10.5))   # a gap from the City icon (playtest 30.10)
 			var cap_hover: bool = hovered_capital == i
 			_draw_pixel_icon(cap_at, _ICONS["capital_badge"], line_px,
 				Color(CAPITAL_BADGE_COL.lightened(0.45) if cap_hover else CAPITAL_BADGE_COL, alpha), alpha)

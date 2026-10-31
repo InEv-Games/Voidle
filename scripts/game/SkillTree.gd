@@ -211,7 +211,7 @@ func _init() -> void:
 	_n("lunar_program", "Lunar Program", "A lander that carries settlers to the Moon. It needs your Orbit first. Pick the Moon in the Local System view. Earth buildings work there too; three Moon-only buildings use its Craters, Caves and Ion storm regions.",
 		1200.0, _at("orbital_assembly", -90, 4.6), ["orbital_assembly"], "common", "Unlocks the Moon lander",
 		{"events": ["orbit_station"], "common": true, "shape": NodeShape.CIRCLE})
-	_n("lunar_materials", "Lunar Materials", "Learn to build with what the Moon gives — the step before the rocket that leaves it. The final rocket starts from a Spaceport on the Moon.",
+	_n("lunar_materials", "Lunar Materials", "Learn to build with what the Moon gives — the step before the final rocket. Any of your Spaceports can launch it.",
 		1200.0, _at("lunar_program", -90, 2.3), ["lunar_program"], "common", "On the road to the final rocket",
 		{"events": ["moon_production"], "common": true})
 	_n("advanced_planet_rocket", "Advanced Planetary Rocket", "The rocket that leaves the Moon for a new world.",

@@ -192,6 +192,43 @@ static func placement_materials(def: DistrictDef, data: PlanetData) -> Dictionar
 		return mats
 	return {}
 
+## Prefab tiers (playtest 30.10): the player picks which tier of each starter
+## building an Orbit district comes with. A prefab building's ladder, Tier 0
+## up; a tier not researched yet falls back to the highest one that is.
+const PREFAB_LADDERS := {
+	"low_rise_housing":     ["low_rise_housing", "residential", "apartments", "luxury_complex"],
+	"commercial":           ["commercial", "local_trade_center", "trading_post", "commodities_exchange"],
+	"field_observatory":    ["field_observatory", "lab", "advanced_lab", "particle_accelerator"],
+	"solar_panel":          ["solar_panel", "solar_matrix", "fission_reactor", "antimatter_chamber"],
+	"surface_quarry":       ["surface_quarry", "mine", "deep_drill", "mantle_cracker"],
+	"ore_sorting_workshop": ["ore_sorting_workshop", "refinery", "refinery", "refinery"],
+	"warehouse":            ["warehouse", "warehouse", "storage_facility", "storage_facility"],
+}
+## Chosen prefab tier per Orbit district type (DistrictDef.Type → 0..3), set by
+## the build list's stepper; placement and its price read it.
+static var prefab_tier: Dictionary = {}
+
+## The building a prefab entry becomes at the chosen tier (researched only).
+static func prefab_building(base_id: String, tier: int) -> String:
+	var ladder: Array = PREFAB_LADDERS.get(base_id, [base_id])
+	var avail := BuildingDef.available_buildings()
+	for t in range(clampi(tier, 0, ladder.size() - 1), -1, -1):
+		var bid: String = ladder[t]
+		for b: BuildingDef in avail:
+			if b.building_id == bid:
+				return bid
+	return base_id
+
+## Highest tier any prefab building of `def` can take now (0 when nothing more is researched).
+static func prefab_max_tier(def: DistrictDef) -> int:
+	var best := 0
+	for row: Array in def.prefab:
+		var ladder: Array = PREFAB_LADDERS.get(String(row[0]), [row[0]])
+		for t in ladder.size():
+			if prefab_building(String(row[0]), t) == String(ladder[t]):
+				best = maxi(best, t)
+	return best
+
 ## Each prefab building of `def` with its price: [[building_id, {credits, mats…}], …].
 ## Every copy pays the normal repeat price as if built one after another in
 ## the new (empty) district (Economy.building_cost rules).
@@ -201,8 +238,9 @@ static func prefab_items(def: DistrictDef) -> Array:
 		return out
 	var c: BalanceConfig = Balance.cfg
 	var placed: Array[String] = []
+	var tier := int(prefab_tier.get(int(def.id), 0))
 	for row: Array in def.prefab:
-		var bdef := BuildingDef.find(String(row[0]))
+		var bdef := BuildingDef.find(prefab_building(String(row[0]), tier))
 		if bdef == null:
 			continue
 		for i in int(row[1]):

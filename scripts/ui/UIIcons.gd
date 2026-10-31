@@ -39,3 +39,11 @@ static func get_icon(name: String) -> Texture2D:
 	var tex := load(path) as Texture2D
 	_cache[name] = tex
 	return tex
+
+## BBCode for an icon inline in a RichTextLabel: [img] at `px` size, tinted.
+static func bb(name: String, px: int = 11, col: Color = Color(1, 1, 1)) -> String:
+	var file: String = MAP.get(name, name)
+	var path := DIR + file + ".svg"
+	if not ResourceLoader.exists(path):
+		path = DIR + String(MAP["unknown"]) + ".svg"
+	return "[img=%dx%d color=#%s]%s[/img]" % [px, px, col.to_html(false), path]

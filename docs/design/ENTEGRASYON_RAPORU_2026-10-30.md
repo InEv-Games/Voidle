@@ -162,3 +162,69 @@ Hepsi veri tabanlı. Sayılar ve metinler dosyanın başındaki tablolardan değ
 - **Donma düzeltildi.** Relic işaretinin nabız animasyonu `_draw()` içinden `queue_redraw.call_deferred()` çağırıyordu. Godot 4'te `queue_redraw` da ertelendiği için bu tek karede sonsuz döngüye giriyordu. Döngü, Dünya'daki relic işareti görününce (harita kurulunca) başlıyordu. Yeniden çizim artık `POILayer._process` içinden yapılıyor.
 - **News şeridi** artık tam genişlikte ve NEWS etiketi sağda. Şerit view'in left panel'inin hemen altında çiziliyor; panel üstüne açılıyor, şerit kaymıyor. Left panel olmayan view'lerde şerit kendi katmanında duruyor.
 - **News boş kalmıyor.** Haberler arka arkaya akıyor, aralarında "◈" ayırıcı var. Bekleyen olay yoksa yerine bir flavour haber (artık 28 tane) ya da canlı durum satırı geliyor (hazine, Science, nüfus/kapasite, enerji dengesi, City/district sayısı). Son 8 dolgu haberi hemen tekrar etmiyor.
+
+## 10. 30.10 playtest düzeltmeleri (2026-10-31)
+
+Kararlar: Science geliri ×0.25 (`BalanceConfig.science_income_mult`). Logistics Center depo vermiyor; Orbital Production deposunu koruyor. Tekrar fiyatında kredi ve malzeme birlikte artmaya devam ediyor. Final roket için Ay Spaceport'u sorusu açık.
+
+**Kritik**
+- **Upgrade tree dolanması:** yalnız ana parent'a çizgi çekiliyor, alternatifler tooltip'te "Requires one of". Tooltip'teki fiyat artışı açıklamaları kaldırıldı.
+- **FPS** (statik inceleme; oyun içinde profillenemedi):
+  - `BuildingDef.find` sözlükten O(1) arama yapıyor.
+  - `Location` imzası kare başına bir kez hesaplanıyor (önceden her bina, her kare için gezegendeki tüm district'leri tarıyordu).
+  - `_district_poi` etiket indeksini kullanıyor.
+  - Destek çarpanları kare başına gezegen başına tek geçişte hesaplanıyor.
+  - **Oyun içinde FPS'i doğrulayın**, hâlâ düşüyorsa profil gerekir.
+- **Kendini güncellemeyen bina listesi:** imzada "para yetiyor" ve "nüfus yetiyor" ayrı bitler oldu. Kredi yetince satır artık açılıyor.
+- **Ferrite %** her yerden kaldırıldı.
+
+**Sol panel ve okunabilirlik**
+- Yeni `MarqueeLabel`: minimum genişliği 0. Sığmayan içerik ileri geri kayıyor. `ListItem` başlığı ve istatistik satırı bunun içinde; sol panel artık içeriğe göre genişlemiyor, uzun başlık maliyet rozetinin altına girmiyor.
+- **District paneli**
+  - "District Income" satırı çarpılmış üretimi gösteriyor; altında binaların toplamı ("Buildings").
+  - Tooltip yalnız district'in kendi kaynağının coğrafyasını ve konumu açıkça listeliyor: Neighbours, City centre, Room to grow.
+  - Başlıktaki coğrafya etiketleri kalktı.
+- **City paneli:** başlık etiketleri kalktı. "Next level" ve "Supports" artık satır olarak duruyor. Capital en üstte, altında ayırıcı çizgi var.
+- **Gezegen paneli:** Orbit en üstte, altında ayırıcı çizgi var.
+- **Yerleştirme tooltip'i**
+  - Başlıkta o noktanın coğrafyası yazıyor ("Coast" yerine örneğin "River · Forest").
+  - "Makes here" satırında üretim, bu district'in kendi coğrafya çarpanları ve sade konum satırları var.
+  - "Site 3x" ve km satırları kalktı.
+- **Seviye tooltip'i** çarpanı ve kaynak bazında şimdiki → sonraki değeri gösteriyor.
+- **Üst kaynak çubuğu**
+  - Tüm dünyaların ortak geliri gösteriliyor.
+  - Tooltip'te kaynak kaynak + ve − dökümü var.
+  - Raw geliri artık tüketimi de düşüyor.
+  - Ferrite satırının tooltip'i çalışıyor.
+  - Hücreye tıklayınca Trade açılıyor.
+- Gülen surat yerine çalışan ikonu. City ile Capital ikonu arasına boşluk eklendi.
+- Sol panel kayarken işaretler artık aynı karede yer değiştiriyor (gecikme yok).
+- **Tooltip kilidi:** fare 1.6 sn kıpırdamazsa halka doluyor ve tooltip yerinde kalıyor. Üstüne gidilebiliyor, dışarı çıkınca kapanıyor. İç içe terim tooltip'leri henüz yok.
+- Upgrade tree açıkken lens tooltip'i artık araya girmiyor.
+
+**Lens ve harita**
+- Lens çubuğu her zaman görünüyor: tutorial'sız oyunda ve City kurarken de.
+- Her coğrafyanın kendi lens rengi var; lens açıkken çubuğun üstünde renk açıklaması çıkıyor.
+- Normal görünümde fareyle üstüne gelince o noktanın coğrafyası yazıyor.
+- Terran dünyalarda her zaman biraz Dağ ve Jeotermal yarık oluşuyor (eşik, dünyanın kendi en yüksek dilimi). Ay'ın Krater, Mağara ve İyon bölgeleri büyütüldü.
+- Yollar aynı kara parçasında da daha kısaysa deniz rotasını kullanıyor (`RoadNetwork.LAND_ONLY_SAME_LANDMASS`).
+
+**Diğer**
+- **Binalar**
+  - Bina listesi ve kurulmuş binalar sıralı: çıkarma → işleme → depo, grup içinde yüksek tier üstte.
+  - Stack sabit, unstack ve "Stack" kutusu kalktı.
+  - Keşfedilmemiş mineral isteyen binalar listede gri görünüyor ve nedenini yazıyor.
+- **District ve Orbit**
+  - İnşa halindeki district kartında CANCEL butonu var.
+  - Yörüngedeki Orbit City'e tıklayınca Orbit paneli açılıyor. Orbit district'lerinin 250 çalışanı listede görünüyor.
+  - Orbit district satırında prefab tier seçimi var (− T0 +); yalnız araştırılmış tier'ler seçilebiliyor, fiyat anında güncelleniyor.
+- **Spaceport:** kendi City'sine her şeyde +5% veriyor. Wonder olsun mu, karar açık.
+- **Final roket:** hazırlanırken ve hazırken kartında "PICK TARGET IN SOLAR SYSTEM" butonu var. Roket hazırlanmaya başlayınca güneş sistemi görünümü açılıyor.
+- **Free population geliri:** kaynak tooltip'inde "Idle population" satırı olarak görünüyor, oradan doğrulanabilir.
+
+**Sonraya kalanlar**
+- Force Buy (Trade güncellemesiyle birlikte).
+- Oto-satış değişikliği (Trade güncellemesi).
+- İç içe tooltip terimleri.
+- Demo bitiş sekansı (designer tasarlayacak).
+- Ay Spaceport zorunluluğu (soru bekliyor).

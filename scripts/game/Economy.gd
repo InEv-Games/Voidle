@@ -401,7 +401,9 @@ static func pop_speed(pd: PlanetData, pp: PlanetProgress) -> float:
 ## and Residential districts need none — housing must always be buildable, or a
 ## full planet could never grow again.
 static func founding_pop(def: DistrictDef, pd: PlanetData = null, parent_city: String = "") -> int:
-	if def == null or def.is_orbital or def.id == DistrictDef.Type.CITY \
+	if def != null and def.is_orbital:
+		return def.own_workers   # an Orbit district's own workers (counted in world_used_population)
+	if def == null or def.id == DistrictDef.Type.CITY \
 			or def.id == DistrictDef.Type.RESIDENTIAL:
 		return 0
 	if pd == null:
@@ -579,6 +581,7 @@ static func _frame_caches() -> void:
 		_cache_frame = f
 		_city_maps.clear()
 		_bonus_cache.clear()
+		_support_maps.clear()
 
 static func city_key(pd: PlanetData, district_label: String) -> String:
 	if pd == null:
@@ -604,22 +607,53 @@ static func scope_bonus(pp: PlanetProgress, district_label: String, id: String, 
 	_bonus_cache[ck] = mult
 	return mult
 
+## A world's supports, gathered once per frame: { "city": { city label:
+## { id: +fraction } }, "planet": { id: +fraction } } (Capital supports, Orbit
+## districts, legacy planet-wide buildings; traits are added in planet_bonus).
+static var _support_maps: Dictionary = {}   # planet seed -> map, this frame
+
+static func _supports(pp: PlanetProgress, pd: PlanetData) -> Dictionary:
+	_frame_caches()
+	if _support_maps.has(pp.planet_seed):
+		return _support_maps[pp.planet_seed]
+	var cities := {}
+	var planet := {}
+	for b: Dictionary in pp.buildings:
+		if b.get("constructing", false):
+			continue
+		var def := BuildingDef.find(b.get("building_id", ""))
+		if def == null or def.planet_bonus.is_empty():
+			continue
+		var n := float(b.get("amount", 1))
+		var into: Dictionary = planet
+		if not def.planet_wide:
+			var c := city_key(pd, b.get("district_id", ""))
+			if c == "":
+				continue
+			if not cities.has(c):
+				cities[c] = {}
+			into = cities[c]
+		for id: String in def.planet_bonus:
+			into[id] = float(into.get(id, 0.0)) + float(def.planet_bonus[id]) * n
+	if pd != null:
+		for p: POIData in pd.custom_pois:
+			if not p.is_orbital() or p.constructing:
+				continue
+			var ddef := DistrictDef.find_by_key(p.type_tag)
+			if ddef != null:
+				for id: String in ddef.planet_support:
+					planet[id] = float(planet.get(id, 0.0)) + float(ddef.planet_support[id])
+	var m := {"city": cities, "planet": planet}
+	_support_maps[pp.planet_seed] = m
+	return m
+
 ## 1 + the Capital supports for `id` built in the City `city` (its label).
 static func city_support(pp: PlanetProgress, city: String, id: String, pd: PlanetData = null) -> float:
 	if city == "":
 		return 1.0
 	if pd == null:
 		pd = GameState.get_planet_data(pp.planet_seed)
-	var mult := 1.0
-	for b: Dictionary in pp.buildings:
-		if b.get("constructing", false):
-			continue
-		var def := BuildingDef.find(b.get("building_id", ""))
-		if def == null or def.planet_wide or not def.planet_bonus.has(id):
-			continue
-		if city_key(pd, b.get("district_id", "")) == city:
-			mult += float(def.planet_bonus[id]) * float(b.get("amount", 1))
-	return mult
+	return 1.0 + float(_supports(pp, pd)["city"].get(city, {}).get(id, 0.0))
 
 ## 1 + the planet-scale supports for `id`: every finished Orbit district's
 ## DistrictDef.planet_support (whatever buildings it holds), the world's
@@ -627,18 +661,5 @@ static func city_support(pp: PlanetProgress, city: String, id: String, pd: Plane
 static func planet_bonus(pp: PlanetProgress, id: String, pd: PlanetData = null) -> float:
 	if pd == null:
 		pd = GameState.get_planet_data(pp.planet_seed)
-	var mult := 1.0 + PlanetTags.planet_fraction(pp.planet_seed, id)
-	if pd != null:
-		for p: POIData in pd.custom_pois:
-			if not p.is_orbital() or p.constructing:
-				continue
-			var ddef := DistrictDef.find_by_key(p.type_tag)
-			if ddef != null and ddef.planet_support.has(id):
-				mult += float(ddef.planet_support[id])
-	for b: Dictionary in pp.buildings:
-		if b.get("constructing", false):
-			continue
-		var def := BuildingDef.find(b.get("building_id", ""))
-		if def != null and def.planet_wide and def.planet_bonus.has(id):
-			mult += float(def.planet_bonus[id]) * float(b.get("amount", 1))
-	return mult
+	return 1.0 + PlanetTags.planet_fraction(pp.planet_seed, id) \
+		+ float(_supports(pp, pd)["planet"].get(id, 0.0))

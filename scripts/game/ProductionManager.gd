@@ -594,6 +594,95 @@ func resource_rates(only_seed: int = -1) -> Dictionary:
 			rates[id] = float(rates.get(id, 0.0)) + float(idle[id])
 	return rates
 
+## Where every stored resource comes from and goes to, per second, across all
+## worlds: { resource id: { source label: per second } } — districts by type,
+## buildings by model (upkeep as "<model> upkeep", negative), idle population.
+## "raw" holds every raw mineral together (mined minus used); each mineral id
+## its own share. Cached for BREAKDOWN_MS; the top bar's rates and tooltips read it.
+const BREAKDOWN_MS := 250
+var _breakdown: Dictionary = {}
+var _breakdown_at := -100000
+
+func resource_breakdowns() -> Dictionary:
+	var now := Time.get_ticks_msec()
+	if now - _breakdown_at < BREAKDOWN_MS:
+		return _breakdown
+	_breakdown_at = now
+	var out := {}
+	var add := func(id: String, label: String, v: float) -> void:
+		if absf(v) < 0.00001:
+			return
+		if not out.has(id):
+			out[id] = {}
+		out[id][label] = float(out[id].get(label, 0.0)) + v
+	var st := get_node("/root/SkillTree")
+	for pp: PlanetProgress in _all_colonies():
+		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+		if pd == null:
+			continue
+		var minerals: Array = Economy.raw_for_body(pd)
+		var spread := func(label: String, v: float) -> void:   # a mine's raw output over the body's minerals
+			add.call(Economy.RAW, label, v)
+			for r: Dictionary in minerals:
+				add.call(String(r["id"]), label, v / float(minerals.size()))
+		for poi: POIData in pd.custom_pois:
+			var ddef := district_def(poi)
+			if ddef == null or not makes_base(pd, poi) or ddef.base_tick <= 0.0:
+				continue
+			var label := "Orbit City" if poi.is_orbital() else ("Capital Districts" if poi.is_city() else ddef.display_name + "s")
+			var inc := district_income(pp, poi)
+			for id: String in inc:
+				if id == Economy.ENERGY or id == Economy.POPULATION:
+					continue
+				if id == Economy.RAW and ddef.id != DistrictDef.Type.MINING and not GameState.is_body_surveyed(pp.planet_seed):
+					continue
+				var v: float = float(inc[id]) * st.get_global_speed_mult() * planet_pop_speed(pp.planet_seed) / ddef.base_tick
+				if id == Economy.RAW:
+					spread.call(label, v)
+				else:
+					add.call(id, label, v)
+		for entry: Dictionary in pp.buildings:
+			if entry.get("constructing", false):
+				continue
+			var key := _key(pp.planet_seed, entry.get("district_id", ""), entry.get("uid", "-1"))
+			if _user_paused.get(key, false) or _paused.get(key, false) or _storage_full.get(key, false):
+				continue
+			var def := BuildingDef.find(entry.get("building_id", ""))
+			if def == null or def.tick_duration <= 0.0:
+				continue
+			if def.energy_per_tick < 0.0 and _global_energy_ratio <= 0.0:
+				continue
+			var speed: float = st.get_global_speed_mult()
+			if def.outputs.has(Economy.RAW):
+				speed *= st.get_mine_speed_mult()
+			var per_s := speed / def.tick_duration
+			var eff := output_efficiency(pp, def)
+			for id: String in def.outputs:
+				if id == Economy.ENERGY or id == Economy.POPULATION:
+					continue
+				var v := output_per_cycle(pp, entry, def, id) * eff * per_s
+				if id == Economy.RAW:
+					spread.call(def.display_name, v)
+				else:
+					add.call(id, def.display_name, v)
+			for id: String in def.inputs:
+				var v := -float(def.inputs[id]) * float(entry.get("amount", 1)) * per_s
+				add.call(id, def.display_name + " upkeep", v)
+				if Economy.is_raw(id):
+					add.call(Economy.RAW, def.display_name + " upkeep", v)
+	var idle := idle_income_rates()
+	for id: String in idle:
+		add.call(id, "Idle population", float(idle[id]))
+	_breakdown = out
+	return out
+
+## Net per second of a resource from resource_breakdowns().
+func breakdown_total(id: String) -> float:
+	var t := 0.0
+	for v in resource_breakdowns().get(id, {}).values():
+		t += float(v)
+	return t
+
 ## Pays a building's per-cycle inputs from the global stock. Returns false (and
 ## takes nothing) if anything is short. Every input is a fixed, named resource
 ## (e.g. "ferrite") — a building never picks a different mineral on its own;
@@ -696,7 +785,7 @@ func _skill_mods(pp: PlanetProgress, id: String, v: float, output_tag: String) -
 		Economy.FUEL:
 			v *= st.get_fuel_mult() * st.reserve_mult(idle_ratio())
 		Economy.SCIENCE:
-			v *= st.get_science_mult()
+			v *= st.get_science_mult() * Balance.cfg.science_income_mult
 		Economy.ENERGY:
 			if output_tag == "solar":
 				v *= st.get_solar_mult()
@@ -749,7 +838,7 @@ func idle_income_rates() -> Dictionary:
 	var st := get_node("/root/SkillTree")
 	var k := empire_idle().x / 1000.0 / 60.0
 	return {Economy.CREDITS: k * float(st.idle_credits_per_1000()),
-		Economy.SCIENCE: k * float(st.idle_science_per_1000())}
+		Economy.SCIENCE: k * float(st.idle_science_per_1000()) * Balance.cfg.science_income_mult}
 
 func _tick_idle_income(delta: float) -> void:
 	_idle_timer += delta
@@ -797,10 +886,7 @@ func _district_poi(pp: PlanetProgress, district_id: String) -> POIData:
 	var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
 	if pd == null:
 		return null
-	for poi: POIData in pd.custom_pois:
-		if poi.label == district_id:
-			return poi
-	return null
+	return _index(pd)["by_label"].get(district_id, null)
 
 ## Terrain multiplier of a building's output: always 1 — geography raises only
 ## its district's base (§3, §19.3). Kept for the UI that shows it.

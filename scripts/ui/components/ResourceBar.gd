@@ -198,6 +198,15 @@ func _bind_chip(cell: ResourceChip) -> void:
 				TooltipManager.hide_tip()
 				_toggle_raw_dropdown()
 				cell.accept_event())
+	elif id != Economy.ENERGY and id != Economy.POPULATION:
+		# a tradeable resource opens Trade (playtest 30.10)
+		cell.gui_input.connect(func(e: InputEvent) -> void:
+			if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
+					and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+				AudioManager.play("click")
+				TooltipManager.hide_tip()
+				HUDManager.toggle_trade_panel()
+				cell.accept_event())
 
 ## Tooltip body of a top-bar cell, with live numbers.
 func _cell_tip(id: String, base: String) -> String:
@@ -238,13 +247,30 @@ func _cell_tip(id: String, base: String) -> String:
 					penalty = "\n\n[color=#e36a6a]Overcrowded — every building and district on every world makes %d%% of its output.[/color]" % int(round(spd * 100.0))
 			return head + "Shown as available / max, for all your worlds together.\nCities house %s each; Residential districts add more.\nNew districts (%s) and district levels use population.\n\nIf more people work than you can house, every finished cycle on every world makes less (down to %d%% at worst) until you build homes." % [
 				Economy.fmt(Balance.cfg.city_base_pop), Economy.fmt(Economy.district_found_pop(0)), int(round((1.0 - Balance.cfg.pop_max_slowdown) * 100.0))] + penalty + _idle_pop_text()
-	var r: float = ProductionManager.resource_rates().get(id, 0.0)
-	var txt := "%s\n\nStored  %s  (max %s, shared by all worlds)" % [base, Economy.fmt(Economy.amount(id)), Economy.fmt(Economy.cap(id))]
-	var wpp := _rate_planet()
-	if wpp != null:
-		var rw: float = ProductionManager.resource_rates(wpp.planet_seed).get(id, 0.0)
-		txt += "\nPer second on %s  %s%s" % [_rate_planet_name(), "+" if rw >= 0.0 else "", Economy.fmt(rw)]
-	return txt + "\nPer second, all worlds  %s%s" % ["+" if r >= 0.0 else "", Economy.fmt(r)]
+	var txt := base + "\n\n" + ("Stored  %s" % Economy.fmt(_stock_amount(id)) if not Economy.is_capped(id) and id != Economy.RAW \
+		else "Stored  %s  (max %s, shared by all worlds)" % [Economy.fmt(_stock_amount(id)),
+			Economy.fmt(Economy.cap(id if id != Economy.RAW else "ferrite"))])
+	return txt + "\n\n" + breakdown_text(id) + "\n\nClick to open Trade."
+
+## "+1.2 /s  Market" lines of a resource, largest first, then the net (all worlds).
+static func breakdown_text(id: String) -> String:
+	var parts: Dictionary = ProductionManager.resource_breakdowns().get(id, {})
+	var keys: Array = parts.keys()
+	keys.sort_custom(func(a, b) -> bool: return absf(float(parts[a])) > absf(float(parts[b])))
+	var lines: Array[String] = ["Per second, all worlds:"]
+	var net := 0.0
+	for k in keys:
+		var v := float(parts[k])
+		net += v
+		if lines.size() <= 10:
+			lines.append("[color=#%s]%s%s[/color]  %s" % [("8fe39a" if v >= 0.0 else "e36a6a"),
+				"+" if v >= 0.0 else "−", Economy.fmt(absf(v)), k])
+	if keys.size() > 10:
+		lines.append("… and %d more" % (keys.size() - 10))
+	if keys.is_empty():
+		lines.append("Nothing makes or uses it yet.")
+	lines.append("Net  %s%s /s" % ["+" if net >= 0.0 else "−", Economy.fmt(absf(net))])
+	return "\n".join(lines)
 
 ## Idle housing across the empire and what research turns it into.
 func _idle_pop_text() -> String:
@@ -281,9 +307,11 @@ func _rate_planet_name() -> String:
 func _refresh_resource_cells() -> void:
 	if _res_lbls.is_empty():
 		return
-	# per-second rates of the world in view; stocks stay empire-wide
-	var wpp := _rate_planet()
-	var rates: Dictionary = ProductionManager.resource_rates(wpp.planet_seed if wpp != null else -1)
+	# per-second rates of every world together, like the stocks (playtest 30.10:
+	# the Moon's income isn't kept apart), raw minerals net of what buildings use
+	var rates := {}
+	for id: String in [Economy.CREDITS, Economy.SCIENCE, Economy.GOODS, Economy.FUEL, Economy.RARE, Economy.RAW]:
+		rates[id] = ProductionManager.breakdown_total(id)
 	_update_reveals(rates)
 	_set_rate(Economy.CREDITS, rates.get(Economy.CREDITS, 0.0))
 	_set_rate(Economy.SCIENCE, rates.get(Economy.SCIENCE, 0.0))
@@ -400,8 +428,13 @@ func _fill_raw_dropdown() -> void:
 			chip.value_width = 44.0
 			var nm: String = r["name"]
 			var rid: String = r["id"]
-			chip.mouse_entered.connect(func() -> void: TooltipManager.show_tip(nm \
-				if Economy.is_mineral_discovered(rid) or Economy.amount(rid) > 0.0 else "Undiscovered"))
+			chip.mouse_filter = Control.MOUSE_FILTER_STOP
+			chip.mouse_entered.connect(func() -> void:
+				if Economy.is_mineral_discovered(rid) or Economy.amount(rid) > 0.0:
+					TooltipManager.show_tip(nm, "Stored  %s  (max %s)\n\n%s" % [Economy.fmt(Economy.amount(rid)),
+						Economy.fmt(Economy.cap(rid)), breakdown_text(rid)])
+				else:
+					TooltipManager.show_tip("Undiscovered", "A mineral you haven't found yet."))
 			chip.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 			_raw_dd_list.add_child(chip)
 			rows.append(chip)
