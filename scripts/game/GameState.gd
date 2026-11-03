@@ -19,6 +19,8 @@ signal relics_changed
 ## Planet traits: { "seed": [trait id, …] } and picks waiting { "seed": [[id ×3], …] }.
 var planet_tags: Dictionary = {}
 var tag_offers: Dictionary = {}
+## Re-rolls used on a world's first waiting pick: { "seed": count }.
+var tag_rerolls: Dictionary = {}
 ## Relics: { relic id: unix time found } and their sites { relic id: [lon, lat] }.
 var relics_found: Dictionary = {}
 var relic_sites: Dictionary = {}
@@ -1198,6 +1200,7 @@ func save() -> void:
 		"landing_paid":         landing_paid,
 		"planet_tags":          planet_tags,
 		"tag_offers":           tag_offers,
+		"tag_rerolls":          tag_rerolls,
 		"relics_found":         relics_found,
 		"relic_sites":          relic_sites,
 		"balance_profile":      Balance.profile_name,
@@ -1340,6 +1343,7 @@ func load_save() -> bool:
 	landing_paid = data.get("landing_paid", {})
 	planet_tags = data.get("planet_tags", {})
 	tag_offers = data.get("tag_offers", {})
+	tag_rerolls = data.get("tag_rerolls", {})
 	relics_found = data.get("relics_found", {})
 	relic_sites = data.get("relic_sites", {})
 	# time away (KARARLAR §4): only measured and shown — no offline economy yet.
@@ -1507,6 +1511,7 @@ func delete_save(remove_file := true, rebuild := true) -> void:
 	discovered_minerals.clear()
 	planet_tags.clear()
 	tag_offers.clear()
+	tag_rerolls.clear()
 	relics_found.clear()
 	relic_sites.clear()
 	planet_view_unlocked = false

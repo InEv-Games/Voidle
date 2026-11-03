@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="TraitDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/TraitDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+trait_id = "restless_core"
+display_name = "Restless Core"
+description = "A warm, active interior that is easy to tap."
+rarity = 0
+effects = {"energy": 0.1}
+allowed_planet_types = Array[int]([])
+weight = 10

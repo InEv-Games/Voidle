@@ -6,66 +6,28 @@ extends RefCounted
 ## (the home world starts with CRADLE; any other draws a pick when scanned);
 ## the others need a planet level (Balance trait_slot_levels) and are opened
 ## by paying Science and Rare Elements (trait_slot_costs) — then the player
-## picks one of three, roguelite style. Most traits are a planet-wide support
+## picks one of three, roguelite style, and may re-roll them: the first re-roll
+## of a pick is free, the next ones cost Science (reroll_cost). The traits are
+## files in res://resources/traits (TraitDef), each with a rarity; later slots
+## roll rarer ones (Balance trait_rarity_odds). Most are a planet-wide support
 ## counted with the Orbit's (Economy.planet_bonus): +10% Science on this world;
-## the strong ones of the later slots add districts per City or building slots.
+## the rare ones add districts per City or building slots.
 ##
-## State lives in GameState: planet_tags { "seed": [trait id, …] } and
-## tag_offers { "seed": [[id, id, id], …] } (offers waiting for a pick, kept in
-## the save so reloading can't reroll them).
+## State lives in GameState: planet_tags { "seed": [trait id, …] }, tag_offers
+## { "seed": [[id, id, id], …] } (offers waiting for a pick, kept in the save so
+## reloading can't reroll them) and tag_rerolls { "seed": re-rolls of the first
+## waiting pick }.
 
 ## How many traits are offered per pick.
 const OFFER_SIZE := 3
 ## Trait slots per world.
 const SLOTS := 3
-## Effects that are counts, not fractions ("+2 districts per City").
+## Effects that are counts, not fractions ("+1 district per City").
 const COUNT_EFFECTS: Array[String] = ["city_districts", "district_slots"]
 ## The home world's trait.
 const CRADLE := "cradle_world"
 
-## id: { name, desc, effect { resource_id: +fraction }, types (PlanetData.Type,
-## empty = any world), weight (how often it is offered) }. "raw" in an effect
-## means raw and processed output (raw, goods, fuel, rare elements).
-const CATALOGUE := {
-	"cradle_world":     {"name": "Cradle World", "desc": "Where your people began. Home feels like home.",
-		"effect": {"population": 0.10}, "types": [], "weight": 0},
-	"rich_crust":       {"name": "Rich Crust", "desc": "Mineral veins run close to the surface.",
-		"effect": {"raw": 0.10}, "types": [], "weight": 10},
-	"fertile_basins":   {"name": "Fertile Basins", "desc": "Sheltered lowlands where settlements thrive.",
-		"effect": {"population": 0.10}, "types": [], "weight": 10},
-	"clear_skies":      {"name": "Clear Skies", "desc": "Cloudless nights and still air for instruments.",
-		"effect": {"science": 0.10}, "types": [], "weight": 10},
-	"busy_crossroads":  {"name": "Busy Crossroads", "desc": "Haulers and traders like to stop here.",
-		"effect": {"credits": 0.10}, "types": [], "weight": 10},
-	"restless_core":    {"name": "Restless Core", "desc": "A warm, active interior that is easy to tap.",
-		"effect": {"energy": 0.10}, "types": [], "weight": 10},
-	"ancient_archives": {"name": "Ancient Archives", "desc": "Someone studied this world long before you.",
-		"effect": {"science": 0.15, "credits": -0.05}, "types": [], "weight": 5},
-	"boomtown":         {"name": "Boomtown", "desc": "Fast money, fast growth, cramped streets.",
-		"effect": {"credits": 0.15, "population": -0.05}, "types": [], "weight": 5},
-	"deep_lodes":       {"name": "Deep Lodes", "desc": "Huge deposits — mining them takes power.",
-		"effect": {"raw": 0.15, "energy": -0.05}, "types": [], "weight": 5},
-	"low_gravity":      {"name": "Low Gravity", "desc": "Light loads, light structures, easy power.",
-		"effect": {"energy": 0.15}, "types": [PlanetData.Type.MOON, PlanetData.Type.BARREN, PlanetData.Type.ASTEROID], "weight": 6},
-	"regolith_seas":    {"name": "Regolith Seas", "desc": "Plains of loose rock ready to be sifted.",
-		"effect": {"raw": 0.15}, "types": [PlanetData.Type.MOON, PlanetData.Type.BARREN], "weight": 6},
-	"earthrise_views":  {"name": "Earthrise Views", "desc": "Settlers come for the view and stay.",
-		"effect": {"population": 0.15}, "types": [PlanetData.Type.MOON], "weight": 6},
-	"stable_plates":    {"name": "Stable Plates", "desc": "Quiet ground: every scale works a little better.",
-		"effect": {"credits": 0.05, "science": 0.05, "raw": 0.05}, "types": [], "weight": 3},
-	# strong ones: only in the slots you pay for (min_slot)
-	"grand_plateaus":   {"name": "Grand Plateaus", "desc": "Wide, level land: cities spread without limits.",
-		"effect": {"city_districts": 2}, "types": [], "weight": 4, "min_slot": 1},
-	"deep_bedrock":     {"name": "Deep Bedrock", "desc": "Solid ground under every quarter: build taller.",
-		"effect": {"district_slots": 1}, "types": [], "weight": 4, "min_slot": 1},
-	"golden_age":       {"name": "Golden Age", "desc": "Everything here seems to go right.",
-		"effect": {"credits": 0.20, "science": 0.20}, "types": [], "weight": 2, "min_slot": 2},
-}
-
 # ── Queries ──────────────────────────────────────────────────────────────────
-
-static func info(id: String) -> Dictionary:
-	return CATALOGUE.get(id, {})
 
 static func traits_of(planet_seed: int) -> Array:
 	return GameState.planet_tags.get(str(planet_seed), [])
@@ -88,27 +50,75 @@ static func planet_fraction(planet_seed: int, id: String) -> float:
 		return 0.0
 	var total := 0.0
 	for tid: String in traits_of(planet_seed):
-		total += float(info(tid).get("effect", {}).get(key, 0.0))
+		total += float(_effects_of(tid).get(key, 0.0))
 	return total
 
-## "+10% Science · −5% Credits" / "+2 districts per City".
+static func _effects_of(id: String) -> Dictionary:
+	var def := TraitDef.find(id)
+	return def.effects if def != null else {}
+
+## "+10% Science · −5% Credits" / "+1 district per City".
 static func effect_text(id: String) -> String:
 	var parts: Array[String] = []
-	var eff: Dictionary = info(id).get("effect", {})
+	var eff := _effects_of(id)
 	for rid: String in eff:
-		parts.append(_part_text(rid, float(eff[rid])))
+		parts.append(effect_part(rid, float(eff[rid])))
 	return " · ".join(parts)
 
-static func _part_text(rid: String, v: float) -> String:
+static func effect_part(rid: String, v: float) -> String:
+	return "%s %s" % [effect_value(rid, v), resource_label(rid, roundi(absf(v)))]
+
+## The amount alone: "+15%", "−5%", "+1".
+static func effect_value(rid: String, v: float) -> String:
+	var n := roundi(absf(v)) if rid in COUNT_EFFECTS else roundi(absf(v) * 100.0)
+	return "%s%d%s" % ["+" if v >= 0.0 else "−", n, "" if rid in COUNT_EFFECTS else "%"]
+
+static func effect_icon(rid: String) -> String:
+	return {"city_districts": "district", "district_slots": "factory"}.get(rid, rid)
+
+## A malus reads red, a count gold, the rest in the resource's colour.
+static func effect_color(rid: String, v: float) -> Color:
+	if v < 0.0:
+		return Color(1.0, 0.45, 0.42)
 	if rid in COUNT_EFFECTS:
-		return "%s%d %s" % ["+" if v >= 0.0 else "−", roundi(absf(v)), resource_label(rid)]
-	return "%s%d%% %s" % ["+" if v >= 0.0 else "−", roundi(absf(v) * 100.0), resource_label(rid)]
+		return Color(0.95, 0.82, 0.45)
+	return Economy.color_of(rid) if rid != Economy.RAW else Color(0.85, 0.78, 0.70)
+
+## An effect in icons and its amount, no words: "[science] +15%", the four
+## output icons for raw, "[city] +1 [district]" for a count per City.
+static func effect_short_bb(rid: String, v: float, px: int) -> String:
+	var c := effect_color(rid, v)
+	var val := "[color=#%s]%s[/color]" % [c.to_html(false), effect_value(rid, v)]
+	match rid:
+		"city_districts":
+			return "%s %s %s" % [UIIcons.bb("city", px, c), val, UIIcons.bb("district", px, c)]
+		"district_slots":
+			return "%s %s %s" % [UIIcons.bb("district", px, c), val, UIIcons.bb("factory", px, c)]
+		Economy.RAW:
+			var icons := ""
+			for id: String in [Economy.RAW, Economy.GOODS, Economy.FUEL, Economy.RARE]:
+				var ic := c if v < 0.0 or id == Economy.RAW else Economy.color_of(id)
+				icons += UIIcons.bb(id, px, ic)
+			return "%s %s" % [icons, val]
+	return "%s %s" % [UIIcons.bb(rid, px, c), val]
+
+## What an effect touches, in a sentence (its tooltip on the trait cards).
+static func effect_explain(rid: String) -> String:
+	match rid:
+		"city_districts":   return "Every City on this world can hold more districts."
+		"district_slots":   return "Every surface district on this world has room for more buildings."
+		Economy.RAW:        return "Mining and processing on this world: minerals, Goods, Fuel, Rare Elements."
+		Economy.POPULATION: return "The housing of every City on this world."
+		Economy.ENERGY:     return "The energy made by every building on this world."
+		Economy.SCIENCE:    return "All the Science this world makes."
+		Economy.CREDITS:    return "All the Credits this world earns."
+	return "Output on this world."
 
 ## Whole-number effect of a world's traits ("city_districts" → +2).
 static func planet_count(planet_seed: int, key: String) -> int:
 	var total := 0
 	for tid: String in traits_of(planet_seed):
-		total += int(info(tid).get("effect", {}).get(key, 0))
+		total += int(_effects_of(tid).get(key, 0))
 	return total
 
 ## The effect as tooltip BBCode: one line per resource, its icon and colour,
@@ -116,22 +126,17 @@ static func planet_count(planet_seed: int, key: String) -> int:
 ## planet" closes it.
 static func effect_bb(id: String) -> String:
 	var lines: Array[String] = []
-	var eff: Dictionary = info(id).get("effect", {})
+	var eff := _effects_of(id)
 	for rid: String in eff:
 		var v := float(eff[rid])
-		var col := Economy.color_of(rid) if rid != Economy.RAW else Color(0.85, 0.78, 0.70)
-		if v < 0.0:
-			col = Color(1.0, 0.45, 0.42)
-		var icon: String = {"city_districts": "district", "district_slots": "factory"}.get(rid, rid)
-		if rid in COUNT_EFFECTS:
-			col = Color(0.95, 0.82, 0.45)   # a strong trait reads gold
-		lines.append("%s [color=#%s]%s[/color]" % [UIIcons.bb(icon, 13, col), col.to_html(false), _part_text(rid, v)])
+		var col := effect_color(rid, v)
+		lines.append("%s [color=#%s]%s[/color]" % [UIIcons.bb(effect_icon(rid), 13, col), col.to_html(false), effect_part(rid, v)])
 	return "\n".join(lines) + "\n[color=#8a93b0]on this planet[/color]"
 
-static func resource_label(rid: String) -> String:
+static func resource_label(rid: String, count := 1) -> String:
 	match rid:
-		"city_districts":   return "districts per City"
-		"district_slots":   return "building slot in every district"
+		"city_districts":   return "district per City" if count == 1 else "districts per City"
+		"district_slots":   return "building slot in every district" if count == 1 else "building slots in every district"
 		Economy.RAW:        return "raw & processed output"
 		Economy.POPULATION: return "housing"
 		Economy.ENERGY:     return "energy output"
@@ -139,7 +144,7 @@ static func resource_label(rid: String) -> String:
 
 ## True when every part of the trait's effect is good.
 static func is_positive(id: String) -> bool:
-	for v in info(id).get("effect", {}).values():
+	for v in _effects_of(id).values():
 		if float(v) < 0.0:
 			return false
 	return true
@@ -160,62 +165,98 @@ static func atmosphere_tag(pd: PlanetData) -> Array:
 # ── Picks ────────────────────────────────────────────────────────────────────
 
 ## Queues one pick of OFFER_SIZE traits for a world (none it already has,
-## none from another offer waiting for it). Seeded per world and pick, so the
-## same game offers the same three.
+## none from another offer waiting for it). Seeded per world, pick and re-roll,
+## so the same game offers the same three.
 static func queue_offer(pd: PlanetData) -> void:
 	if pd == null:
 		return
-	var k := str(pd.seed)
-	var have: Array = traits_of(pd.seed)
 	var offers: Array = offers_of(pd.seed).duplicate()
-	var taken := {}
-	for t in have:
-		taken[t] = true
-	for o: Array in offers:
-		for t in o:
-			taken[t] = true
-	var pool: Array = []
-	for id: String in CATALOGUE:
-		var c: Dictionary = CATALOGUE[id]
-		if int(c["weight"]) <= 0 or taken.has(id):
-			continue
-		var types: Array = c["types"]
-		if not types.is_empty() and not (int(pd.planet_type) in types):
-			continue
-		if int(c.get("min_slot", 0)) > have.size() + offers.size():
-			continue   # strong traits come only with the slots you pay for
-		pool.append(id)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = pd.seed ^ (0x7A65 + (have.size() + offers.size()) * 7919)
-	var pick: Array = []
-	while pick.size() < OFFER_SIZE and not pool.is_empty():
-		var total := 0
-		for id: String in pool:
-			total += int(CATALOGUE[id]["weight"])
-		var r := rng.randi_range(1, total)
-		for i in pool.size():
-			r -= int(CATALOGUE[pool[i]]["weight"])
-			if r <= 0:
-				pick.append(pool[i])
-				pool.remove_at(i)
-				break
+	var slot := traits_of(pd.seed).size() + offers.size()
+	var pick := _draw(pd, slot, _taken(pd.seed), _roll_rng(pd.seed, slot, 0))
 	if pick.is_empty():
 		return
 	offers.append(pick)
-	GameState.tag_offers[k] = offers
+	GameState.tag_offers[str(pd.seed)] = offers
 	GameState.tag_offers_changed.emit()
+
+static func _roll_rng(planet_seed: int, slot: int, rerolls: int) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = planet_seed ^ (0x7A65 + slot * 7919 + rerolls * 104729)
+	return rng
+
+## Trait ids a world has or has on offer: { id: true }.
+static func _taken(planet_seed: int) -> Dictionary:
+	var taken := {}
+	for t in traits_of(planet_seed):
+		taken[t] = true
+	for o: Array in offers_of(planet_seed):
+		for t in o:
+			taken[t] = true
+	return taken
+
+## Up to OFFER_SIZE different traits the world allows, none of `taken`.
+static func _draw(pd: PlanetData, slot: int, taken: Dictionary, rng: RandomNumberGenerator) -> Array:
+	var pool: Array[TraitDef] = []
+	for def: TraitDef in TraitDef.all():
+		if def.weight > 0 and not taken.has(def.trait_id) and def.allows(int(pd.planet_type)):
+			pool.append(def)
+	var pick: Array = []
+	while pick.size() < OFFER_SIZE and not pool.is_empty():
+		var def := _draw_one(pool, slot, rng)
+		pick.append(def.trait_id)
+		pool.erase(def)
+	return pick
+
+## First its rarity by the slot's odds, then a trait of that rarity by weight.
+## A rarity with nothing left gives its share to the others; when the slot's
+## odds have nothing left at all, any trait still in the pool can come.
+static func _draw_one(pool: Array[TraitDef], slot: int, rng: RandomNumberGenerator) -> TraitDef:
+	var odds := rarity_odds(slot)
+	var rarity_weight := {}
+	for def: TraitDef in pool:
+		rarity_weight[def.rarity] = int(odds.get(def.rarity_key(), 0))
+	var rarity := -1
+	var total := 0
+	for r: int in rarity_weight:
+		total += int(rarity_weight[r])
+	if total > 0:
+		var roll := rng.randi_range(1, total)
+		for r: int in rarity_weight:
+			roll -= int(rarity_weight[r])
+			if roll <= 0:
+				rarity = r
+				break
+	var kin: Array[TraitDef] = []
+	var kin_total := 0
+	for def: TraitDef in pool:
+		if rarity < 0 or def.rarity == rarity:
+			kin.append(def)
+			kin_total += def.weight
+	var roll := rng.randi_range(1, kin_total)
+	for def: TraitDef in kin:
+		roll -= def.weight
+		if roll <= 0:
+			return def
+	return kin[0]
+
+## { rarity key: weight } for slot `i`.
+static func rarity_odds(i: int) -> Dictionary:
+	var table: Array[Dictionary] = Balance.cfg.trait_rarity_odds
+	return table[mini(i, table.size() - 1)]
 
 ## The player takes `id` from the world's first waiting offer.
 static func choose(planet_seed: int, id: String) -> bool:
 	var k := str(planet_seed)
 	var offers: Array = offers_of(planet_seed).duplicate()
-	if offers.is_empty() or not (id in (offers[0] as Array)):
+	var def := TraitDef.find(id)
+	if offers.is_empty() or def == null or not (id in (offers[0] as Array)):
 		return false
 	offers.remove_at(0)
 	if offers.is_empty():
 		GameState.tag_offers.erase(k)
 	else:
 		GameState.tag_offers[k] = offers
+	GameState.tag_rerolls.erase(k)   # the next pick has its own free re-roll
 	var have: Array = traits_of(planet_seed).duplicate()
 	have.append(id)
 	GameState.planet_tags[k] = have
@@ -223,9 +264,48 @@ static func choose(planet_seed: int, id: String) -> bool:
 	GameState.tag_offers_changed.emit()
 	GameState.planet_progress_changed.emit(planet_seed)
 	var pd := GameState.get_planet_data(planet_seed)
-	NewsFeed.post("%s is now known for its %s (%s)." % [pd.planet_name if pd else "A world", info(id)["name"], effect_text(id)], NewsFeed.Kind.EVENT,
-		"%s\n\n%s on this planet, counted on its whole total." % [info(id)["desc"], effect_text(id)], info(id)["name"],
+	NewsFeed.post("%s is now known for its %s (%s)." % [pd.planet_name if pd else "A world", def.display_name, effect_text(id)], NewsFeed.Kind.EVENT,
+		"%s\n\n%s on this planet, counted on its whole total." % [def.description, effect_text(id)], def.display_name,
 		{"seed": planet_seed})
+	return true
+
+# ── Re-rolls ─────────────────────────────────────────────────────────────────
+
+static func rerolls_used(planet_seed: int) -> int:
+	return int(GameState.tag_rerolls.get(str(planet_seed), 0))
+
+## What the next re-roll of the world's first waiting pick costs: {} when free.
+static func reroll_cost(planet_seed: int) -> Dictionary:
+	var used := rerolls_used(planet_seed)
+	if used == 0:
+		return {}
+	var costs: Array[float] = Balance.cfg.trait_reroll_costs
+	var base: float = costs[mini(traits_of(planet_seed).size(), costs.size() - 1)]
+	return {Economy.SCIENCE: roundf(base * pow(Balance.cfg.trait_reroll_growth, used - 1))}
+
+## Pays and swaps the first waiting pick for three new cards; the old ones come
+## back only if the world has too few other traits left.
+static func reroll(planet_seed: int) -> bool:
+	var pd := GameState.get_planet_data(planet_seed)
+	var offers: Array = offers_of(planet_seed).duplicate()
+	if pd == null or offers.is_empty():
+		return false
+	var used := rerolls_used(planet_seed) + 1
+	var slot := traits_of(planet_seed).size()
+	var rng := _roll_rng(planet_seed, slot, used)
+	var taken := _taken(planet_seed)
+	var pick := _draw(pd, slot, taken, rng)
+	if pick.size() < OFFER_SIZE:
+		for t in offers[0]:
+			taken.erase(t)
+		for t in pick:
+			taken[t] = true
+		pick.append_array(_draw(pd, slot, taken, rng).slice(0, OFFER_SIZE - pick.size()))
+	if pick.is_empty() or not Economy.pay(reroll_cost(planet_seed)):
+		return false
+	offers[0] = pick
+	GameState.tag_offers[str(planet_seed)] = offers
+	GameState.tag_rerolls[str(planet_seed)] = used
 	return true
 
 ## A world reached a level: its next slot may be opened now — paid, not given

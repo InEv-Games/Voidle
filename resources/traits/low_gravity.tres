@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="TraitDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/TraitDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+trait_id = "low_gravity"
+display_name = "Low Gravity"
+description = "Light loads, light structures, easy power."
+rarity = 1
+effects = {"energy": 0.15}
+allowed_planet_types = Array[int]([6, 4, 7])
+weight = 10

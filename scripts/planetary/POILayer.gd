@@ -326,7 +326,16 @@ func _rebuild_ghost_card() -> void:
 			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			h.add_child(l)
 			if row.size() > 1 and String(row[1]) != "":
-				h.add_child(_card_text(String(row[1])))
+				var rt := _card_text(String(row[1]))
+				if row.size() > 2:   # a cost: in a box, its edge red while short
+					var box := PanelContainer.new()
+					box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+					box.add_theme_stylebox_override("panel", TooltipCard._box_style(bool(row[2])))
+					box.add_child(rt)
+					h.add_child(box)
+				else:
+					h.add_child(rt)
 			vb.add_child(h)
 	_card_panel.add_child(vb)
 

@@ -25,8 +25,12 @@ extends PanelContainer
 ## left, the cost with icons at the bottom right (BBCode both; right empty: off).
 var footer_left: String = ""
 var footer_right: String = ""
+## The right side is a one-time cost: drawn in a box (playtest 31.10), its
+## edge red while it can't be paid.
+var footer_ok := true
 var _foot_l: RichTextLabel = null
 var _foot_r: RichTextLabel = null
+var _foot_box: PanelContainer = null
 
 ## Top-right corner of the header (BBCode, e.g. "37K / 50K"; empty hides it)
 ## and a detail block under the body behind a separator (playtest 31.10).
@@ -62,10 +66,23 @@ func _hook_terms(l: RichTextLabel) -> void:
 	l.meta_hover_started.connect(func(m: Variant) -> void: term_hovered.emit(String(m)))
 	l.meta_hover_ended.connect(func(m: Variant) -> void: term_left.emit(String(m)))
 
-func set_footer(left: String, right: String) -> void:
+func set_footer(left: String, right: String, ok := true) -> void:
 	footer_left = left
 	footer_right = right
+	footer_ok = ok
 	_sync()
+
+static func _box_style(ok: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(1, 1, 1, 0.05) if ok else Color(0.9, 0.35, 0.35, 0.08)
+	sb.border_color = Color(0.55, 0.62, 0.78, 0.45) if ok else Color(0.95, 0.42, 0.42, 0.85)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(3)
+	sb.content_margin_left = 6.0
+	sb.content_margin_right = 6.0
+	sb.content_margin_top = 1.0
+	sb.content_margin_bottom = 1.0
+	return sb
 
 func _foot_label() -> RichTextLabel:
 	var l := RichTextLabel.new()
@@ -135,11 +152,16 @@ func _sync() -> void:
 		_foot_l = _foot_label()
 		_foot_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		_foot_r = _foot_label()
+		_foot_box = PanelContainer.new()
+		_foot_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_foot_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_foot_box.add_child(_foot_r)
 		row.add_child(_foot_l)
-		row.add_child(_foot_r)
+		row.add_child(_foot_box)
 	if _foot_l != null:
 		_foot_l.visible = rich
-		_foot_r.visible = rich
+		_foot_box.visible = rich and footer_right != ""
+		_foot_box.add_theme_stylebox_override("panel", _box_style(footer_ok))
 		_foot_l.text = footer_left
 		_foot_r.text = footer_right
 	($VBox/Actions as Control).visible = ($VBox/Actions as Node).get_child_count() > 0

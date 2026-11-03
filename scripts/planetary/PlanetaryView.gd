@@ -4051,10 +4051,12 @@ func _planet_tag_items(data: PlanetData) -> Array:
 	var at := PlanetTags.atmosphere_tag(data)
 	var out: Array = [[st[0], HeroTag.Tone.PLAIN, st[1], "info"], [at[0], HeroTag.Tone.PLAIN, at[1], "info"]]
 	for tid in PlanetTags.traits_of(data.seed):
-		var info := PlanetTags.info(String(tid))
-		out.append([String(info.get("name", tid)),
+		var def := TraitDef.find(String(tid))
+		if def == null:
+			continue
+		out.append([def.display_name,
 			HeroTag.Tone.GOOD if PlanetTags.is_positive(String(tid)) else HeroTag.Tone.PLAIN,
-			"%s\n\n%s" % [info.get("desc", ""), PlanetTags.effect_bb(String(tid))], "trait"])
+			"%s\n\n%s" % [def.description, PlanetTags.effect_bb(String(tid))], "trait"])
 	if not PlanetTags.offers_of(data.seed).is_empty():
 		out.append(["+ Choose a trait", HeroTag.Tone.GOOD, "A trait waits for this world: pick one of three.", "pick"])
 	elif data.seed != GameState.home_planet_seed and not GameState.is_scanned(data.seed):
@@ -4080,12 +4082,12 @@ func _build_trait_slots(data: PlanetData) -> Control:
 		match st:
 			PlanetTags.Slot.FILLED:
 				var tid := String(PlanetTags.traits_of(data.seed)[i])
-				var info := PlanetTags.info(tid)
-				label = String(info.get("name", tid))
-				var strong := int(info.get("min_slot", 0)) > 0
-				col = gold if strong else (UIStyle.color(&"good") if PlanetTags.is_positive(tid) else Color(0.95, 0.70, 0.45))
-				tip_title = label
-				tip = "%s\n\n%s" % [info.get("desc", ""), PlanetTags.effect_bb(tid)]
+				var def := TraitDef.find(tid)
+				label = def.display_name if def != null else tid
+				if def != null:
+					col = def.rarity_color()
+					tip_title = label
+					tip = "%s\n\n%s" % [def.description, PlanetTags.effect_bb(tid)]
 			PlanetTags.Slot.PICKING:
 				label = "+ Choose a trait"
 				col = UIStyle.color(&"good")
@@ -4094,7 +4096,7 @@ func _build_trait_slots(data: PlanetData) -> Control:
 			PlanetTags.Slot.OPEN_TO_BUY:
 				label = "Open slot"
 				col = gold
-				tip = "Open this slot, then pick one of three traits. The later slots can roll the strong ones."
+				tip = "Open this slot, then pick one of three traits. Later slots roll rarer ones."
 				foot = _full_cost_bb(PlanetTags.slot_cost(i), 0, data, pp)
 				var cap_i := i
 				on_click = func() -> void:
@@ -4137,10 +4139,11 @@ func _build_trait_slots(data: PlanetData) -> Control:
 		var cap_title := tip_title
 		var cap_tip := tip
 		var cap_foot := foot
+		var cap_slot := i
 		b.mouse_entered.connect(func() -> void:
 			TooltipManager.show_tip(cap_title, cap_tip)
 			if cap_foot != "":
-				TooltipManager.set_footer("", cap_foot))
+				TooltipManager.set_footer("", cap_foot, Economy.can_pay(PlanetTags.slot_cost(cap_slot))))
 		b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 		if on_click.is_valid():
 			b.pressed.connect(func() -> void:
@@ -5931,13 +5934,17 @@ func _placement_card(def: DistrictDef, chk: Dictionary, sys: Dictionary, site_na
 			stock = stock or (id != Economy.ENERGY and id != Economy.POPULATION)
 	var left := (_cycle_bb(ProductionManager.district_cycle_sec(def)) + "   " if stock else "") + "   ".join(made)
 	var right: String
+	var can_pay := true
 	if _moving_poi != null:
-		right = _bb("Fee  ", BB_DIM) + _cost_bb(Settlement.move_fee(current_data, _moving_poi), 0, current_data, pp)
+		var fee := Settlement.move_fee(current_data, _moving_poi)
+		right = _bb("Fee  ", BB_DIM) + _cost_bb(fee, 0, current_data, pp)
+		can_pay = GameState.credits >= fee
 	else:
 		var pl := _parent_label()
-		right = _full_cost_bb(DistrictDef.placement_full_cost(def, current_data, pl),
-			Economy.founding_pop(def, current_data, pl), current_data, pp)
-	card.append([[left, right]])
+		var full := DistrictDef.placement_full_cost(def, current_data, pl)
+		right = _full_cost_bb(full, Economy.founding_pop(def, current_data, pl), current_data, pp)
+		can_pay = Economy.can_pay(full)
+	card.append([[left, right, can_pay]])
 	return card
 
 ## Site mineral shares are gone (playtest 30.10): a world yields its whole
@@ -6124,8 +6131,11 @@ func _show_planet_level_tip(data: PlanetData, pp: PlanetProgress) -> void:
 			var col: Color = Color.html(BB_BAD) if short else (Color(0.85, 0.78, 0.70) if rid == Economy.RAW else Economy.color_of(rid))
 			parts.append((UIIcons.bb(rid, 11, col) + " " + _bb(Economy.fmt(float(cost[k])), col)) if UIIcons.has_icon(rid) \
 				else _bb("%s %s" % [Economy.fmt(float(cost[k])), Economy.display_name(rid)], col))
+	var can_pay := true
+	for k in cost.keys():
+		can_pay = can_pay and (GameState.credits if str(k) == "credits" else _level_cost_have(str(k))) >= float(cost[k])
 	TooltipManager.show_tip("Planet level up", "\n".join(lines))
-	TooltipManager.set_footer("", "  ·  ".join(parts))
+	TooltipManager.set_footer("", "  ·  ".join(parts), can_pay)
 
 func _show_level_up_popup(pp: PlanetProgress) -> void:
 	if pp.is_upgrading:
@@ -6987,14 +6997,14 @@ func _found_city_block(data: PlanetData) -> String:
 ## The standard build tip (playtest 31.10) — the same for buildings, districts
 ## and Cities: the description and notes in the body; the bottom row has what
 ## it makes with its cycle on the left and the cost in the bottom-right corner.
-func _show_build_tip(title: String, body: Variant, makes: Dictionary, cycle_sec: float, cost_bb: String) -> void:
+func _show_build_tip(title: String, body: Variant, makes: Dictionary, cycle_sec: float, cost_bb: String, ok := true) -> void:
 	var made: Array[String] = []
 	var stock := false
 	for id: String in makes:
 		made.append(_res_bb(id, float(makes[id])))
 		stock = stock or (id != Economy.ENERGY and id != Economy.POPULATION)
 	TooltipManager.show_tip(title, body)
-	TooltipManager.set_footer((_cycle_bb(cycle_sec) + "   " if stock and cycle_sec > 0.0 else "") + "   ".join(made), cost_bb)
+	TooltipManager.set_footer((_cycle_bb(cycle_sec) + "   " if stock and cycle_sec > 0.0 else "") + "   ".join(made), cost_bb, ok)
 
 func _show_found_city_tip(data: PlanetData) -> void:
 	var pp := GameState.get_planet(data.seed)
@@ -7010,7 +7020,8 @@ func _show_found_city_tip(data: PlanetData) -> void:
 		lines.append(_bb("➡ " + block, BB_BAD))
 	var makes := cdef.base_outputs.duplicate()
 	makes[Economy.POPULATION] = float(makes.get(Economy.POPULATION, 0.0)) + Balance.cfg.city_base_pop   # it houses people too
-	_show_build_tip("Found City", "\n".join(lines), makes, ProductionManager.district_cycle_sec(cdef), _cost_bb(cost, 0, data, pp))
+	_show_build_tip("Found City", "\n".join(lines), makes, ProductionManager.district_cycle_sec(cdef), _cost_bb(cost, 0, data, pp),
+		GameState.credits >= cost)
 
 ## District types the add card offers: the planet overview founds Cities, a
 ## City's panel adds the other districts, the orbital tab stations.
@@ -7105,7 +7116,7 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 		if pop_need > 0 and not has_pop:
 			t_desc += "\n\n[color=orange]Population will exceed housing — output drops until you build more homes.[/color]"
 		TooltipManager.show_tip(t_title, t_desc)
-		TooltipManager.set_footer(foot_l, foot_r))
+		TooltipManager.set_footer(foot_l, foot_r, Economy.can_pay(DistrictDef.placement_full_cost(def, data, parent_label))))
 	btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
@@ -8624,7 +8635,7 @@ func _show_build_row_tip() -> void:
 	var foot_l := (_cycle_bb(ProductionManager.building_cycle_sec(def)) + "   " if _has_stock_output(def) else "") + "   ".join(flow)
 	var foot_r := (_bb("×%d  " % n, "#e8ecf6") if n > 1 else "") + _full_cost_bb(cost, int(c["pop"]) * n, planet, pp)
 	TooltipManager.show_tip(String(c["title"]), "\n".join(body))
-	TooltipManager.set_footer(foot_l, foot_r)
+	TooltipManager.set_footer(foot_l, foot_r, Economy.can_pay(cost))
 
 ## What a cost is short of, as red icon amounts: "➡ [goods] 40  [fuel] 5".
 func _missing_bb(cost: Dictionary) -> String:
@@ -8939,7 +8950,7 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 		var cost_r := _cost_bb(credits, need, planet, pp)
 		btn.mouse_entered.connect(func() -> void:
 			TooltipManager.show_tip("Level up Capital District" if poi.is_city() else "Level up %s" % poi.shown_name(), tip)
-			TooltipManager.set_footer("", cost_r))
+			TooltipManager.set_footer("", cost_r, GameState.credits >= credits))
 		btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 		tip = ""   # shown above, with its footer
 	if tip != "":
@@ -11105,7 +11116,7 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 	var cost_r := _cost_bb(credits, pop, planet, pp)
 	btn.mouse_entered.connect(func() -> void:
 		TooltipManager.show_tip("City level up", tip)
-		TooltipManager.set_footer("", cost_r))
+		TooltipManager.set_footer("", cost_r, GameState.credits >= credits))
 	btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	btn.pressed.connect(func() -> void:
 		TooltipManager.hide_tip()

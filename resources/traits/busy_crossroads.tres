@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="TraitDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/TraitDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+trait_id = "busy_crossroads"
+display_name = "Busy Crossroads"
+description = "Haulers and traders like to stop here."
+rarity = 0
+effects = {"credits": 0.1}
+allowed_planet_types = Array[int]([])
+weight = 10

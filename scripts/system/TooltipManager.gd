@@ -383,10 +383,10 @@ func set_detail(d: String) -> void:
 
 ## Bottom row in BBCode: `left` (e.g. what it makes) and `right` (the cost,
 ## bottom-right corner); call after show_tip, like set_title_icon.
-func set_footer(left: String, right: String) -> void:
+func set_footer(left: String, right: String, ok := true) -> void:
 	if _ignored:
 		return
-	_panel.set_footer(left, right)
+	_panel.set_footer(left, right, ok)
 
 ## Icon before the title (UIIcons name or resource id); call after show_tip.
 func set_title_icon(icon_name: String) -> void:

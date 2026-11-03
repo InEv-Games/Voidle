@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="TraitDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/TraitDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+trait_id = "cradle_world"
+display_name = "Cradle World"
+description = "Where your people began. Home feels like home."
+rarity = 0
+effects = {"population": 0.1}
+allowed_planet_types = Array[int]([])
+weight = 0

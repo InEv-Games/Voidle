@@ -20,6 +20,15 @@ extends Resource
 @export var trait_slot_levels: Array[int] = [1, 3, 5]
 @export var trait_slot_costs: Array[Dictionary] = [{}, {"science": 400.0, "rare_elements": 15.0},
 	{"science": 1500.0, "rare_elements": 50.0}]
+## How often each TraitDef rarity is rolled, per slot: later slots roll rarer.
+@export var trait_rarity_odds: Array[Dictionary] = [
+	{"common": 75, "uncommon": 25},
+	{"common": 45, "uncommon": 35, "rare": 20},
+	{"common": 25, "uncommon": 35, "rare": 30, "legendary": 10}]
+## Science for the first paid re-roll of a pick, per slot (the one before it is
+## free); each one after costs trait_reroll_growth times more.
+@export var trait_reroll_costs: Array[float] = [60.0, 200.0, 600.0]
+@export var trait_reroll_growth: float = 2.0
 
 @export_group("Start")
 @export var start_credits: float = 1000.0

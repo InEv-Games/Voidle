@@ -224,7 +224,7 @@ func _update_trait_notice(delta: float) -> void:
 		return
 	_trait_poll = 0.5
 	var seeds := PlanetTags.pending_seeds()
-	var want := visible and not seeds.is_empty() and not TutorialManager.blocks_hud()
+	var want := visible and not seeds.is_empty() and not TutorialManager.blocks_hud() and not GameOverlays.trait_picker_open()
 	if not want:
 		if _trait_btn != null and is_instance_valid(_trait_btn):
 			_trait_btn.queue_free()

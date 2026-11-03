@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="TraitDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/TraitDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+trait_id = "earthrise_views"
+display_name = "Earthrise Views"
+description = "Settlers come for the view and stay."
+rarity = 1
+effects = {"population": 0.15}
+allowed_planet_types = Array[int]([6])
+weight = 10
