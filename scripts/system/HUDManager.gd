@@ -390,11 +390,6 @@ func show_settings_popup() -> void:
 		l.text = t
 		l.theme_type_variation = &"HeaderLabel"
 		p.add_content(l)
-	var item_wrap := func(child: Control) -> PanelContainer:
-		var card := PanelContainer.new()
-		card.theme_type_variation = &"ItemPanel"
-		card.add_child(child)
-		return card
 	var slider_row := func(t: String, value: float, on_change: Callable) -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
@@ -418,7 +413,7 @@ func show_settings_popup() -> void:
 			on_change.call(v))
 		row.add_child(sl)
 		row.add_child(pct)
-		p.add_content(item_wrap.call(row))
+		p.add_content(row)
 	section.call("AUDIO")
 	slider_row.call("Master Volume", SettingsManager.master_volume, func(v: float): SettingsManager.set_master_volume(v))
 	slider_row.call("Music", SettingsManager.music_volume, func(v: float): SettingsManager.set_music_volume(v))
@@ -449,7 +444,7 @@ func show_settings_popup() -> void:
 		TutorialManager.tutorial_enabled = true
 		AudioManager.play("ui_click"))
 	tut_row.add_child(reset_btn)
-	p.add_content(item_wrap.call(tut_row))
+	p.add_content(tut_row)
 
 ## Credits / science changes show through the resource bar's gain animation.
 func _on_credits_changed(_new_val: float) -> void:

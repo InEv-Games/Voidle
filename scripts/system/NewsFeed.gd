@@ -363,7 +363,7 @@ func _process(delta: float) -> void:
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		l.add_theme_font_size_override("font_size", 12)
 		l.add_theme_color_override("font_color",
-			UIStyle.color(&"neutral_stroke") if text.begins_with("◆") else UIStyle.color(&"text_subtle"))
+			Color(1.0, 0.86, 0.50) if text.begins_with("◆") else Color(0.78, 0.84, 0.95))
 		l.text = text + SEPARATOR
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_clip.add_child(l)
@@ -434,10 +434,10 @@ static func _move(id: String) -> float:
 ## "▲ 3%" in green, "▼ 2%" in red, "■" when flat.
 static func _move_text(m: float) -> Array:
 	if m > 0.005:
-		return ["▲ %d%%" % maxi(roundi(m * 100.0), 1), UIStyle.color(&"good")]
+		return ["▲ %d%%" % maxi(roundi(m * 100.0), 1), Color(0.45, 0.95, 0.55)]
 	if m < -0.005:
-		return ["▼ %d%%" % maxi(roundi(-m * 100.0), 1), UIStyle.color(&"bad")]
-	return ["■", UIStyle.color(&"text_muted")]
+		return ["▼ %d%%" % maxi(roundi(-m * 100.0), 1), Color(1.0, 0.45, 0.42)]
+	return ["■", Color(0.65, 0.70, 0.85)]
 
 func _tick_ticker(delta: float) -> void:
 	if _ticker == null or not is_instance_valid(_ticker):
