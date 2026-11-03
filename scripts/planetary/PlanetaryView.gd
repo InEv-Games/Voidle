@@ -752,9 +752,15 @@ func _show_planet_overview() -> void:
 func _star_system_block() -> String:
 	return "" if GameState.can_view_solar() else "Star system not unlocked yet"
 
+var _panel_menu_key := ""   # the menu the side panel last showed (CyberReveal on change)
+
 func _nav_visit(planet: PlanetData, sub: Dictionary, label: String) -> void:
 	if planet != null:
-		NavigationManager.visit(NavigationManager.planet_entry(planet, sub, label))
+		var entry := NavigationManager.planet_entry(planet, sub, label)
+		if entry["key"] != _panel_menu_key:   # a new menu, not the same one rebuilt
+			_panel_menu_key = entry["key"]
+			($SidePanel as LeftPanel).reveal()
+		NavigationManager.visit(entry)
 
 ## Records whichever panel is showing (same precedence as _refresh_active_panel).
 func _nav_visit_current() -> void:

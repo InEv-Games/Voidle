@@ -58,7 +58,8 @@ func show_overlay(c: Control) -> void:
 		_overlay = c
 		c.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		content.add_child(c))
+		content.add_child(c)
+		reveal())
 
 ## Back to the view's own content.
 func close_overlay() -> void:
@@ -73,7 +74,8 @@ func close_overlay() -> void:
 			var n = (w as WeakRef).get_ref()
 			if n != null and is_instance_valid(n):
 				(n as CanvasItem).visible = true
-		_hidden.clear())
+		_hidden.clear()
+		reveal())
 
 func _swap(change: Callable) -> void:
 	if _swap_tw != null and _swap_tw.is_valid():
@@ -100,6 +102,23 @@ func _ready() -> void:
 	if hud != null:
 		hud.fill_shortcuts(_shortcuts)
 	_place()
+	reveal()   # the view's first menu
+
+## Plays the cyberpunk entrance (CyberReveal) over the content once this
+## frame's building is done. Views call it when they switch to a new menu;
+## several calls in one frame play it once.
+var _reveal_queued := false
+
+func reveal() -> void:
+	if _reveal_queued:
+		return
+	_reveal_queued = true
+	_play_reveal.call_deferred()
+
+func _play_reveal() -> void:
+	_reveal_queued = false
+	if is_inside_tree() and visible:
+		CyberReveal.play(content)
 
 func _process(_delta: float) -> void:
 	if absf(offset_top - _hud_bar_height()) > 0.5:
