@@ -12,7 +12,9 @@ const CARD_W := 230.0
 # ── Shared ───────────────────────────────────────────────────────────────────
 
 ## A dimmed full-screen layer with a centred column; returns [layer, column].
-static func _overlay(host: Node, title: String, subtitle: String) -> Array:
+## hero_w > 0: the heading is a left panel hero (HeroHeader: subtitle as its
+## caption above the title) that wide, instead of centred lines.
+static func _overlay(host: Node, title: String, subtitle: String, hero_w := 0.0) -> Array:
 	var layer := CanvasLayer.new()
 	layer.layer = LAYER
 	host.get_tree().root.add_child(layer)
@@ -35,6 +37,12 @@ static func _overlay(host: Node, title: String, subtitle: String) -> Array:
 	col.add_theme_constant_override("separation", 12)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(col)
+	if hero_w > 0.0:
+		var hero := HeroHeader.create(subtitle, title.to_upper())
+		hero.custom_minimum_size.x = hero_w
+		col.add_child(hero)
+		AudioManager.play("click")
+		return [layer, col]
 	var t := Label.new()
 	t.text = title.to_upper()
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -143,7 +151,7 @@ static func open_relic_site(host: Node, relic_id: String) -> void:
 	if idx < 0:
 		return
 	var r: Dictionary = Relics.CATALOGUE[idx]
-	var o := _overlay(host, "Relic site", "Relic %d of %d" % [idx + 1, Relics.count()])
+	var o := _overlay(host, "Relic site", "Relic %d of %d" % [idx + 1, Relics.count()], 420.0)
 	var layer: CanvasLayer = o[0]
 	var card := _card()
 	card.custom_minimum_size.x = 420.0
