@@ -37,12 +37,12 @@ func _ready() -> void:
 
 	# Dark fully opaque fullscreen background with blueprint dots
 	_bg = ColorRect.new()
-	_bg.color = Color(0.04, 0.05, 0.09, 1.0) # Tam opak (arkayı göstermez)
+	_bg.color = UIStyle.color(&"panel_bg") # Tam opak (arkayı göstermez)
 	_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	
 	# Blueprint Grid Effect (moves with the camera and scales with zoom)
 	_bg.draw.connect(func() -> void:
-		var dot_color := Color(0.2, 0.25, 0.35, 0.5)
+		var dot_color := Color(UIStyle.color(&"accent_dim"), 0.35)
 		var grid_size: int = maxi(10, int(40.0 * self._zoom))
 		var dot_size: float = maxf(1.0, 2.0 * self._zoom)
 		
@@ -203,26 +203,26 @@ func _build_tree_graph() -> void:
 		card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
-		# Style based on status (Cyberpunk Theme)
-		var bg_color := Color(0.08, 0.09, 0.12, 0.9)
-		var border_color := Color(0.5, 0.6, 0.7, 0.8) # <--- Brighter border for locked nodes
+		# Style based on status (60-30-10 Theme)
+		var bg_color := Color(UIStyle.color(&"item_bg"), 0.92)
+		var border_color := Color(UIStyle.color(&"text_muted"), 0.85) # Locked nodes
 		var shadow_color := Color(0.0, 0.0, 0.0, 0.0)
 		var border_width := 1.0
 		
 		if is_max_level:
-			bg_color = Color(0.02, 0.1, 0.05, 0.95)
-			border_color = Color(0.25, 0.95, 0.45, 1.0)
-			shadow_color = Color(0.25, 0.95, 0.45, 0.3)
+			bg_color = Color(UIStyle.color(&"positive_bg"), 0.95)
+			border_color = UIStyle.color(&"good")
+			shadow_color = Color(UIStyle.color(&"good"), 0.3)
 			border_width = 2.0
 		elif cur_lv > 0:
-			bg_color = Color(0.1, 0.08, 0.02, 0.95)
-			border_color = Color(0.95, 0.65, 0.25, 0.9)
-			shadow_color = Color(0.95, 0.65, 0.25, 0.2)
+			bg_color = Color(UIStyle.color(&"neutral_bg"), 0.95)
+			border_color = UIStyle.color(&"neutral_stroke")
+			shadow_color = Color(UIStyle.color(&"neutral_stroke"), 0.25)
 			border_width = 2.0
 		elif purchasable:
-			bg_color = Color(0.04, 0.08, 0.15, 0.95)
-			border_color = Color(0.15, 0.85, 0.95, 0.85)
-			shadow_color = Color(0.15, 0.85, 0.95, 0.2)
+			bg_color = Color(UIStyle.color(&"item_bg_hover"), 0.95)
+			border_color = UIStyle.color(&"accent")
+			shadow_color = Color(UIStyle.color(&"accent"), 0.25)
 			border_width = 2.0
 
 		if node.act2 if "act2" in node else false:

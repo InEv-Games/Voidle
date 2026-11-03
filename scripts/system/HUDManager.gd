@@ -388,24 +388,37 @@ func show_settings_popup() -> void:
 	var section := func(t: String) -> void:
 		var l := Label.new()
 		l.text = t
-		l.theme_type_variation = &"TitleLabel"
+		l.theme_type_variation = &"HeaderLabel"
 		p.add_content(l)
+	var item_wrap := func(child: Control) -> PanelContainer:
+		var card := PanelContainer.new()
+		card.theme_type_variation = &"ItemPanel"
+		card.add_child(child)
+		return card
 	var slider_row := func(t: String, value: float, on_change: Callable) -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		var l := Label.new()
 		l.text = t
-		l.theme_type_variation = &"SubLabel"
-		l.custom_minimum_size = Vector2(90, 0)
+		l.theme_type_variation = &"TitleLabel"
+		l.custom_minimum_size = Vector2(96, 0)
 		row.add_child(l)
 		var sl := HSlider.new()
 		sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		sl.min_value = 0.0; sl.max_value = 1.0; sl.step = 0.05
 		sl.value = value
-		sl.value_changed.connect(on_change)
+		var pct := Label.new()
+		pct.theme_type_variation = &"MonoLabel"
+		pct.custom_minimum_size = Vector2(34, 0)
+		pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		pct.text = "%d%%" % roundi(value * 100.0)
+		sl.value_changed.connect(func(v: float) -> void:
+			pct.text = "%d%%" % roundi(v * 100.0)
+			on_change.call(v))
 		row.add_child(sl)
-		p.add_content(row)
+		row.add_child(pct)
+		p.add_content(item_wrap.call(row))
 	section.call("AUDIO")
 	slider_row.call("Master Volume", SettingsManager.master_volume, func(v: float): SettingsManager.set_master_volume(v))
 	slider_row.call("Music", SettingsManager.music_volume, func(v: float): SettingsManager.set_music_volume(v))
@@ -426,17 +439,17 @@ func show_settings_popup() -> void:
 	var tut_row := HBoxContainer.new()
 	var tut_lbl := Label.new()
 	tut_lbl.text = "Tutorial"
-	tut_lbl.theme_type_variation = &"SubLabel"
+	tut_lbl.theme_type_variation = &"TitleLabel"
 	tut_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tut_row.add_child(tut_lbl)
-	var reset_btn := IconButton.create_text("RESET TUTORIAL")
+	var reset_btn := IconButton.create_text("RESET TUTORIAL", IconButton.Variant.NEUTRAL)
 	reset_btn.pressed.connect(func() -> void:
 		SettingsManager.tutorial_ever_done = false
 		SettingsManager.save_settings()
 		TutorialManager.tutorial_enabled = true
 		AudioManager.play("ui_click"))
 	tut_row.add_child(reset_btn)
-	p.add_content(tut_row)
+	p.add_content(item_wrap.call(tut_row))
 
 ## Credits / science changes show through the resource bar's gain animation.
 func _on_credits_changed(_new_val: float) -> void:

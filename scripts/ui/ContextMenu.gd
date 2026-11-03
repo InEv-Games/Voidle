@@ -56,9 +56,9 @@ func _build(title: String, subtitle: String, commands: Array[GameCommand], scree
 	box.add_theme_constant_override("separation", 1)
 	_panel.add_child(box)
 
-	box.add_child(_padded(_label(title, 10, Color(0.85, 0.88, 1.0))))
+	box.add_child(_padded(_label(title, 10, UIStyle.color(&"text_bright"))))
 	if subtitle != "":
-		box.add_child(_padded(_label(subtitle, 7, Color(0.48, 0.55, 0.78))))
+		box.add_child(_padded(_label(subtitle, 7, UIStyle.color(&"text_muted"))))
 	var sep := HSeparator.new()
 	box.add_child(sep)
 
@@ -107,7 +107,7 @@ func _row(c: GameCommand) -> Control:
 
 	var tip := c.tooltip
 	if blocked != "":
-		tip = (tip + "\n\n" if tip != "" else "") + "[color=#e06060]➡ %s[/color]" % blocked
+		tip = (tip + "\n\n" if tip != "" else "") + "[color=#%s]➡ %s[/color]" % [UIStyle.hex(&"bad"), blocked]
 	btn.mouse_entered.connect(func() -> void:
 		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER if blocked == "" else CursorManager.State.NORMAL)

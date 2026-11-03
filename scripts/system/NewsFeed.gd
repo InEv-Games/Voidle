@@ -267,8 +267,8 @@ func _build_ui(host: Node) -> void:
 	_bar.name = "NewsCrawl"
 	_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.03, 0.05, 0.10, 0.82)
-	sb.border_color = Color(0.45, 0.60, 0.85, 0.35)
+	sb.bg_color = Color(UIStyle.color(&"panel_bg"), 0.92)
+	sb.border_color = Color(UIStyle.color(&"accent_dim"), 0.65)
 	sb.border_width_top = 1
 	_bar.add_theme_stylebox_override("panel", sb)
 	_bar.anchor_left = 0.0
@@ -296,9 +296,9 @@ func _build_ui(host: Node) -> void:
 	tag.text = " NEWS "
 	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tag.add_theme_font_size_override("font_size", 11)
-	tag.add_theme_color_override("font_color", Color(0.04, 0.06, 0.12))
+	tag.add_theme_color_override("font_color", UIStyle.color(&"panel_bg"))
 	var tag_bg := StyleBoxFlat.new()
-	tag_bg.bg_color = Color(0.95, 0.75, 0.30)
+	tag_bg.bg_color = UIStyle.color(&"neutral_stroke")
 	tag.add_theme_stylebox_override("normal", tag_bg)
 	tag.anchor_left = 1.0
 	tag.anchor_right = 1.0
@@ -377,7 +377,7 @@ func _process(delta: float) -> void:
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		l.add_theme_font_size_override("font_size", 12)
 		l.add_theme_color_override("font_color",
-			Color(1.0, 0.86, 0.50) if text.begins_with("◆") else Color(0.78, 0.84, 0.95))
+			UIStyle.color(&"neutral_stroke") if text.begins_with("◆") else UIStyle.color(&"text_subtle"))
 		l.text = text + SEPARATOR
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_clip.add_child(l)
@@ -404,13 +404,11 @@ var _tk_t := 0.0
 
 func _build_ticker() -> void:
 	_ticker = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.06, 0.09, 0.18, 0.95)
-	sb.border_color = Color(0.45, 0.60, 0.85, 0.45)
-	sb.set_border_width_all(1)
-	sb.set_corner_radius_all(2)
+	var sb := UIStyle.item_box(Color(UIStyle.color(&"accent_dim"), 0.65), 2)
 	sb.content_margin_left = 4
+	sb.content_margin_top = 0
 	sb.content_margin_right = 4
+	sb.content_margin_bottom = 0
 	_ticker.add_theme_stylebox_override("panel", sb)
 	_ticker.anchor_left = 1.0
 	_ticker.anchor_right = 1.0
@@ -488,10 +486,10 @@ static func _move(id: String) -> float:
 ## "▲ 3%" in green, "▼ 2%" in red, "■" when flat.
 static func _move_text(m: float) -> Array:
 	if m > 0.005:
-		return ["▲ %d%%" % maxi(roundi(m * 100.0), 1), Color(0.45, 0.95, 0.55)]
+		return ["▲ %d%%" % maxi(roundi(m * 100.0), 1), UIStyle.color(&"good")]
 	if m < -0.005:
-		return ["▼ %d%%" % maxi(roundi(-m * 100.0), 1), Color(1.0, 0.45, 0.42)]
-	return ["■", Color(0.65, 0.70, 0.85)]
+		return ["▼ %d%%" % maxi(roundi(-m * 100.0), 1), UIStyle.color(&"bad")]
+	return ["■", UIStyle.color(&"text_muted")]
 
 func _tick_ticker(delta: float) -> void:
 	if _ticker == null or not is_instance_valid(_ticker):

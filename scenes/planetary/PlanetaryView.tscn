@@ -64,10 +64,10 @@ content_margin_left = 14.0
 content_margin_top = 16.0
 content_margin_right = 14.0
 content_margin_bottom = 14.0
-bg_color = Color(0.03529, 0.09412, 0.1686, 0.97)
+bg_color = Color(0.0157, 0.0431, 0.0784, 0.97)
 border_width_left = 1
 border_width_right = 1
-border_color = Color(0.1373, 0.7255, 0.9059, 1)
+border_color = Color(0.1176, 0.5608, 0.7216, 1)
 
 [node name="PlanetaryView" type="Control" unique_id=279896849]
 layout_mode = 3
@@ -86,7 +86,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.04, 0.05, 0.1, 1)
+color = Color(0.0157, 0.0431, 0.0784, 1)
 
 [node name="PlanetContainer" type="Control" parent="." unique_id=1811771985]
 layout_mode = 1
@@ -113,7 +113,6 @@ script = ExtResource("3_cccc")
 z_index = 200
 z_as_relative = false
 layout_mode = 1
-theme_override_styles/panel = SubResource("StyleBoxFlat_b4p0g")
 
 [node name="Hero" parent="SidePanel/Layout/PanelContent" unique_id=808202502 instance=ExtResource("4_hero")]
 layout_mode = 2

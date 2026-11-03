@@ -17,8 +17,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(300, 44)
 layout_mode = 2
 focus_mode = 0
-theme_override_colors/font_color = Color(0.55, 0.85, 1, 1)
-theme_override_fonts/font = ExtResource("2_orbitron")
+theme_type_variation = &"ButtonDefault"
 theme_override_font_sizes/font_size = 13
 text = "★  WISHLIST ON STEAM"
 
@@ -29,7 +28,7 @@ theme_override_constants/separation = 6
 
 [node name="Hint" type="Label" parent="EmailBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.76, 0.92, 1)
+theme_override_colors/font_color = Color(0.7216, 0.8471, 0.9333, 1)
 theme_override_font_sizes/font_size = 11
 text = "Get news about Voidle — the full game, new worlds, the next civilization:"
 horizontal_alignment = 1
@@ -52,14 +51,13 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(90, 36)
 layout_mode = 2
 focus_mode = 0
-theme_override_colors/font_color = Color(0.6, 1, 0.7, 1)
-theme_override_fonts/font = ExtResource("2_orbitron")
+theme_type_variation = &"ButtonPositive"
 theme_override_font_sizes/font_size = 12
 text = "SEND"
 
 [node name="Consent" type="Label" parent="EmailBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.55, 0.7, 1)
+theme_override_colors/font_color = Color(0.4314, 0.5725, 0.6902, 1)
 theme_override_font_sizes/font_size = 9
 text = "We'll only use your email to tell you about Voidle. Unsubscribe any time."
 horizontal_alignment = 1

@@ -17,7 +17,7 @@ static func _overlay(host: Node, title: String, subtitle: String) -> Array:
 	layer.layer = LAYER
 	host.get_tree().root.add_child(layer)
 	var shade := ColorRect.new()
-	shade.color = Color(0.0, 0.01, 0.04, 0.72)
+	shade.color = Color(UIStyle.color(&"panel_bg"), 0.82)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	shade.gui_input.connect(func(ev: InputEvent) -> void:
@@ -56,7 +56,12 @@ static func close(layer: CanvasLayer) -> void:
 
 static func _card(min_h: float = 0.0) -> PanelContainer:
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UIStyle.box(&"SidePanel"))
+	var sb := UIStyle.item_box(UIStyle.color(&"accent_dim"), 5)
+	sb.content_margin_left = 12.0
+	sb.content_margin_top = 12.0
+	sb.content_margin_right = 12.0
+	sb.content_margin_bottom = 12.0
+	p.add_theme_stylebox_override("panel", sb)
 	p.custom_minimum_size = Vector2(CARD_W, min_h)
 	return p
 
@@ -64,18 +69,17 @@ static func _text(txt: String, size: int, col: Color = Color(0, 0, 0, 0), wrap :
 	var l := Label.new()
 	l.text = txt
 	l.add_theme_font_size_override("font_size", size)
-	if col.a > 0.0:
-		l.add_theme_color_override("font_color", col)
+	l.add_theme_color_override("font_color", col if col.a > 0.0 else UIStyle.color(&"text_bright"))
 	if wrap:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = CARD_W - 24.0
 	return l
 
 static func _good() -> Color:
-	return Color(0.55, 0.95, 0.60)
+	return UIStyle.color(&"good")
 
 static func _bad() -> Color:
-	return Color(1.0, 0.55, 0.50)
+	return UIStyle.color(&"bad")
 
 static func _pop_in(c: Control, delay: float) -> void:
 	c.modulate.a = 0.0

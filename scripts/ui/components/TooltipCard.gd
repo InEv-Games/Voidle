@@ -91,6 +91,7 @@ func _sync() -> void:
 	ic.visible = icon_name != ""
 	if ic.visible:
 		ic.texture = UIIcons.get_icon(icon_name)
+		ic.self_modulate = UIStyle.resource_color(icon_name)
 	if not _body_from_parts:
 		var b := $VBox/Body as RichTextLabel
 		b.text = body
