@@ -6833,7 +6833,7 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 			_rotate_to_lon(eq_lon)
 		else:
 			_select_district_on_planet(cap_poi.label)
-			_focus_on_site(cap_poi.lon_deg, cap_poi.lat_deg)
+		_frame_poi(cap_poi)
 		if cap_poi.constructing:
 			TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\nBuild time: %.0fs" % cap_poi.construct_duration)
 			return
@@ -7279,22 +7279,61 @@ func _city_of(poi: POIData) -> POIData:
 func _focus_city(city: POIData) -> void:
 	if city == null or current_data == null:
 		return
-	var sum := Vector3.ZERO
-	for p: POIData in current_data.custom_pois:
-		if p == city or (p.parent_city == city.label and not p.is_orbital()):
-			var lon := deg_to_rad(p.lon_deg)
-			var lat := deg_to_rad(p.lat_deg)
-			sum += Vector3(cos(lat) * cos(lon), sin(lat), cos(lat) * sin(lon))
-	if sum.length_squared() < 1e-6:
+	var n := _city_center(city)
+	if n == Vector3.ZERO:
 		return
-	var n := sum.normalized()
-	var lon_c := rad_to_deg(atan2(n.z, n.x))
-	var lat_c := rad_to_deg(asin(clampf(n.y, -1.0, 1.0)))
 	AudioManager.play("click")
-	_focus_on_site(lon_c, lat_c, 0.5)
+	_focus_on_site(rad_to_deg(atan2(n.z, n.x)), rad_to_deg(asin(clampf(n.y, -1.0, 1.0))), 0.5)
 	# Anchor on the globe's centre so the zoom doesn't fight the spin.
 	_set_zoom_target(maxf(_zoom_target, CITY_FOCUS_ZOOM),
 		planet_renderer.global_position + planet_renderer.size * 0.5)
+
+static func _lonlat_dir(lon_deg: float, lat_deg: float) -> Vector3:
+	var lon := deg_to_rad(lon_deg)
+	var lat := deg_to_rad(lat_deg)
+	return Vector3(cos(lat) * cos(lon), sin(lat), cos(lat) * sin(lon))
+
+## Unit vector to the middle of a City and its surface districts (ZERO if none).
+func _city_center(city: POIData) -> Vector3:
+	var sum := Vector3.ZERO
+	for p: POIData in current_data.custom_pois:
+		if p == city or (p.parent_city == city.label and not p.is_orbital()):
+			sum += _lonlat_dir(p.lon_deg, p.lat_deg)
+	return sum.normalized() if sum.length_squared() > 1e-6 else Vector3.ZERO
+
+## Left-panel picks: turn the camera to the picked thing and ease the zoom to
+## its size — a City with all its districts in view, one district (and its
+## buildings) closer, an orbital station / the whole planet out to the globe.
+const FRAME_VIEW_FRAC: float = 0.32   # a framed area fills this much of the view height
+
+func _frame_poi(poi: POIData) -> void:
+	if poi == null or current_data == null:
+		return
+	if poi.is_orbital():
+		_frame_zoom(ZOOM_MIN)
+		return
+	var spacing := TerrainSampler.min_spacing_deg(current_data)
+	var dir := _lonlat_dir(poi.lon_deg, poi.lat_deg)
+	var radius_deg := spacing * 1.8   # a district with its neighbours around it
+	if poi.is_city():
+		var c := _city_center(poi)
+		if c != Vector3.ZERO:
+			dir = c
+		var spread := 0.0
+		for p: POIData in current_data.custom_pois:
+			if p == poi or (p.parent_city == poi.label and not p.is_orbital()):
+				spread = maxf(spread, rad_to_deg(dir.angle_to(_lonlat_dir(p.lon_deg, p.lat_deg))))
+		radius_deg = spread + spacing * 0.75
+	_focus_on_site(rad_to_deg(atan2(dir.z, dir.x)), rad_to_deg(asin(clampf(dir.y, -1.0, 1.0))), 0.5)
+	# Planet radius on screen is view_h * _base_radius * zoom; pick the zoom that
+	# puts the area's edge FRAME_VIEW_FRAC/2 of the view height from the centre.
+	var z := FRAME_VIEW_FRAC * 0.5 / (_base_radius * maxf(sin(deg_to_rad(minf(radius_deg, 80.0))), 0.01))
+	# never so far out that districts hide, nor into the "city view" where markers fade
+	_frame_zoom(clampf(z, ZOOM_BORDER_FULL, _zoom_max() * 0.78))
+
+func _frame_zoom(z: float) -> void:
+	# anchored on the globe's centre so the zoom doesn't fight the spin
+	_set_zoom_target(z, planet_renderer.global_position + planet_renderer.size * 0.5)
 
 ## pm_key -> { "fill": Control, "prog": Array[float] }
 var _bar_meta: Dictionary = {}
@@ -10748,6 +10787,7 @@ func _build_orbit_card(data: PlanetData, pp: PlanetProgress) -> PanelContainer:
 	card.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	card.pressed.connect(func() -> void:
 		AudioManager.play("click")
+		_frame_zoom(ZOOM_MIN)
 		_build_orbit_panel(data))
 	return card
 
@@ -11047,6 +11087,7 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 		back.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_city_panel_poi = null
+			_frame_zoom(ZOOM_MIN)
 			_build_planet_overview(planet))
 		root.add_child(back)
 
@@ -11252,6 +11293,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		oback.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		oback.pressed.connect(func() -> void:
 			AudioManager.play("click")
+			_frame_zoom(ZOOM_MIN)
 			_build_orbit_panel(planet))
 		top_row.add_child(oback)
 	if parent_city != null:
@@ -11262,7 +11304,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		back.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_select_district_on_planet(cap_parent.label)
-			_focus_on_site(cap_parent.lon_deg, cap_parent.lat_deg)
+			_frame_poi(cap_parent)
 			_build_city_panel(cap_parent, planet))
 		back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		top_row.add_child(back)
