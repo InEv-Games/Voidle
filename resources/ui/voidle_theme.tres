@@ -526,6 +526,26 @@ corner_radius_top_right = 3
 corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
 
+[sub_resource type="StyleBoxFlat" id="news_panel"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.0157, 0.0431, 0.0784, 0.92)
+border_width_top = 1
+border_color = Color(0.1176, 0.5608, 0.7216, 0.75)
+
+[sub_resource type="StyleBoxFlat" id="news_tag"]
+content_margin_left = 4.0
+content_margin_top = 0.0
+content_margin_right = 4.0
+content_margin_bottom = 0.0
+bg_color = Color(0.9608, 0.7686, 0.2627, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
 [sub_resource type="StyleBoxFlat" id="panel"]
 content_margin_left = 10.0
 content_margin_top = 8.0
@@ -998,6 +1018,13 @@ MonoLabel/font_sizes/font_size = 9
 MonoLabel/fonts/font = ExtResource("f_mono")
 NavBar/base_type = &"PanelContainer"
 NavBar/styles/panel = SubResource("navbar")
+NewsPanel/base_type = &"Panel"
+NewsPanel/styles/panel = SubResource("news_panel")
+NewsTag/base_type = &"Label"
+NewsTag/colors/font_color = Color(0.0157, 0.0431, 0.0784, 1)
+NewsTag/font_sizes/font_size = 10
+NewsTag/fonts/font = ExtResource("f_bold")
+NewsTag/styles/normal = SubResource("news_tag")
 OptionButton/colors/font_color = Color(0.9176, 0.9686, 1, 1)
 OptionButton/colors/font_hover_color = Color(1, 1, 1, 1)
 OptionButton/font_sizes/font_size = 9

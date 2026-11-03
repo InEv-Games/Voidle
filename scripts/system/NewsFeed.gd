@@ -15,6 +15,8 @@ extends CanvasLayer
 
 enum Kind { EVENT, FLAVOUR }
 
+const NEWS_PANEL_SCENE := preload("res://scenes/ui/components/NewsPanel.tscn")
+const GROUP := &"news_panel"
 const HEIGHT := 22.0
 ## Crawl speed, px per second.
 const SPEED := 70.0
@@ -261,59 +263,33 @@ func _status() -> String:
 
 # ── Crawl ────────────────────────────────────────────────────────────────────
 
-## Builds the bar under `host` (or on this layer when null).
+## Binds an existing NewsPanel scene node, or instantiates NewsPanel.tscn under `host`.
 func _build_ui(host: Node) -> void:
-	_bar = Panel.new()
-	_bar.name = "NewsCrawl"
-	_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(UIStyle.color(&"panel_bg"), 0.92)
-	sb.border_color = Color(UIStyle.color(&"accent_dim"), 0.65)
-	sb.border_width_top = 1
-	_bar.add_theme_stylebox_override("panel", sb)
-	_bar.anchor_left = 0.0
-	_bar.anchor_right = 1.0
-	_bar.anchor_top = 1.0
-	_bar.anchor_bottom = 1.0
-	_bar.offset_left = 0.0
-	_bar.offset_right = 0.0
-	_bar.offset_top = -HEIGHT
-	_bar.offset_bottom = 0.0
-	# catches clicks (an item with a place takes the camera there); the left
-	# panel, drawn after it, still gets the clicks over it
-	_bar.mouse_filter = Control.MOUSE_FILTER_STOP
-	_bar.gui_input.connect(_on_bar_input)
-	(host if host != null else self).add_child(_bar)
-	_clip = Control.new()
-	_clip.clip_contents = true
-	_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_clip.anchor_right = 1.0
-	_clip.anchor_bottom = 1.0
-	_clip.offset_left = 6
-	_clip.offset_right = -(TICKER_W + 4.0) - 50.0 - 8.0   # news │ NEWS │ market
-	_bar.add_child(_clip)
-	var tag := Label.new()
-	tag.text = " NEWS "
-	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tag.add_theme_font_size_override("font_size", 11)
-	tag.add_theme_color_override("font_color", UIStyle.color(&"panel_bg"))
-	var tag_bg := StyleBoxFlat.new()
-	tag_bg.bg_color = UIStyle.color(&"neutral_stroke")
-	tag.add_theme_stylebox_override("normal", tag_bg)
-	tag.anchor_left = 1.0
-	tag.anchor_right = 1.0
-	tag.offset_left = -(TICKER_W + 4.0) - 50.0
-	tag.offset_right = -(TICKER_W + 4.0) - 4.0
-	tag.offset_top = 4   # centred under the 1px top border
-	tag.offset_bottom = HEIGHT - 3
-	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_bar.add_child(tag)
-	_build_ticker()
+	var target_host: Node = host if host != null else self
+	var found: Panel = null
+	for n in get_tree().get_nodes_in_group(GROUP):
+		if n is Panel and (n as Panel).is_inside_tree() and not (n as Panel).is_queued_for_deletion():
+			found = n as Panel
+			break
+	if found != null:
+		_bar = found
+		if _bar.get_parent() != target_host:
+			_bar.reparent(target_host, false)
+	else:
+		_bar = NEWS_PANEL_SCENE.instantiate() as Panel
+		target_host.add_child(_bar)
+	_clip = _bar.get_node("Clip") as Control
+	for c in _clip.get_children():
+		c.queue_free()
 	_labels.clear()
+	_bind_ticker()
+	if not _bar.has_meta("news_bound"):
+		_bar.set_meta("news_bound", true)
+		_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+		_bar.gui_input.connect(_on_bar_input)
 
 ## The bar sits in the left panel's parent, just before the panel; without one,
-## on this layer. A bar freed with its view is built again.
+## on this layer. A bar freed with its view is built again, or adopted from the scene.
 func _ensure_bar() -> void:
 	var panel: Control = null
 	for n in get_tree().get_nodes_in_group(LeftPanel.GROUP):
@@ -321,7 +297,17 @@ func _ensure_bar() -> void:
 			panel = n
 			break
 	var host: Node = panel.get_parent() if panel != null else self
-	if _bar == null or not is_instance_valid(_bar) or _bar.is_queued_for_deletion():
+	# If the current view has its own NewsPanel instance in `host`, adopt it.
+	var scene_bar: Panel = null
+	for n in get_tree().get_nodes_in_group(GROUP):
+		if n is Panel and n.get_parent() == host and not n.is_queued_for_deletion():
+			scene_bar = n as Panel
+			break
+	if scene_bar != null and _bar != scene_bar:
+		if _bar != null and is_instance_valid(_bar) and _bar.get_parent() == self:
+			_bar.queue_free()
+		_build_ui(host)
+	elif _bar == null or not is_instance_valid(_bar) or _bar.is_queued_for_deletion():
 		_build_ui(host)
 	elif _bar.get_parent() != host:
 		_bar.reparent(host, false)
@@ -402,66 +388,28 @@ var _tk_row: Control = null
 var _tk_i := 0
 var _tk_t := 0.0
 
-func _build_ticker() -> void:
-	_ticker = PanelContainer.new()
-	var sb := UIStyle.item_box(Color(UIStyle.color(&"accent_dim"), 0.65), 2)
-	sb.content_margin_left = 4
-	sb.content_margin_top = 0
-	sb.content_margin_right = 4
-	sb.content_margin_bottom = 0
-	_ticker.add_theme_stylebox_override("panel", sb)
-	_ticker.anchor_left = 1.0
-	_ticker.anchor_right = 1.0
-	_ticker.offset_left = -TICKER_W - 2.0
-	_ticker.offset_right = -2.0
-	_ticker.offset_top = 3.0   # centred under the 1px top border
-	_ticker.offset_bottom = HEIGHT - 2.0
-	_ticker.clip_contents = true
-	_ticker.mouse_filter = Control.MOUSE_FILTER_STOP
-	_bar.add_child(_ticker)
-	# a fixed window the row slides through, up and out, in from below
-	var view := Control.new()
-	view.clip_contents = true
-	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ticker.add_child(view)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	view.add_child(row)
-	_tk_row = row
-	_tk_icon = TextureRect.new()
-	_tk_icon.custom_minimum_size = Vector2(12, 12)
-	_tk_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_tk_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_tk_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_tk_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_tk_icon)
-	_tk_price = Label.new()
-	_tk_price.add_theme_font_size_override("font_size", 11)
-	_tk_price.custom_minimum_size = Vector2(40, 0)
-	_tk_price.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_tk_price.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_tk_price)
-	_tk_move = Label.new()
-	_tk_move.add_theme_font_size_override("font_size", 11)
-	_tk_move.custom_minimum_size = Vector2(38, 0)
-	_tk_move.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_tk_move.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_tk_move.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_tk_move)
-	_ticker.mouse_entered.connect(func() -> void:
-		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("Market", _ticker_tip()))
-	_ticker.mouse_exited.connect(func() -> void:
-		CursorManager.set_state(CursorManager.State.NORMAL)
-		TooltipManager.hide_tip())
-	_ticker.gui_input.connect(func(ev: InputEvent) -> void:
-		var mb := ev as InputEventMouseButton
-		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			AudioManager.play("click")
-			TooltipManager.hide_tip()
-			HUDManager.toggle_trade_panel()
-			_ticker.accept_event())
+func _bind_ticker() -> void:
+	_ticker = _bar.get_node("Ticker") as Control
+	_tk_row = _ticker.get_node("View/Row") as Control
+	_tk_icon = _tk_row.get_node("Icon") as TextureRect
+	_tk_price = _tk_row.get_node("Price") as Label
+	_tk_move = _tk_row.get_node("Move") as Label
+	if not _ticker.has_meta("ticker_bound"):
+		_ticker.set_meta("ticker_bound", true)
+		_ticker.mouse_filter = Control.MOUSE_FILTER_STOP
+		_ticker.mouse_entered.connect(func() -> void:
+			CursorManager.set_state(CursorManager.State.POINTER)
+			TooltipManager.show_tip("Market", _ticker_tip()))
+		_ticker.mouse_exited.connect(func() -> void:
+			CursorManager.set_state(CursorManager.State.NORMAL)
+			TooltipManager.hide_tip())
+		_ticker.gui_input.connect(func(ev: InputEvent) -> void:
+			var mb := ev as InputEventMouseButton
+			if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+				AudioManager.play("click")
+				TooltipManager.hide_tip()
+				HUDManager.toggle_trade_panel()
+				_ticker.accept_event())
 	_tk_t = TICKER_SEC   # fill it at once
 
 ## Products the ticker may show (tradeable now).
