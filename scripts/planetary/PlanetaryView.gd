@@ -11382,6 +11382,8 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	var slots_used  := pp.slots_used_in_district(poi.label)
 	var slots_total := pp.district_slots(poi)
 
+	root.add_child(HSeparator.new())   # details (minerals, totals, bonuses) set apart top and bottom
+
 	# Minerals at this district's site, as chips
 	var mins_txt := _minerals_text(poi.resource_tags)
 	if mins_txt != "":
@@ -11450,6 +11452,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	var bonus_row := _build_district_bonus_row(poi, planet)
 	if bonus_row != null:
 		root.add_child(bonus_row)
+	root.add_child(HSeparator.new())
 
 	# Connect production updates to refresh bar fills live
 	if not ProductionManager.building_progress_changed.is_connected(_on_production_update):
