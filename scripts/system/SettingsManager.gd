@@ -4,6 +4,16 @@ const SETTINGS_PATH = "user://settings.cfg"
 
 ## Emitted when a visual setting changes so open views can re-apply it.
 signal night_shadow_changed(value: float)
+signal theme_changed(theme_id: String)
+
+const THEMES := {
+	"cyan":    {"label": "Cyan (Default)",    "path": "res://resources/ui/voidle_theme_cyan.tres",    "swatch": Color(0.1373, 0.7255, 0.9059)},
+	"yellow":  {"label": "Solar Gold (News)", "path": "res://resources/ui/voidle_theme_yellow.tres",  "swatch": Color(0.95, 0.75, 0.30)},
+	"emerald": {"label": "Bio Emerald",       "path": "res://resources/ui/voidle_theme_emerald.tres", "swatch": Color(0.22, 0.88, 0.56)},
+	"crimson": {"label": "Mars Crimson",      "path": "res://resources/ui/voidle_theme_crimson.tres", "swatch": Color(0.96, 0.38, 0.46)},
+	"violet":  {"label": "Nebula Violet",     "path": "res://resources/ui/voidle_theme_violet.tres",  "swatch": Color(0.68, 0.48, 0.98)},
+}
+const THEME_ORDER: Array[String] = ["cyan", "yellow", "emerald", "crimson", "violet"]
 
 var master_volume: float = 1.0
 var music_volume:  float = 1.0
@@ -16,6 +26,7 @@ var night_shadow: float = 1.0
 ## Lowest layer of the current civ (Tip 0: buildings) shown as stacks ×N (true)
 ## or one card each with its own demolish button (false).
 var stack_lowest_layer: bool = true
+var theme_id: String = "cyan"
 
 ## Frame cap (laptop heat, playtest 31.10): an idle game needs no 120 fps on a
 ## ProMotion screen, and in the background it only has to keep ticking.
@@ -56,12 +67,16 @@ func load_settings() -> void:
 		tutorial_ever_done = config.get_value("tutorial", "ever_done",     false)
 		night_shadow       = config.get_value("video",    "night_shadow",  1.0)
 		stack_lowest_layer = config.get_value("ui",       "stack_lowest",  true)
+		theme_id           = config.get_value("ui",       "theme",         "cyan")
+		if not THEMES.has(theme_id):
+			theme_id = "cyan"
 	else:
 		master_volume = 1.0
 		music_volume  = 1.0
 		ui_volume     = 1.0
 		sfx_volume    = 1.0
 		is_fullscreen = true
+		theme_id      = "cyan"
 
 func save_settings() -> void:
 	var config := ConfigFile.new()
@@ -73,6 +88,7 @@ func save_settings() -> void:
 	config.set_value("video",    "night_shadow",  night_shadow)
 	config.set_value("tutorial", "ever_done",     tutorial_ever_done)
 	config.set_value("ui",       "stack_lowest",  stack_lowest_layer)
+	config.set_value("ui",       "theme",         theme_id)
 	config.save(SETTINGS_PATH)
 
 func apply_settings() -> void:
@@ -84,6 +100,16 @@ func apply_settings() -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	_apply_theme(theme_id)
+
+func _apply_theme(id: String) -> void:
+	var key := id if THEMES.has(id) else "cyan"
+	var path: String = THEMES[key]["path"]
+	var src := load(path) as Theme
+	var dst := ThemeDB.get_project_theme()
+	if dst != null and src != null and dst != src:
+		dst.clear()
+		dst.merge_with(src)
 
 func _set_bus_volume(bus_name: String, val: float) -> void:
 	var idx := AudioServer.get_bus_index(bus_name)
@@ -124,3 +150,11 @@ func set_stack_lowest_layer(val: bool) -> void:
 func set_fullscreen(val: bool) -> void:
 	is_fullscreen = val
 	apply_settings(); save_settings()
+
+func set_theme_id(id: String) -> void:
+	if not THEMES.has(id):
+		return
+	theme_id = id
+	_apply_theme(theme_id)
+	save_settings()
+	theme_changed.emit(theme_id)

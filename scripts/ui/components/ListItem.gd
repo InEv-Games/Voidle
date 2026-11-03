@@ -64,6 +64,15 @@ var _cycle_box: HBoxContainer = null
 var _badge_box: HBoxContainer = null
 var _cycle_lbl: Label = null
 var _hovered := false
+var _applying_theme := false
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and is_node_ready() and not _applying_theme:
+		_applying_theme = true
+		if has_node("Row/Body/TitleRule"):
+			($Row/Body/TitleRule as CanvasItem).self_modulate = UIStyle.color(&"accent")
+		_apply_box()
+		_applying_theme = false
 
 static func create(t: String, icon_id: String, badge_text := "", stat_list: PackedStringArray = [], desc := "") -> ListItem:
 	var it := (load(SCENE_PATH) as PackedScene).instantiate() as ListItem
@@ -110,6 +119,8 @@ func _sync() -> void:
 		_cycle_box.visible = cycle != ""
 	_icon.texture = UIIcons.get_icon(icon_name)
 	_icon.self_modulate = icon_color
+	if has_node("Row/Body/TitleRule"):
+		($Row/Body/TitleRule as CanvasItem).self_modulate = UIStyle.color(&"accent")
 	for c in _stats.get_children():
 		_stats.remove_child(c)
 		c.queue_free()

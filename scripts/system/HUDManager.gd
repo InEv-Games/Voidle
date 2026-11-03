@@ -430,6 +430,41 @@ func show_settings_popup() -> void:
 	fs_chk.mouse_exited.connect(func(): CursorManager.set_state(CursorManager.State.NORMAL))
 	p.add_content(fs_chk)
 	slider_row.call("Night Shadows", SettingsManager.night_shadow, func(v: float): SettingsManager.set_night_shadow(v))
+	var theme_row := HBoxContainer.new()
+	theme_row.add_theme_constant_override("separation", 8)
+	var theme_lbl := Label.new()
+	theme_lbl.text = "Theme Color"
+	theme_lbl.theme_type_variation = &"TitleLabel"
+	theme_lbl.custom_minimum_size = Vector2(96, 0)
+	theme_row.add_child(theme_lbl)
+	var swatch := Panel.new()
+	swatch.custom_minimum_size = Vector2(14, 14)
+	swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var swatch_sb := StyleBoxFlat.new()
+	swatch_sb.set_corner_radius_all(3)
+	swatch_sb.set_border_width_all(1)
+	swatch_sb.border_color = Color(1, 1, 1, 0.35)
+	swatch_sb.bg_color = SettingsManager.THEMES[SettingsManager.theme_id]["swatch"]
+	swatch.add_theme_stylebox_override("panel", swatch_sb)
+	theme_row.add_child(swatch)
+	var theme_opt := OptionButton.new()
+	theme_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	theme_opt.focus_mode = Control.FOCUS_NONE
+	for i in SettingsManager.THEME_ORDER.size():
+		var tid: String = SettingsManager.THEME_ORDER[i]
+		theme_opt.add_item(SettingsManager.THEMES[tid]["label"], i)
+		if tid == SettingsManager.theme_id:
+			theme_opt.selected = i
+	theme_opt.item_selected.connect(func(idx: int) -> void:
+		if idx >= 0 and idx < SettingsManager.THEME_ORDER.size():
+			var tid: String = SettingsManager.THEME_ORDER[idx]
+			SettingsManager.set_theme_id(tid)
+			swatch_sb.bg_color = SettingsManager.THEMES[tid]["swatch"]
+			AudioManager.play("ui_click"))
+	theme_opt.mouse_entered.connect(func(): CursorManager.set_state(CursorManager.State.POINTER))
+	theme_opt.mouse_exited.connect(func(): CursorManager.set_state(CursorManager.State.NORMAL))
+	theme_row.add_child(theme_opt)
+	p.add_content(theme_row)
 	p.add_content(HSeparator.new())
 	var tut_row := HBoxContainer.new()
 	var tut_lbl := Label.new()
