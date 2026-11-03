@@ -25,6 +25,14 @@ var _is_dragging: bool = false
 var _drag_offset: Vector2 = Vector2.ZERO
 var _center_ctrl: Control
 var _bg: ColorRect
+# Where input put the canvas; _center_ctrl's position / scale ease toward these
+# (_process), and a flung drag keeps sliding a moment after release.
+var _pos_t: Vector2 = Vector2.ZERO
+var _zoom_t: float = 1.0
+var _pan_vel: Vector2 = Vector2.ZERO   # px/s
+var _last_pan_usec: int = 0
+const CAM_EASE     := 14.0   # 1/s
+const PAN_FRICTION := 4.5    # 1/s
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -89,6 +97,8 @@ func _ready() -> void:
 		_center_ctrl.position = _saved_position
 		_zoom = _saved_zoom
 		_center_ctrl.scale = Vector2(_zoom, _zoom)
+	_pos_t = _center_ctrl.position
+	_zoom_t = _zoom
 
 	# Build all nodes and position them
 	if SkillTreeView._view_civ < 0:
@@ -130,8 +140,8 @@ func _ready() -> void:
 	
 	_close_btn.pressed.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
-		SkillTreeView._saved_position = _center_ctrl.position
-		SkillTreeView._saved_zoom     = _zoom
+		SkillTreeView._saved_position = _pos_t
+		SkillTreeView._saved_zoom     = _zoom_t
 		SkillTreeView.is_open = false
 		tree_closed.emit()
 		queue_free())
@@ -158,6 +168,8 @@ func _show_civ(civ: int) -> void:
 	TooltipManager.hide_tip()
 	AudioManager.play("click")
 	_center_ctrl.position = get_viewport_rect().size * 0.5
+	_pos_t = _center_ctrl.position
+	_pan_vel = Vector2.ZERO
 	if _title != null:
 		_title.text = _title_text()
 	_build_tree_graph()
@@ -613,55 +625,68 @@ func _on_skill_unlocked(_id: String) -> void:
 	_build_tree_graph()
 	_connections_draw.queue_redraw()
 
+func _process(delta: float) -> void:
+	if not _is_dragging and _pan_vel != Vector2.ZERO:
+		_pos_t += _pan_vel * delta
+		_pan_vel *= exp(-delta * PAN_FRICTION)
+		if _pan_vel.length_squared() < 25.0:
+			_pan_vel = Vector2.ZERO
+	if _center_ctrl.position.is_equal_approx(_pos_t) and is_equal_approx(_zoom, _zoom_t):
+		return
+	# screen pos is linear in position and scale, so easing both by the same k
+	# keeps the point under the cursor put while a zoom plays out
+	var k := 1.0 - exp(-delta * CAM_EASE)
+	_zoom = lerpf(_zoom, _zoom_t, k)
+	_center_ctrl.position = _center_ctrl.position.lerp(_pos_t, k)
+	if _center_ctrl.position.distance_squared_to(_pos_t) < 0.01 and absf(_zoom - _zoom_t) < 0.0005:
+		_center_ctrl.position = _pos_t
+		_zoom = _zoom_t
+	_center_ctrl.scale = Vector2(_zoom, _zoom)
+	_connections_draw.queue_redraw()
+	_bg.queue_redraw()
+
+## Zooms toward `factor` × the target zoom, keeping `at` (global) under the cursor.
+func _zoom_at(at: Vector2, factor: float) -> void:
+	var new_zoom := clampf(_zoom_t * factor, 0.25, 2.0)
+	_pos_t = at + (_pos_t - at) * (new_zoom / _zoom_t)
+	_zoom_t = new_zoom
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
 				_is_dragging = true
-				_drag_offset = _center_ctrl.position - mb.global_position
+				_drag_offset = _pos_t - mb.global_position
+				_pan_vel = Vector2.ZERO
+				_last_pan_usec = Time.get_ticks_usec()
 				CursorManager.set_state(CursorManager.State.GRAB)
 			else:
+				if Time.get_ticks_usec() - _last_pan_usec > 100000:
+					_pan_vel = Vector2.ZERO   # held still before letting go: no fling
 				_is_dragging = false
 				CursorManager.set_state(CursorManager.State.NORMAL)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			var old_zoom = _zoom
-			_zoom *= 1.15
-			_zoom = clampf(_zoom, 0.25, 2.0)
-			# Mouse bazlı zoom için offset düzeltmesi (center_ctrl.scale)
-			var mouse_pos = mb.global_position
-			_center_ctrl.position = mouse_pos + (_center_ctrl.position - mouse_pos) * (_zoom / old_zoom)
-			_center_ctrl.scale = Vector2(_zoom, _zoom)
-			_bg.queue_redraw()
+			_zoom_at(mb.global_position, 1.15)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			var old_zoom = _zoom
-			_zoom /= 1.15
-			_zoom = clampf(_zoom, 0.25, 2.0)
-			var mouse_pos = mb.global_position
-			_center_ctrl.position = mouse_pos + (_center_ctrl.position - mouse_pos) * (_zoom / old_zoom)
-			_center_ctrl.scale = Vector2(_zoom, _zoom)
-			_bg.queue_redraw()
-			
+			_zoom_at(mb.global_position, 1.0 / 1.15)
+
 	elif event is InputEventMagnifyGesture:
 		# Trackpad Pinch to Zoom
 		var mag := event as InputEventMagnifyGesture
-		var old_zoom = _zoom
-		_zoom *= mag.factor
-		_zoom = clampf(_zoom, 0.25, 2.0)
-		var mouse_pos = mag.position
-		_center_ctrl.position = mouse_pos + (_center_ctrl.position - mouse_pos) * (_zoom / old_zoom)
-		_center_ctrl.scale = Vector2(_zoom, _zoom)
-		_bg.queue_redraw()
+		_zoom_at(mag.position, mag.factor)
 
 	elif event is InputEventPanGesture:
 		# Trackpad Two Finger Scroll (Panning)
 		var pan := event as InputEventPanGesture
 		# Pan delta is usually very small, needs a multiplier
-		_center_ctrl.position -= pan.delta * 25.0
-		_connections_draw.queue_redraw()
-		_bg.queue_redraw()
-		
+		_pos_t -= pan.delta * 25.0
+
 	elif event is InputEventMouseMotion and _is_dragging:
 		var mm := event as InputEventMouseMotion
-		_center_ctrl.position = mm.global_position + _drag_offset
-		_connections_draw.queue_redraw()
+		var new_t := mm.global_position + _drag_offset
+		var now := Time.get_ticks_usec()
+		var dt := clampf(float(now - _last_pan_usec) / 1e6, 0.004, 0.1)
+		_last_pan_usec = now
+		_pan_vel = _pan_vel.lerp((new_t - _pos_t) / dt, 0.5)
+		_pos_t = new_t

@@ -1216,9 +1216,7 @@ func _input(event: InputEvent) -> void:
 			var r_px := _planet_r_px()
 			if r_px > 0.0:
 				var spin_r := r_px * maxf(cos(planet_renderer.tilt), 0.35)
-				planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset() + pg.delta.x / spin_r)
-				if not planet_renderer.tilt_locked:
-					planet_renderer.set_tilt(planet_renderer.tilt - pg.delta.y / r_px)
+				planet_renderer.nudge(pg.delta.x / spin_r, -pg.delta.y / r_px)
 			get_viewport().set_input_as_handled()
 
 func load_planet(data: PlanetData) -> void:
@@ -1228,6 +1226,7 @@ func load_planet(data: PlanetData) -> void:
 		_panel_scroll_pos = 0   # reset scroll on planet switch
 		_zoom = ZOOM_MIN
 		_zoom_target = ZOOM_MIN
+		planet_renderer.stop_motion()   # no fling carried over from the last world
 		planet_renderer.set_tilt(0.0)
 		_end_district_placement()
 		_orbit_panel_open = false
@@ -1455,34 +1454,44 @@ static func _hidden_by(v: Vector3, b: Dictionary) -> bool:
 	return v.z > 0.0 and Vector2(v.x, v.y).distance_to(b["c"]) < float(b["r"])
 
 ## WASD / arrow keys turn the globe (A/D spin, W/S tilt) — not while typing,
-## in the console, or with the Upgrade Tree open. Slower when zoomed in.
+## in the console, or with the Upgrade Tree open. Slower when zoomed in. The
+## turn speeds up and settles smoothly instead of starting / stopping dead.
 const KEY_SPIN_SPEED := 1.6   # rad/s at the widest zoom
+const KEY_SPIN_EASE  := 7.0   # 1/s — how fast the turn reaches / leaves full speed
+var _key_spin_vel := Vector2.ZERO   # (spin, tilt) rad/s
 func _tick_key_spin(delta: float) -> void:
-	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()) or _naming_open or _switching_body:
+	if _switching_body:
+		_key_spin_vel = Vector2.ZERO
 		return
+	var dir := Vector2.ZERO
+	if _key_spin_allowed():
+		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
+			dir.x -= 1.0
+		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
+			dir.x += 1.0
+		if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
+			dir.y += 1.0
+		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
+			dir.y -= 1.0
+	var target := dir * KEY_SPIN_SPEED / maxf(_zoom, 0.5) * Vector2(1.0, 0.6)
+	_key_spin_vel = _key_spin_vel.lerp(target, 1.0 - exp(-delta * KEY_SPIN_EASE))
+	if dir == Vector2.ZERO and _key_spin_vel.length_squared() < 1e-4:
+		_key_spin_vel = Vector2.ZERO
+		return
+	if planet_renderer.tilt_locked:
+		_key_spin_vel.y = 0.0
+	planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset() + _key_spin_vel.x * delta)
+	if _key_spin_vel.y != 0.0:
+		planet_renderer.set_tilt(planet_renderer.tilt + _key_spin_vel.y * delta)
+
+func _key_spin_allowed() -> bool:
+	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()) or _naming_open:
+		return false
 	var focus := get_viewport().gui_get_focus_owner()
 	if focus is LineEdit or focus is TextEdit:
-		return
+		return false
 	var dc := get_node_or_null("/root/DevConsole")
-	if dc != null and bool(dc.get("_open")):
-		return
-	var spin := 0.0
-	var tilt := 0.0
-	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
-		spin -= 1.0
-	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
-		spin += 1.0
-	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
-		tilt += 1.0
-	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
-		tilt -= 1.0
-	if spin == 0.0 and tilt == 0.0:
-		return
-	var speed := KEY_SPIN_SPEED / maxf(_zoom, 0.5) * delta
-	if spin != 0.0:
-		planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset() + spin * speed)
-	if tilt != 0.0 and not planet_renderer.tilt_locked:
-		planet_renderer.set_tilt(planet_renderer.tilt + tilt * speed * 0.6)
+	return not (dc != null and bool(dc.get("_open")))
 
 ## Picks the burn / arrival angles the first time a route is drawn: the burn on
 ## the side of the origin facing the destination, the arrival on the side of
@@ -2395,17 +2404,21 @@ func _try_follow_lander(at: Vector2) -> bool:
 			if hit != null:
 				_cam_follow_ship_id = hit.ship_id
 				_cam_follow_lander = false
+				planet_renderer.stop_motion()
 				AudioManager.play("click")
 				_show_unlock_toast("Following %s" % hit.ship_name, "Drag the planet to release the camera.")
 				return true
 		return false
 	_cam_follow_ship_id = ""
 	_cam_follow_lander = true
+	planet_renderer.stop_motion()
 	AudioManager.play("click")
 	_show_unlock_toast("Following the lander", "Drag the planet to release the camera.")
 	return true
 
 func _tick_cam_follow(delta: float) -> void:
+	if planet_renderer._dragging and _focus_tween != null and _focus_tween.is_valid():
+		_focus_tween.kill()   # the player took the camera
 	if _cam_follow_ship_id != "":
 		_tick_follow_ship(delta)
 		return
@@ -4797,6 +4810,8 @@ func _add_orbit_toggle(planet_cont: Control, layer: OrbitalLayer) -> void:
 var _last_hud_h := -1.0
 
 func _process(delta: float) -> void:
+	# drag easing / fling first, so every layer this frame sees the same globe
+	planet_renderer.tick_motion(delta)
 	_place_objectives()
 	if not _build_tip_ctx.is_empty():
 		_show_build_row_tip()   # Shift / Ctrl change how many a click buys
@@ -4959,11 +4974,22 @@ func _apply_light_angle() -> void:
 
 
 
+## The running scripted camera turn (_rotate_to_lon / _focus_on_site); a new
+## one replaces it, and grabbing the globe cancels it.
+var _focus_tween: Tween = null
+
+func _new_focus_tween() -> Tween:
+	if _focus_tween != null and _focus_tween.is_valid():
+		_focus_tween.kill()
+	planet_renderer.stop_motion()
+	_focus_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	return _focus_tween
+
 func _rotate_to_lon(lon_deg: float, duration: float = 0.45) -> void:
 	var target  := fposmod(deg_to_rad(lon_deg), TAU)
 	var current := fposmod(planet_renderer.get_rotation_offset(), TAU)
 	var diff    := fposmod(target - current + PI, TAU) - PI
-	var tween   := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	var tween   := _new_focus_tween()
 	tween.tween_method(
 		func(v: float) -> void: planet_renderer.set_rotation_offset(v),
 		current, current + diff, duration)
@@ -4976,7 +5002,7 @@ func _focus_on_site(lon_deg: float, lat_deg: float, duration: float = 0.45) -> v
 	var target  := fposmod(deg_to_rad(lon_deg), TAU)
 	var current := fposmod(planet_renderer.get_rotation_offset(), TAU)
 	var diff    := fposmod(target - current + PI, TAU) - PI
-	var tween   := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	var tween   := _new_focus_tween()
 	tween.tween_method(
 		func(v: float) -> void: planet_renderer.set_rotation_offset(v),
 		current, current + diff, duration)
@@ -5371,11 +5397,12 @@ func _apply_zoom() -> void:
 	_update_aspect()
 	planet_renderer._update_radius()
 
+const ZOOM_EASE := 10.0   # 1/s — how fast the zoom glides to its target
 func _tick_zoom(delta: float) -> void:
 	if is_equal_approx(_zoom, _zoom_target):
 		return
 	var prev := _zoom
-	_zoom = lerpf(_zoom, _zoom_target, 1.0 - exp(-delta * 14.0))
+	_zoom = lerpf(_zoom, _zoom_target, 1.0 - exp(-delta * ZOOM_EASE))
 	if absf(_zoom - _zoom_target) < 0.002:
 		_zoom = _zoom_target
 	_keep_anchor_fixed(prev, _zoom)

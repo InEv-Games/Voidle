@@ -7,6 +7,8 @@ const ZOOM_MAX     := 4.0
 const TILT_MIN     := 0.20
 const TILT_MAX     := 0.90
 const ENTRY_CHARGE := 4   # scroll-in steps on a star to trigger entry
+const CAM_EASE     := 13.0  # 1/s — how fast the view glides to where input put it
+const PAN_FRICTION := 4.5   # 1/s — how fast a flung pan slows down
 
 const STAR_R: Dictionary = {
 	SolarData.StarType.WHITE_DWARF:     2.5,
@@ -32,6 +34,14 @@ var _dragging:      bool    = false
 var _drag_from:     Vector2 = Vector2.ZERO
 var _tilt_dragging: bool    = false
 var _rotation:      float   = 0.0   # horizontal galaxy rotation (radians)
+# Where input put the camera; the shown _offset / _zoom / _rotation / _tilt
+# ease toward these each frame (_tick_camera).
+var _offset_t:   Vector2 = Vector2.ZERO
+var _zoom_t:     float   = 1.0
+var _tilt_t:     float   = 0.52
+var _rotation_t: float   = 0.0
+var _pan_vel:    Vector2 = Vector2.ZERO   # px/s, carried on after a drag
+var _last_pan_usec: int  = 0
 
 var _right_from:    Vector2 = Vector2.ZERO   # right-press spot: a short click opens the context menu
 var _entry_charge:  int  = 0
@@ -95,6 +105,10 @@ func _ready() -> void:
 		# center of the left 70% (the right panel takes the rest; hidden in showcase)
 		_offset = Vector2(size.x * (0.5 if GameState.showcase_mode else 0.35), size.y * 0.5)
 		_zoom   = 2.5
+	_offset_t   = _offset
+	_zoom_t     = _zoom
+	_tilt_t     = _tilt
+	_rotation_t = _rotation
 
 func _build_right_panel() -> void:
 	var panel := PanelContainer.new()
@@ -221,6 +235,7 @@ func _update_right_panel() -> void:
 			visited, total, _galaxy.links.size()]
 
 func _process(delta: float) -> void:
+	_tick_camera(delta)
 	_pulse = fposmod(_pulse + delta * 1.8, TAU)
 	var mouse   := get_viewport().get_mouse_position()
 	var new_hov := -1
@@ -246,6 +261,20 @@ func _process(delta: float) -> void:
 	else:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 	queue_redraw()
+
+func _tick_camera(delta: float) -> void:
+	if not _dragging and _pan_vel != Vector2.ZERO:
+		_offset_t += _pan_vel * delta
+		_pan_vel *= exp(-delta * PAN_FRICTION)
+		if _pan_vel.length_squared() < 25.0:
+			_pan_vel = Vector2.ZERO
+	# screen pos is linear in zoom and offset, so easing both by the same k keeps
+	# the point under the cursor put while a wheel zoom plays out
+	var k := 1.0 - exp(-delta * CAM_EASE)
+	_zoom     = lerpf(_zoom, _zoom_t, k)
+	_offset   = _offset.lerp(_offset_t, k)
+	_rotation = lerp_angle(_rotation, _rotation_t, k)
+	_tilt     = lerpf(_tilt, _tilt_t, k)
 
 ## Showcase reveals and lights every star; otherwise only explored ones and their neighbours.
 func _star_visible(i: int) -> bool:
@@ -358,11 +387,15 @@ func _input(event: InputEvent) -> void:
 						return
 					_dragging  = true
 					_drag_from = mb.position
+					_pan_vel   = Vector2.ZERO
+					_last_pan_usec = Time.get_ticks_usec()
 				else:
 					# single click with minimal drag = enter star
 					if _hovered >= 0 and mb.position.distance_to(_drag_from) < 6.0:
 						_entering = true
 						_navigate_to(_hovered)
+					elif Time.get_ticks_usec() - _last_pan_usec > 100000:
+						_pan_vel = Vector2.ZERO   # held still before letting go: no fling
 					_dragging = false
 			MOUSE_BUTTON_RIGHT:
 				_tilt_dragging = mb.pressed
@@ -392,18 +425,22 @@ func _input(event: InputEvent) -> void:
 
 	elif event is InputEventPanGesture:
 		# 2-finger swipe on trackpad → pan
-		_offset += event.delta * 4.0
+		_offset_t += event.delta * 4.0
 		get_viewport().set_input_as_handled()
 
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		if _tilt_dragging:
 			# right-drag X = horizontal rotation, Y = tilt
-			_rotation = fposmod(_rotation - mm.relative.x * 0.005, TAU)
-			_tilt      = clamp(_tilt + mm.relative.y * 0.004, TILT_MIN, TILT_MAX)
+			_rotation_t = fposmod(_rotation_t - mm.relative.x * 0.005, TAU)
+			_tilt_t     = clamp(_tilt_t + mm.relative.y * 0.004, TILT_MIN, TILT_MAX)
 			get_viewport().set_input_as_handled()
-		elif _dragging and mm.relative.length() > 0.5:
-			_offset += mm.relative
+		elif _dragging:
+			_offset_t += mm.relative
+			var now := Time.get_ticks_usec()
+			var dt := clampf(float(now - _last_pan_usec) / 1e6, 0.004, 0.1)
+			_last_pan_usec = now
+			_pan_vel = _pan_vel.lerp(mm.relative / dt, 0.5)
 			get_viewport().set_input_as_handled()
 
 # ── Right-click actions (CommandRegistry + ContextMenu) ──────────────────────
@@ -426,9 +463,9 @@ func _enter_star(star_idx: int) -> void:
 	_navigate_to(star_idx)
 
 func _zoom_at(screen_pos: Vector2, factor: float) -> void:
-	var new_zoom: float = clamp(_zoom * factor, ZOOM_MIN, ZOOM_MAX)
-	_offset = screen_pos + (_offset - screen_pos) * (new_zoom / _zoom)
-	_zoom   = new_zoom
+	var new_zoom: float = clamp(_zoom_t * factor, ZOOM_MIN, ZOOM_MAX)
+	_offset_t = screen_pos + (_offset_t - screen_pos) * (new_zoom / _zoom_t)
+	_zoom_t   = new_zoom
 
 func _charge_entry(amount: int) -> void:
 	if _hovered < 0:
@@ -448,10 +485,10 @@ func _reset_charge() -> void:
 
 func _navigate_to(star_idx: int) -> void:
 	# don't auto-unlock — player must survey the system first
-	_galaxy.view_offset   = _offset
-	_galaxy.view_zoom     = _zoom
-	_galaxy.view_tilt     = _tilt
-	_galaxy.view_rotation = _rotation
+	_galaxy.view_offset   = _offset_t
+	_galaxy.view_zoom     = _zoom_t
+	_galaxy.view_tilt     = _tilt_t
+	_galaxy.view_rotation = _rotation_t
 	var sd: SolarData
 	if star_idx == GameState.home_star_idx:
 		# Always use the pre-generated home solar so home planet stays consistent
