@@ -5057,13 +5057,18 @@ const LENS_BAR_MARGIN := 30.0   # clears the news crawl (NewsFeed.HEIGHT)
 func _place_lens_bar() -> void:
 	if _lens_bar == null or not is_instance_valid(_lens_bar):
 		return
-	# always on screen (playtest 30.10): with the panel closed — a game without
-	# the tutorial, founding a City — the lenses are needed just as much
 	var h := _lens_bar.get_combined_minimum_size().y
 	_lens_bar.offset_bottom = -LENS_BAR_MARGIN
 	_lens_bar.offset_top = _lens_bar.offset_bottom - h
-	_lens_bar.modulate.a = 1.0
-	_lens_bar.visible = true
+	_fade_lens_ui()
+
+## Lenses (and their colour key) only show with the left panel open; they fade
+## with the panel's slide.
+func _fade_lens_ui() -> void:
+	for c in [_lens_bar, _lens_legend]:   # untyped: either may be a freed node
+		if is_instance_valid(c):
+			(c as Control).modulate.a = _panel_t
+			(c as Control).visible = _panel_t > 0.01
 
 ## Orbital surface scan: a bright band sweeps the globe once, then the role
 ## lenses of this world work (GameState.scanned_bodies).
@@ -5235,6 +5240,7 @@ func _refresh_lens_legend() -> void:
 	row.offset_bottom = _lens_bar.offset_top - 6.0
 	row.offset_top = row.offset_bottom - h
 	_lens_legend = row
+	_fade_lens_ui()
 
 func _refresh_lens() -> void:
 	_style_lens_bar()
@@ -6696,7 +6702,7 @@ func _level_badge(lv: int, is_city: bool) -> PanelContainer:
 ## otherwise a City card opens the City panel.
 ## Look and layout: scenes/ui/components/ListItem.tscn.
 func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetProgress,
-		_panel_content: VBoxContainer, _root: VBoxContainer, as_capital: bool = false) -> PanelContainer:
+		_panel_content: VBoxContainer, _root: VBoxContainer, as_capital: bool = false) -> Control:
 	var as_city := poi.is_city() and not as_capital
 	var lv: int = Leveling.city_level(pp, poi) if as_city else pp.district_levels.get(poi.label, 1)
 	var title := (poi.capital_shown_name() if as_capital else poi.shown_name()).to_upper()
@@ -6746,21 +6752,20 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	# production cycle (stock income only) / construction / levelling bar
 	var c_poi := poi
 	var p_seed := planet.seed
+	var cancel_btn: IconButton = null
 	if poi.constructing:
 		card.description = "Constructing..."
 		card.stats = PackedStringArray()
 		_poll_progress(card, func() -> float: return c_poi.construct_progress, UIStyle.color(&"neutral_stroke"), true)
-		# a visible way back (playtest 30.10): cancel it for a full refund
+		# a visible way back (playtest 30.10): cancel it for a full refund; ✖ sits beside the card
 		if Settlement.cancel_district_block(planet, poi) == "":
-			var cancel_btn := IconButton.create("", "cancel", IconButton.Variant.NEGATIVE)   # icon only; the tip says what it does
+			cancel_btn = IconButton.create("", "cancel", IconButton.Variant.NEGATIVE)   # icon only; the tip says what it does
+			cancel_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			cancel_btn.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Cancel construction", "Stops building it and gives everything back."))
 			cancel_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 			cancel_btn.pressed.connect(func() -> void:
 				TooltipManager.hide_tip()
 				_cancel_district(c_poi))
-			var bottom := card.get_node_or_null("Row/Body/Bottom")
-			if bottom != null:
-				bottom.add_child(cancel_btn)
 	elif as_city and pp.city_upgrading.has(poi.label):
 		card.description = "City levelling up…"
 		card.stats = PackedStringArray()
@@ -6809,7 +6814,14 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 			_build_city_panel(cap_poi, cap_planet)
 		else:
 			_build_district_panel(cap_poi, cap_planet))
-	return card
+	if cancel_btn == null:
+		return card
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(card)
+	row.add_child(cancel_btn)
+	return row
 
 ## Icon for a city / district card from its kind (UIIcons names).
 func _district_icon(poi: POIData, as_city: bool, as_capital: bool) -> String:
@@ -8396,7 +8408,7 @@ func _build_construction_bar(def: BuildingDef, pm_key: String, entry: Dictionary
 	row.add_theme_constant_override("separation", 4)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(card)
-	var x_btn := IconButton.create("", "close", IconButton.Variant.NEGATIVE)
+	var x_btn := IconButton.create("", "cancel", IconButton.Variant.NEGATIVE)
 	x_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	x_btn.pressed.connect(_cancel_building.bind(entry))
 	var bb := {Economy.CREDITS: PlanetProgress.stack_paid(entry)}

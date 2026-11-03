@@ -362,8 +362,9 @@ func _process(delta: float) -> void:
 		l.set_meta("loc", item.get("loc", {}))
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		l.add_theme_font_size_override("font_size", 12)
-		l.add_theme_color_override("font_color",
-			Color(1.0, 0.86, 0.50) if text.begins_with("◆") else Color(0.78, 0.84, 0.95))
+		var ev_col := _bar.get_theme_color(&"event_color", &"NewsPanel") if _bar.has_theme_color(&"event_color", &"NewsPanel") else Color(1.0, 0.86, 0.50)
+		var tx_col := _bar.get_theme_color(&"text_color", &"NewsPanel") if _bar.has_theme_color(&"text_color", &"NewsPanel") else Color(0.78, 0.84, 0.95)
+		l.add_theme_color_override("font_color", ev_col if text.begins_with("◆") else tx_col)
 		l.text = text + SEPARATOR
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_clip.add_child(l)
