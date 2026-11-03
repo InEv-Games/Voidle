@@ -13,9 +13,8 @@ config_version=5
 config/name="Voidle"
 run/main_scene="res://scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
-boot_splash/bg_color=Color(0, 0, 0, 1)
 boot_splash/stretch_mode=0
-boot_splash/image="res://resources/iBright Games Logo.png"
+boot_splash/image="uid://bi50gslvhjorn"
 config/icon="uid://cklxjbcevnmf"
 boot_splash/minimum_display_time=1800
 
