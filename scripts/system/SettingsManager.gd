@@ -6,14 +6,17 @@ const SETTINGS_PATH = "user://settings.cfg"
 signal night_shadow_changed(value: float)
 signal theme_changed(theme_id: String)
 
+## Theme presets: an accent hue and a harmony for ThemeBuilder. "cyan" is the
+## project theme as authored (voidle_theme.tres); "custom" is the theme builder's.
 const THEMES := {
-	"cyan":    {"label": "Cyan (Default)",    "path": "res://resources/ui/voidle_theme_cyan.tres",    "swatch": Color(0.1373, 0.7255, 0.9059)},
-	"yellow":  {"label": "Solar Gold (News)", "path": "res://resources/ui/voidle_theme_yellow.tres",  "swatch": Color(0.95, 0.75, 0.30)},
-	"emerald": {"label": "Bio Emerald",       "path": "res://resources/ui/voidle_theme_emerald.tres", "swatch": Color(0.22, 0.88, 0.56)},
-	"crimson": {"label": "Mars Crimson",      "path": "res://resources/ui/voidle_theme_crimson.tres", "swatch": Color(0.96, 0.38, 0.46)},
-	"violet":  {"label": "Nebula Violet",     "path": "res://resources/ui/voidle_theme_violet.tres",  "swatch": Color(0.68, 0.48, 0.98)},
+	"cyan":    {"label": "Cyan (Default)",    "hue": 194.0, "harmony": ThemeBuilder.Harmony.ANALOGOUS,     "original": true},
+	"yellow":  {"label": "Solar Gold (News)", "hue": 43.0,  "harmony": ThemeBuilder.Harmony.COMPLEMENTARY},
+	"emerald": {"label": "Bio Emerald",       "hue": 151.0, "harmony": ThemeBuilder.Harmony.ANALOGOUS},
+	"crimson": {"label": "Mars Crimson",      "hue": 352.0, "harmony": ThemeBuilder.Harmony.MONOCHROMATIC},
+	"violet":  {"label": "Nebula Violet",     "hue": 265.0, "harmony": ThemeBuilder.Harmony.ANALOGOUS},
+	"custom":  {"label": "Custom"},
 }
-const THEME_ORDER: Array[String] = ["cyan", "yellow", "emerald", "crimson", "violet"]
+const THEME_ORDER: Array[String] = ["cyan", "yellow", "emerald", "crimson", "violet", "custom"]
 
 var master_volume: float = 1.0
 var music_volume:  float = 1.0
@@ -27,6 +30,14 @@ var night_shadow: float = 1.0
 ## or one card each with its own demolish button (false).
 var stack_lowest_layer: bool = true
 var theme_id: String = "cyan"
+## Theme builder (theme_id "custom"): accent hue in degrees, ThemeBuilder.Harmony, saturation scale.
+var theme_hue: float = 194.0
+var theme_harmony: int = ThemeBuilder.Harmony.ANALOGOUS
+var theme_vividness: float = 1.0
+
+## The project theme as authored, captured before any recolour.
+var _base_theme: Theme = null
+var _applied_theme_key := ""
 
 ## Frame cap (laptop heat, playtest 31.10): an idle game needs no 120 fps on a
 ## ProMotion screen, and in the background it only has to keep ticking.
@@ -70,6 +81,10 @@ func load_settings() -> void:
 		theme_id           = config.get_value("ui",       "theme",         "cyan")
 		if not THEMES.has(theme_id):
 			theme_id = "cyan"
+		theme_hue          = config.get_value("ui",       "theme_hue",       194.0)
+		theme_harmony      = config.get_value("ui",       "theme_harmony",   ThemeBuilder.Harmony.ANALOGOUS)
+		theme_vividness    = config.get_value("ui",       "theme_vividness", 1.0)
+		_take_preset(theme_id)   # saved builder values only count for "custom"
 	else:
 		master_volume = 1.0
 		music_volume  = 1.0
@@ -89,6 +104,9 @@ func save_settings() -> void:
 	config.set_value("tutorial", "ever_done",     tutorial_ever_done)
 	config.set_value("ui",       "stack_lowest",  stack_lowest_layer)
 	config.set_value("ui",       "theme",         theme_id)
+	config.set_value("ui",       "theme_hue",       theme_hue)
+	config.set_value("ui",       "theme_harmony",   theme_harmony)
+	config.set_value("ui",       "theme_vividness", theme_vividness)
 	config.save(SETTINGS_PATH)
 
 func apply_settings() -> void:
@@ -100,16 +118,35 @@ func apply_settings() -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-	_apply_theme(theme_id)
+	_apply_theme()
 
-func _apply_theme(id: String) -> void:
-	var key := id if THEMES.has(id) else "cyan"
-	var path: String = THEMES[key]["path"]
-	var src := load(path) as Theme
+## Recolours the project theme in place (open UI follows it). Skipped when
+## nothing changed, since a theme swap restyles every Control.
+func _apply_theme() -> void:
 	var dst := ThemeDB.get_project_theme()
-	if dst != null and src != null and dst != src:
-		dst.clear()
-		dst.merge_with(src)
+	if dst == null:
+		return
+	if _base_theme == null:
+		_base_theme = Theme.new()
+		_base_theme.merge_with(dst)
+	var original: bool = THEMES.get(theme_id, {}).get("original", false)
+	var key := "original" if original else "%s|%.1f|%d|%.2f" % [theme_id, theme_hue, theme_harmony, theme_vividness]
+	if key == _applied_theme_key:
+		return
+	_applied_theme_key = key
+	var src := _base_theme if original else ThemeBuilder.build(_base_theme, theme_hue, theme_harmony, theme_vividness)
+	dst.clear()
+	dst.merge_with(src)
+
+## The accent colour of the current theme, for a swatch.
+func theme_swatch() -> Color:
+	return UIStyle.color(&"accent")
+
+## Panel / item / accent colours the builder would make, for a preview.
+func theme_preview(hue: float, harmony: int, vividness: float) -> Array[Color]:
+	if _base_theme == null:
+		_apply_theme()
+	return ThemeBuilder.preview(_base_theme, hue, harmony, vividness)
 
 func _set_bus_volume(bus_name: String, val: float) -> void:
 	var idx := AudioServer.get_bus_index(bus_name)
@@ -151,10 +188,29 @@ func set_fullscreen(val: bool) -> void:
 	is_fullscreen = val
 	apply_settings(); save_settings()
 
+## Picks a preset; its hue and harmony become the builder's starting point.
 func set_theme_id(id: String) -> void:
 	if not THEMES.has(id):
 		return
 	theme_id = id
-	_apply_theme(theme_id)
+	_take_preset(id)
+	_apply_theme()
+	save_settings()
+	theme_changed.emit(theme_id)
+
+func _take_preset(id: String) -> void:
+	var preset: Dictionary = THEMES.get(id, {})
+	if preset.has("hue"):
+		theme_hue = preset["hue"]
+		theme_harmony = preset["harmony"]
+		theme_vividness = 1.0
+
+## Theme builder: any change makes the theme "custom".
+func set_custom_theme(hue: float, harmony: int, vividness: float) -> void:
+	theme_id = "custom"
+	theme_hue = fposmod(hue, 360.0)
+	theme_harmony = harmony
+	theme_vividness = clampf(vividness, 0.2, 1.3)
+	_apply_theme()
 	save_settings()
 	theme_changed.emit(theme_id)

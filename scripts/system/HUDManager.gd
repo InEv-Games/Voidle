@@ -376,6 +376,136 @@ func show_pause_menu() -> void:
 			GameState.save()
 			get_tree().quit())
 
+## Settings rows for the UI theme: a preset, or the builder (harmony, accent
+## hue, vividness) with a 60/30/10 preview. Builder changes apply after a
+## short pause, since a theme swap restyles every Control.
+func _add_theme_builder(p: ModalPopup) -> void:
+	var row_of := func(t: String) -> HBoxContainer:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		var l := Label.new()
+		l.text = t
+		l.theme_type_variation = &"TitleLabel"
+		l.custom_minimum_size = Vector2(96, 0)
+		row.add_child(l)
+		p.add_content(row)
+		return row
+	var swatch_of := func(parent: Control, c: Color) -> StyleBoxFlat:
+		var sw := Panel.new()
+		sw.custom_minimum_size = Vector2(14, 14)
+		sw.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(3)
+		sb.set_border_width_all(1)
+		sb.border_color = Color(1, 1, 1, 0.35)
+		sb.bg_color = c
+		sw.add_theme_stylebox_override("panel", sb)
+		parent.add_child(sw)
+		return sb
+	var hover := func(c: Control) -> void:
+		c.mouse_entered.connect(func(): CursorManager.set_state(CursorManager.State.POINTER))
+		c.mouse_exited.connect(func(): CursorManager.set_state(CursorManager.State.NORMAL))
+
+	# preset
+	var theme_row: HBoxContainer = row_of.call("Theme Color")
+	var swatch_sb: StyleBoxFlat = swatch_of.call(theme_row, SettingsManager.theme_swatch())
+	var theme_opt := OptionButton.new()
+	theme_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	theme_opt.focus_mode = Control.FOCUS_NONE
+	for i in SettingsManager.THEME_ORDER.size():
+		theme_opt.add_item(SettingsManager.THEMES[SettingsManager.THEME_ORDER[i]]["label"], i)
+	theme_opt.selected = SettingsManager.THEME_ORDER.find(SettingsManager.theme_id)
+	hover.call(theme_opt)
+	theme_row.add_child(theme_opt)
+
+	# builder
+	var harm_row: HBoxContainer = row_of.call("Harmony")
+	var harm_opt := OptionButton.new()
+	harm_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	harm_opt.focus_mode = Control.FOCUS_NONE
+	for i in ThemeBuilder.HARMONY_ORDER.size():
+		harm_opt.add_item(ThemeBuilder.HARMONY_LABELS[ThemeBuilder.HARMONY_ORDER[i]], i)
+	hover.call(harm_opt)
+	harm_row.add_child(harm_opt)
+
+	var slider := func(row: HBoxContainer, lo: float, hi: float, step: float) -> Array:
+		var sl := HSlider.new()
+		sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		sl.min_value = lo; sl.max_value = hi; sl.step = step
+		row.add_child(sl)
+		var v := Label.new()
+		v.theme_type_variation = &"MonoLabel"
+		v.custom_minimum_size = Vector2(34, 0)
+		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(v)
+		return [sl, v]
+	var hue_row: HBoxContainer = row_of.call("Accent Hue")
+	var hue_sb: StyleBoxFlat = swatch_of.call(hue_row, Color.WHITE)
+	var hue_parts: Array = slider.call(hue_row, 0.0, 359.0, 1.0)
+	var hue_sl: HSlider = hue_parts[0]
+	var hue_lbl: Label = hue_parts[1]
+	var viv_row: HBoxContainer = row_of.call("Vividness")
+	var viv_parts: Array = slider.call(viv_row, 0.2, 1.3, 0.05)
+	var viv_sl: HSlider = viv_parts[0]
+	var viv_lbl: Label = viv_parts[1]
+
+	var prev_row: HBoxContainer = row_of.call("Preview")
+	prev_row.tooltip_text = "Backgrounds (60%) · items (30%) · accent (10%)"
+	var prev_sbs: Array[StyleBoxFlat] = []
+	for i in 3:
+		var sb: StyleBoxFlat = swatch_of.call(prev_row, Color.BLACK)
+		prev_sbs.append(sb)
+		(prev_row.get_child(prev_row.get_child_count() - 1) as Control).custom_minimum_size = Vector2(40, 14)
+
+	var syncing := [false]   # true while the controls are set from code
+	var gen := [0]
+	var refresh := func() -> void:
+		var harmony: int = ThemeBuilder.HARMONY_ORDER[maxi(harm_opt.selected, 0)]
+		hue_lbl.text = "%d°" % roundi(hue_sl.value)
+		viv_lbl.text = "%d%%" % roundi(viv_sl.value * 100.0)
+		hue_sb.bg_color = Color.from_hsv(hue_sl.value / 360.0, 0.8, 0.95)
+		var cols := SettingsManager.theme_preview(hue_sl.value, harmony, viv_sl.value)
+		for i in 3:
+			prev_sbs[i].bg_color = cols[i]
+	var sync := func() -> void:
+		syncing[0] = true
+		theme_opt.selected = SettingsManager.THEME_ORDER.find(SettingsManager.theme_id)
+		harm_opt.selected = maxi(ThemeBuilder.HARMONY_ORDER.find(SettingsManager.theme_harmony), 0)
+		hue_sl.value = SettingsManager.theme_hue
+		viv_sl.value = SettingsManager.theme_vividness
+		swatch_sb.bg_color = SettingsManager.theme_swatch()
+		syncing[0] = false
+		refresh.call()
+	var on_builder := func() -> void:
+		if syncing[0]:
+			return
+		refresh.call()
+		gen[0] += 1
+		var my_gen: int = gen[0]
+		get_tree().create_timer(0.2, true).timeout.connect(func() -> void:
+			if my_gen != gen[0] or not is_instance_valid(theme_opt):
+				return
+			SettingsManager.set_custom_theme(hue_sl.value,
+				ThemeBuilder.HARMONY_ORDER[maxi(harm_opt.selected, 0)], viv_sl.value)
+			sync.call())
+	theme_opt.item_selected.connect(func(idx: int) -> void:
+		if syncing[0] or idx < 0 or idx >= SettingsManager.THEME_ORDER.size():
+			return
+		AudioManager.play("ui_click")
+		var tid: String = SettingsManager.THEME_ORDER[idx]
+		if tid == "custom":
+			on_builder.call()
+		else:
+			SettingsManager.set_theme_id(tid)
+			sync.call())
+	harm_opt.item_selected.connect(func(_i: int) -> void:
+		AudioManager.play("ui_click")
+		on_builder.call())
+	hue_sl.value_changed.connect(func(_v: float) -> void: on_builder.call())
+	viv_sl.value_changed.connect(func(_v: float) -> void: on_builder.call())
+	sync.call()
+
 func show_settings_popup() -> void:
 	AudioManager.play("ui_click")
 	var p := ModalPopup.open(self, "Settings", "settings", "", 300)   # above the pause menu
@@ -430,41 +560,7 @@ func show_settings_popup() -> void:
 	fs_chk.mouse_exited.connect(func(): CursorManager.set_state(CursorManager.State.NORMAL))
 	p.add_content(fs_chk)
 	slider_row.call("Night Shadows", SettingsManager.night_shadow, func(v: float): SettingsManager.set_night_shadow(v))
-	var theme_row := HBoxContainer.new()
-	theme_row.add_theme_constant_override("separation", 8)
-	var theme_lbl := Label.new()
-	theme_lbl.text = "Theme Color"
-	theme_lbl.theme_type_variation = &"TitleLabel"
-	theme_lbl.custom_minimum_size = Vector2(96, 0)
-	theme_row.add_child(theme_lbl)
-	var swatch := Panel.new()
-	swatch.custom_minimum_size = Vector2(14, 14)
-	swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var swatch_sb := StyleBoxFlat.new()
-	swatch_sb.set_corner_radius_all(3)
-	swatch_sb.set_border_width_all(1)
-	swatch_sb.border_color = Color(1, 1, 1, 0.35)
-	swatch_sb.bg_color = SettingsManager.THEMES[SettingsManager.theme_id]["swatch"]
-	swatch.add_theme_stylebox_override("panel", swatch_sb)
-	theme_row.add_child(swatch)
-	var theme_opt := OptionButton.new()
-	theme_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	theme_opt.focus_mode = Control.FOCUS_NONE
-	for i in SettingsManager.THEME_ORDER.size():
-		var tid: String = SettingsManager.THEME_ORDER[i]
-		theme_opt.add_item(SettingsManager.THEMES[tid]["label"], i)
-		if tid == SettingsManager.theme_id:
-			theme_opt.selected = i
-	theme_opt.item_selected.connect(func(idx: int) -> void:
-		if idx >= 0 and idx < SettingsManager.THEME_ORDER.size():
-			var tid: String = SettingsManager.THEME_ORDER[idx]
-			SettingsManager.set_theme_id(tid)
-			swatch_sb.bg_color = SettingsManager.THEMES[tid]["swatch"]
-			AudioManager.play("ui_click"))
-	theme_opt.mouse_entered.connect(func(): CursorManager.set_state(CursorManager.State.POINTER))
-	theme_opt.mouse_exited.connect(func(): CursorManager.set_state(CursorManager.State.NORMAL))
-	theme_row.add_child(theme_opt)
-	p.add_content(theme_row)
+	_add_theme_builder(p)
 	p.add_content(HSeparator.new())
 	var tut_row := HBoxContainer.new()
 	var tut_lbl := Label.new()
