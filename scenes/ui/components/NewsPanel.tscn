@@ -23,8 +23,6 @@ corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
 [node name="NewsPanel" type="Panel" groups=["news_panel"]]
-z_index = 95
-z_as_relative = false
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
@@ -35,12 +33,28 @@ grow_vertical = 0
 theme_type_variation = &"NewsPanel"
 theme_override_styles/panel = SubResource("StyleBoxFlat_bar")
 
+[node name="Clip" type="Control" parent="."]
+clip_contents = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_right = -166.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
 [node name="Tag" type="Label" parent="."]
-layout_mode = 0
-offset_left = 408.0
-offset_top = 3.0
-offset_right = 456.0
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -158.0
+offset_top = 4.0
+offset_right = -112.0
 offset_bottom = 19.0
+grow_horizontal = 0
 theme_type_variation = &"NewsTag"
 theme_override_colors/font_color = Color(0.04, 0.06, 0.12, 1)
 theme_override_font_sizes/font_size = 11
@@ -49,25 +63,23 @@ text = " NEWS "
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="Ticker" type="Panel" parent="."]
+[node name="Ticker" type="PanelContainer" parent="."]
 visible = false
-layout_mode = 0
-offset_left = 464.0
-offset_top = 2.0
-offset_right = 568.0
+clip_contents = true
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -106.0
+offset_top = 3.0
+offset_right = -2.0
 offset_bottom = 20.0
+grow_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_ticker")
 
 [node name="View" type="Control" parent="Ticker"]
 clip_contents = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 5.0
-offset_right = -5.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
 mouse_filter = 2
 
 [node name="Row" type="HBoxContainer" parent="Ticker/View"]
@@ -80,33 +92,20 @@ custom_minimum_size = Vector2(12, 12)
 layout_mode = 2
 size_flags_vertical = 4
 mouse_filter = 2
-texture_filter = 3
 expand_mode = 1
 stretch_mode = 5
 
 [node name="Price" type="Label" parent="Ticker/View/Row"]
+custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
 mouse_filter = 2
-theme_override_colors/font_color = Color(0.92, 0.94, 0.98, 1)
 theme_override_font_sizes/font_size = 11
 vertical_alignment = 1
 
 [node name="Move" type="Label" parent="Ticker/View/Row"]
+custom_minimum_size = Vector2(38, 0)
 layout_mode = 2
-size_flags_horizontal = 3
 mouse_filter = 2
 theme_override_font_sizes/font_size = 11
 horizontal_alignment = 2
 vertical_alignment = 1
-
-[node name="Clip" type="Control" parent="."]
-clip_contents = true
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 576.0
-offset_right = -12.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
