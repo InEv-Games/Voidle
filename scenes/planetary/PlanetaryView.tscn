@@ -117,7 +117,6 @@ layout_mode = 1
 z_index = 200
 z_as_relative = false
 layout_mode = 1
-theme_override_styles/panel = SubResource("StyleBoxFlat_b4p0g")
 
 [node name="Hero" parent="SidePanel/Layout/PanelContent" unique_id=808202502 instance=ExtResource("4_hero")]
 layout_mode = 2

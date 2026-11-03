@@ -11,6 +11,10 @@ extends RefCounted
 
 const THEME: Theme = preload("res://resources/ui/voidle_theme.tres")
 
+static func _active_theme() -> Theme:
+	var t := ThemeDB.get_project_theme()
+	return t if t != null else THEME
+
 const DEFAULT  := &"ButtonDefault"
 const POSITIVE := &"ButtonPositive"
 const NEUTRAL  := &"ButtonNeutral"
@@ -23,14 +27,14 @@ const _FONT_COLORS := ["font_color", "font_hover_color", "font_pressed_color", "
 
 ## Palette colour (panel_bg, item_bg, accent, good, bad, icon, text_subtle, ...).
 static func color(name: StringName) -> Color:
-	return THEME.get_color(name, &"Palette")
+	return _active_theme().get_color(name, &"Palette")
 
 ## Palette colour as a 6-digit hex string without '#' (for BBCode [color=#...]).
 static func hex(name: StringName) -> String:
 	return color(name).to_html(false)
 
 static func box(type: StringName, name: StringName = &"panel") -> StyleBox:
-	return THEME.get_stylebox(name, type)
+	return _active_theme().get_stylebox(name, type)
 
 ## Returns a duplicate of the 30% secondary ItemPanel StyleBoxFlat, optionally overriding border/radius.
 static func item_box(border_col := Color(0, 0, 0, 0), corner := -1) -> StyleBoxFlat:
@@ -53,7 +57,7 @@ static func panel_box(alpha := -1.0, border_col := Color(0, 0, 0, 0)) -> StyleBo
 	return sb
 
 static func font_size(type: StringName) -> int:
-	return THEME.get_font_size(&"font_size", type)
+	return _active_theme().get_font_size(&"font_size", type)
 
 ## Gives an existing Button one of the four types (text-centred), dropping
 ## local stylebox / colour / font overrides so the theme wins.
