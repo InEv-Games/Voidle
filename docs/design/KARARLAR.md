@@ -90,3 +90,11 @@ Tarih: 26 Ekim 2026. İş planı: [PLAYTEST_2026-10-23.md](PLAYTEST_2026-10-23.m
 - **Demoda yalnızca Dünya ve Ay oynanır** (demo bitmeden de). Diğer dünyalar Medeniyet 1 içeriği açılınca oynanır; Earth Spaceport Ay'a kurulamaz (Ay'ın kendi Lunar Spaceport'u var).
 - **Son roket 3 dakika uçar** ve yıldız sistemi görünümünde yolu ve ETA'sıyla çizilir.
 - **İade kredi ve malzemeyi kapsar.** Clear, reset ve demolish ödenen kredinin ve malzemenin aynı oranını iade eder: %50, Recycling skilleriyle %65 ve %75.
+
+## 11. Oyuncuya gösterilen metinlerde kaynaklar yalnızca ikonla yazılır
+
+**Kararımız (3 Kasım 2026):** Oyunda bir kaynaktan bahsederken adı yazılmaz, ikonu kullanılır. "+5% Credits" değil, Credits ikonu ve "+5%". Bu kural etkiler, bedeller, ödüller, eksik miktarlar, tooltip'ler ve açıklama cümleleri için geçerlidir.
+
+- **Nasıl yazılır:** `UIIcons.bb(id, boyut, renk)` ile ikon, yanına miktar. Trait ve bonus etkileri için `PlanetTags.effect_short_bb`. "Hammadde ve işlenmiş ürünler" (`raw`) dört ikonla gösterilir.
+- **Düz metin alanlar:** İkon gösteremeyen yerde (haber bandı, düz `Label`) kaynak adını yazma. Ya alanı `RichTextLabel` yap ya da cümleyi kaynaktan söz etmeyecek şekilde kur; ayrıntı tooltip'e gider.
+- **Kapsam dışı:** Hikâye metni gibi kurgu cümleleri ("your scientists"), bina ve araştırma adları, geliştirici konsolu ve kaynağın kendisini tanıtan yerler (Glossary girdisinin başlığı gibi).

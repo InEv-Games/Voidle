@@ -1,24 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/excavation/StoryDialog.gd" id="1_script"]
 [ext_resource type="Texture2D" path="res://resources/companions/portraits/silhouette.svg" id="2_portrait"]
 [ext_resource type="PackedScene" path="res://scenes/ui/components/IconButton.tscn" id="3_button"]
-
-[sub_resource type="StyleBoxFlat" id="panel_box"]
-content_margin_left = 20.0
-content_margin_top = 16.0
-content_margin_right = 20.0
-content_margin_bottom = 16.0
-bg_color = Color(0.04, 0.05, 0.09, 0.98)
-border_width_left = 1
-border_width_top = 3
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.98, 0.8, 0.36, 0.6)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
+[ext_resource type="PackedScene" path="res://scenes/ui/components/InfoRow.tscn" id="4_row"]
+[ext_resource type="Texture2D" path="res://resources/ui/icons/explore.svg" id="5_icon"]
 
 [node name="StoryDialog" type="Control"]
 layout_mode = 3
@@ -29,7 +15,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
 
-[node name="Shade" type="ColorRect" parent="."]
+[node name="Dim" type="ColorRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -37,7 +23,7 @@ anchor_bottom = 1.0
 offset_top = 30.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0.01, 0.04, 0.8)
+color = Color(0, 0, 0, 0.6)
 
 [node name="Center" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -48,108 +34,191 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="Panel" type="PanelContainer" parent="Center"]
-custom_minimum_size = Vector2(600, 0)
+[node name="Card" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(580, 290)
 layout_mode = 2
-theme_override_styles/panel = SubResource("panel_box")
+theme_type_variation = &"PopupCard"
 
-[node name="Row" type="HBoxContainer" parent="Center/Panel"]
+[node name="VBox" type="VBoxContainer" parent="Center/Card"]
 layout_mode = 2
-theme_override_constants/separation = 18
+theme_override_constants/separation = 8
 
-[node name="Portrait" type="TextureRect" parent="Center/Panel/Row"]
-visible = false
-custom_minimum_size = Vector2(200, 250)
+[node name="Header" type="HBoxContainer" parent="Center/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Icon" type="TextureRect" parent="Center/Card/VBox/Header"]
+self_modulate = Color(0.137, 0.725, 0.906, 1)
+custom_minimum_size = Vector2(14, 14)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+texture = ExtResource("5_icon")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Center/Card/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"HeaderLabel"
+text = "SITE NAME"
+
+[node name="Counter" type="Label" parent="Center/Card/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"CounterLabel"
+text = "VESYN  1 / 5"
+
+[node name="Rule" type="VBoxContainer" parent="Center/Card/VBox"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="A" type="HSeparator" parent="Center/Card/VBox/Rule"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DoubleRule"
+
+[node name="B" type="HSeparator" parent="Center/Card/VBox/Rule"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"DoubleRule"
+
+[node name="Row" type="HBoxContainer" parent="Center/Card/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="Frame" type="PanelContainer" parent="Center/Card/VBox/Row"]
+custom_minimum_size = Vector2(132, 170)
 layout_mode = 2
 size_flags_vertical = 0
+mouse_filter = 2
+theme_type_variation = &"IconCell"
+
+[node name="SceneIcon" type="TextureRect" parent="Center/Card/VBox/Row/Frame"]
+self_modulate = Color(0.137, 0.725, 0.906, 0.55)
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+mouse_filter = 2
+texture = ExtResource("5_icon")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Portrait" type="TextureRect" parent="Center/Card/VBox/Row/Frame"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
 texture = ExtResource("2_portrait")
 expand_mode = 1
 stretch_mode = 6
 
-[node name="Col" type="VBoxContainer" parent="Center/Panel/Row"]
+[node name="Col" type="VBoxContainer" parent="Center/Card/VBox/Row"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 10
+theme_override_constants/separation = 6
 
-[node name="Caption" type="Label" parent="Center/Panel/Row/Col"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.98, 0.8, 0.36, 1)
-theme_override_font_sizes/font_size = 10
-text = "EXCAVATION 1 / 5  ·  WORLD"
-
-[node name="Title" type="Label" parent="Center/Panel/Row/Col"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "SITE NAME"
-
-[node name="Line" type="ColorRect" parent="Center/Panel/Row/Col"]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-mouse_filter = 2
-color = Color(0.98, 0.8, 0.36, 0.3)
-
-[node name="Speaker" type="Label" parent="Center/Panel/Row/Col"]
+[node name="Speaker" type="Label" parent="Center/Card/VBox/Row/Col"]
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(0.98, 0.8, 0.36, 1)
-theme_override_font_sizes/font_size = 12
+theme_type_variation = &"HeaderLabel"
 text = "Speaker"
 
-[node name="Body" type="RichTextLabel" parent="Center/Panel/Row/Col"]
-custom_minimum_size = Vector2(556, 44)
+[node name="Body" type="RichTextLabel" parent="Center/Card/VBox/Row/Col"]
+custom_minimum_size = Vector2(410, 0)
 layout_mode = 2
-theme_override_font_sizes/normal_font_size = 15
+mouse_filter = 2
+theme_type_variation = &"PopupBody"
+theme_override_font_sizes/normal_font_size = 12
 bbcode_enabled = true
 text = "Story text."
 fit_content = true
 scroll_active = false
+visible_characters_behavior = 1
 
-[node name="Spacer" type="Control" parent="Center/Panel/Row/Col"]
+[node name="Spacer" type="Control" parent="Center/Card/VBox/Row/Col"]
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="TimeBox" type="PanelContainer" parent="Center/Panel/Row/Col"]
-visible = false
-custom_minimum_size = Vector2(0, 30)
-layout_mode = 2
-
-[node name="Time" type="Label" parent="Center/Panel/Row/Col/TimeBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 14
-text = "5:00"
-horizontal_alignment = 1
-
-[node name="Rewards" type="RichTextLabel" parent="Center/Panel/Row/Col"]
+[node name="Details" type="VBoxContainer" parent="Center/Card/VBox/Row/Col"]
 visible = false
 layout_mode = 2
-theme_override_font_sizes/normal_font_size = 14
+theme_override_constants/separation = 4
+
+[node name="TimeRow" parent="Center/Card/VBox/Row/Col/Details" instance=ExtResource("4_row")]
+layout_mode = 2
+key = "Digging time"
+value = "5:00"
+
+[node name="ReturnsRow" type="HBoxContainer" parent="Center/Card/VBox/Row/Col/Details"]
+layout_mode = 2
+
+[node name="Key" type="Label" parent="Center/Card/VBox/Row/Col/Details/ReturnsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SubLabel"
+text = "Returns at least"
+
+[node name="Value" type="RichTextLabel" parent="Center/Card/VBox/Row/Col/Details/ReturnsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_font_sizes/normal_font_size = 11
 bbcode_enabled = true
 fit_content = true
 scroll_active = false
 
-[node name="Block" type="Label" parent="Center/Panel/Row/Col"]
+[node name="TimeBox" type="PanelContainer" parent="Center/Card/VBox/Row/Col"]
+visible = false
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"ItemPanel"
+
+[node name="Time" type="Label" parent="Center/Card/VBox/Row/Col/TimeBox"]
+layout_mode = 2
+theme_type_variation = &"HeaderLabel"
+text = "5:00"
+horizontal_alignment = 1
+
+[node name="Rewards" type="RichTextLabel" parent="Center/Card/VBox/Row/Col"]
 visible = false
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.55, 0.5, 1)
-theme_override_font_sizes/font_size = 12
+mouse_filter = 2
+theme_override_font_sizes/normal_font_size = 12
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
 
-[node name="Choices" type="VBoxContainer" parent="Center/Panel/Row/Col"]
+[node name="Block" type="RichTextLabel" parent="Center/Card/VBox/Row/Col"]
+visible = false
+layout_mode = 2
+mouse_filter = 2
+theme_override_font_sizes/normal_font_size = 11
+theme_override_colors/default_color = Color(0.89, 0.416, 0.416, 1)
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+
+[node name="Choices" type="VBoxContainer" parent="Center/Card/VBox/Row/Col"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="Buttons" type="HBoxContainer" parent="Center/Panel/Row/Col"]
+[node name="Later" parent="Center/Card/VBox/Buttons" instance=ExtResource("3_button")]
 layout_mode = 2
-theme_override_constants/separation = 10
-alignment = 2
-
-[node name="Later" parent="Center/Panel/Row/Col/Buttons" instance=ExtResource("3_button")]
-layout_mode = 2
+size_flags_horizontal = 3
 label_text = "LATER"
-layout = 1
+icon_name = "cancel"
 
-[node name="Next" parent="Center/Panel/Row/Col/Buttons" instance=ExtResource("3_button")]
+[node name="Next" parent="Center/Card/VBox/Buttons" instance=ExtResource("3_button")]
 layout_mode = 2
+size_flags_horizontal = 3
 label_text = "CONTINUE"
 icon_name = "confirm"
 variant = 1

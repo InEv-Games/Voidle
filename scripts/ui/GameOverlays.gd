@@ -211,8 +211,7 @@ static func _trait_card(def: TraitDef, planet_seed: int, layer: CanvasLayer) -> 
 		var amount := float(def.effects[rid])
 		var row := _rich("[center]%s[/center]" % PlanetTags.effect_short_bb(rid, amount, 20), 20, TRAIT_INNER_W)
 		row.mouse_filter = Control.MOUSE_FILTER_PASS   # its tooltip; the card keeps its hover
-		_tip_on(row, PlanetTags.effect_part(rid, amount).capitalize() if rid in PlanetTags.COUNT_EFFECTS \
-			else PlanetTags.effect_part(rid, amount), PlanetTags.effect_explain(rid))
+		_tip_on(row, def.display_name, PlanetTags.effect_explain(rid))
 		v.add_child(row)
 	var sp := Control.new()
 	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL

@@ -32,12 +32,14 @@ const FALLBACK_PORTRAIT := "res://resources/companions/portraits/silhouette.svg"
 func portrait_texture() -> Texture2D:
 	return portrait if portrait != null else load(FALLBACK_PORTRAIT) as Texture2D
 
-## "+5% Credits everywhere" / "Districts build 25% faster".
-func bonus_text() -> String:
-	var pct := roundi(bonus_value * 100.0)
+## The bonus for BBCode: a resource by its icon ("[credits] +5% everywhere"),
+## never its name.
+func bonus_bb(px: int) -> String:
 	if bonus == Bonus.BUILD_SPEED:
-		return "Districts build %d%% faster (Orbit rockets too)" % pct
-	return "+%d%% %s everywhere" % [pct, PlanetTags.resource_label(bonus_resource)]
+		var col := UIStyle.color(&"good")
+		return "%s [color=#%s]Districts build %d%% faster (Orbit rockets too)[/color]" % [UIIcons.bb("upgrade", px, col),
+			col.to_html(false), roundi(bonus_value * 100.0)]
+	return "%s everywhere" % PlanetTags.effect_short_bb(bonus_resource, bonus_value, px)
 
 static var _cache: Array[CompanionDef] = []
 

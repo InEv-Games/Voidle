@@ -57,17 +57,6 @@ static func _effects_of(id: String) -> Dictionary:
 	var def := TraitDef.find(id)
 	return def.effects if def != null else {}
 
-## "+10% Science · −5% Credits" / "+1 district per City".
-static func effect_text(id: String) -> String:
-	var parts: Array[String] = []
-	var eff := _effects_of(id)
-	for rid: String in eff:
-		parts.append(effect_part(rid, float(eff[rid])))
-	return " · ".join(parts)
-
-static func effect_part(rid: String, v: float) -> String:
-	return "%s %s" % [effect_value(rid, v), resource_label(rid, roundi(absf(v)))]
-
 ## The amount alone: "+15%", "−5%", "+1".
 static func effect_value(rid: String, v: float) -> String:
 	var n := roundi(absf(v)) if rid in COUNT_EFFECTS else roundi(absf(v) * 100.0)
@@ -102,17 +91,22 @@ static func effect_short_bb(rid: String, v: float, px: int) -> String:
 			return "%s %s" % [icons, val]
 	return "%s %s" % [UIIcons.bb(rid, px, c), val]
 
-## What an effect touches, in a sentence (its tooltip on the trait cards).
+## What an effect touches, in a sentence for BBCode (its tooltip on the trait
+## cards): resources by their icons, never their names.
 static func effect_explain(rid: String) -> String:
+	const PX := 12
+	var ic := UIIcons.bb(rid, PX, effect_color(rid, 1.0)) if rid not in COUNT_EFFECTS and rid != Economy.RAW else ""
 	match rid:
 		"city_districts":   return "Every City on this world can hold more districts."
 		"district_slots":   return "Every surface district on this world has room for more buildings."
-		Economy.RAW:        return "Mining and processing on this world: minerals, Goods, Fuel, Rare Elements."
-		Economy.POPULATION: return "The housing of every City on this world."
-		Economy.ENERGY:     return "The energy made by every building on this world."
-		Economy.SCIENCE:    return "All the Science this world makes."
-		Economy.CREDITS:    return "All the Credits this world earns."
-	return "Output on this world."
+		Economy.RAW:
+			var icons := ""
+			for id: String in [Economy.RAW, Economy.GOODS, Economy.FUEL, Economy.RARE]:
+				icons += UIIcons.bb(id, PX, Economy.color_of(id) if id != Economy.RAW else effect_color(id, 1.0))
+			return "Mining and processing on this world: %s" % icons
+		Economy.POPULATION: return "The %s room of every City on this world." % ic
+		Economy.ENERGY:     return "The %s made by every building on this world." % ic
+	return "All the %s this world makes." % ic
 
 ## Whole-number effect of a world's traits ("city_districts" → +2).
 static func planet_count(planet_seed: int, key: String) -> int:
@@ -129,8 +123,7 @@ static func effect_bb(id: String) -> String:
 	var eff := _effects_of(id)
 	for rid: String in eff:
 		var v := float(eff[rid])
-		var col := effect_color(rid, v)
-		lines.append("%s [color=#%s]%s[/color]" % [UIIcons.bb(effect_icon(rid), 13, col), col.to_html(false), effect_part(rid, v)])
+		lines.append(effect_short_bb(rid, v, 13))
 	return "\n".join(lines) + "\n[color=#8a93b0]on this planet[/color]"
 
 static func resource_label(rid: String, count := 1) -> String:
@@ -264,8 +257,8 @@ static func choose(planet_seed: int, id: String) -> bool:
 	GameState.tag_offers_changed.emit()
 	GameState.planet_progress_changed.emit(planet_seed)
 	var pd := GameState.get_planet_data(planet_seed)
-	NewsFeed.post("%s is now known for its %s (%s)." % [pd.planet_name if pd else "A world", def.display_name, effect_text(id)], NewsFeed.Kind.EVENT,
-		"%s\n\n%s on this planet, counted on its whole total." % [def.description, effect_text(id)], def.display_name,
+	NewsFeed.post("%s is now known for its %s." % [pd.planet_name if pd else "A world", def.display_name], NewsFeed.Kind.EVENT,
+		"%s\n\n%s" % [def.description, effect_bb(id)], def.display_name,
 		{"seed": planet_seed})
 	return true
 

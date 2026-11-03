@@ -248,8 +248,8 @@ static func finish(s: ExcavationSiteDef, blackboard: Dictionary) -> Dictionary:
 	if who != null:
 		GameState.companions_joined[who.companion_id] = int(Time.get_unix_time_from_system())
 		Economy.invalidate_bonus_cache()
-		NewsFeed.post("%s joins you — %s." % [who.display_name, who.bonus_text()], NewsFeed.Kind.EVENT,
-			who.bio, who.display_name, _site_loc(s.site_id))
+		NewsFeed.post("%s joins you." % who.display_name, NewsFeed.Kind.EVENT,
+			"%s\n\n%s" % [who.bonus_bb(13), who.bio], who.display_name, _site_loc(s.site_id))
 	else:
 		NewsFeed.post("Excavation finished: %s." % s.display_name, NewsFeed.Kind.EVENT, s.teaser, s.display_name, _site_loc(s.site_id))
 	GameState.excavations_changed.emit()
