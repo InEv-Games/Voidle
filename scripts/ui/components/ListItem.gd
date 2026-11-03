@@ -28,7 +28,7 @@ signal stepped(delta: int)
 	set(v): description = v; _sync()
 @export var icon_name: String = "city":
 	set(v): icon_name = v; _sync()
-@export var icon_color: Color = Color(0.898, 0.831, 0.675):
+@export var icon_color: Color = Color(0.949, 0.8863, 0.7294):
 	set(v): icon_color = v; _sync()
 ## Cycle length beside the badge ("20s"; empty hides it): stats are per cycle,
 ## so they read "+30" and the cycle stands once here (playtest 31.10).
@@ -46,7 +46,7 @@ signal stepped(delta: int)
 ## Cycle / construction progress 0..1; below 0 hides the fill.
 @export_range(-1.0, 1.0) var progress: float = -1.0:
 	set(v): progress = v; _sync()
-@export var progress_color: Color = Color(0.137, 0.725, 0.906):
+@export var progress_color: Color = Color(0.2196, 0.8157, 1.0):
 	set(v): progress_color = v; _sync()
 ## Construction look: crawling stripes over the fill.
 @export var progress_striped: bool = false:

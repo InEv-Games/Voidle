@@ -12,7 +12,7 @@ extends Control
 ## 0..1; below 0 hides the fill.
 @export_range(-1.0, 1.0) var progress: float = -1.0:
 	set(v): progress = v; queue_redraw()
-@export var color: Color = Color(0.137, 0.725, 0.906):
+@export var color: Color = Color(0.2196, 0.8157, 1.0):
 	set(v): color = v; queue_redraw()
 ## Crawling diagonal stripes over the gradient: the look for anything being
 ## built or levelled.

@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/ui/components/ListItem.gd" id="1_script"]
 
 [sub_resource type="Gradient" id="rule_gradient"]
-colors = PackedColorArray(0.1373, 0.7255, 0.9059, 0.55, 0.1373, 0.7255, 0.9059, 0)
+colors = PackedColorArray(0.2196, 0.8157, 1, 0.5, 0.2196, 0.8157, 1, 0)
 
 [sub_resource type="GradientTexture2D" id="rule_fade"]
 gradient = SubResource("rule_gradient")
@@ -30,7 +30,7 @@ mouse_filter = 2
 theme_type_variation = &"IconCell"
 
 [node name="Icon" type="TextureRect" parent="Row/IconCell"]
-self_modulate = Color(0.898, 0.831, 0.675, 1)
+self_modulate = Color(0.949, 0.8863, 0.7294, 1)
 custom_minimum_size = Vector2(20, 20)
 layout_mode = 2
 mouse_filter = 2
