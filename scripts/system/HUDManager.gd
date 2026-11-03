@@ -114,13 +114,13 @@ var _explore_btns: Array[Button] = []
 func fill_shortcuts(row: HBoxContainer) -> void:
 	var skill_btn := _make_skill_button()
 	var trade_btn := _make_trade_button()
-	var museum_btn := _make_museum_button()
+	var companions_btn := _make_companions_button()
 	var explore_btn := _make_explore_button()
 	explore_btn.visible = GameState.explore_available()
-	for b: Button in [skill_btn, trade_btn, museum_btn, explore_btn]:
+	for b: Button in [skill_btn, trade_btn, companions_btn, explore_btn]:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # share the row evenly
 		row.add_child(b)
-	museum_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # square, icon only
+	companions_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # square, icon only
 	for list: Array[Button] in [_skill_btns, _explore_btns]:   # drop rows freed with their view
 		for i in range(list.size() - 1, -1, -1):
 			if not is_instance_valid(list[i]):
@@ -198,17 +198,17 @@ func _make_trade_button() -> Button:
 		TooltipManager.hide_tip())
 	return b
 
-## Museum: every relic of the game, found or not (GameOverlays.open_museum).
-func _make_museum_button() -> Button:
-	var b := IconButton.create("", "library", IconButton.Variant.DEFAULT)
+## Companions: every companion of the game, joined or not (CompanionGallery).
+func _make_companions_button() -> Button:
+	var b := IconButton.create("", "population", IconButton.Variant.DEFAULT)
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
 	b.pressed.connect(func() -> void:
 		TooltipManager.hide_tip()
-		GameOverlays.open_museum(self))
+		CompanionGallery.open(self))
 	b.mouse_entered.connect(func() -> void:
 		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("Museum", "Relics found: %d / %d. Each gives a bonus everywhere and a hint to the next." % [Relics.found_count(), Relics.count()]))
+		TooltipManager.show_tip("Companions", "Joined: %d / %d. Each gives a bonus everywhere." % [Excavations.joined_count(), CompanionDef.all().size()]))
 	b.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())

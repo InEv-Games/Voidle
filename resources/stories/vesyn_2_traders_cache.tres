@@ -1,0 +1,158 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_60kkc"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_8eiah"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_34kxg"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_tcv31"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_1nxkx"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="6_quw2l"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="7_sqnel"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryGrant.gd" id="8_pe0gh"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StorySetFlag.gd" id="9_vbafb"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryHasFlag.gd" id="10_iglno"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="11_leqid"]
+
+[sub_resource type="Resource" id="Resource_dqcp3"]
+script = ExtResource("2_8eiah")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_k6rit"]
+script = ExtResource("5_1nxkx")
+exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_dqcp3")])
+id = 1
+graph_position = Vector2(80, 80)
+
+[sub_resource type="Resource" id="Resource_q20s3"]
+script = ExtResource("2_8eiah")
+target_id = 5
+
+[sub_resource type="Resource" id="Resource_tjxkf"]
+script = ExtResource("5_1nxkx")
+entry_name = "return"
+exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_q20s3")])
+id = 2
+graph_position = Vector2(80, 340)
+
+[sub_resource type="Resource" id="Resource_iasab"]
+script = ExtResource("2_8eiah")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_56gd1"]
+script = ExtResource("6_quw2l")
+text = "Deeper in the same ruin your crews hit metal: a locked crate, half buried. Digging it free will take a while."
+exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_iasab")])
+id = 3
+graph_position = Vector2(460, 80)
+
+[sub_resource type="Resource" id="Resource_tj0ek"]
+script = ExtResource("7_sqnel")
+exit_name = "dig"
+id = 4
+graph_position = Vector2(840, 80)
+
+[sub_resource type="Resource" id="Resource_q3urs"]
+script = ExtResource("8_pe0gh")
+resources = {
+"credits": 300,
+"goods": 40
+}
+
+[sub_resource type="Resource" id="Resource_r1q6p"]
+script = ExtResource("9_vbafb")
+flag = "vesyn_opened"
+
+[sub_resource type="Resource" id="Resource_mls3g"]
+script = ExtResource("2_8eiah")
+target_id = 6
+label = "Open it. Finders keepers."
+actions = Array[ExtResource("3_34kxg")]([SubResource("Resource_q3urs"), SubResource("Resource_r1q6p")])
+
+[sub_resource type="Resource" id="Resource_jr1mk"]
+script = ExtResource("8_pe0gh")
+resources = {
+"science": 60
+}
+
+[sub_resource type="Resource" id="Resource_id7ro"]
+script = ExtResource("9_vbafb")
+flag = "vesyn_honest"
+
+[sub_resource type="Resource" id="Resource_7w268"]
+script = ExtResource("2_8eiah")
+target_id = 7
+label = "Leave it, with a note and your address."
+actions = Array[ExtResource("3_34kxg")]([SubResource("Resource_jr1mk"), SubResource("Resource_id7ro")])
+
+[sub_resource type="Resource" id="Resource_8v5op"]
+script = ExtResource("8_pe0gh")
+resources = {
+"credits": 500
+}
+
+[sub_resource type="Resource" id="Resource_ldrut"]
+script = ExtResource("9_vbafb")
+flag = "vesyn_honest"
+
+[sub_resource type="Resource" id="Resource_6rpsk"]
+script = ExtResource("10_iglno")
+flag = "vesyn_sold"
+
+[sub_resource type="Resource" id="Resource_frs4w"]
+script = ExtResource("2_8eiah")
+target_id = 8
+label = "Show the mark to your bronze buyer."
+condition = SubResource("Resource_6rpsk")
+actions = Array[ExtResource("3_34kxg")]([SubResource("Resource_8v5op"), SubResource("Resource_ldrut")])
+
+[sub_resource type="Resource" id="Resource_ahbxr"]
+script = ExtResource("6_quw2l")
+text = "The crate is out. It carries a trader's mark, fresh paint over old metal. Its owner clearly means to come back."
+exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_mls3g"), SubResource("Resource_7w268"), SubResource("Resource_frs4w")])
+id = 5
+graph_position = Vector2(460, 340)
+
+[sub_resource type="Resource" id="Resource_m2kat"]
+script = ExtResource("2_8eiah")
+target_id = 9
+
+[sub_resource type="Resource" id="Resource_kf4ye"]
+script = ExtResource("6_quw2l")
+text = "Trade goods, well packed. Whoever owned this will notice."
+exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_m2kat")])
+id = 6
+graph_position = Vector2(840, 340)
+
+[sub_resource type="Resource" id="Resource_bgjjo"]
+script = ExtResource("2_8eiah")
+target_id = 9
+
+[sub_resource type="Resource" id="Resource_8redg"]
+script = ExtResource("6_quw2l")
+text = "You seal it back up. By morning, the note is gone. The crate is still there."
+exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_bgjjo")])
+id = 7
+graph_position = Vector2(840, 580)
+
+[sub_resource type="Resource" id="Resource_3jyiw"]
+script = ExtResource("2_8eiah")
+target_id = 9
+
+[sub_resource type="Resource" id="Resource_osdpf"]
+script = ExtResource("6_quw2l")
+text = "The buyer knows the mark at once: a trader named Vale. They pay you well to pass along a message."
+exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_3jyiw")])
+id = 8
+graph_position = Vector2(840, 820)
+
+[sub_resource type="Resource" id="Resource_bvmdx"]
+script = ExtResource("7_sqnel")
+id = 9
+graph_position = Vector2(1220, 340)
+
+[resource]
+script = ExtResource("11_leqid")
+graph_name = "vesyn_2_traders_cache"
+next_free_id = 10
+nodes = Array[ExtResource("1_60kkc")]([SubResource("Resource_k6rit"), SubResource("Resource_tjxkf"), SubResource("Resource_56gd1"), SubResource("Resource_tj0ek"), SubResource("Resource_ahbxr"), SubResource("Resource_kf4ye"), SubResource("Resource_8redg"), SubResource("Resource_osdpf"), SubResource("Resource_bvmdx")])
+occurrences = Array[String](["start", "return"])
+endings = Array[String](["dig", "end"])

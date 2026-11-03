@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CompanionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/CompanionDef.gd" id="1_7slu0"]
+
+[resource]
+script = ExtResource("1_7slu0")
+companion_id = "dorian_hale"
+display_name = "Dorian Hale"
+role = "Lunar contractor"
+bio = "Has spent a year alone with a hatch older than any record. Reads a builder's mark the way others read a blueprint."
+hint = "Something inside a crater on the Moon keeps sending a pulse."
+order = 1
+bonus = 1
+bonus_value = 0.25
+legacy_relic_id = "selene_seal"

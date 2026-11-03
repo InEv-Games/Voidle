@@ -1,0 +1,116 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_0l7gq"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_g1h8r"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_hcb7e"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_pw41v"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_n0f17"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="6_q16xb"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="7_w6ua3"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryGrant.gd" id="8_7iqko"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="9_pqtvh"]
+
+[sub_resource type="Resource" id="Resource_van6q"]
+script = ExtResource("2_g1h8r")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_e2b6w"]
+script = ExtResource("5_n0f17")
+exits = Array[ExtResource("2_g1h8r")]([SubResource("Resource_van6q")])
+id = 1
+graph_position = Vector2(80, 80)
+
+[sub_resource type="Resource" id="Resource_3cdct"]
+script = ExtResource("2_g1h8r")
+target_id = 5
+
+[sub_resource type="Resource" id="Resource_12o8q"]
+script = ExtResource("5_n0f17")
+entry_name = "return"
+exits = Array[ExtResource("2_g1h8r")]([SubResource("Resource_3cdct")])
+id = 2
+graph_position = Vector2(80, 340)
+
+[sub_resource type="Resource" id="Resource_xsj22"]
+script = ExtResource("2_g1h8r")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_dalo3"]
+script = ExtResource("6_q16xb")
+text = "Tool marks run along the crater wall, cut straight and spaced like a blueprint. Exposing the rest will take time."
+exits = Array[ExtResource("2_g1h8r")]([SubResource("Resource_xsj22")])
+id = 3
+graph_position = Vector2(460, 80)
+
+[sub_resource type="Resource" id="Resource_44lxx"]
+script = ExtResource("7_w6ua3")
+exit_name = "dig"
+id = 4
+graph_position = Vector2(840, 80)
+
+[sub_resource type="Resource" id="Resource_wq6os"]
+script = ExtResource("8_7iqko")
+resources = {
+"goods": 60,
+"science": 150
+}
+
+[sub_resource type="Resource" id="Resource_6q3dn"]
+script = ExtResource("2_g1h8r")
+target_id = 6
+label = "Copy the pattern for your engineers."
+actions = Array[ExtResource("3_hcb7e")]([SubResource("Resource_wq6os")])
+
+[sub_resource type="Resource" id="Resource_gv7jg"]
+script = ExtResource("8_7iqko")
+resources = {
+"moonstone": 300
+}
+
+[sub_resource type="Resource" id="Resource_fi25p"]
+script = ExtResource("2_g1h8r")
+target_id = 7
+label = "Cut out a sample of the wall."
+actions = Array[ExtResource("3_hcb7e")]([SubResource("Resource_gv7jg")])
+
+[sub_resource type="Resource" id="Resource_xdjlp"]
+script = ExtResource("6_q16xb")
+text = "The wall is bare now, and the marks run on for a kilometre."
+exits = Array[ExtResource("2_g1h8r")]([SubResource("Resource_6q3dn"), SubResource("Resource_fi25p")])
+id = 5
+graph_position = Vector2(460, 340)
+
+[sub_resource type="Resource" id="Resource_woxff"]
+script = ExtResource("2_g1h8r")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_b7efe"]
+script = ExtResource("6_q16xb")
+text = "Your engineers argue over the drawings for days. Nobody leaves the room."
+exits = Array[ExtResource("2_g1h8r")]([SubResource("Resource_woxff")])
+id = 6
+graph_position = Vector2(840, 340)
+
+[sub_resource type="Resource" id="Resource_tahdj"]
+script = ExtResource("2_g1h8r")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_goif0"]
+script = ExtResource("6_q16xb")
+text = "The saw takes a whole shift. Behind the cut, someone has left a fresh boot print."
+exits = Array[ExtResource("2_g1h8r")]([SubResource("Resource_tahdj")])
+id = 7
+graph_position = Vector2(840, 580)
+
+[sub_resource type="Resource" id="Resource_py8on"]
+script = ExtResource("7_w6ua3")
+id = 8
+graph_position = Vector2(1220, 340)
+
+[resource]
+script = ExtResource("9_pqtvh")
+graph_name = "moon_2_builders_marks"
+next_free_id = 9
+nodes = Array[ExtResource("1_0l7gq")]([SubResource("Resource_e2b6w"), SubResource("Resource_12o8q"), SubResource("Resource_dalo3"), SubResource("Resource_44lxx"), SubResource("Resource_xdjlp"), SubResource("Resource_b7efe"), SubResource("Resource_goif0"), SubResource("Resource_py8on")])
+occurrences = Array[String](["start", "return"])
+endings = Array[String](["dig", "end"])

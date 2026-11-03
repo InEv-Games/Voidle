@@ -365,7 +365,7 @@ static func cycle_text(sec: float) -> String:
 	return "%ds" % roundi(sec)
 
 func district_build_speed() -> float:
-	return Relics.build_speed()
+	return Excavations.build_speed()
 
 ## Every finished surface district makes its base income (DistrictDef.base_outputs)
 ## on its own cycle. Energy and population are flows / capacity, handled in

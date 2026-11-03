@@ -1,0 +1,63 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/excavation/CompanionCard.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://resources/companions/portraits/silhouette.svg" id="2_portrait"]
+
+[sub_resource type="StyleBoxFlat" id="panel_box"]
+content_margin_left = 12.0
+content_margin_top = 12.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+bg_color = Color(0.04, 0.05, 0.09, 0.98)
+border_width_left = 1
+border_width_top = 3
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.98, 0.8, 0.36, 0.6)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="CompanionCard" type="PanelContainer"]
+custom_minimum_size = Vector2(248, 0)
+theme_override_styles/panel = SubResource("panel_box")
+script = ExtResource("1_script")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Portrait" type="TextureRect" parent="VBox"]
+custom_minimum_size = Vector2(224, 240)
+layout_mode = 2
+texture = ExtResource("2_portrait")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Name" type="Label" parent="VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "NAME"
+
+[node name="Role" type="Label" parent="VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.66, 0.8, 1)
+theme_override_font_sizes/font_size = 11
+text = "Role"
+
+[node name="Bonus" type="Label" parent="VBox"]
+custom_minimum_size = Vector2(224, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.95, 0.6, 1)
+theme_override_font_sizes/font_size = 12
+text = "+5% Credits everywhere"
+autowrap_mode = 3
+
+[node name="Bio" type="Label" parent="VBox"]
+custom_minimum_size = Vector2(224, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.77, 0.88, 1)
+theme_override_font_sizes/font_size = 11
+text = "Bio"
+autowrap_mode = 3

@@ -1,0 +1,125 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_ujds8"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_70vgn"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_0qlg3"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_gvsm7"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_6kcoo"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryGrant.gd" id="6_q0ao8"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryHasFlag.gd" id="7_523ca"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="8_osycq"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="9_pevbw"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="10_c3p3b"]
+
+[sub_resource type="Resource" id="Resource_xeu7r"]
+script = ExtResource("2_70vgn")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_mi82r"]
+script = ExtResource("5_6kcoo")
+exits = Array[ExtResource("2_70vgn")]([SubResource("Resource_xeu7r")])
+id = 1
+graph_position = Vector2(80, 80)
+
+[sub_resource type="Resource" id="Resource_j0e7c"]
+script = ExtResource("6_q0ao8")
+resources = {
+"science": 400
+}
+
+[sub_resource type="Resource" id="Resource_ciey7"]
+script = ExtResource("7_523ca")
+flag = "vesyn_scholars"
+
+[sub_resource type="Resource" id="Resource_2he8u"]
+script = ExtResource("2_70vgn")
+target_id = 5
+condition = SubResource("Resource_ciey7")
+actions = Array[ExtResource("3_0qlg3")]([SubResource("Resource_j0e7c")])
+
+[sub_resource type="Resource" id="Resource_1lcld"]
+script = ExtResource("6_q0ao8")
+resources = {
+"credits": 1500
+}
+
+[sub_resource type="Resource" id="Resource_8cqgq"]
+script = ExtResource("7_523ca")
+flag = "vesyn_scholars"
+negate = true
+
+[sub_resource type="Resource" id="Resource_358k4"]
+script = ExtResource("2_70vgn")
+target_id = 6
+condition = SubResource("Resource_8cqgq")
+actions = Array[ExtResource("3_0qlg3")]([SubResource("Resource_1lcld")])
+
+[sub_resource type="Resource" id="Resource_4dbcm"]
+script = ExtResource("5_6kcoo")
+entry_name = "return"
+exits = Array[ExtResource("2_70vgn")]([SubResource("Resource_2he8u"), SubResource("Resource_358k4")])
+id = 2
+graph_position = Vector2(80, 340)
+
+[sub_resource type="Resource" id="Resource_6ux5k"]
+script = ExtResource("2_70vgn")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_8osx2"]
+script = ExtResource("8_osycq")
+text = "One sketch keeps coming back in the ledgers: a line through the ruins, aimed at the sky. Surveying it properly will take time."
+exits = Array[ExtResource("2_70vgn")]([SubResource("Resource_6ux5k")])
+id = 3
+graph_position = Vector2(460, 80)
+
+[sub_resource type="Resource" id="Resource_hnw6n"]
+script = ExtResource("9_pevbw")
+exit_name = "dig"
+id = 4
+graph_position = Vector2(840, 80)
+
+[sub_resource type="Resource" id="Resource_e25vh"]
+script = ExtResource("2_70vgn")
+target_id = 7
+
+[sub_resource type="Resource" id="Resource_mugp2"]
+script = ExtResource("8_osycq")
+text = "Your first catalogue finally pays off: the instruments were never tools. Placed back on their shelves, they form a sighting line."
+exits = Array[ExtResource("2_70vgn")]([SubResource("Resource_e25vh")])
+id = 5
+graph_position = Vector2(460, 340)
+
+[sub_resource type="Resource" id="Resource_k1ul6"]
+script = ExtResource("2_70vgn")
+target_id = 7
+
+[sub_resource type="Resource" id="Resource_sc1s2"]
+script = ExtResource("8_osycq")
+text = "The bronze is long sold, but your buyers still pay for the story, and their old sketches show a sighting line."
+exits = Array[ExtResource("2_70vgn")]([SubResource("Resource_k1ul6")])
+id = 6
+graph_position = Vector2(460, 580)
+
+[sub_resource type="Resource" id="Resource_rdn66"]
+script = ExtResource("2_70vgn")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_urixp"]
+script = ExtResource("8_osycq")
+text = "Every stone of the ruins points the same way: at the Moon. Whoever built this meant to leave."
+exits = Array[ExtResource("2_70vgn")]([SubResource("Resource_rdn66")])
+id = 7
+graph_position = Vector2(840, 340)
+
+[sub_resource type="Resource" id="Resource_iyl71"]
+script = ExtResource("9_pevbw")
+id = 8
+graph_position = Vector2(1220, 340)
+
+[resource]
+script = ExtResource("10_c3p3b")
+graph_name = "vesyn_5_pale_line"
+next_free_id = 9
+nodes = Array[ExtResource("1_ujds8")]([SubResource("Resource_mi82r"), SubResource("Resource_4dbcm"), SubResource("Resource_8osx2"), SubResource("Resource_hnw6n"), SubResource("Resource_mugp2"), SubResource("Resource_sc1s2"), SubResource("Resource_urixp"), SubResource("Resource_iyl71")])
+occurrences = Array[String](["start", "return"])
+endings = Array[String](["dig", "end"])

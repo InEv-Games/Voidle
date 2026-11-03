@@ -3,8 +3,8 @@ extends Node2D
 signal poi_clicked(index: int, data: Dictionary)
 ## The small Capital badge beside a City's marker was clicked (opens its Capital District).
 signal capital_clicked(index: int)
-## A relic site was clicked (Relics): its relic id.
-signal relic_clicked(relic_id: String)
+## An excavation mark was clicked (Excavations): its site id.
+signal excavation_clicked(site_id: String)
 
 const DOT_RADIUS       := 5.0
 const DOT_HOVER_RADIUS := 8.0
@@ -529,11 +529,12 @@ func _draw_wonders() -> void:
 			draw_rect(box, Color(BIG_ICON_COL, 0.6), false, 1.0)
 			draw_string(font, box.position + Vector2(5.0, 11.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, BIG_ICON_COL)
 
-## Relic sites (Relics.sites_on): [{ id, name, lon, lat (radians) }].
-var relics: Array = []
-var _hover_relic: Dictionary = {}
-const RELIC_COL := Color(1.0, 0.80, 0.35)
-const _RELIC_ICON := [
+## Excavation marks (Excavations.sites_on): [{ id, name, lon, lat (radians), done, total, site }].
+var sites: Array = []
+var _hover_site: Dictionary = {}
+const SITE_COL := Color(1.0, 0.80, 0.35)
+const SITE_DIG_COL := Color(0.62, 0.72, 0.88)
+const _SITE_ICON := [
 	"...#...",
 	"..###..",
 	".##.##.",
@@ -543,40 +544,76 @@ const _RELIC_ICON := [
 	"...#...",
 ]
 
-func _draw_relics() -> void:
-	if relics.is_empty() or marker_vis <= 0.02:
+func _draw_sites() -> void:
+	if sites.is_empty() or marker_vis <= 0.02:
 		return
 	var p := _get_planet_params()
 	if p.is_empty():
 		return
 	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
 	var pulse := 0.65 + 0.35 * sin(Time.get_ticks_msec() / 260.0)
-	for r: Dictionary in relics:
+	var font: Font = _orbitron if _orbitron else ThemeDB.fallback_font
+	const SIZE := 9
+	for r: Dictionary in sites:
 		var at = _wonder_screen(r, p)
 		if at == null:
 			continue
 		var sp := _snap_local((at as Vector2) - global_position)
-		var hov: bool = _hover_relic.get("id", "") == r["id"]
-		_draw_pixel_glow(sp, block * (5.0 + 2.0 * pulse), 0.35 * pulse * marker_vis)
-		_draw_pixel_icon(sp, _RELIC_ICON, block, Color(RELIC_COL.lightened(0.35) if hov else RELIC_COL, marker_vis), marker_vis)
+		var hov: bool = _hover_site.get("id", "") == r["id"]
+		var s: ExcavationSiteDef = r["site"]
+		var stage := Excavations.stage(s)
+		var digging := stage == Excavations.Stage.DIGGING
+		var col := SITE_DIG_COL if digging else SITE_COL
+		if not digging:   # waiting for the player: it calls out
+			var calling := stage == Excavations.Stage.READY
+			_draw_pixel_glow(sp, block * ((7.0 if calling else 5.0) + 2.0 * pulse), (0.6 if calling else 0.35) * pulse * marker_vis)
+		_draw_pixel_icon(sp, _SITE_ICON, block, Color(col.lightened(0.35) if hov else col, marker_vis), marker_vis)
+		var total: int = r.get("total", 1)
+		var head := block * 3.0   # room above the mark for its hover label
+		if total > 1:
+			var part := 1.0 - Excavations.time_left(s) / maxf(s.duration_sec, 1.0) if digging else 0.0
+			_draw_site_bar(sp, int(r.get("done", 0)), total, block, part)
+			head = block * 9.0
+		var below := ""
+		if digging:
+			below = Excavations.time_text(Excavations.time_left(s))
+		elif stage == Excavations.Stage.READY:
+			below = "READY"
+		if below != "":
+			var bw := font.get_string_size(below, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE).x
+			var bp := sp + Vector2(-bw * 0.5, block * 4.0 + SIZE)
+			draw_string_outline(font, bp, below, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, 3, Color(0, 0, 0, marker_vis))
+			draw_string(font, bp, below, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, Color(col, marker_vis))
 		if hov:
-			var font: Font = _orbitron if _orbitron else ThemeDB.fallback_font
-			var text := "RELIC SITE · CLICK"
-			const SIZE := 9
+			var text := "%s · %s" % [String(r["name"]).to_upper(), "DIGGING" if digging else "CLICK"]
 			var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE).x
-			var box := Rect2(sp + Vector2(-tw * 0.5 - 5.0, -block * 3.0 - 15.0), Vector2(tw + 10.0, 15.0))
+			var box := Rect2(sp + Vector2(-tw * 0.5 - 5.0, -head - 15.0), Vector2(tw + 10.0, 15.0))
 			draw_rect(box, Color(0.04, 0.07, 0.14, 0.88))
-			draw_rect(box, Color(RELIC_COL, 0.7), false, 1.0)
-			draw_string(font, box.position + Vector2(5.0, 11.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, RELIC_COL)
+			draw_rect(box, Color(col, 0.7), false, 1.0)
+			draw_string(font, box.position + Vector2(5.0, 11.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, col)
 
-func _relic_at(global_pos: Vector2) -> Dictionary:
-	if marker_vis < 0.5 or relics.is_empty():
+## A notched bar over a mark: one notch per excavation of its ruin, lit if done;
+## the one being dug fills by `part` (0..1).
+func _draw_site_bar(sp: Vector2, done: int, total: int, block: float, part := 0.0) -> void:
+	var seg := Vector2(block * 3.0, block * 2.0)
+	var w := total * seg.x + (total - 1) * block
+	var origin := (sp + Vector2(-w * 0.5, -block * 7.0)).floor()
+	draw_rect(Rect2(origin - Vector2(block, block), Vector2(w + block * 2.0, seg.y + block * 2.0)), Color(0, 0, 0, 0.85 * marker_vis))
+	for i in total:
+		var col := Color(SITE_COL, marker_vis) if i < done else Color(0.28, 0.25, 0.18, marker_vis)
+		var at := origin + Vector2(i * (seg.x + block), 0.0)
+		draw_rect(Rect2(at, seg), col)
+		if i == done and part > 0.0:
+			draw_rect(Rect2(at, Vector2(seg.x * part, seg.y)), Color(SITE_DIG_COL, marker_vis))
+
+func _site_at(global_pos: Vector2) -> Dictionary:
+	if marker_vis < 0.5 or sites.is_empty():
 		return {}
 	var p := _get_planet_params()
 	if p.is_empty():
 		return {}
 	var reach := maxf(9.0, _pixel_size() * 2.5)
-	for r: Dictionary in relics:
+	for r: Dictionary in sites:
 		var at = _wonder_screen(r, p)
 		if at != null and (at as Vector2).distance_to(global_pos) <= reach:
 			return r
@@ -1034,8 +1071,8 @@ func update_screen_positions() -> void:
 func _process(_delta: float) -> void:
 	if not _planet:
 		return
-	if not relics.is_empty():
-		queue_redraw()   # relic marks pulse (never from _draw: queue_redraw there loops)
+	if not sites.is_empty():
+		queue_redraw()   # excavation marks pulse (never from _draw: queue_redraw there loops)
 	var p := _get_planet_params()
 	if p.is_empty():
 		return
@@ -1172,7 +1209,6 @@ func _draw_scene(font: Font) -> void:
 	var merges := _label_merges()
 	_draw_roads()
 	_draw_wonders()
-	_draw_relics()
 	_draw_links()
 
 	for ft in _floating_texts:
@@ -1337,8 +1373,11 @@ func _draw_scene(font: Font) -> void:
 			draw_string(font, lv_pos, lv_str,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, LV_SIZE, Color(0.65, 0.85, 1.0, alpha * 0.85))
 
+	_draw_sites()   # above the markers: a City may stand on its spot
+
 ## A filled pill with the level, drawn after the name (before it when the
 ## label hangs to the left). Cities get a crown-coloured border.
+
 func _draw_level_badge(font: Font, lv: int, label_pos: Vector2, text_size: Vector2,
 		horiz_dir: float, alpha: float, is_city: bool) -> void:
 	const SIZE := 11
@@ -1364,11 +1403,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventMouseMotion:
 		_hover_port = _port_at(event.global_position)
-		var prev_r: String = _hover_relic.get("id", "")
-		_hover_relic = _relic_at(event.global_position)
-		if String(_hover_relic.get("id", "")) != prev_r:
+		var prev_r: String = _hover_site.get("id", "")
+		_hover_site = _site_at(event.global_position)
+		if String(_hover_site.get("id", "")) != prev_r:
 			queue_redraw()
-			if not _hover_relic.is_empty():
+			if not _hover_site.is_empty():
 				AudioManager.play("poi_ping")
 				CursorManager.set_state(CursorManager.State.POINTER)
 		var prev_w: String = _hover_wonder.get("name", "")
@@ -1401,10 +1440,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			CursorManager.set_state(CursorManager.State.NORMAL)
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var rel := _relic_at(event.global_position)
+		var rel := _site_at(event.global_position)
 		if not rel.is_empty():
 			AudioManager.play("poi_select")
-			relic_clicked.emit(String(rel["id"]))
+			excavation_clicked.emit(String(rel["id"]))
 			get_viewport().set_input_as_handled()
 			return
 		var cap := _get_capital_at(event.global_position)

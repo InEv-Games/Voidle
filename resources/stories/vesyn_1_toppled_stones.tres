@@ -1,0 +1,124 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_wnvqg"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_fb3j0"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_smols"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_di0j0"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_4hxdn"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="6_6j2nd"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="7_f7btk"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryGrant.gd" id="8_y5j3a"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StorySetFlag.gd" id="9_1umm4"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="10_1ixl2"]
+
+[sub_resource type="Resource" id="Resource_i8odk"]
+script = ExtResource("2_fb3j0")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_b2h6f"]
+script = ExtResource("5_4hxdn")
+exits = Array[ExtResource("2_fb3j0")]([SubResource("Resource_i8odk")])
+id = 1
+graph_position = Vector2(80, 80)
+
+[sub_resource type="Resource" id="Resource_ry55i"]
+script = ExtResource("2_fb3j0")
+target_id = 5
+
+[sub_resource type="Resource" id="Resource_bbxit"]
+script = ExtResource("5_4hxdn")
+entry_name = "return"
+exits = Array[ExtResource("2_fb3j0")]([SubResource("Resource_ry55i")])
+id = 2
+graph_position = Vector2(80, 340)
+
+[sub_resource type="Resource" id="Resource_73168"]
+script = ExtResource("2_fb3j0")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_beu1f"]
+script = ExtResource("6_6j2nd")
+text = "Your surveyors lift the last toppled stone. Beneath it, a stair runs down into the dark. Clearing it will take crews, supplies and time."
+exits = Array[ExtResource("2_fb3j0")]([SubResource("Resource_73168")])
+id = 3
+graph_position = Vector2(460, 80)
+
+[sub_resource type="Resource" id="Resource_hgi17"]
+script = ExtResource("7_f7btk")
+exit_name = "dig"
+id = 4
+graph_position = Vector2(840, 80)
+
+[sub_resource type="Resource" id="Resource_cru11"]
+script = ExtResource("8_y5j3a")
+resources = {
+"science": 150
+}
+
+[sub_resource type="Resource" id="Resource_x0mad"]
+script = ExtResource("9_1umm4")
+flag = "vesyn_scholars"
+
+[sub_resource type="Resource" id="Resource_5ciko"]
+script = ExtResource("2_fb3j0")
+target_id = 6
+label = "Catalogue everything."
+actions = Array[ExtResource("3_smols")]([SubResource("Resource_cru11"), SubResource("Resource_x0mad")])
+
+[sub_resource type="Resource" id="Resource_m8gpm"]
+script = ExtResource("8_y5j3a")
+resources = {
+"credits": 800
+}
+
+[sub_resource type="Resource" id="Resource_3ud6n"]
+script = ExtResource("9_1umm4")
+flag = "vesyn_sold"
+
+[sub_resource type="Resource" id="Resource_ka7h8"]
+script = ExtResource("2_fb3j0")
+target_id = 7
+label = "Sell the bronze to fund the dig."
+actions = Array[ExtResource("3_smols")]([SubResource("Resource_m8gpm"), SubResource("Resource_3ud6n")])
+
+[sub_resource type="Resource" id="Resource_0gywx"]
+script = ExtResource("6_6j2nd")
+text = "The stair is clear. At the bottom lies a dry chamber: shelves of bronze instruments, and no dust at all."
+exits = Array[ExtResource("2_fb3j0")]([SubResource("Resource_5ciko"), SubResource("Resource_ka7h8")])
+id = 5
+graph_position = Vector2(460, 340)
+
+[sub_resource type="Resource" id="Resource_aq3ea"]
+script = ExtResource("2_fb3j0")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_ik2tf"]
+script = ExtResource("6_6j2nd")
+text = "The catalogue fills three crates of notes. Someone kept this place clean, and not long ago."
+exits = Array[ExtResource("2_fb3j0")]([SubResource("Resource_aq3ea")])
+id = 6
+graph_position = Vector2(840, 340)
+
+[sub_resource type="Resource" id="Resource_s4wu1"]
+script = ExtResource("2_fb3j0")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_e4utk"]
+script = ExtResource("6_6j2nd")
+text = "The bronze sells fast. One buyer asks, a little too casually, whether you found a compass."
+exits = Array[ExtResource("2_fb3j0")]([SubResource("Resource_s4wu1")])
+id = 7
+graph_position = Vector2(840, 580)
+
+[sub_resource type="Resource" id="Resource_swsvq"]
+script = ExtResource("7_f7btk")
+id = 8
+graph_position = Vector2(1220, 340)
+
+[resource]
+script = ExtResource("10_1ixl2")
+graph_name = "vesyn_1_toppled_stones"
+next_free_id = 9
+nodes = Array[ExtResource("1_wnvqg")]([SubResource("Resource_b2h6f"), SubResource("Resource_bbxit"), SubResource("Resource_beu1f"), SubResource("Resource_hgi17"), SubResource("Resource_0gywx"), SubResource("Resource_ik2tf"), SubResource("Resource_e4utk"), SubResource("Resource_swsvq")])
+occurrences = Array[String](["start", "return"])
+endings = Array[String](["dig", "end"])

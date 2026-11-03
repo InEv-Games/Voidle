@@ -1,0 +1,181 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_3pq7g"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_px8ca"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_4vhhx"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_wx0o3"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_u3t5j"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryGrant.gd" id="6_mqcwm"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryHasFlag.gd" id="7_khnnh"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="8_21m3j"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="9_fijuy"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_talker_modifier.gd" id="10_fgqj3"]
+[ext_resource type="Resource" path="res://resources/companions/sera_vale.tres" id="11_l4lor"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryJoinCompanion.gd" id="12_3joev"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StorySetFlag.gd" id="13_vqsgn"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="14_lackm"]
+
+[sub_resource type="Resource" id="Resource_s20ep"]
+script = ExtResource("2_px8ca")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_18p25"]
+script = ExtResource("5_u3t5j")
+exits = Array[ExtResource("2_px8ca")]([SubResource("Resource_s20ep")])
+id = 1
+graph_position = Vector2(80, 80)
+
+[sub_resource type="Resource" id="Resource_hesbj"]
+script = ExtResource("6_mqcwm")
+resources = {
+"credits": 300
+}
+
+[sub_resource type="Resource" id="Resource_4m1we"]
+script = ExtResource("7_khnnh")
+flag = "vesyn_honest"
+
+[sub_resource type="Resource" id="Resource_jwb75"]
+script = ExtResource("2_px8ca")
+target_id = 5
+condition = SubResource("Resource_4m1we")
+actions = Array[ExtResource("3_4vhhx")]([SubResource("Resource_hesbj")])
+
+[sub_resource type="Resource" id="Resource_xquv0"]
+script = ExtResource("7_khnnh")
+flag = "vesyn_honest"
+negate = true
+
+[sub_resource type="Resource" id="Resource_nn1sj"]
+script = ExtResource("2_px8ca")
+target_id = 6
+condition = SubResource("Resource_xquv0")
+
+[sub_resource type="Resource" id="Resource_wuy7m"]
+script = ExtResource("5_u3t5j")
+entry_name = "return"
+exits = Array[ExtResource("2_px8ca")]([SubResource("Resource_jwb75"), SubResource("Resource_nn1sj")])
+id = 2
+graph_position = Vector2(80, 340)
+
+[sub_resource type="Resource" id="Resource_pu5j5"]
+script = ExtResource("2_px8ca")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_t3s2f"]
+script = ExtResource("8_21m3j")
+text = "Fresh tool marks at the far end of the ruin, and they aren't yours. Someone else is digging here. Your crews can break through to them."
+exits = Array[ExtResource("2_px8ca")]([SubResource("Resource_pu5j5")])
+id = 3
+graph_position = Vector2(460, 80)
+
+[sub_resource type="Resource" id="Resource_4wpmt"]
+script = ExtResource("9_fijuy")
+exit_name = "dig"
+id = 4
+graph_position = Vector2(840, 80)
+
+[sub_resource type="Resource" id="Resource_xgwnw"]
+script = ExtResource("2_px8ca")
+target_id = 7
+
+[sub_resource type="Resource" id="Resource_xc27u"]
+script = ExtResource("10_fgqj3")
+talker = "Sera Vale"
+
+[sub_resource type="Resource" id="Resource_tbxvr"]
+script = ExtResource("8_21m3j")
+text = "You're the ones who left my crate alone. I'm Sera Vale. Most people aren't so polite, so here's something for your trouble."
+exits = Array[ExtResource("2_px8ca")]([SubResource("Resource_xgwnw")])
+id = 5
+graph_position = Vector2(460, 340)
+modifiers = Array[ExtResource("4_wx0o3")]([SubResource("Resource_xc27u")])
+
+[sub_resource type="Resource" id="Resource_6u83b"]
+script = ExtResource("2_px8ca")
+target_id = 7
+
+[sub_resource type="Resource" id="Resource_s8heo"]
+script = ExtResource("10_fgqj3")
+talker = "Sera Vale"
+
+[sub_resource type="Resource" id="Resource_p2gp7"]
+script = ExtResource("8_21m3j")
+text = "So you're the ones who opened my crate. I'm Sera Vale. You owe me, and I fully intend to collect."
+exits = Array[ExtResource("2_px8ca")]([SubResource("Resource_6u83b")])
+id = 6
+graph_position = Vector2(460, 320)
+modifiers = Array[ExtResource("4_wx0o3")]([SubResource("Resource_s8heo")])
+
+[sub_resource type="Resource" id="Resource_yya53"]
+script = ExtResource("6_mqcwm")
+resources = {
+"credits": 500
+}
+
+[sub_resource type="Resource" id="Resource_ejf26"]
+script = ExtResource("12_3joev")
+companion = ExtResource("11_l4lor")
+
+[sub_resource type="Resource" id="Resource_880bn"]
+script = ExtResource("2_px8ca")
+target_id = 8
+label = "Join us. We pay in contracts."
+actions = Array[ExtResource("3_4vhhx")]([SubResource("Resource_yya53"), SubResource("Resource_ejf26")])
+
+[sub_resource type="Resource" id="Resource_8q2y3"]
+script = ExtResource("6_mqcwm")
+resources = {
+"science": 150
+}
+
+[sub_resource type="Resource" id="Resource_s0ap4"]
+script = ExtResource("13_vqsgn")
+flag = "vesyn_sera_curious"
+
+[sub_resource type="Resource" id="Resource_uefb4"]
+script = ExtResource("12_3joev")
+companion = ExtResource("11_l4lor")
+
+[sub_resource type="Resource" id="Resource_w1ftr"]
+script = ExtResource("2_px8ca")
+target_id = 8
+label = "Join us. We want to know what it points at."
+actions = Array[ExtResource("3_4vhhx")]([SubResource("Resource_8q2y3"), SubResource("Resource_s0ap4"), SubResource("Resource_uefb4")])
+
+[sub_resource type="Resource" id="Resource_tetbb"]
+script = ExtResource("10_fgqj3")
+talker = "Sera Vale"
+
+[sub_resource type="Resource" id="Resource_04fih"]
+script = ExtResource("8_21m3j")
+text = "This compass ignores the poles. It points at your Moon, and I can't get there alone. You have rockets. I have routes."
+exits = Array[ExtResource("2_px8ca")]([SubResource("Resource_880bn"), SubResource("Resource_w1ftr")])
+id = 7
+graph_position = Vector2(840, 340)
+modifiers = Array[ExtResource("4_wx0o3")]([SubResource("Resource_tetbb")])
+
+[sub_resource type="Resource" id="Resource_jgkag"]
+script = ExtResource("2_px8ca")
+target_id = 9
+
+[sub_resource type="Resource" id="Resource_ttnq8"]
+script = ExtResource("8_21m3j")
+text = "Sera signs on, and has renegotiated two of your supply contracts by evening."
+exits = Array[ExtResource("2_px8ca")]([SubResource("Resource_jgkag")])
+id = 8
+graph_position = Vector2(1220, 340)
+
+[sub_resource type="Resource" id="Resource_3aarp"]
+script = ExtResource("9_fijuy")
+id = 9
+graph_position = Vector2(1600, 340)
+
+[resource]
+script = ExtResource("14_lackm")
+graph_name = "vesyn_3_compass_bearer"
+next_free_id = 10
+nodes = Array[ExtResource("1_3pq7g")]([SubResource("Resource_18p25"), SubResource("Resource_wuy7m"), SubResource("Resource_t3s2f"), SubResource("Resource_4wpmt"), SubResource("Resource_tbxvr"), SubResource("Resource_p2gp7"), SubResource("Resource_04fih"), SubResource("Resource_ttnq8"), SubResource("Resource_3aarp")])
+occurrences = Array[String](["start", "return"])
+endings = Array[String](["dig", "end"])
+talkers = Array[String](["Sera Vale"])

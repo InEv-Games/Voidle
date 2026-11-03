@@ -1,0 +1,128 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_2t2pi"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_f3r3h"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_ox24b"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_wcxqr"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_8nc01"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_talker_modifier.gd" id="6_7f8my"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="7_ssqyv"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="8_hbif7"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryGrant.gd" id="9_rilm5"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="10_mtbsq"]
+
+[sub_resource type="Resource" id="Resource_ruyqa"]
+script = ExtResource("2_f3r3h")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_7v6ja"]
+script = ExtResource("5_8nc01")
+exits = Array[ExtResource("2_f3r3h")]([SubResource("Resource_ruyqa")])
+id = 1
+graph_position = Vector2(80, 80)
+
+[sub_resource type="Resource" id="Resource_w7twn"]
+script = ExtResource("2_f3r3h")
+target_id = 5
+
+[sub_resource type="Resource" id="Resource_kub4a"]
+script = ExtResource("5_8nc01")
+entry_name = "return"
+exits = Array[ExtResource("2_f3r3h")]([SubResource("Resource_w7twn")])
+id = 2
+graph_position = Vector2(80, 340)
+
+[sub_resource type="Resource" id="Resource_g7xnb"]
+script = ExtResource("2_f3r3h")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_caob3"]
+script = ExtResource("6_7f8my")
+talker = "Sera Vale"
+
+[sub_resource type="Resource" id="Resource_kavdo"]
+script = ExtResource("7_ssqyv")
+text = "There's another ruin on my route, and a door in it that isn't a tomb's. Give me a crew and some time and I'll tell you what it really is."
+exits = Array[ExtResource("2_f3r3h")]([SubResource("Resource_g7xnb")])
+id = 3
+graph_position = Vector2(460, 80)
+modifiers = Array[ExtResource("4_wcxqr")]([SubResource("Resource_caob3")])
+
+[sub_resource type="Resource" id="Resource_17w3g"]
+script = ExtResource("8_hbif7")
+exit_name = "dig"
+id = 4
+graph_position = Vector2(840, 80)
+
+[sub_resource type="Resource" id="Resource_dnw4a"]
+script = ExtResource("9_rilm5")
+resources = {
+"ferrite": 300,
+"goods": 40
+}
+
+[sub_resource type="Resource" id="Resource_cfqup"]
+script = ExtResource("2_f3r3h")
+target_id = 6
+label = "Open the vault by the book."
+actions = Array[ExtResource("3_ox24b")]([SubResource("Resource_dnw4a")])
+
+[sub_resource type="Resource" id="Resource_6irvo"]
+script = ExtResource("9_rilm5")
+resources = {
+"credits": 1200
+}
+
+[sub_resource type="Resource" id="Resource_gvcf6"]
+script = ExtResource("2_f3r3h")
+target_id = 7
+label = "Force it. Time is money."
+actions = Array[ExtResource("3_ox24b")]([SubResource("Resource_6irvo")])
+
+[sub_resource type="Resource" id="Resource_5x1t6"]
+script = ExtResource("6_7f8my")
+talker = "Sera Vale"
+
+[sub_resource type="Resource" id="Resource_4h3tk"]
+script = ExtResource("7_ssqyv")
+text = "It's an accounts office. Someone ran a trade route from here, straight into the sky."
+exits = Array[ExtResource("2_f3r3h")]([SubResource("Resource_cfqup"), SubResource("Resource_gvcf6")])
+id = 5
+graph_position = Vector2(460, 340)
+modifiers = Array[ExtResource("4_wcxqr")]([SubResource("Resource_5x1t6")])
+
+[sub_resource type="Resource" id="Resource_8q1b0"]
+script = ExtResource("2_f3r3h")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_63mkx"]
+script = ExtResource("7_ssqyv")
+text = "The lock gives way after two careful days. Inside: sealed stores, still good."
+exits = Array[ExtResource("2_f3r3h")]([SubResource("Resource_8q1b0")])
+id = 6
+graph_position = Vector2(840, 340)
+
+[sub_resource type="Resource" id="Resource_mtpfa"]
+script = ExtResource("2_f3r3h")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_egnlk"]
+script = ExtResource("7_ssqyv")
+text = "The door comes off in an hour. Half the ledgers burn; the valuables don't."
+exits = Array[ExtResource("2_f3r3h")]([SubResource("Resource_mtpfa")])
+id = 7
+graph_position = Vector2(840, 580)
+
+[sub_resource type="Resource" id="Resource_3avcx"]
+script = ExtResource("8_hbif7")
+id = 8
+graph_position = Vector2(1220, 340)
+
+[resource]
+script = ExtResource("10_mtbsq")
+graph_name = "vesyn_4_ledger_vault"
+next_free_id = 9
+nodes = Array[ExtResource("1_2t2pi")]([SubResource("Resource_7v6ja"), SubResource("Resource_kub4a"), SubResource("Resource_kavdo"), SubResource("Resource_17w3g"), SubResource("Resource_4h3tk"), SubResource("Resource_63mkx"), SubResource("Resource_egnlk"), SubResource("Resource_3avcx")])
+occurrences = Array[String](["start", "return"])
+endings = Array[String](["dig", "end"])
+talkers = Array[String](["Sera Vale"])

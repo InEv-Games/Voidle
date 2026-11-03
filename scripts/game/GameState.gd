@@ -13,17 +13,22 @@ signal global_resources_changed
 signal district_placed(planet_seed: int, district_type_id: int)
 ## Planet traits (PlanetTags): a pick was queued or taken.
 signal tag_offers_changed
-## A relic was found (Relics).
-signal relics_changed
+## An excavation ended or a companion joined (Excavations).
+signal excavations_changed
 
 ## Planet traits: { "seed": [trait id, …] } and picks waiting { "seed": [[id ×3], …] }.
 var planet_tags: Dictionary = {}
 var tag_offers: Dictionary = {}
 ## Re-rolls used on a world's first waiting pick: { "seed": count }.
 var tag_rerolls: Dictionary = {}
-## Relics: { relic id: unix time found } and their sites { relic id: [lon, lat] }.
-var relics_found: Dictionary = {}
-var relic_sites: Dictionary = {}
+## Excavations: { site id: unix time done }, { site id: { ready_at, told } } digging,
+## { place key: [lon, lat] }, { flag: true } the choices stories remember, and
+## { companion id: unix time joined }.
+var excavations_done: Dictionary = {}
+var excavations_digging: Dictionary = {}
+var excavation_sites: Dictionary = {}
+var story_flags: Dictionary = {}
+var companions_joined: Dictionary = {}
 
 # ── Starting Config (edit these to change new-game defaults) ─────────────────
 ## Starting credits / Science for a new game come from the balance profile
@@ -331,6 +336,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not get_tree().paused:
 		play_seconds += delta
+		Excavations.tick()
 	_autosave_timer += delta
 	if _autosave_timer >= AUTOSAVE_INTERVAL:
 		_autosave_timer = 0.0
@@ -1201,8 +1207,11 @@ func save() -> void:
 		"planet_tags":          planet_tags,
 		"tag_offers":           tag_offers,
 		"tag_rerolls":          tag_rerolls,
-		"relics_found":         relics_found,
-		"relic_sites":          relic_sites,
+		"excavations_done":     excavations_done,
+		"excavations_digging":  excavations_digging,
+		"excavation_sites":     excavation_sites,
+		"story_flags":          story_flags,
+		"companions_joined":    companions_joined,
 		"balance_profile":      Balance.profile_name,
 		"credits":              credits,
 		"science_points":       science_points,
@@ -1344,8 +1353,12 @@ func load_save() -> bool:
 	planet_tags = data.get("planet_tags", {})
 	tag_offers = data.get("tag_offers", {})
 	tag_rerolls = data.get("tag_rerolls", {})
-	relics_found = data.get("relics_found", {})
-	relic_sites = data.get("relic_sites", {})
+	excavations_done = data.get("excavations_done", {})
+	excavations_digging = data.get("excavations_digging", {})
+	excavation_sites = data.get("excavation_sites", {})
+	story_flags = data.get("story_flags", {})
+	companions_joined = data.get("companions_joined", {})
+	Excavations.migrate_relics(data.get("relics_found", {}))
 	# time away (KARARLAR §4): only measured and shown — no offline economy yet.
 	# A clock that went backwards counts as no time away (GDD §19.27).
 	var saved_at := float(data.get("saved_at", 0.0))
@@ -1512,8 +1525,11 @@ func delete_save(remove_file := true, rebuild := true) -> void:
 	planet_tags.clear()
 	tag_offers.clear()
 	tag_rerolls.clear()
-	relics_found.clear()
-	relic_sites.clear()
+	excavations_done.clear()
+	excavations_digging.clear()
+	excavation_sites.clear()
+	story_flags.clear()
+	companions_joined.clear()
 	planet_view_unlocked = false
 	global_resources.clear()
 	_planet_progress.clear()

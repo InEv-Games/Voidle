@@ -194,8 +194,8 @@ func _ready() -> void:
 			(planet_renderer.material as ShaderMaterial).set_shader_parameter("night_shadow", v))
 	poi_layer.poi_clicked.connect(_on_district_clicked)
 	poi_layer.capital_clicked.connect(_on_capital_clicked)
-	poi_layer.relic_clicked.connect(func(id: String) -> void: GameOverlays.open_relic_site(self, id))
-	GameState.relics_changed.connect(_refresh_relic_sites)
+	poi_layer.excavation_clicked.connect(func(id: String) -> void: StoryDialog.open(self, id))
+	GameState.excavations_changed.connect(_refresh_excavation_sites)
 	GameState.tag_offers_changed.connect(func() -> void:
 		if current_data != null:
 			_set_planet_hero(current_data)
@@ -536,7 +536,7 @@ func _manage_commands(poi: POIData) -> Array:
 ## Demolish as a visible button (the same command as the right-click menu, so
 ## players find it — playtest 23.10).
 ## The level-up button with Demolish beside it as a square icon button, like
-## the Museum's beside Trade (playtest 31.10).
+## the Companions' beside Trade (playtest 31.10).
 func _with_demolish(level_btn: Control, poi: POIData) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
@@ -2451,7 +2451,7 @@ func focus_lander_at(moon_seed: int) -> void:
 
 ## A news item was clicked (NewsFeed.go_to): { seed, label } turns the camera
 ## to that district / City and opens its panel; { seed, lon, lat } turns to a
-## spot (a relic site); { seed } shows the world. Another world is opened first
+## spot (an excavation); { seed } shows the world. Another world is opened first
 ## (its Moon or parent in place, any other through a scene change).
 func focus_news_location(loc: Dictionary) -> void:
 	var seed_val := int(loc.get("seed", -1))
@@ -2630,6 +2630,7 @@ func _prepare_planet_maps(data: PlanetData) -> void:
 		if not pd.is_orbital() and pd.manual_position:
 			pd.site_features = FeatureMap.shares(data, deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg))
 	_apply_feature_texture()
+	_refresh_excavation_sites()   # a new site's place needs the map
 	RoadNetwork.for_planet(data)   # graph builds on a worker thread
 	_maps_ready_seed = data.seed
 	_roads_dirty = true
@@ -3064,7 +3065,7 @@ func _upload_territories(data: PlanetData) -> void:
 		_territories.append({"n": n, "r": r, "poi": pd,
 			"col": Vector4(c.r, c.g, c.b, light), "sea": 1.0 if _is_sea_site(pd) else 0.0})
 	poi_layer.wonders = _wonder_sites(data)
-	poi_layer.relics = Relics.sites_on(data)
+	poi_layer.sites = Excavations.sites_on(data)
 	# Neighbour pairs drive the arcs and label merging in POILayer; roads are
 	# routed separately (_rebuild_roads).
 	var pairs := _neighbor_pairs()
@@ -4190,10 +4191,10 @@ func _fill_modifiers_section(vbox: VBoxContainer, data: PlanetData) -> void:
 		tag_row.add_child(pill)
 	vbox.add_child(tag_row)
 
-## Relic marks on the open world (Relics.sites_on).
-func _refresh_relic_sites() -> void:
+## Excavation marks on the open world (Excavations.sites_on).
+func _refresh_excavation_sites() -> void:
 	if current_data != null and poi_layer != null and is_instance_valid(poi_layer):
-		poi_layer.relics = Relics.sites_on(current_data)
+		poi_layer.sites = Excavations.sites_on(current_data)
 		poi_layer.queue_redraw()
 
 func _build_system_panel() -> void:
@@ -5103,7 +5104,7 @@ func _tick_surface_scan(delta: float) -> void:
 		if scanned != null and PlanetTags.traits_of(seed_val).is_empty() and PlanetTags.offers_of(seed_val).is_empty():
 			PlanetTags.queue_offer(scanned)
 			GameOverlays.open_trait_picker(self, seed_val)
-		_refresh_relic_sites()
+		_refresh_excavation_sites()
 		GameState.save()
 		AudioManager.play("building_done")
 		_show_unlock_toast("Surface scanned", "Pick a lens at the bottom (Energy, Production …) and hover the surface to see what each spot gives.")

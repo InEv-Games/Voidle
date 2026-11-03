@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ExcavationSiteDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationSiteDef.gd" id="1_pkkdd"]
+[ext_resource type="Resource" path="res://resources/stories/vesyn_2_traders_cache.tres" id="2_lb2f0"]
+
+[resource]
+script = ExtResource("1_pkkdd")
+site_id = "vesyn_traders_cache"
+ruin_id = "vesyn_buried_hall"
+display_name = "The Trader's Cache"
+teaser = "Something has been hidden deeper in the ruin."
+cost = {
+"credits": 500.0,
+"science": 100.0
+}
+duration_sec = 480.0
+reward = {
+"credits": 750.0,
+"science": 160.0
+}
+story = ExtResource("2_lb2f0")

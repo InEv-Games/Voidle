@@ -1,0 +1,61 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/excavation/CompanionGallery.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/IconButton.tscn" id="2_button"]
+
+[node name="CompanionGallery" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Shade" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 30.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0.01, 0.04, 0.8)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="VBox" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Center/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "COMPANIONS"
+horizontal_alignment = 1
+
+[node name="Count" type="Label" parent="Center/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.66, 0.8, 1)
+text = "0 / 0 joined"
+horizontal_alignment = 1
+
+[node name="Grid" type="HFlowContainer" parent="Center/VBox"]
+custom_minimum_size = Vector2(800, 0)
+layout_mode = 2
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 12
+alignment = 1
+
+[node name="Close" parent="Center/VBox" instance=ExtResource("2_button")]
+layout_mode = 2
+size_flags_horizontal = 4
+label_text = "CLOSE"
+layout = 1

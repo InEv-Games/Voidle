@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="ExcavationSiteDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationSiteDef.gd" id="1_fy28g"]
+[ext_resource type="Resource" path="res://resources/stories/moon_3_sealed_hatch.tres" id="2_hbwst"]
+
+[resource]
+script = ExtResource("1_fy28g")
+site_id = "moon_sealed_hatch"
+ruin_id = "moon_echo_crater"
+display_name = "The Sealed Hatch"
+teaser = "Your crews have found a hatch, and a camp beside it."
+cost = {
+"credits": 2000.0,
+"moonstone": 100.0,
+"science": 600.0
+}
+duration_sec = 1200.0
+reward = {
+"credits": 3000.0,
+"moonstone": 160.0,
+"science": 900.0
+}
+terrain = 1
+story = ExtResource("2_hbwst")

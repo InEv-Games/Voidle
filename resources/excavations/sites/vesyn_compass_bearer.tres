@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="ExcavationSiteDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationSiteDef.gd" id="1_f8r2j"]
+[ext_resource type="Resource" path="res://resources/stories/vesyn_3_compass_bearer.tres" id="2_rbynv"]
+
+[resource]
+script = ExtResource("1_f8r2j")
+site_id = "vesyn_compass_bearer"
+ruin_id = "vesyn_buried_hall"
+display_name = "The Compass Bearer"
+teaser = "Someone else is digging here, and they don't work for you."
+cost = {
+"credits": 800.0,
+"ferrite": 100.0,
+"science": 200.0
+}
+duration_sec = 720.0
+reward = {
+"credits": 1200.0,
+"ferrite": 160.0,
+"science": 300.0
+}
+story = ExtResource("2_rbynv")

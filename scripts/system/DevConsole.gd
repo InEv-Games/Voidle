@@ -340,6 +340,8 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]moonlaunch[/color] [color=#aaaaaa][sec] [reset][/color] — send the Moon lander now (default 15s)")
 			_log_info("  [color=#88ddcc]rocket[/color] [color=#aaaaaa][sec][/color] — launch the final rocket now (completes Civilization 0)")
 			_log_info("  [color=#88ddcc]tutorial complete[/color] — skip/finish tutorial")
+			_log_info("  [color=#88ddcc]excavate ready[/color] — finish the digs under way now")
+			_log_info("  [color=#88ddcc]excavate reset[/color] — start every excavation over: marks, story choices, companions")
 			_log_info("[color=#33cc55]── BALANCE ───────────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]balance[/color]                     — active profile and the ones available")
 			_log_info("  [color=#88ddcc]balance[/color] [color=#aaaaaa]<name>[/color]              — switch profile now and list what changed")
@@ -477,6 +479,19 @@ func _exec(line: String) -> void:
 					_log_err("Unknown debug target. Try: coords")
 
 		# ── Colony ──────────────────────────────────────────────────────────
+		"excavate":
+			var sub := parts[1].to_lower() if parts.size() > 1 else ""
+			match sub:
+				"ready":
+					for id: String in GameState.excavations_digging:
+						GameState.excavations_digging[id]["ready_at"] = GameState.play_seconds
+					_log_ok("Digs finished: %d." % GameState.excavations_digging.size())
+				"reset":
+					Excavations.reset_all()
+					_log_ok("Excavations, story choices and companions reset.")
+				_:
+					_log_err("Try: excavate ready | reset")
+
 		"colonize":
 			var seed := GameState.active_planet_seed
 			if seed < 0: _log_err("Not viewing a planet."); return

@@ -1,10 +1,9 @@
 class_name GameOverlays
 extends RefCounted
 
-## Full-screen overlays of the 31.10 mechanics: the planet trait picker (one of
-## three cards with a re-roll, survivors-like), the relic site card and the Relic Museum.
-## Each opens on its own CanvasLayer above the HUD; ESC or a click on the shade
-## closes it (the trait pick stays waiting).
+## Full-screen overlay of the planet trait picker (one of three cards with a
+## re-roll, survivors-like). It opens on its own CanvasLayer above the HUD; ESC
+## or a click on the shade closes it (the trait pick stays waiting).
 
 const LAYER := 240
 const CARD_W := 230.0
@@ -354,95 +353,3 @@ static func _rich(bb: String, size: int, width: float) -> RichTextLabel:
 	l.add_theme_font_size_override("normal_font_size", size)
 	l.text = bb
 	return l
-
-# ── Relic site ───────────────────────────────────────────────────────────────
-
-## The card of a relic site on the map: its story and the excavation.
-static func open_relic_site(host: Node, relic_id: String) -> void:
-	var idx := Relics.index_of(relic_id)
-	if idx < 0:
-		return
-	var r: Dictionary = Relics.CATALOGUE[idx]
-	var o := _overlay(host, "Relic site", "Relic %d of %d" % [idx + 1, Relics.count()])
-	var layer: CanvasLayer = o[0]
-	var card := _card()
-	card.custom_minimum_size.x = 420.0
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	card.add_child(v)
-	var story := _text(String(r["story"]), 12)
-	story.custom_minimum_size.x = 396.0
-	v.add_child(story)
-	var block := Relics.excavate_block(relic_id)
-	var btn := IconButton.create("EXCAVATE", "library", IconButton.Variant.POSITIVE,
-		"%s sci" % Economy.fmt(float(r["cost"])))
-	btn.disabled = block != ""
-	v.add_child(btn)
-	if block != "":
-		v.add_child(_text(block, 11, _bad()))
-	btn.pressed.connect(func() -> void:
-		if not Relics.excavate(relic_id):
-			AudioManager.play("error")
-			return
-		AudioManager.play("achievement")
-		close(layer)
-		_found_card(host, r))
-	(o[1] as VBoxContainer).add_child(card)
-	_pop_in(card, 0.0)
-
-static func _found_card(host: Node, r: Dictionary) -> void:
-	var o := _overlay(host, r["name"], "Added to the Museum  ·  %d / %d relics" % [Relics.found_count(), Relics.count()])
-	var card := _card()
-	card.custom_minimum_size.x = 420.0
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	card.add_child(v)
-	var b := _text(Relics.bonus_text(r), 14, _good())
-	b.custom_minimum_size.x = 396.0
-	v.add_child(b)
-	var h := _text("Next: " + String(r["hint"]), 12, Color(1.0, 0.85, 0.45))
-	h.custom_minimum_size.x = 396.0
-	v.add_child(h)
-	(o[1] as VBoxContainer).add_child(card)
-	_pop_in(card, 0.0)
-
-# ── Museum ───────────────────────────────────────────────────────────────────
-
-## Every relic of the game: found ones with their bonus and story, the one being
-## looked for with its hint, the rest unknown.
-static func open_museum(host: Node) -> void:
-	var o := _overlay(host, "Museum", "%d / %d relics found" % [Relics.found_count(), Relics.count()])
-	var layer: CanvasLayer = o[0]
-	var grid := HFlowContainer.new()
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	grid.custom_minimum_size.x = (CARD_W + 12.0) * 3.0
-	grid.alignment = FlowContainer.ALIGNMENT_CENTER
-	(o[1] as VBoxContainer).add_child(grid)
-	for i in Relics.count():
-		var r: Dictionary = Relics.CATALOGUE[i]
-		var card := _card(200.0)
-		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 8)
-		card.add_child(v)
-		var found := Relics.is_found(r["id"])
-		v.add_child(_text("RELIC %d" % (i + 1), 10, UIStyle.color(&"text_muted")))
-		if found:
-			v.add_child(_text(String(r["name"]).to_upper(), 14))
-			v.add_child(_text(Relics.bonus_text(r), 12, _good()))
-			v.add_child(_text(String(r["story"]), 10, UIStyle.color(&"text_subtle")))
-		else:
-			v.add_child(_text("???", 14, UIStyle.color(&"text_muted")))
-			if Relics.is_hinted(r["id"]):
-				var hint: String = Relics.FIRST_HINT if i == 0 else String(Relics.CATALOGUE[i - 1]["hint"])
-				v.add_child(_text("Hint: " + hint, 11, Color(1.0, 0.85, 0.45)))
-			else:
-				v.add_child(_text("Not yet known.", 11, UIStyle.color(&"text_muted")))
-		if not found:
-			card.modulate = Color(0.75, 0.78, 0.85, 0.85)
-		grid.add_child(card)
-		_pop_in(card, 0.05 * i)
-	var shut := IconButton.create_text("CLOSE")
-	shut.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	shut.pressed.connect(func() -> void: close(layer))
-	(o[1] as VBoxContainer).add_child(shut)

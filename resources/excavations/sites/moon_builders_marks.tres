@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="ExcavationSiteDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationSiteDef.gd" id="1_bdhif"]
+[ext_resource type="Resource" path="res://resources/stories/moon_2_builders_marks.tres" id="2_nwrj6"]
+
+[resource]
+script = ExtResource("1_bdhif")
+site_id = "moon_builders_marks"
+ruin_id = "moon_echo_crater"
+display_name = "The Builder's Marks"
+teaser = "Straight cuts along a crater wall. Nature doesn't do straight."
+cost = {
+"credits": 1500.0,
+"moonstone": 50.0,
+"science": 450.0
+}
+duration_sec = 900.0
+reward = {
+"credits": 2250.0,
+"moonstone": 90.0,
+"science": 700.0
+}
+terrain = 1
+story = ExtResource("2_nwrj6")

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ExcavationSiteDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationSiteDef.gd" id="1_3wnhh"]
+[ext_resource type="Resource" path="res://resources/stories/vesyn_1_toppled_stones.tres" id="2_v1m8i"]
+
+[resource]
+script = ExtResource("1_3wnhh")
+site_id = "vesyn_toppled_stones"
+ruin_id = "vesyn_buried_hall"
+display_name = "The Toppled Stones"
+teaser = "Surveyors report a buried chamber under the Old Ruins."
+cost = {
+"credits": 300.0,
+"science": 50.0
+}
+reward = {
+"credits": 450.0,
+"science": 80.0
+}
+story = ExtResource("2_v1m8i")

@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ExcavationSiteDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationSiteDef.gd" id="1_ykfue"]
+[ext_resource type="Resource" path="res://resources/stories/vesyn_5_pale_line.tres" id="2_hruhc"]
+
+[resource]
+script = ExtResource("1_ykfue")
+site_id = "vesyn_pale_line"
+ruin_id = "vesyn_counting_house"
+display_name = "The Pale Line"
+teaser = "The ruins seem to line up with something overhead."
+cost = {
+"credits": 1800.0,
+"science": 500.0
+}
+duration_sec = 1200.0
+reward = {
+"credits": 2700.0,
+"science": 750.0
+}
+story = ExtResource("2_hruhc")

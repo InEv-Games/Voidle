@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CompanionDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/CompanionDef.gd" id="1_bvx5o"]
+
+[resource]
+script = ExtResource("1_bvx5o")
+companion_id = "sera_vale"
+display_name = "Sera Vale"
+role = "Wandering trader"
+bio = "Knows every route worth flying and most that aren't. Her bronze compass ignores the poles and points at the Moon."
+hint = "Someone else is digging in the Old Ruins of your home world."
+bonus_resource = "credits"
+legacy_relic_id = "first_compass"

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ExcavationWorldDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationWorldDef.gd" id="1_0jhx5"]
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationSiteDef.gd" id="2_xmwek"]
+[ext_resource type="Resource" path="res://resources/excavations/sites/vesyn_toppled_stones.tres" id="3_5sksa"]
+[ext_resource type="Resource" path="res://resources/excavations/sites/vesyn_traders_cache.tres" id="4_npgq1"]
+[ext_resource type="Resource" path="res://resources/excavations/sites/vesyn_compass_bearer.tres" id="5_dy17d"]
+[ext_resource type="Resource" path="res://resources/excavations/sites/vesyn_ledger_vault.tres" id="6_lix3n"]
+[ext_resource type="Resource" path="res://resources/excavations/sites/vesyn_pale_line.tres" id="7_e41n8"]
+
+[resource]
+script = ExtResource("1_0jhx5")
+sites = Array[ExtResource("2_xmwek")]([ExtResource("3_5sksa"), ExtResource("4_npgq1"), ExtResource("5_dy17d"), ExtResource("6_lix3n"), ExtResource("7_e41n8")])

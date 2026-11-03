@@ -1,0 +1,120 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_teyme"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_ijyuy"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_w12vj"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_3vks1"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_gnwep"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="6_bgq1r"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="7_1vdk4"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryGrant.gd" id="8_g0u0a"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StorySetFlag.gd" id="9_qj7fd"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="10_37ar4"]
+
+[sub_resource type="Resource" id="Resource_w1lxw"]
+script = ExtResource("2_ijyuy")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_2ixkt"]
+script = ExtResource("5_gnwep")
+exits = Array[ExtResource("2_ijyuy")]([SubResource("Resource_w1lxw")])
+id = 1
+graph_position = Vector2(80, 80)
+
+[sub_resource type="Resource" id="Resource_83u78"]
+script = ExtResource("2_ijyuy")
+target_id = 5
+
+[sub_resource type="Resource" id="Resource_r8eh5"]
+script = ExtResource("5_gnwep")
+entry_name = "return"
+exits = Array[ExtResource("2_ijyuy")]([SubResource("Resource_83u78")])
+id = 2
+graph_position = Vector2(80, 340)
+
+[sub_resource type="Resource" id="Resource_y3pbg"]
+script = ExtResource("2_ijyuy")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_b06vn"]
+script = ExtResource("6_bgq1r")
+text = "A faint pulse repeats from inside a crater, on no frequency your crews use. Finding its source means hauling gear down the rim."
+exits = Array[ExtResource("2_ijyuy")]([SubResource("Resource_y3pbg")])
+id = 3
+graph_position = Vector2(460, 80)
+
+[sub_resource type="Resource" id="Resource_phume"]
+script = ExtResource("7_1vdk4")
+exit_name = "dig"
+id = 4
+graph_position = Vector2(840, 80)
+
+[sub_resource type="Resource" id="Resource_jc4h8"]
+script = ExtResource("8_g0u0a")
+resources = {
+"moonstone": 150
+}
+
+[sub_resource type="Resource" id="Resource_1ot53"]
+script = ExtResource("2_ijyuy")
+target_id = 6
+label = "Send a survey crew."
+actions = Array[ExtResource("3_w12vj")]([SubResource("Resource_jc4h8")])
+
+[sub_resource type="Resource" id="Resource_mgcog"]
+script = ExtResource("8_g0u0a")
+resources = {
+"science": 300
+}
+
+[sub_resource type="Resource" id="Resource_wy2pt"]
+script = ExtResource("9_qj7fd")
+flag = "moon_loud"
+
+[sub_resource type="Resource" id="Resource_6qmrv"]
+script = ExtResource("2_ijyuy")
+target_id = 7
+label = "Drop a seismic charge and listen."
+actions = Array[ExtResource("3_w12vj")]([SubResource("Resource_mgcog"), SubResource("Resource_wy2pt")])
+
+[sub_resource type="Resource" id="Resource_e0w34"]
+script = ExtResource("6_bgq1r")
+text = "The gear is in place and the pulse is clearer now. There are two ways to learn more."
+exits = Array[ExtResource("2_ijyuy")]([SubResource("Resource_1ot53"), SubResource("Resource_6qmrv")])
+id = 5
+graph_position = Vector2(460, 340)
+
+[sub_resource type="Resource" id="Resource_4ha8q"]
+script = ExtResource("2_ijyuy")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_iomvh"]
+script = ExtResource("6_bgq1r")
+text = "The crew walks the rim for a week and comes back with samples and a map of the pulse."
+exits = Array[ExtResource("2_ijyuy")]([SubResource("Resource_4ha8q")])
+id = 6
+graph_position = Vector2(840, 340)
+
+[sub_resource type="Resource" id="Resource_6ckrw"]
+script = ExtResource("2_ijyuy")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_5vmhl"]
+script = ExtResource("6_bgq1r")
+text = "The charge rings the crater like a bell. The echo draws a hollow space below, and the pulse stops for a moment."
+exits = Array[ExtResource("2_ijyuy")]([SubResource("Resource_6ckrw")])
+id = 7
+graph_position = Vector2(840, 580)
+
+[sub_resource type="Resource" id="Resource_s1x6r"]
+script = ExtResource("7_1vdk4")
+id = 8
+graph_position = Vector2(1220, 340)
+
+[resource]
+script = ExtResource("10_37ar4")
+graph_name = "moon_1_rim_echo"
+next_free_id = 9
+nodes = Array[ExtResource("1_teyme")]([SubResource("Resource_2ixkt"), SubResource("Resource_r8eh5"), SubResource("Resource_b06vn"), SubResource("Resource_phume"), SubResource("Resource_e0w34"), SubResource("Resource_iomvh"), SubResource("Resource_5vmhl"), SubResource("Resource_s1x6r")])
+occurrences = Array[String](["start", "return"])
+endings = Array[String](["dig", "end"])

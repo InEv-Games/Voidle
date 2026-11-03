@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ExcavationWorldDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationWorldDef.gd" id="1_k8hgr"]
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationSiteDef.gd" id="2_muvyj"]
+[ext_resource type="Resource" path="res://resources/excavations/sites/moon_rim_echo.tres" id="3_baexs"]
+[ext_resource type="Resource" path="res://resources/excavations/sites/moon_builders_marks.tres" id="4_0nbea"]
+[ext_resource type="Resource" path="res://resources/excavations/sites/moon_sealed_hatch.tres" id="5_3mtun"]
+[ext_resource type="Resource" path="res://resources/excavations/sites/moon_foundations.tres" id="6_f5x32"]
+
+[resource]
+script = ExtResource("1_k8hgr")
+world = 1
+sites = Array[ExtResource("2_muvyj")]([ExtResource("3_baexs"), ExtResource("4_0nbea"), ExtResource("5_3mtun"), ExtResource("6_f5x32")])

@@ -46,6 +46,10 @@ NewsFeed="*res://scripts/system/NewsFeed.gd"
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/VSM/plugin.cfg")
+
 [gui]
 
 theme/custom="res://resources/ui/voidle_theme.tres"

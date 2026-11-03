@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="ExcavationSiteDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationSiteDef.gd" id="1_kxcxn"]
+[ext_resource type="Resource" path="res://resources/stories/vesyn_4_ledger_vault.tres" id="2_u4eof"]
+
+[resource]
+script = ExtResource("1_kxcxn")
+site_id = "vesyn_ledger_vault"
+ruin_id = "vesyn_counting_house"
+display_name = "The Ledger Vault"
+teaser = "Another ruin, with a lock Sera thinks she can read."
+cost = {
+"credits": 1200.0,
+"ferrite": 150.0,
+"science": 300.0
+}
+duration_sec = 900.0
+reward = {
+"credits": 1800.0,
+"ferrite": 240.0,
+"science": 450.0
+}
+story = ExtResource("2_u4eof")

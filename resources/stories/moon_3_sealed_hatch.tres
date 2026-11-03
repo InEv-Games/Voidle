@@ -1,0 +1,174 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_i057t"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_oi2fs"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_ycgyf"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_2nqu5"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_v0d47"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryHasFlag.gd" id="6_t3uum"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="7_ldxe2"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="8_4vbte"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_talker_modifier.gd" id="9_vkh5h"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryGrant.gd" id="10_p5hd7"]
+[ext_resource type="Resource" path="res://resources/companions/dorian_hale.tres" id="11_xoo2x"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StoryJoinCompanion.gd" id="12_gecue"]
+[ext_resource type="Script" path="res://scripts/game/excavation/StorySetFlag.gd" id="13_51efx"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="14_qgesl"]
+
+[sub_resource type="Resource" id="Resource_yi0b5"]
+script = ExtResource("2_oi2fs")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_fb5r6"]
+script = ExtResource("5_v0d47")
+exits = Array[ExtResource("2_oi2fs")]([SubResource("Resource_yi0b5")])
+id = 1
+graph_position = Vector2(80, 80)
+
+[sub_resource type="Resource" id="Resource_f6lg0"]
+script = ExtResource("6_t3uum")
+flag = "moon_loud"
+
+[sub_resource type="Resource" id="Resource_rshoq"]
+script = ExtResource("2_oi2fs")
+target_id = 5
+condition = SubResource("Resource_f6lg0")
+
+[sub_resource type="Resource" id="Resource_qe8an"]
+script = ExtResource("6_t3uum")
+flag = "moon_loud"
+negate = true
+
+[sub_resource type="Resource" id="Resource_eekwe"]
+script = ExtResource("2_oi2fs")
+target_id = 6
+condition = SubResource("Resource_qe8an")
+
+[sub_resource type="Resource" id="Resource_u0py0"]
+script = ExtResource("5_v0d47")
+entry_name = "return"
+exits = Array[ExtResource("2_oi2fs")]([SubResource("Resource_rshoq"), SubResource("Resource_eekwe")])
+id = 2
+graph_position = Vector2(80, 340)
+
+[sub_resource type="Resource" id="Resource_gbntf"]
+script = ExtResource("2_oi2fs")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_8ubwb"]
+script = ExtResource("7_ldxe2")
+text = "The marks end at a hatch, and beside it someone has pitched a camp. Clearing a safe path down to it will take a while."
+exits = Array[ExtResource("2_oi2fs")]([SubResource("Resource_gbntf")])
+id = 3
+graph_position = Vector2(460, 80)
+
+[sub_resource type="Resource" id="Resource_62w3i"]
+script = ExtResource("8_4vbte")
+exit_name = "dig"
+id = 4
+graph_position = Vector2(840, 80)
+
+[sub_resource type="Resource" id="Resource_cqn0l"]
+script = ExtResource("2_oi2fs")
+target_id = 7
+
+[sub_resource type="Resource" id="Resource_bws6y"]
+script = ExtResource("9_vkh5h")
+talker = "Dorian Hale"
+
+[sub_resource type="Resource" id="Resource_tqyuj"]
+script = ExtResource("7_ldxe2")
+text = "That charge of yours shook my whole camp. Dorian Hale, contractor. You could have knocked."
+exits = Array[ExtResource("2_oi2fs")]([SubResource("Resource_cqn0l")])
+id = 5
+graph_position = Vector2(460, 340)
+modifiers = Array[ExtResource("4_2nqu5")]([SubResource("Resource_bws6y")])
+
+[sub_resource type="Resource" id="Resource_0hyik"]
+script = ExtResource("2_oi2fs")
+target_id = 7
+
+[sub_resource type="Resource" id="Resource_drk7c"]
+script = ExtResource("9_vkh5h")
+talker = "Dorian Hale"
+
+[sub_resource type="Resource" id="Resource_imw1f"]
+script = ExtResource("7_ldxe2")
+text = "Quiet crews. I like that. Dorian Hale, contractor. I've been studying this hatch for a year."
+exits = Array[ExtResource("2_oi2fs")]([SubResource("Resource_0hyik")])
+id = 6
+graph_position = Vector2(460, 580)
+modifiers = Array[ExtResource("4_2nqu5")]([SubResource("Resource_drk7c")])
+
+[sub_resource type="Resource" id="Resource_4rvhs"]
+script = ExtResource("10_p5hd7")
+resources = {
+"science": 200
+}
+
+[sub_resource type="Resource" id="Resource_dcojb"]
+script = ExtResource("12_gecue")
+companion = ExtResource("11_xoo2x")
+
+[sub_resource type="Resource" id="Resource_ls5h1"]
+script = ExtResource("2_oi2fs")
+target_id = 8
+label = "Teach our crews."
+actions = Array[ExtResource("3_ycgyf")]([SubResource("Resource_4rvhs"), SubResource("Resource_dcojb")])
+
+[sub_resource type="Resource" id="Resource_0jwg4"]
+script = ExtResource("10_p5hd7")
+resources = {
+"moonstone": 200
+}
+
+[sub_resource type="Resource" id="Resource_k5kft"]
+script = ExtResource("13_51efx")
+flag = "moon_opened_first"
+
+[sub_resource type="Resource" id="Resource_6kd8x"]
+script = ExtResource("12_gecue")
+companion = ExtResource("11_xoo2x")
+
+[sub_resource type="Resource" id="Resource_xerhb"]
+script = ExtResource("2_oi2fs")
+target_id = 8
+label = "Open it together first."
+actions = Array[ExtResource("3_ycgyf")]([SubResource("Resource_0jwg4"), SubResource("Resource_k5kft"), SubResource("Resource_6kd8x")])
+
+[sub_resource type="Resource" id="Resource_0busc"]
+script = ExtResource("9_vkh5h")
+talker = "Dorian Hale"
+
+[sub_resource type="Resource" id="Resource_jb2nv"]
+script = ExtResource("7_ldxe2")
+text = "Its seal is a builder's mark, and it's older than any record. Learn to read it, and any crew works faster."
+exits = Array[ExtResource("2_oi2fs")]([SubResource("Resource_ls5h1"), SubResource("Resource_xerhb")])
+id = 7
+graph_position = Vector2(840, 340)
+modifiers = Array[ExtResource("4_2nqu5")]([SubResource("Resource_0busc")])
+
+[sub_resource type="Resource" id="Resource_ueuwe"]
+script = ExtResource("2_oi2fs")
+target_id = 9
+
+[sub_resource type="Resource" id="Resource_d6c5w"]
+script = ExtResource("7_ldxe2")
+text = "Dorian packs up the camp that night and is correcting your site plans by morning."
+exits = Array[ExtResource("2_oi2fs")]([SubResource("Resource_ueuwe")])
+id = 8
+graph_position = Vector2(1220, 340)
+
+[sub_resource type="Resource" id="Resource_cweb6"]
+script = ExtResource("8_4vbte")
+id = 9
+graph_position = Vector2(1600, 340)
+
+[resource]
+script = ExtResource("14_qgesl")
+graph_name = "moon_3_sealed_hatch"
+next_free_id = 10
+nodes = Array[ExtResource("1_i057t")]([SubResource("Resource_fb5r6"), SubResource("Resource_u0py0"), SubResource("Resource_8ubwb"), SubResource("Resource_62w3i"), SubResource("Resource_tqyuj"), SubResource("Resource_imw1f"), SubResource("Resource_jb2nv"), SubResource("Resource_d6c5w"), SubResource("Resource_cweb6")])
+occurrences = Array[String](["start", "return"])
+endings = Array[String](["dig", "end"])
+talkers = Array[String](["Dorian Hale"])

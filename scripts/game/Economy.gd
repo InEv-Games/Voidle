@@ -572,7 +572,7 @@ static var _cache_frame: int = -1
 static var _city_maps: Dictionary = {}     # planet seed -> { district label -> city label }
 static var _bonus_cache: Dictionary = {}   # "seed|city|id" -> multiplier
 
-## Drops this frame's support multipliers (a trait or relic changed them).
+## Drops this frame's support multipliers (a trait or companion changed them).
 static func invalidate_bonus_cache() -> void:
 	_cache_frame = -1
 
@@ -604,7 +604,7 @@ static func scope_bonus(pp: PlanetProgress, district_label: String, id: String, 
 	var ck := "%d|%s|%s" % [pp.planet_seed, city, id]
 	if _bonus_cache.has(ck):
 		return _bonus_cache[ck]
-	var mult := city_support(pp, city, id, pd) * planet_bonus(pp, id, pd) * Relics.global_mult(id)
+	var mult := city_support(pp, city, id, pd) * planet_bonus(pp, id, pd) * Excavations.global_mult(id)
 	_bonus_cache[ck] = mult
 	return mult
 

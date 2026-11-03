@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="ExcavationSiteDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/ExcavationSiteDef.gd" id="1_2mk62"]
+[ext_resource type="Resource" path="res://resources/stories/moon_4_foundations.tres" id="2_4vf86"]
+
+[resource]
+script = ExtResource("1_2mk62")
+site_id = "moon_foundations"
+ruin_id = "moon_second_hatch"
+display_name = "The Foundations"
+teaser = "Dorian has found a second hatch. He says you should see this."
+cost = {
+"credits": 3000.0,
+"moonstone": 150.0,
+"science": 900.0
+}
+duration_sec = 1800.0
+reward = {
+"credits": 4500.0,
+"moonstone": 240.0,
+"science": 1350.0
+}
+terrain = 1
+story = ExtResource("2_4vf86")
