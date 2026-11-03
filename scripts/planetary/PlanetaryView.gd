@@ -5084,12 +5084,29 @@ func _place_lens_bar() -> void:
 	if _lens_bar == null or not is_instance_valid(_lens_bar):
 		return
 	var h := _lens_bar.get_combined_minimum_size().y
-	_lens_bar.offset_bottom = -LENS_BAR_MARGIN
+	var lh := 0.0
+	if is_instance_valid(_lens_legend):
+		lh = (_lens_legend as Control).get_combined_minimum_size().y + LENS_LEGEND_GAP
+	# rides the panel's slide tween: up from below the screen as it opens
+	var drop := (1.0 - _panel_t) * (LENS_BAR_MARGIN + h + lh)
+	_lens_bar.offset_bottom = -LENS_BAR_MARGIN + drop
 	_lens_bar.offset_top = _lens_bar.offset_bottom - h
+	_place_lens_legend()
 	_fade_lens_ui()
 
-## Lenses (and their colour key) only show with the left panel open; they fade
-## with the panel's slide.
+## The lens colour key sits just above the lens bar and moves with it.
+const LENS_LEGEND_GAP := 6.0
+
+func _place_lens_legend() -> void:
+	if not is_instance_valid(_lens_legend) or not is_instance_valid(_lens_bar):
+		return
+	var row := _lens_legend as Control
+	var h := row.get_combined_minimum_size().y
+	row.offset_bottom = _lens_bar.offset_top - LENS_LEGEND_GAP
+	row.offset_top = row.offset_bottom - h
+
+## Lenses (and their colour key) only show with the left panel open; they slide
+## and fade with the panel.
 func _fade_lens_ui() -> void:
 	for c in [_lens_bar, _lens_legend]:   # untyped: either may be a freed node
 		if is_instance_valid(c):
@@ -5262,11 +5279,8 @@ func _refresh_lens_legend() -> void:
 	row.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 0)
 	row.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	row.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	var h := row.get_combined_minimum_size().y
-	row.offset_bottom = _lens_bar.offset_top - 6.0
-	row.offset_top = row.offset_bottom - h
 	_lens_legend = row
-	_fade_lens_ui()
+	_place_lens_bar()   # the bar's slide offset counts the legend's height
 
 func _refresh_lens() -> void:
 	_style_lens_bar()
