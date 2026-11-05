@@ -56,25 +56,7 @@ func _ready() -> void:
 	credits_panel = ResourceBar.create()   # top-left
 	top_layer.call_deferred("add_child", credits_panel)
 
-	var settings_btn := IconButton.create("", "settings", IconButton.Variant.DEFAULT)   # square, icon only
-	settings_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	
-	settings_btn.anchor_left = 1.0
-	settings_btn.anchor_right = 1.0
-	settings_btn.anchor_top = 0.0
-	settings_btn.anchor_bottom = 0.0
-	settings_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	settings_btn.grow_vertical = Control.GROW_DIRECTION_END
-	settings_btn.offset_right = -4
-	settings_btn.offset_top = 4
-	
-	settings_btn.mouse_entered.connect(func() -> void:
-		CursorManager.set_state(CursorManager.State.POINTER)
-		AudioManager.play("hover"))
-	settings_btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
-	settings_btn.pressed.connect(show_pause_menu)
-	
-	top_layer.call_deferred("add_child", settings_btn)
+	# (no settings button: Esc opens the pause menu)
 
 
 	# Upgrade Tree · Trade · Explore live at the bottom of the view's LeftPanel
