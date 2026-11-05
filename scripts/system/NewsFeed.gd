@@ -402,20 +402,34 @@ func _bind_ticker() -> void:
 	if not _ticker.has_meta("ticker_bound"):
 		_ticker.set_meta("ticker_bound", true)
 		_ticker.mouse_filter = Control.MOUSE_FILTER_STOP
+		_ticker_look(&"normal")
 		_ticker.mouse_entered.connect(func() -> void:
+			_ticker_look(&"hover")
 			CursorManager.set_state(CursorManager.State.POINTER)
 			TooltipManager.show_tip("Market", _ticker_tip()))
 		_ticker.mouse_exited.connect(func() -> void:
+			_ticker_look(&"normal")
 			CursorManager.set_state(CursorManager.State.NORMAL)
 			TooltipManager.hide_tip())
 		_ticker.gui_input.connect(func(ev: InputEvent) -> void:
 			var mb := ev as InputEventMouseButton
-			if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			if mb == null or mb.button_index != MOUSE_BUTTON_LEFT:
+				return
+			if mb.pressed:
+				_ticker_look(&"pressed")
 				AudioManager.play("click")
 				TooltipManager.hide_tip()
 				HUDManager.toggle_trade_panel()
-				_ticker.accept_event())
+			else:
+				_ticker_look(&"hover")
+			_ticker.accept_event())
 	_tk_t = TICKER_SEC   # fill it at once
+
+## The market box looks like a button (theme BarButton, shared with the lens
+## button): normal / hover / pressed.
+func _ticker_look(state: StringName) -> void:
+	if _ticker != null and is_instance_valid(_ticker):
+		_ticker.add_theme_stylebox_override(&"panel", _ticker.get_theme_stylebox(state, &"BarButton"))
 
 ## Products the ticker may show (tradeable now).
 static func _ticker_ids() -> Array[String]:

@@ -854,6 +854,54 @@ grow_begin = 2.0
 grow_end = 2.0
 vertical = true
 
+[sub_resource type="StyleBoxFlat" id="barbutton_n"]
+content_margin_left = 7.0
+content_margin_top = 2.0
+content_margin_right = 7.0
+content_margin_bottom = 2.0
+bg_color = Color(0.04706, 0.1686, 0.2745, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 2
+border_color = Color(0.1176, 0.5608, 0.7216, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="barbutton_h"]
+content_margin_left = 7.0
+content_margin_top = 2.0
+content_margin_right = 7.0
+content_margin_bottom = 2.0
+bg_color = Color(0.06667, 0.2275, 0.3608, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 2
+border_color = Color(0.1373, 0.7255, 0.9059, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="barbutton_p"]
+content_margin_left = 7.0
+content_margin_top = 3.0
+content_margin_right = 7.0
+content_margin_bottom = 2.0
+bg_color = Color(0.03529, 0.09412, 0.1686, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1373, 0.7255, 0.9059, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
 [resource]
 default_font = ExtResource("f_regular")
 Badge/base_type = &"PanelContainer"
@@ -865,6 +913,17 @@ BadgeLabel/fonts/font = ExtResource("f_italic")
 BodyLabel/base_type = &"Label"
 BodyLabel/colors/font_color = Color(0.7216, 0.8471, 0.9333, 1)
 BodyLabel/font_sizes/font_size = 8
+BarButton/base_type = &"Button"
+BarButton/colors/font_color = Color(0.9176, 0.9686, 1, 1)
+BarButton/colors/font_hover_color = Color(1, 1, 1, 1)
+BarButton/colors/font_pressed_color = Color(0.7216, 0.8471, 0.9333, 1)
+BarButton/colors/font_focus_color = Color(0.9176, 0.9686, 1, 1)
+BarButton/font_sizes/font_size = 11
+BarButton/fonts/font = ExtResource("f_bold")
+BarButton/styles/focus = SubResource("empty")
+BarButton/styles/hover = SubResource("barbutton_h")
+BarButton/styles/normal = SubResource("barbutton_n")
+BarButton/styles/pressed = SubResource("barbutton_p")
 Button/colors/font_color = Color(0.9176, 0.9686, 1, 1)
 Button/colors/font_disabled_color = Color(0.9176, 0.9686, 1, 0.4)
 Button/colors/font_focus_color = Color(0.9176, 0.9686, 1, 1)
