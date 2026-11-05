@@ -132,7 +132,7 @@ var _base_radius:      float = 0.42
 # The right panel can slide off-screen; the planet view (and the HUD energy
 # readout) widen with it so the globe stays centred in whatever space is left.
 const PANEL_FRACTION:  float = LeftPanel.WIDTH   # panel width as a fraction of the screen
-const PANEL_SLIDE_SEC: float = 1.35   # slow, cinematic: LeftPanel scrambles + VHS-blinks over it
+const PANEL_SLIDE_SEC: float = 0.9   # slow, cinematic: LeftPanel scrambles + VHS-blinks over it
 var _panel_open:       bool    = true
 var _panel_t:          float   = 1.0  # 1 = fully open, 0 = fully hidden
 var _panel_tween:      Tween   = null

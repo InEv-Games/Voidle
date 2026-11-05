@@ -192,20 +192,20 @@ func _place() -> void:
 ##   Opening: each row runs its own tween (ROW_IN_SEC), starting at a random
 ##            moment within ROW_IN_STAGGER — it may run past the slide's end.
 const ROW_FADE := 0.45
-const ROW_IN_SEC := 0.675
-const ROW_IN_STAGGER := 0.9
+const ROW_IN_SEC := 0.45
+const ROW_IN_STAGGER := 0.6
 ## Each char turns into glyphs once its row drops below the char's own
 ## threshold, picked in this range — a few go right away, all by the lower end.
 const SCRAMBLE_FROM := Vector2(0.35, 1.0)
 ## Share of a label's chars that scramble at all; the rest only fade.
-const SCRAMBLE_SHARE := 0.35
-const FADE_GLYPH_SEC := 0.12   # how often a scrambled glyph changes (slow = analog)
+const SCRAMBLE_SHARE := 1.0
+const FADE_GLYPH_SEC := 0.09   # how often a scrambled glyph changes (slow = analog)
 ## Blink while a row comes or goes: it drops out like a weak tape signal.
 ## Every BLINK_SEC a row may dip (BLINK_CHANCE) to a random opacity between
 ## BLINK_DIP.x and BLINK_DIP.y of what its fade says.
 const BLINK_SEC := 0.07
-const BLINK_CHANCE := 0.15
-const BLINK_DIP := Vector2(0.45, 0.8)
+const BLINK_CHANCE := 0.35
+const BLINK_DIP := Vector2(0.15, 0.6)
 
 var _rows: Dictionary = {}   # row id → {node, orig, last, p, cap, s, seed, labels, tween}
 var _fade: Dictionary = {}   # label id → {node, text, last, h}
