@@ -90,7 +90,6 @@ func _on_content_child(n: Node) -> void:
 func _ready() -> void:
 	add_to_group(GROUP)
 	item_rect_changed.connect(queue_redraw)   # the backdrop follows the slide
-	_build_cover()
 	content.child_entered_tree.connect(_on_content_child)
 	var hud := get_node_or_null("/root/HUDManager")
 	if hud != null:
@@ -126,7 +125,6 @@ func _play_reveal() -> void:
 func _process(_delta: float) -> void:
 	if absf(offset_top - _hud_bar_height()) > 0.5:
 		_place()
-	_update_cover()
 
 ## Slides the panel between hidden (0) and open (1).
 func set_slide(t: float) -> void:
@@ -144,14 +142,6 @@ const BACKDROP_STOPS := [[0.0, 0.88], [0.7, 0.78], [1.0, 0.5], [1.35, 0.0]]
 const BACKDROP_DARKEN := 0.5
 
 func _draw() -> void:
-	_draw_backdrop(self, 0.0, 0.0, size.y)
-	var sb := get_theme_stylebox(&"panel")
-	if sb != null:
-		draw_style_box(sb, Rect2(Vector2.ZERO, size))   # keep the border on top
-
-## The backdrop gradient on `ci` between y0 and y1; `base` is where the panel's
-## left edge is in ci's coordinates (the screen's left edge is always reached).
-func _draw_backdrop(ci: CanvasItem, base: float, y0: float, y1: float) -> void:
 	var t := _effective_t()
 	if t <= 0.0:
 		return
@@ -162,66 +152,19 @@ func _draw_backdrop(ci: CanvasItem, base: float, y0: float, y1: float) -> void:
 	col = col.darkened(BACKDROP_DARKEN)
 	var xs: Array[float] = []
 	var alphas: Array[float] = []
-	for st in BACKDROP_STOPS:
-		xs.append(base + float(st[0]) * size.x)
-		alphas.append(float(st[1]) * t)
-	xs[0] = minf(base - global_position.x, base)   # reach back to the screen's left edge
+	for s in BACKDROP_STOPS:
+		xs.append(float(s[0]) * size.x)
+		alphas.append(float(s[1]) * t)
+	xs[0] = minf(-position.x, 0.0)   # reach back to the screen's left edge
 	for i in xs.size() - 1:
 		var a := Color(col, alphas[i])
 		var b := Color(col, alphas[i + 1])
-		ci.draw_polygon(
-			PackedVector2Array([Vector2(xs[i], y0), Vector2(xs[i + 1], y0),
-				Vector2(xs[i + 1], y1), Vector2(xs[i], y1)]),
+		draw_polygon(
+			PackedVector2Array([Vector2(xs[i], 0), Vector2(xs[i + 1], 0),
+				Vector2(xs[i + 1], size.y), Vector2(xs[i], size.y)]),
 			PackedColorArray([a, b, b, a]))
-
-# ── Over the resource bar ─────────────────────────────────────────────────────
-# The HUD's resource bar is on a canvas layer above the views (it must stay
-# over the Upgrade Tree), so it would cover the panel. To keep it behind the
-# panel, the part of the backdrop and stroke that falls on the bar is drawn
-# again on a layer just above it. Mouse-transparent: the chips stay usable.
-# Hidden while the Upgrade Tree covers the view.
-
-const COVER_LAYER := 231   # just above the HUD's top layer (230)
-
-var _cover_layer: CanvasLayer = null
-var _cover: Control = null
-
-func _build_cover() -> void:
-	_cover_layer = CanvasLayer.new()
-	_cover_layer.layer = COVER_LAYER
-	_cover = Control.new()
-	_cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_cover.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_cover.draw.connect(_draw_cover)
-	_cover_layer.add_child(_cover)
-	add_child(_cover_layer, false, Node.INTERNAL_MODE_BACK)
-
-func _resource_bar() -> Control:
-	var hud := get_node_or_null("/root/HUDManager")
-	var bar = hud.get("credits_panel") if hud != null else null
-	if bar != null and is_instance_valid(bar as Node) and (bar as Control).is_visible_in_tree():
-		return bar as Control
-	return null
-
-func _update_cover() -> void:
-	if _cover_layer == null:
-		return
-	var on := is_visible_in_tree() and not SkillTreeView.is_open and _resource_bar() != null
-	_cover_layer.visible = on
-	if on:
-		_cover.queue_redraw()
-
-func _draw_cover() -> void:
-	var bar := _resource_bar()
-	if bar == null:
-		return
-	var r := bar.get_global_rect()
-	var base := global_position.x
-	_draw_backdrop(_cover, base, r.position.y, r.end.y)
-	var sb := get_theme_stylebox(&"panel")
-	if sb is StyleBoxFlat and (sb as StyleBoxFlat).border_width_left > 0:
-		var f := sb as StyleBoxFlat
-		_cover.draw_rect(Rect2(base, r.position.y, f.border_width_left, r.size.y), f.border_color)
+	if sb != null:
+		draw_style_box(sb, Rect2(Vector2.ZERO, size))   # keep the border on top
 
 ## The panel's right edge as a fraction of the screen width, for a slide t.
 static func edge_frac(t: float = 1.0) -> float:
