@@ -667,9 +667,8 @@ content_margin_left = 14.0
 content_margin_top = 16.0
 content_margin_right = 14.0
 content_margin_bottom = 14.0
-bg_color = Color(0.03529, 0.09412, 0.1686, 0.97)
+bg_color = Color(0.03529, 0.09412, 0.1686, 0)
 border_width_left = 1
-border_width_right = 1
 border_color = Color(0.1373, 0.7255, 0.9059, 1)
 
 [sub_resource type="StyleBoxFlat" id="stepperminus_d"]

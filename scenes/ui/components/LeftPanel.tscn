@@ -7,6 +7,8 @@ anchors_preset = -1
 anchor_left = 0.025
 anchor_right = 0.325
 anchor_bottom = 1.0
+offset_left = 36.199997
+offset_right = 3.0517578e-05
 theme_type_variation = &"SidePanel"
 script = ExtResource("1_script")
 
@@ -16,7 +18,7 @@ theme_override_constants/separation = 8
 
 [node name="PanelContainer" type="PanelContainer" parent="Layout" unique_id=487196389]
 modulate = Color(1, 1, 1, 0)
-custom_minimum_size = Vector2(0, 40)
+custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 
 [node name="PanelContent" type="VBoxContainer" parent="Layout" unique_id=1938270561]
@@ -31,3 +33,7 @@ mouse_filter = 2
 layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 4
+
+[node name="Container" type="Container" parent="Layout" unique_id=1936895358]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
