@@ -10976,11 +10976,11 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 8)
 	root.add_child(HSeparator.new())
-	var back := IconButton.create_text("‹  " + planet.planet_name.to_upper())
+	var back := LeftPanel.back_button(planet.planet_name.to_upper())
 	back.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_build_planet_overview(planet))
-	root.add_child(back)
+	_mount_above_hero(back, root)
 	var header := HBoxContainer.new()
 	var title := Label.new()
 	title.text = "Orbit"
@@ -11155,13 +11155,13 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	root.add_theme_constant_override("separation", 8)
 
 	if GameState.planet_view_unlocked:
-		var back := IconButton.create_text("‹  " + planet.planet_name.to_upper())
+		var back := LeftPanel.back_button(planet.planet_name.to_upper())
 		back.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_city_panel_poi = null
 			_frame_zoom(ZOOM_MIN)
 			_build_planet_overview(planet))
-		root.add_child(back)
+		_mount_above_hero(back, root)
 
 	# Hero: the City, its level and how far it is from the next one
 	var count := Leveling.city_district_count(planet, city)
@@ -11361,7 +11361,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	top_row.alignment = BoxContainer.ALIGNMENT_END
 	var parent_city := _find_poi(planet, poi.parent_city) if not poi.is_city() else poi
 	if poi.is_orbital():
-		var oback := IconButton.create_text("‹  ORBIT")
+		var oback := LeftPanel.back_button("ORBIT")
 		oback.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		oback.pressed.connect(func() -> void:
 			AudioManager.play("click")
@@ -11369,7 +11369,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 			_build_orbit_panel(planet))
 		top_row.add_child(oback)
 	if parent_city != null:
-		var back := IconButton.create_text("‹  " + parent_city.shown_name().to_upper())
+		var back := LeftPanel.back_button(parent_city.shown_name().to_upper())
 		back.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		back.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		var cap_parent := parent_city

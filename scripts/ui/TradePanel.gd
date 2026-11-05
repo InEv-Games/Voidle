@@ -74,13 +74,12 @@ func _ready() -> void:
 		_place()
 		get_viewport().size_changed.connect(_place)
 
-	# the market's name on top — the left panel's hero, like every other menu —
-	# then BACK (to the panel's own content)
-	v.add_child(HeroHeader.create("Trade", "MARKET"))
-	var back := IconButton.create_text("‹  BACK")
-	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# BACK (to the panel's own content) as a text button above the hero, then
+	# the market's name — the left panel's hero, like every other menu
+	var back := LeftPanel.back_button("BACK")
 	back.pressed.connect(close)
 	v.add_child(back)
+	v.add_child(HeroHeader.create("Trade", "MARKET"))
 	# one small line of colour under it (warnings show here for a moment)
 	_status = _label("", 9, UIStyle.color(&"text_subtle"))
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

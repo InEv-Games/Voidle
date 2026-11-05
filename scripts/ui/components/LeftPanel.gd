@@ -214,6 +214,20 @@ func _update_stroke_span() -> void:
 		_stroke_span = span
 		queue_redraw()
 
+## The way back up from a menu ("‹  HALLACLI"): a plain text button, shown
+## above the menu's hero.
+const BACK_FONT := 11
+
+static func back_button(label: String) -> Button:
+	var b := Button.new()
+	b.theme_type_variation = &"ButtonFlat"
+	b.text = "‹  " + label
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_size_override(&"font_size", BACK_FONT)
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	return b
+
 ## The panel's right edge as a fraction of the screen width, for a slide t.
 static func edge_frac(t: float = 1.0) -> float:
 	return (GAP + WIDTH) * t
