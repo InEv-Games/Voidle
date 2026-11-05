@@ -79,6 +79,7 @@ func close_overlay() -> void:
 func _swap(change: Callable) -> void:
 	change.call()
 	_place()
+	queue_redraw()   # _force_open may have changed the backdrop's opacity
 
 ## Whatever the view adds while an overlay is up stays behind it.
 func _on_content_child(n: Node) -> void:
@@ -88,6 +89,7 @@ func _on_content_child(n: Node) -> void:
 
 func _ready() -> void:
 	add_to_group(GROUP)
+	item_rect_changed.connect(queue_redraw)   # the backdrop follows the slide
 	content.child_entered_tree.connect(_on_content_child)
 	var hud := get_node_or_null("/root/HUDManager")
 	if hud != null:
@@ -119,6 +121,41 @@ func _process(_delta: float) -> void:
 func set_slide(t: float) -> void:
 	slide_t = t
 	_place()
+	queue_redraw()
+
+## Backdrop (the panel itself is transparent): darkens from the screen's left
+## edge to the right, so the content stays readable over a zoomed-in planet.
+## Each stop is (x as a fraction of the panel width, opacity); x 0 is the panel's
+## left edge, the first stop starts at the screen edge, the last fades out past
+## the panel's right edge. Its colour is the SidePanel style's bg_color.
+const BACKDROP_STOPS := [[0.0, 0.88], [0.7, 0.78], [1.0, 0.5], [1.35, 0.0]]
+## How much darker than the style's bg_color (0 = same, 1 = black).
+const BACKDROP_DARKEN := 0.5
+
+func _draw() -> void:
+	var t := 1.0 if _force_open and overlay() != null else slide_t
+	if t <= 0.0:
+		return
+	var sb := get_theme_stylebox(&"panel")
+	var col := Color(0.035, 0.094, 0.169)
+	if sb is StyleBoxFlat:
+		col = (sb as StyleBoxFlat).bg_color
+	col = col.darkened(BACKDROP_DARKEN)
+	var xs: Array[float] = []
+	var alphas: Array[float] = []
+	for s in BACKDROP_STOPS:
+		xs.append(float(s[0]) * size.x)
+		alphas.append(float(s[1]) * t)
+	xs[0] = minf(-position.x, 0.0)   # reach back to the screen's left edge
+	for i in xs.size() - 1:
+		var a := Color(col, alphas[i])
+		var b := Color(col, alphas[i + 1])
+		draw_polygon(
+			PackedVector2Array([Vector2(xs[i], 0), Vector2(xs[i + 1], 0),
+				Vector2(xs[i + 1], size.y), Vector2(xs[i], size.y)]),
+			PackedColorArray([a, b, b, a]))
+	if sb != null:
+		draw_style_box(sb, Rect2(Vector2.ZERO, size))   # keep the border on top
 
 ## The panel's right edge as a fraction of the screen width, for a slide t.
 static func edge_frac(t: float = 1.0) -> float:
