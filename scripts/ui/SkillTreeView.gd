@@ -105,17 +105,7 @@ func _ready() -> void:
 		SkillTreeView._view_civ = GameState.civilization_type
 	_build_tree_graph()
 
-	# Title at the top center
-	var title := Label.new()
-	_title = title
-	title.text = _title_text()
-	if _font: title.add_theme_font_override("font", _font)
-	title.add_theme_font_size_override("font_size", 16)
-	title.add_theme_color_override("font_color", UIStyle.color(&"text"))
-	title.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	title.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	title.offset_top = 24.0
-	add_child(title)
+	# (no title: playtest — the tree speaks for itself)
 
 	# Subtitle
 	var sub := Label.new()
@@ -150,11 +140,24 @@ func _ready() -> void:
 	_close_btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL))
 	add_child(_close_btn)
+	# IconButton sizes itself (growing right), so centre it on its width
+	_close_btn.resized.connect(_centre_close_btn)
+	_centre_close_btn.call_deferred()
 
 	# Listen to skill unlocks to redraw connections & button states
 	get_node("/root/SkillTree").skill_unlocked.connect(_on_skill_unlocked)
 
 var _title: Label
+
+## Keeps the close button centred horizontally on the screen.
+func _centre_close_btn() -> void:
+	if _close_btn == null or not is_instance_valid(_close_btn):
+		return
+	var w := _close_btn.size.x
+	_close_btn.anchor_left = 0.5
+	_close_btn.anchor_right = 0.5
+	_close_btn.offset_left = -w * 0.5
+	_close_btn.offset_right = w * 0.5
 
 func _title_text() -> String:
 	var t := "✦ CIVILIZATION %d RESEARCH ✦" % SkillTreeView._view_civ
