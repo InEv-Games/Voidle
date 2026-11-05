@@ -153,7 +153,11 @@ var _planet_view: TextureRect = null
 ## Role overlay shown by the role buttons ("" = none) — FeatureMap.ROLES keys.
 var _role: String = ""
 var _lens_bar: Control = null
-var _lens_buttons: Dictionary = {}      # role -> Button
+var _lens_buttons: Dictionary = {}      # role -> Button (in the lens menu)
+var _lens_main: IconButton = null        # the one lens button: opens the menu
+var _lens_menu: PanelContainer = null    # the lenses, above the button
+var _lens_menu_open := false
+var _lens_menu_tw: Tween = null
 var _roads_dirty: bool = false
 var _maps_ready_seed: int = -1          # planet whose terrain / resource / road maps are built
 var _route_cache: Dictionary = {}       # "lonA,latA|lonB,latB" -> route
@@ -1104,6 +1108,9 @@ func _try_force_buy() -> bool:
 	return true
 
 func _input(event: InputEvent) -> void:
+	if _lens_menu_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
 			and (event as InputEventKey).keycode == KEY_F and _try_force_buy():
 		get_viewport().set_input_as_handled()
@@ -5042,18 +5049,29 @@ func _rebuild_lens_bar() -> void:
 	if _role != "" and not GameState.is_scanned(current_data.seed):
 		_set_role("")   # a lens left on from another world
 	var cont := planet_renderer.get_parent() as Control
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	# the bar: the lens menu (hidden) stacked over the one lens button
+	var row := VBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_END
 	row.add_theme_constant_override("separation", 4)
 	row.z_index = 50
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lens_menu = PanelContainer.new()
+	_lens_menu.theme_type_variation = &"PopupCard"
+	_lens_menu.visible = false
+	_lens_menu_open = false
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 3)
+	_lens_menu.add_child(list)
+	row.add_child(_lens_menu)
 	# NORMAL: the plain map, no lens
-	var nb := _make_lens_button("NORMAL", Color(0.80, 0.84, 0.95), func() -> void: _set_role(""))
+	var nb := _make_lens_button("NORMAL", Color(0.80, 0.84, 0.95), func() -> void:
+		_set_role("")
+		_set_lens_menu(false))
 	nb.set_meta("tint", Color(0.80, 0.84, 0.95))
 	nb.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Normal", "The plain map, no lens.\nHold Alt over the globe to name the geography under the mouse."))
 	nb.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	_lens_buttons[""] = nb
-	row.add_child(nb)
+	list.add_child(nb)
 	for role: String in FeatureMap.ROLES:
 		var info: Dictionary = FeatureMap.ROLES[role]
 		var tint: Color = info["tint"]
@@ -5063,7 +5081,8 @@ func _rebuild_lens_bar() -> void:
 				AudioManager.play("error")
 				_show_unlock_toast("Not scanned yet", "Scan this world's surface from orbit to use its lenses.")
 				return
-			_set_role("" if _role == cap_role else cap_role))
+			_set_role("" if _role == cap_role else cap_role)
+			_set_lens_menu(false))
 		if not GameState.is_scanned(current_data.seed):
 			b.modulate = Color(0.5, 0.5, 0.55, 0.6)   # locked until the surface is scanned
 		b.set_meta("tint", tint)
@@ -5074,7 +5093,18 @@ func _rebuild_lens_bar() -> void:
 		b.mouse_entered.connect(func() -> void: TooltipManager.show_tip(String(info["label"]), tip))
 		b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 		_lens_buttons[role] = b
-		row.add_child(b)
+		list.add_child(b)
+	for c in list.get_children():
+		(c as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# the one button: shows the lens that is on, opens / closes the menu
+	_lens_main = IconButton.create_text("LENS")
+	_lens_main.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_lens_main.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
+	_lens_main.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
+	_lens_main.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		_set_lens_menu(not _lens_menu_open))
+	row.add_child(_lens_main)
 	cont.add_child(row)
 	row.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 16)
 	row.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -5185,6 +5215,82 @@ func _style_lens_bar() -> void:
 	for role: String in _lens_buttons:
 		var b: IconButton = _lens_buttons[role]
 		b.variant = IconButton.Variant.NEUTRAL if role == _role else IconButton.Variant.DEFAULT
+	# the one button names the lens that's on
+	if _lens_main != null and is_instance_valid(_lens_main):
+		var on := "NORMAL" if _role == "" else String(FeatureMap.ROLES[_role]["label"]).to_upper()
+		_lens_main.label_text = "LENS  ·  " + on
+		_lens_main.variant = IconButton.Variant.DEFAULT if _role == "" else IconButton.Variant.NEUTRAL
+
+# ── Lens menu ─────────────────────────────────────────────────────────────────
+# Opens above the lens button: the card grows up out of the button while it
+# fades in, then the lenses come in one by one from the bottom, each rising a
+# little. Closing runs it backwards, quicker. Closes on a pick, on the button,
+# on a click anywhere else, or on Esc.
+
+const LENS_MENU_IN_SEC := 0.22
+const LENS_MENU_OUT_SEC := 0.14
+const LENS_ITEM_STEP := 0.035   # between one lens and the next
+const LENS_ITEM_RISE := 8.0     # px each lens rises as it comes in
+
+func _set_lens_menu(open: bool) -> void:
+	if _lens_menu == null or not is_instance_valid(_lens_menu) or open == _lens_menu_open:
+		return
+	_lens_menu_open = open
+	if _lens_menu_tw != null and _lens_menu_tw.is_valid():
+		_lens_menu_tw.kill()
+	var items: Array = (_lens_menu.get_child(0) as Control).get_children()
+	items.reverse()   # bottom (next to the button) first
+	if open:
+		_lens_menu.visible = true
+		_place_lens_bar()
+		_lens_menu.scale = Vector2(1.0, 0.6)
+		_lens_menu.modulate.a = 0.0
+		for c in items:
+			(c as Control).modulate.a = 0.0
+		_lens_menu_tw = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_lens_menu_tw.tween_method(_lens_menu_grow, 0.6, 1.0, LENS_MENU_IN_SEC)
+		_lens_menu_tw.tween_property(_lens_menu, "modulate:a", 1.0, LENS_MENU_IN_SEC)
+		for i in items.size():
+			var c := items[i] as Control
+			var delay := 0.06 + i * LENS_ITEM_STEP
+			_lens_menu_tw.tween_property(c, "modulate:a", 1.0, LENS_MENU_IN_SEC).set_delay(delay)
+			_lens_menu_tw.tween_method(func(k: float) -> void:
+				if is_instance_valid(c):
+					c.offset_transform_position = Vector2(0.0, (1.0 - k) * LENS_ITEM_RISE),
+				0.0, 1.0, LENS_MENU_IN_SEC).set_delay(delay)
+	else:
+		_lens_menu_tw = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		_lens_menu_tw.tween_method(_lens_menu_grow, 1.0, 0.6, LENS_MENU_OUT_SEC)
+		_lens_menu_tw.tween_property(_lens_menu, "modulate:a", 0.0, LENS_MENU_OUT_SEC)
+		_lens_menu_tw.chain().tween_callback(func() -> void:
+			if is_instance_valid(_lens_menu) and not _lens_menu_open:
+				_lens_menu.visible = false
+				_lens_menu.scale = Vector2.ONE
+				_place_lens_bar())
+
+## The card's height scale, grown from its bottom edge (the size is only known
+## once laid out, so the pivot is set each step).
+func _lens_menu_grow(k: float) -> void:
+	if not is_instance_valid(_lens_menu):
+		return
+	_lens_menu.pivot_offset = Vector2(_lens_menu.size.x * 0.5, _lens_menu.size.y)
+	_lens_menu.scale = Vector2(1.0, k)
+
+## Closes the lens menu on a click outside it (or on its button, which toggles
+## it itself) and on Esc. Returns true when it ate the event.
+func _lens_menu_input(event: InputEvent) -> bool:
+	if not _lens_menu_open:
+		return false
+	if event is InputEventKey and (event as InputEventKey).pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
+		_set_lens_menu(false)
+		return true
+	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+		var at := (event as InputEventMouseButton).global_position
+		var on_menu := is_instance_valid(_lens_menu) and _lens_menu.get_global_rect().has_point(at)
+		var on_btn := is_instance_valid(_lens_main) and _lens_main.get_global_rect().has_point(at)
+		if not on_menu and not on_btn:
+			_set_lens_menu(false)   # the click still goes through
+	return false
 
 ## With a lens on, hovering the globe tells what that spot gives the role:
 ## "Production here  +30%" and the features behind it (on them full, near half).
