@@ -23,7 +23,10 @@ var _light_angle:   float = 0.8
 var _font:          Font
 var _credits_lbl:   Label
 var _credits_idx:   int   = 0
-var _cont_btn:      Button
+var _play_btn:      Button
+var _sel_slot:      int = 0      # the save PLAY opens (or starts a new game in)
+var _slot_lbl:      Label
+var _del_btn:       Button
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -180,16 +183,15 @@ func _build_menu() -> void:
 	gap.custom_minimum_size = Vector2(0, 28)
 	root.add_child(gap)
 
-	# Buttons — the browser demo has no saves (no CONTINUE), no tour and no QUIT
+	# Buttons — the browser demo has no saves (one PLAY DEMO), no tour and no QUIT
 	var demo := GameState.demo_build
-	if not demo:
-		_cont_btn = _add_button(root, "CONTINUE", _on_continue)
-		_update_continue_btn()
-		GameState.save_deleted.connect(_update_continue_btn)
-
-	if not demo:
-		_add_button(root, "LOAD GAME", _on_load)
-	_add_button(root, "PLAY DEMO" if demo else "NEW GAME", _on_new_game)
+	if demo:
+		_add_button(root, "PLAY DEMO", _on_new_game)
+	else:
+		# PLAY opens the save shown under it (‹ › pick another, the bin deletes it)
+		_play_btn = _add_button(root, "PLAY", _on_play)
+		_build_save_row(root)
+		GameState.save_deleted.connect(_refresh_save_row)
 
 	_add_button(root, "SETTINGS",  _on_settings)
 	if not demo:
@@ -207,7 +209,7 @@ func _build_menu() -> void:
 	root.add_child(ver)
 
 ## Menu item: icon-left Default button (NEW GAME, CONTINUE, SETTINGS, QUIT).
-const MENU_ICONS := {"CONTINUE": "save", "LOAD GAME": "save", "NEW GAME": "new", "PLAY DEMO": "new", "SETTINGS": "settings", "QUIT": "close"}
+const MENU_ICONS := {"PLAY": "new", "PLAY DEMO": "new", "SETTINGS": "settings", "QUIT": "close"}
 
 func _add_button(parent: Control, label: String, cb: Callable) -> Button:
 	var btn := IconButton.create(label, MENU_ICONS.get(label, "unknown"))
@@ -289,20 +291,93 @@ func _process(delta: float) -> void:
 
 # ── Button callbacks ────────────────────────────────────────────────────────
 
-func _update_continue_btn() -> void:
-	if not is_instance_valid(_cont_btn): return
-	var block := GameState.save_block_reason()
-	var has := GameState.has_save() and block == ""
-	_cont_btn.disabled = not has
-	_cont_btn.modulate = Color(1, 1, 1, 1.0 if has else 0.3)
-	_cont_btn.tooltip_text = block   # why an existing save can't be continued
+# ── Save picker (under PLAY) ─────────────────────────────────────────────────
+# One line: ‹ SLOT 1 · Civ 0 · 1h 12m played · 06.11 14:05 › [bin]. It starts
+# on the last-played slot; PLAY continues it, or starts a new game in an empty
+# one; a save this build can't read keeps PLAY off and says why.
 
+func _build_save_row(parent: Control) -> void:
+	_sel_slot = GameState.save_slot
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.custom_minimum_size = Vector2(260, 0)
+	row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	var prev := IconButton.create_text("‹")
+	prev.min_size = Vector2(26, 26)
+	prev.tooltip_text = "Previous save slot"
+	prev.pressed.connect(func() -> void: _step_slot(-1))
+	row.add_child(prev)
+	_slot_lbl = Label.new()
+	_slot_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_slot_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_slot_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_slot_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if _font: _slot_lbl.add_theme_font_override("font", _font)
+	_slot_lbl.add_theme_font_size_override("font_size", 9)
+	_slot_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
+	row.add_child(_slot_lbl)
+	var next := IconButton.create_text("›")
+	next.min_size = Vector2(26, 26)
+	next.tooltip_text = "Next save slot"
+	next.pressed.connect(func() -> void: _step_slot(1))
+	row.add_child(next)
+	_del_btn = IconButton.create("", "danger", IconButton.Variant.NEGATIVE)
+	_del_btn.tooltip_text = "Delete this save"
+	_del_btn.pressed.connect(_on_delete)
+	row.add_child(_del_btn)
+	parent.add_child(row)
+	_refresh_save_row()
+
+func _step_slot(d: int) -> void:
+	AudioManager.play("click", 0.0)
+	_sel_slot = posmod(_sel_slot + d, GameState.SAVE_SLOTS)
+	_refresh_save_row()
+
+func _refresh_save_row() -> void:
+	if not is_instance_valid(_slot_lbl):
+		return
+	var info := GameState.slot_info(_sel_slot)
+	var text := "Empty — starts a new game" if info.is_empty() else _slot_text(info)
+	var ok := info.is_empty() or bool(info.get("ok", false))
+	# the loaded game itself may be blocked (an old save kept as it is)
+	if ok and not info.is_empty() and _sel_slot == GameState.save_slot and GameState.save_block_reason() != "":
+		ok = false
+		text = GameState.save_block_reason()
+	_slot_lbl.text = "SLOT %d  ·  %s" % [_sel_slot + 1, text]
+	_play_btn.disabled = not ok
+	_play_btn.modulate.a = 1.0 if ok else 0.3
+	_del_btn.disabled = info.is_empty()
+	_del_btn.modulate.a = 0.3 if info.is_empty() else 1.0
+
+func _on_play() -> void:
+	AudioManager.play("click", 0.0)
+	var slot := _sel_slot
+	var info := GameState.slot_info(slot)
+	if info.is_empty():
+		_show_intro(func() -> void: GameState.new_game_in(slot))
+		return
+	if not bool(info.get("ok", false)):
+		return
+	# the game already loaded at boot just goes on; another slot is opened first
+	if slot != GameState.save_slot or not GameState.has_save():
+		GameState.open_slot(slot)
+	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
+
+func _on_delete() -> void:
+	var slot := _sel_slot
+	var info := GameState.slot_info(slot)
+	if info.is_empty():
+		return
+	AudioManager.play("click", 0.0)
+	ConfirmPanel.ask(self, "Delete slot %d?" % (slot + 1),
+		"%s\n\nThis can't be undone." % _slot_text(info), "DELETE", func() -> void:
+			GameState.delete_slot(slot)
+			_refresh_save_row())
+
+## PLAY DEMO (the browser demo has no saves).
 func _on_new_game() -> void:
 	AudioManager.play("click", 0.0)
-	if GameState.demo_build:
-		_show_intro(func() -> void: GameState.delete_save())
-		return
-	_show_slots(true)
+	_show_intro(func() -> void: GameState.delete_save())
 
 ## The short goal card before the first scene (scenes/ui/IntroCard.tscn);
 ## `start` runs on BEGIN, before the galaxy opens.
@@ -316,57 +391,6 @@ func _show_intro(start: Callable) -> void:
 		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn"))
 	layer.add_child(card)
 
-func _on_load() -> void:
-	AudioManager.play("click", 0.0)
-	_show_slots(false)
-
-## Save slots: `for_new` picks where a new game starts (a used slot is
-## overwritten after a confirm); otherwise loads one. Each used slot can be deleted.
-func _show_slots(for_new: bool) -> void:
-	var p := ModalPopup.open(self, "New game — pick a slot" if for_new else "Load game", "save")
-	p.confirm_button().visible = false
-	for slot in GameState.SAVE_SLOTS:
-		var info := GameState.slot_info(slot)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 4)
-		var item := ListItem.create("SLOT %d" % (slot + 1), "save",
-			"CURRENT" if slot == GameState.save_slot and not info.is_empty() else "", [], _slot_text(info))
-		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var usable: bool = for_new or (not info.is_empty() and info.get("ok", false))
-		item.clickable = usable
-		if not usable:
-			item.modulate.a = 0.45
-		var cap_slot := slot
-		item.pressed.connect(func() -> void:
-			AudioManager.play("click", 0.0)
-			if for_new:
-				if info.is_empty():
-					p.close()
-					_show_intro(func() -> void: GameState.new_game_in(cap_slot))
-				else:
-					ConfirmPanel.ask(self, "Overwrite slot %d?" % (cap_slot + 1),
-						"Its game (%s) is replaced by the new one." % _slot_text(info), "OVERWRITE",
-						func() -> void:
-							p.close()
-							_show_intro(func() -> void: GameState.new_game_in(cap_slot)))
-			else:
-				p.close()
-				GameState.open_slot(cap_slot)
-				SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn"))
-		row.add_child(item)
-		if not info.is_empty():
-			var del := IconButton.create("", "danger", IconButton.Variant.NEGATIVE)
-			del.tooltip_text = "Delete this save"
-			del.pressed.connect(func() -> void:
-				ConfirmPanel.ask(self, "Delete slot %d?" % (cap_slot + 1),
-					"%s\n\nThis can't be undone." % _slot_text(info), "DELETE", func() -> void:
-						GameState.delete_slot(cap_slot)
-						_update_continue_btn()
-						p.close()
-						_show_slots(for_new)))
-			row.add_child(del)
-		p.add_content(row)
-
 ## "Civ 0 · 1h 12m played · 28.10 14:05", "Empty", or why it can't load.
 static func _slot_text(info: Dictionary) -> String:
 	if info.is_empty():
@@ -379,10 +403,6 @@ static func _slot_text(info: Dictionary) -> String:
 	var d := Time.get_datetime_dict_from_unix_time(t)
 	return "Civ %d  ·  %s played  ·  %02d.%02d %02d:%02d" % [int(info.get("civilization_type", 0)), played,
 		d["day"], d["month"], d["hour"], d["minute"]]
-
-func _on_continue() -> void:
-	AudioManager.play("click", 0.0)
-	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
 
 func _on_settings() -> void:
 	HUDManager.show_settings_popup()
