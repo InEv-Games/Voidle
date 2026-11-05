@@ -425,11 +425,17 @@ func _bind_ticker() -> void:
 			_ticker.accept_event())
 	_tk_t = TICKER_SEC   # fill it at once
 
-## The market box looks like a button (theme BarButton, shared with the lens
-## button): normal / hover / pressed.
+## The market box looks like every other button (theme ButtonDefault): normal /
+## hover / pressed, its padding trimmed so the fixed width holds the price.
 func _ticker_look(state: StringName) -> void:
-	if _ticker != null and is_instance_valid(_ticker):
-		_ticker.add_theme_stylebox_override(&"panel", _ticker.get_theme_stylebox(state, &"BarButton"))
+	if _ticker == null or not is_instance_valid(_ticker):
+		return
+	var sb := _ticker.get_theme_stylebox(state, UIStyle.DEFAULT).duplicate() as StyleBox
+	sb.content_margin_left = 4.0
+	sb.content_margin_right = 4.0
+	sb.content_margin_top = 0.0
+	sb.content_margin_bottom = 0.0
+	_ticker.add_theme_stylebox_override(&"panel", sb)
 
 ## Products the ticker may show (tradeable now).
 static func _ticker_ids() -> Array[String]:

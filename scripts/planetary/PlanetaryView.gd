@@ -154,7 +154,7 @@ var _planet_view: TextureRect = null
 var _role: String = ""
 var _lens_bar: Control = null
 var _lens_buttons: Dictionary = {}      # role -> Button (in the lens menu)
-var _lens_main: Button = null            # the one lens button (BarButton): opens the menu
+var _lens_main: Button = null            # the one lens button: opens the menu
 var _lens_menu: PanelContainer = null    # the lenses, above the button
 var _lens_menu_open := false
 var _lens_menu_tw: Tween = null
@@ -5102,8 +5102,7 @@ func _rebuild_lens_bar() -> void:
 		(c as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# the one button: shows the lens that is on, opens / closes the menu
 	_lens_main = Button.new()
-	_lens_main.theme_type_variation = &"BarButton"   # like the news bar's market box
-	_lens_main.focus_mode = Control.FOCUS_NONE
+	UIStyle.style_button(_lens_main, UIStyle.DEFAULT)   # like every other button
 	_lens_main.text = "LENS"
 	_lens_main.size_flags_horizontal = Control.SIZE_SHRINK_END   # stays put as the wider menu opens
 	_lens_main.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
@@ -5236,12 +5235,8 @@ func _style_lens_bar() -> void:
 	if _lens_main != null and is_instance_valid(_lens_main):
 		var on := "NORMAL" if _role == "" else String(FeatureMap.ROLES[_role]["label"]).to_upper()
 		_lens_main.text = "LENS  ·  " + on
-		# a lens on: its name in the lens's colour
-		if _role == "":
-			_lens_main.remove_theme_color_override(&"font_color")
-		else:
-			_lens_main.add_theme_color_override(&"font_color",
-				(FeatureMap.ROLES[_role]["tint"] as Color).lightened(0.25))
+		# a lens on reads as selected (Neutral), like the lenses in its menu
+		_lens_main.theme_type_variation = UIStyle.DEFAULT if _role == "" else UIStyle.NEUTRAL
 
 # ── Lens menu ─────────────────────────────────────────────────────────────────
 # Drops down under the lens button: the card grows down out of the button
