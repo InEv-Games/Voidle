@@ -272,7 +272,12 @@ const BLINK_SEC := 0.07
 const BLINK_CHANCE := 0.35
 const BLINK_DIP := Vector2(0.15, 0.6)
 
-var _rows: Dictionary = {}   # row id → {node, orig, last, p, cap, s, seed, labels, tween}
+## Inside a row, its items (icons, labels, buttons… in reading order: left to
+## right, line by line) come one after another: each over ITEM_FADE of the
+## row's progress, their starts spread evenly over the rest.
+const ITEM_FADE := 0.4
+
+var _rows: Dictionary = {}   # row id → {node, orig, last, p, cap, s, seed, labels, items, tween}
 var _fade: Dictionary = {}   # label id → {node, text, last, h}
 var _fade_t := 1.0
 var _opening := false        # rows run their own tweens (see Opening above)
@@ -352,7 +357,7 @@ func _collect_rows(n: Node, row: int) -> void:
 				_rows[rid] = {"node": c, "orig": _base_modulate(c as Control),
 					"last": (c as Control).modulate, "p": start, "cap": 1.0,
 					"s": _fade_rng.randf_range(0.0, 1.0 - ROW_FADE), "seed": _fade_rng.randi(),
-					"labels": [], "tween": null}
+					"labels": [], "items": _collect_items(c as Control), "tween": null}
 				if _opening:
 					_start_row_tween(rid)
 		if c is Label and not _fade.has(c.get_instance_id()):
@@ -382,8 +387,32 @@ func _kill_row_tween(r: Dictionary) -> void:
 		(tw as Tween).kill()
 	r["tween"] = null
 
+## A row's items in reading order (tree order: an HBox runs left to right,
+## a card's lines top to bottom), each with where it starts in the row.
+func _collect_items(row: Control) -> Array:
+	var leaves: Array[Control] = []
+	_item_leaves(row, leaves)
+	var items := []
+	var n := leaves.size()
+	for i in n:
+		var c := leaves[i]
+		items.append({"node": c, "orig": _base_modulate(c), "last": c.modulate,
+			"o": (float(i) / float(n - 1)) * (1.0 - ITEM_FADE) if n > 1 else 0.0})
+	return items
+
+func _item_leaves(n: Control, out: Array[Control]) -> void:
+	for c in n.get_children():
+		if not (c is Control) or not (c as Control).visible:
+			continue
+		var ctl := c as Control
+		var has_kids := ctl.get_children().any(func(k: Node) -> bool: return k is Control)
+		if ctl is Label or ctl is TextureRect or ctl is BaseButton or ctl is Separator or not has_kids:
+			out.append(ctl)   # an item (a button is one, whatever is inside it)
+		else:
+			_item_leaves(ctl, out)
+
 ## Shows row `id` at progress p (0 gone, 1 fully there): opacity with blinks,
-## its labels scrambled to match.
+## its items one after another, its labels scrambled to match.
 func _set_row(id: int, p: float, blink_bucket: int, glyph_bucket: int) -> void:
 	var r: Dictionary = _rows.get(id, {})
 	if r.is_empty():
@@ -397,6 +426,19 @@ func _set_row(id: int, p: float, blink_bucket: int, glyph_bucket: int) -> void:
 			var m := Color(orig.r, orig.g, orig.b, orig.a * a)
 			node.modulate = m
 			r["last"] = m
+	var item_p := {}   # label id → its own progress, for the scramble
+	for it: Dictionary in r["items"]:
+		if not is_instance_valid(it["node"]):
+			continue
+		var ic := it["node"] as Control
+		var o: float = it["o"]
+		var ip := smoothstep(o, o + ITEM_FADE, p)
+		item_p[ic.get_instance_id()] = ip
+		if ic.modulate == it["last"]:   # else someone else drives it
+			var io: Color = it["orig"]
+			var im := Color(io.r, io.g, io.b, io.a * ip)
+			ic.modulate = im
+			it["last"] = im
 	for lid in r["labels"]:
 		var e: Dictionary = _fade.get(lid, {})
 		if e.is_empty() or not is_instance_valid(e["node"]):
@@ -407,10 +449,11 @@ func _set_row(id: int, p: float, blink_bucket: int, glyph_bucket: int) -> void:
 			e["h"] = _thresholds(lab.text.length())
 		var text: String = e["text"]
 		var h: PackedFloat32Array = e["h"]
+		var lp: float = item_p.get(lid, p)
 		var out := ""
 		for i in text.length():
 			var ch := text[i]
-			if ch.strip_edges() == "" or p >= h[i]:
+			if ch.strip_edges() == "" or lp >= h[i]:
 				out += ch
 				continue
 			var g := CyberReveal.GLYPHS[absi(hash(Vector3i(i, glyph_bucket, lid & 0xffff))) % CyberReveal.GLYPHS.length()]
@@ -432,6 +475,9 @@ func _restore_row(r: Dictionary) -> void:
 	_kill_row_tween(r)
 	if is_instance_valid(r["node"]) and (r["node"] as Control).modulate == r["last"]:
 		(r["node"] as Control).modulate = r["orig"]
+	for it: Dictionary in r["items"]:
+		if is_instance_valid(it["node"]) and (it["node"] as Control).modulate == it["last"]:
+			(it["node"] as Control).modulate = it["orig"]
 	for lid in r["labels"]:
 		var e: Dictionary = _fade.get(lid, {})
 		if not e.is_empty() and is_instance_valid(e["node"]) and (e["node"] as Label).text == e["last"]:
