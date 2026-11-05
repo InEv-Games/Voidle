@@ -5359,6 +5359,49 @@ func _set_panel_open(open: bool) -> void:
 	_panel_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_panel_tween.tween_method(_apply_panel_t, _panel_t, 1.0 if open else 0.0, PANEL_SLIDE_SEC)
 
+# ── Overlay transitions (the Upgrade Tree) ───────────────────────────────────
+# HUDManager calls these around a full-screen overlay: the left panel closes
+# first, then the overlay fades in while the planet eases out a little; when
+# it closes, zoom and panel go back to how they were.
+
+const OVERLAY_ZOOM_OUT := 0.85   # zoom factor while the overlay comes in
+
+var _overlay_restore: Dictionary = {}   # {panel_open, zoom} before the overlay
+
+## Closes the left panel; returns how long to wait before the overlay fades in.
+func overlay_begin() -> float:
+	_overlay_restore = {"panel_open": _panel_open, "zoom": _zoom_target}
+	if _panel_open:
+		_set_panel_open(false)
+		return PANEL_SLIDE_SEC
+	return 0.0
+
+var _overlay_zoom_tw: Tween = null
+
+## As the overlay fades in: a small, slow zoom-out over `sec` (eased in and
+## out; past ZOOM_MIN is fine, briefly).
+func overlay_zoom_out(sec: float) -> void:
+	if _overlay_zoom_tw != null and _overlay_zoom_tw.is_valid():
+		_overlay_zoom_tw.kill()
+	_zoom_anchor = Vector2.INF
+	_overlay_zoom_tw = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_overlay_zoom_tw.tween_method(func(z: float) -> void:
+		_zoom_target = z
+		_zoom = z   # the tween does the easing; no extra lag on top
+		_apply_zoom(),
+		_zoom_target, _zoom_target * OVERLAY_ZOOM_OUT, sec)
+
+## The overlay closed: zoom and panel as they were.
+func overlay_end() -> void:
+	if _overlay_restore.is_empty():
+		return
+	if _overlay_zoom_tw != null and _overlay_zoom_tw.is_valid():
+		_overlay_zoom_tw.kill()
+	_set_zoom_target(float(_overlay_restore["zoom"]), Vector2.INF)
+	if bool(_overlay_restore["panel_open"]):
+		_set_panel_open(true)
+	_overlay_restore = {}
+
 ## Screen x of the side panel's right edge (0 when it's slid away).
 ## The panel's right edge as a fraction of the screen width (t: 1 open, 0 hidden).
 func _panel_edge_frac(t: float) -> float:
