@@ -5308,8 +5308,12 @@ func _refresh_lens() -> void:
 # ── Side panel slide ──────────────────────────────────────────────────────────
 
 func _build_panel_toggle() -> void:
-	var btn := IconButton.create_text("‹")
-	btn.font_size = 12
+	# just the arrow: no background, no stroke
+	var btn := Button.new()
+	btn.text = "‹"
+	btn.flat = true
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_font_size_override("font_size", PANEL_TOGGLE_FONT)
 	btn.z_index = 201
 	btn.z_as_relative = false
 	btn.tooltip_text = ""
@@ -5320,22 +5324,24 @@ func _build_panel_toggle() -> void:
 		_set_panel_open(not _panel_open))
 	add_child(btn)
 	_panel_toggle_btn = btn
-	# If content ever widens the panel past its anchors, keep the tab on its edge
-	($SidePanel as Control).resized.connect(_place_panel_toggle)
-	($SidePanel as Control).item_rect_changed.connect(_place_panel_toggle)
+	($SidePanel as Control).resized.connect(_place_panel_toggle)   # window resized
 	_apply_panel_t(_panel_t)
 
-## Puts the open/close tab on the side panel's actual right edge.
+const PANEL_TOGGLE_FONT := 20
+const PANEL_TOGGLE_W := 24.0
+
+## Pins the open/close arrow in the strip left of the panel's stroke (the
+## panel never moves, so neither does the arrow), centred vertically.
 func _place_panel_toggle() -> void:
 	if _panel_toggle_btn == null:
 		return
-	var x := _panel_right_edge()
+	var stroke_x := LeftPanel.GAP * get_viewport_rect().size.x
 	_panel_toggle_btn.anchor_left   = 0.0
 	_panel_toggle_btn.anchor_right  = 0.0
 	_panel_toggle_btn.anchor_top    = 0.5
 	_panel_toggle_btn.anchor_bottom = 0.5
-	_panel_toggle_btn.offset_left   = x
-	_panel_toggle_btn.offset_right  = x + 26.0
+	_panel_toggle_btn.offset_left   = maxf(0.0, stroke_x - PANEL_TOGGLE_W)
+	_panel_toggle_btn.offset_right  = stroke_x
 	_panel_toggle_btn.offset_top    = -28.0
 	_panel_toggle_btn.offset_bottom = 28.0
 
@@ -5381,7 +5387,7 @@ func _apply_panel_t(t: float) -> void:
 	($PlanetContainer as Control).anchor_right = 1.0
 	HUDManager.set_view_area_fraction(1.0 - _panel_edge_frac(t))
 	if _panel_toggle_btn != null:
-		_panel_toggle_btn.label_text = "‹" if _panel_open else "›"
+		_panel_toggle_btn.text = "‹" if _panel_open else "›"
 		_place_panel_toggle()
 	if _toast_container != null and is_instance_valid(_toast_container):
 		_toast_container.offset_left = _panel_edge_frac(t) * get_viewport_rect().size.x + 14.0
