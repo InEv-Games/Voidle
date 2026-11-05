@@ -9,16 +9,16 @@ class_name CyberReveal
 extends Node
 
 const GLYPHS := "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#$%&*+=<>/\\[]{}?!_-"
-const STEP_SEC := 0.02        # delay between one block and the next
-const STAGGER_SEC := 0.2      # the last block starts no later than this
-const BLINK_SEC := 0.12
-const DECODE_SEC := 0.2       # per label: first wrong → all settled
-const SCRAMBLE_SHARE := 0.3   # share of a label's chars that start wrong; the rest show right away
-const GLYPH_SEC := 0.05       # how often an unsettled glyph changes
-const GLITCH_CHANCE := 0.03   # a settled char flicking wrong again (fades out)
+const STEP_SEC := 0.0675      # delay between one block and the next
+const STAGGER_SEC := 0.75     # the last block starts no later than this
+const BLINK_SEC := 0.48
+const DECODE_SEC := 0.75      # per label: first wrong → all settled
+const SCRAMBLE_SHARE := 0.15  # share of a label's chars that start wrong; the rest show right away
+const GLYPH_SEC := 0.09       # how often an unsettled glyph changes
+const GLITCH_CHANCE := 0.01   # a settled char flicking wrong again (fades out)
 const FLASH := Color(0.9, 1.08, 1.12)   # faint cyan on the first blink frames
 ## Alpha per blink step (BLINK_SEC split evenly): a short flicker, never fully off.
-const BLINK := [0.5, 0.25, 0.9, 0.6, 1.0]
+const BLINK := [0.55, 0.3, 0.85, 0.6, 1.0]   # slow, analog: a weak tape signal
 
 var _root: Control
 var _t := 0.0
