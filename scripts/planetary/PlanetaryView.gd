@@ -4845,6 +4845,7 @@ func _process(delta: float) -> void:
 	_tick_zoom(delta)
 	_update_placement_hover()
 	_tick_lens_tip()
+	_fade_lens_ui()
 	_tick_lander(delta)
 	_tick_companions()
 	_tick_key_spin(delta)
@@ -5042,6 +5043,8 @@ func _make_lens_button(text: String, tint: Color, on_press: Callable) -> Button:
 ## the map and the economy (FeatureMap.role_texture). Click again to clear.
 func _rebuild_lens_bar() -> void:
 	if _lens_bar != null and is_instance_valid(_lens_bar):
+		if tree_exiting.is_connected(_lens_bar.queue_free):
+			tree_exiting.disconnect(_lens_bar.queue_free)
 		_lens_bar.queue_free()
 	_lens_buttons.clear()
 	if current_data == null or not FeatureMap.has_map(current_data.seed):
@@ -5049,9 +5052,10 @@ func _rebuild_lens_bar() -> void:
 	if _role != "" and not GameState.is_scanned(current_data.seed):
 		_set_role("")   # a lens left on from another world
 	var cont := planet_renderer.get_parent() as Control
-	# the bar: the lens menu (hidden) stacked over the one lens button
+	# the lens button at the right end of the resource bar, its menu (hidden)
+	# dropping down under it
 	var row := VBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_END
+	row.alignment = BoxContainer.ALIGNMENT_BEGIN
 	row.add_theme_constant_override("separation", 4)
 	row.z_index = 50
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -5098,56 +5102,66 @@ func _rebuild_lens_bar() -> void:
 		(c as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# the one button: shows the lens that is on, opens / closes the menu
 	_lens_main = IconButton.create_text("LENS")
-	_lens_main.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_lens_main.size_flags_horizontal = Control.SIZE_SHRINK_END   # stays put as the wider menu opens
 	_lens_main.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 	_lens_main.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	_lens_main.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_set_lens_menu(not _lens_menu_open))
 	row.add_child(_lens_main)
-	cont.add_child(row)
-	row.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 16)
-	row.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	row.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	row.move_child(_lens_main, 0)
+	# in the HUD's top layer (the resource bar's), freed with this view
+	var bar := HUDManager.credits_panel
+	var host: Node = bar.get_parent() if bar != null and is_instance_valid(bar) and bar.get_parent() != null else cont
+	host.add_child(row)
+	row.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	row.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	row.grow_vertical = Control.GROW_DIRECTION_END
+	if host != cont:
+		tree_exiting.connect(row.queue_free)
 	_lens_bar = row
 	_style_lens_bar()
 	_place_lens_bar()
 
-## The lens bar sits at the bottom of the view, above the news crawl.
-const LENS_BAR_MARGIN := 30.0   # clears the news crawl (NewsFeed.HEIGHT)
+## The lens button sits at the right end of the resource bar, centred on its
+## height; the lens colour key stays at the bottom of the view, above the news.
+const LENS_BAR_MARGIN := 30.0   # the colour key clears the news crawl (NewsFeed.HEIGHT)
+const LENS_BAR_RIGHT := 6.0     # gap to the screen's right edge
 
 func _place_lens_bar() -> void:
 	if _lens_bar == null or not is_instance_valid(_lens_bar):
 		return
-	var h := _lens_bar.get_combined_minimum_size().y
-	var lh := 0.0
-	if is_instance_valid(_lens_legend):
-		lh = (_lens_legend as Control).get_combined_minimum_size().y + LENS_LEGEND_GAP
-	# rides the panel's slide tween: up from below the screen as it opens
-	var drop := (1.0 - _panel_t) * (LENS_BAR_MARGIN + h + lh)
-	_lens_bar.offset_bottom = -LENS_BAR_MARGIN + drop
-	_lens_bar.offset_top = _lens_bar.offset_bottom - h
+	var bar_h := 0.0
+	var bar := HUDManager.credits_panel
+	if bar != null and is_instance_valid(bar):
+		bar_h = bar.size.y
+	var btn_h := _lens_main.get_combined_minimum_size().y if is_instance_valid(_lens_main) else 0.0
+	var w := _lens_bar.get_combined_minimum_size().x
+	_lens_bar.offset_right = -LENS_BAR_RIGHT
+	_lens_bar.offset_left = -LENS_BAR_RIGHT - w
+	_lens_bar.offset_top = maxf(0.0, (bar_h - btn_h) * 0.5)
+	_lens_bar.offset_bottom = _lens_bar.offset_top + _lens_bar.get_combined_minimum_size().y
 	_place_lens_legend()
 	_fade_lens_ui()
 
-## The lens colour key sits just above the lens bar and moves with it.
 const LENS_LEGEND_GAP := 6.0
 
 func _place_lens_legend() -> void:
-	if not is_instance_valid(_lens_legend) or not is_instance_valid(_lens_bar):
+	if not is_instance_valid(_lens_legend):
 		return
 	var row := _lens_legend as Control
 	var h := row.get_combined_minimum_size().y
-	row.offset_bottom = _lens_bar.offset_top - LENS_LEGEND_GAP
+	row.offset_bottom = -LENS_BAR_MARGIN
 	row.offset_top = row.offset_bottom - h
 
-## Lenses (and their colour key) only show with the left panel open; they slide
-## and fade with the panel.
+## The lens button lives in the HUD's top layer, which sits over the Upgrade
+## Tree: it hides while the tree is open (the colour key with it).
 func _fade_lens_ui() -> void:
 	for c in [_lens_bar, _lens_legend]:   # untyped: either may be a freed node
 		if is_instance_valid(c):
-			(c as Control).modulate.a = _panel_t
-			(c as Control).visible = _panel_t > 0.01
+			(c as Control).visible = not SkillTreeView.is_open
+	if SkillTreeView.is_open and _lens_menu_open:
+		_set_lens_menu(false)
 
 ## Orbital surface scan: a bright band sweeps the globe once, then the role
 ## lenses of this world work (GameState.scanned_bodies).
@@ -5222,15 +5236,15 @@ func _style_lens_bar() -> void:
 		_lens_main.variant = IconButton.Variant.DEFAULT if _role == "" else IconButton.Variant.NEUTRAL
 
 # ── Lens menu ─────────────────────────────────────────────────────────────────
-# Opens above the lens button: the card grows up out of the button while it
-# fades in, then the lenses come in one by one from the bottom, each rising a
-# little. Closing runs it backwards, quicker. Closes on a pick, on the button,
+# Drops down under the lens button: the card grows down out of the button
+# while it fades in, then the lenses come in one by one from the top, each
+# settling down a little. Closing runs it backwards, quicker. Closes on a pick, on the button,
 # on a click anywhere else, or on Esc.
 
 const LENS_MENU_IN_SEC := 0.22
 const LENS_MENU_OUT_SEC := 0.14
 const LENS_ITEM_STEP := 0.035   # between one lens and the next
-const LENS_ITEM_RISE := 8.0     # px each lens rises as it comes in
+const LENS_ITEM_RISE := 8.0     # px each lens drops as it comes in
 
 func _set_lens_menu(open: bool) -> void:
 	if _lens_menu == null or not is_instance_valid(_lens_menu) or open == _lens_menu_open:
@@ -5239,7 +5253,7 @@ func _set_lens_menu(open: bool) -> void:
 	if _lens_menu_tw != null and _lens_menu_tw.is_valid():
 		_lens_menu_tw.kill()
 	var items: Array = (_lens_menu.get_child(0) as Control).get_children()
-	items.reverse()   # bottom (next to the button) first
+	# top (next to the button) first
 	if open:
 		_lens_menu.visible = true
 		_place_lens_bar()
@@ -5256,7 +5270,7 @@ func _set_lens_menu(open: bool) -> void:
 			_lens_menu_tw.tween_property(c, "modulate:a", 1.0, LENS_MENU_IN_SEC).set_delay(delay)
 			_lens_menu_tw.tween_method(func(k: float) -> void:
 				if is_instance_valid(c):
-					c.offset_transform_position = Vector2(0.0, (1.0 - k) * LENS_ITEM_RISE),
+					c.offset_transform_position = Vector2(0.0, -(1.0 - k) * LENS_ITEM_RISE),
 				0.0, 1.0, LENS_MENU_IN_SEC).set_delay(delay)
 	else:
 		_lens_menu_tw = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
@@ -5268,12 +5282,12 @@ func _set_lens_menu(open: bool) -> void:
 				_lens_menu.scale = Vector2.ONE
 				_place_lens_bar())
 
-## The card's height scale, grown from its bottom edge (the size is only known
-## once laid out, so the pivot is set each step).
+## The card's height scale, grown from its top edge, under the button (the size
+## is only known once laid out, so the pivot is set each step).
 func _lens_menu_grow(k: float) -> void:
 	if not is_instance_valid(_lens_menu):
 		return
-	_lens_menu.pivot_offset = Vector2(_lens_menu.size.x * 0.5, _lens_menu.size.y)
+	_lens_menu.pivot_offset = Vector2(_lens_menu.size.x * 0.5, 0.0)
 	_lens_menu.scale = Vector2(1.0, k)
 
 ## Closes the lens menu on a click outside it (or on its button, which toggles
@@ -5387,12 +5401,12 @@ func _refresh_lens_legend() -> void:
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(sw)
 		row.add_child(l)
-	_lens_bar.get_parent().add_child(row)
+	(planet_renderer.get_parent() as Control).add_child(row)
 	row.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 0)
 	row.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	row.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_lens_legend = row
-	_place_lens_bar()   # the bar's slide offset counts the legend's height
+	_place_lens_bar()
 
 func _refresh_lens() -> void:
 	_style_lens_bar()
