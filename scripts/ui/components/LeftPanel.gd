@@ -110,7 +110,8 @@ func reveal() -> void:
 
 func _play_reveal() -> void:
 	_reveal_queued = false
-	if is_inside_tree() and visible:
+	# closed or mid open/close: the scramble-in on opening is the reveal
+	if is_inside_tree() and visible and _effective_t() >= 1.0 and _rows.is_empty():
 		CyberReveal.play(content)
 
 func _process(_delta: float) -> void:
@@ -133,7 +134,7 @@ const BACKDROP_STOPS := [[0.0, 0.88], [0.7, 0.78], [1.0, 0.5], [1.35, 0.0]]
 const BACKDROP_DARKEN := 0.5
 
 func _draw() -> void:
-	var t := 1.0 if _force_open and overlay() != null else slide_t
+	var t := _effective_t()
 	if t <= 0.0:
 		return
 	var sb := get_theme_stylebox(&"panel")
@@ -161,9 +162,15 @@ func _draw() -> void:
 static func edge_frac(t: float = 1.0) -> float:
 	return (GAP + WIDTH) * t
 
+## The panel never moves: closing it scrambles its text into random glyphs and
+## fades the content out (opening runs the same backwards); the left stroke
+## stays put. `t` is the view's slide value, so its tween drives the effect.
+func _effective_t() -> float:
+	return 1.0 if _force_open and overlay() != null else slide_t
+
 func _place() -> void:
-	var t := 1.0 if _force_open and overlay() != null else slide_t
-	anchor_left = lerpf(-WIDTH, GAP, t)
+	var t := _effective_t()
+	anchor_left = GAP
 	anchor_right = anchor_left + WIDTH
 	anchor_top = 0.0
 	anchor_bottom = 1.0
@@ -172,6 +179,222 @@ func _place() -> void:
 	#offset_top = _hud_bar_height()
 	offset_top = 0.0
 	offset_bottom = 0.0
+	_apply_fade(t)
+
+# ── Open / close: scramble out, scramble in ──────────────────────────────────
+
+## The panel's content comes and goes row by row (a row: each line of the
+## panel — a hero, a card, a header, the shortcut bar… — found by opening the
+## plain VBoxContainers it is stacked in). Every open / close is rolled anew:
+## the order rows go in, their blinks and which chars scramble when.
+##   Closing: each row fades over its own ROW_FADE share of the slide, placed
+##            at random, so they leave in a new order each time.
+##   Opening: each row runs its own tween (ROW_IN_SEC), starting at a random
+##            moment within ROW_IN_STAGGER — it may run past the slide's end.
+const ROW_FADE := 0.45
+const ROW_IN_SEC := 0.675
+const ROW_IN_STAGGER := 0.9
+## Each char turns into glyphs once its row drops below the char's own
+## threshold, picked in this range — a few go right away, all by the lower end.
+const SCRAMBLE_FROM := Vector2(0.35, 1.0)
+## Share of a label's chars that scramble at all; the rest only fade.
+const SCRAMBLE_SHARE := 0.35
+const FADE_GLYPH_SEC := 0.12   # how often a scrambled glyph changes (slow = analog)
+## Blink while a row comes or goes: it drops out like a weak tape signal.
+## Every BLINK_SEC a row may dip (BLINK_CHANCE) to a random opacity between
+## BLINK_DIP.x and BLINK_DIP.y of what its fade says.
+const BLINK_SEC := 0.07
+const BLINK_CHANCE := 0.15
+const BLINK_DIP := Vector2(0.45, 0.8)
+
+var _rows: Dictionary = {}   # row id → {node, orig, last, p, cap, s, seed, labels, tween}
+var _fade: Dictionary = {}   # label id → {node, text, last, h}
+var _fade_t := 1.0
+var _opening := false        # rows run their own tweens (see Opening above)
+var _fade_rng := RandomNumberGenerator.new()
+
+## True while rows are coming or going (ScreenFX leaves the panel alone then).
+func is_animating() -> bool:
+	return _fade_t < 1.0 or not _rows.is_empty()
+
+## A row's blink factor this BLINK_SEC step; `seed` is rolled per row per
+## open / close, so the pattern never repeats.
+func _blink(bucket: int, seed: int) -> float:
+	var r := float(hash(Vector2i(bucket, seed)) & 0xffff) / 65535.0
+	if r < BLINK_CHANCE:
+		return lerpf(BLINK_DIP.x, BLINK_DIP.y, r / BLINK_CHANCE)
+	return 1.0
+
+## A new open / close starts: new order, new blinks, new scramble.
+func _reroll() -> void:
+	for r: Dictionary in _rows.values():
+		_kill_row_tween(r)
+		r["s"] = _fade_rng.randf_range(0.0, 1.0 - ROW_FADE)
+		r["seed"] = _fade_rng.randi()
+		r["cap"] = r["p"]   # closing never brings a half-arrived row back up
+	for e: Dictionary in _fade.values():
+		e["h"] = _thresholds((e["text"] as String).length())
+
+func _apply_fade(t: float) -> void:
+	if t == _fade_t and (t >= 1.0 or t <= 0.0):
+		return   # settled: nothing to animate
+	var from := _fade_t
+	_fade_t = t
+	var layout := $Layout as Control
+	var shown := t > 0.0
+	layout.visible = shown
+	mouse_filter = Control.MOUSE_FILTER_STOP if shown else Control.MOUSE_FILTER_IGNORE
+	if not shown:
+		return
+	var opening_start := from <= 0.0
+	var closing_start := t < from and (from >= 1.0 or _opening)
+	if opening_start or closing_start:
+		_opening = opening_start
+		_collect_rows(layout, 0)
+		_reroll()
+		if opening_start:
+			for id in _rows:
+				_start_row_tween(id)
+			return
+	else:
+		_collect_rows(layout, 0)   # rows built meanwhile join in
+	if _opening:
+		return   # the rows' own tweens drive them
+	if t >= 1.0:
+		_end_fade()   # a close reversed before it finished
+		return
+	var bb := Time.get_ticks_msec() / int(BLINK_SEC * 1000.0)
+	var gb := Time.get_ticks_msec() / int(FADE_GLYPH_SEC * 1000.0)
+	for id in _rows.keys():
+		var r: Dictionary = _rows[id]
+		var s: float = r["s"]
+		_set_row(id, minf(float(r["cap"]), smoothstep(s, s + ROW_FADE, t)), bb, gb)
+
+## Rows (and the labels inside each) under `n`; `row` is the row we are in.
+func _collect_rows(n: Node, row: int) -> void:
+	for c in n.get_children():
+		if not (c is Control) or not (c as Control).is_visible_in_tree():
+			continue
+		var rid := row
+		if rid == 0:
+			if (c is VBoxContainer or c is ScrollContainer or c is MarginContainer) \
+					and not CyberReveal._is_block(c as Control):
+				_collect_rows(c, 0)   # a stack of rows (or a wrapper around one), not a row
+				continue
+			rid = c.get_instance_id()
+			if not _rows.has(rid):
+				var start := 0.0 if _opening or _fade_t < 1.0 else 1.0
+				_rows[rid] = {"node": c, "orig": _base_modulate(c as Control),
+					"last": (c as Control).modulate, "p": start, "cap": 1.0,
+					"s": _fade_rng.randf_range(0.0, 1.0 - ROW_FADE), "seed": _fade_rng.randi(),
+					"labels": [], "tween": null}
+				if _opening:
+					_start_row_tween(rid)
+		if c is Label and not _fade.has(c.get_instance_id()):
+			var text := (c as Label).text
+			if text.strip_edges() != "":
+				_fade[c.get_instance_id()] = {"node": c, "text": text, "last": text,
+					"h": _thresholds(text.length())}
+				(_rows[rid]["labels"] as Array).append(c.get_instance_id())
+		_collect_rows(c, rid)
+
+func _start_row_tween(id: int) -> void:
+	var r: Dictionary = _rows[id]
+	_kill_row_tween(r)
+	_set_row(id, 0.0, 0, 0)   # hidden until its turn
+	var tw := create_tween()
+	tw.tween_interval(_fade_rng.randf_range(0.0, ROW_IN_STAGGER))
+	tw.tween_method(func(p: float) -> void:
+		_set_row(id, p, Time.get_ticks_msec() / int(BLINK_SEC * 1000.0),
+			Time.get_ticks_msec() / int(FADE_GLYPH_SEC * 1000.0)),
+		0.0, 1.0, ROW_IN_SEC).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(_finish_row.bind(id))
+	r["tween"] = tw
+
+func _kill_row_tween(r: Dictionary) -> void:
+	var tw = r["tween"]
+	if tw != null and (tw as Tween).is_valid():
+		(tw as Tween).kill()
+	r["tween"] = null
+
+## Shows row `id` at progress p (0 gone, 1 fully there): opacity with blinks,
+## its labels scrambled to match.
+func _set_row(id: int, p: float, blink_bucket: int, glyph_bucket: int) -> void:
+	var r: Dictionary = _rows.get(id, {})
+	if r.is_empty():
+		return
+	r["p"] = p
+	if is_instance_valid(r["node"]):
+		var node := r["node"] as Control
+		if node.modulate == r["last"]:   # else someone else drives it: leave it be
+			var a := p * (_blink(blink_bucket, r["seed"]) if p > 0.0 and p < 1.0 else 1.0)
+			var orig: Color = r["orig"]
+			var m := Color(orig.r, orig.g, orig.b, orig.a * a)
+			node.modulate = m
+			r["last"] = m
+	for lid in r["labels"]:
+		var e: Dictionary = _fade.get(lid, {})
+		if e.is_empty() or not is_instance_valid(e["node"]):
+			continue
+		var lab := e["node"] as Label
+		if lab.text != e["last"]:   # the game wrote new text meanwhile: take it
+			e["text"] = lab.text
+			e["h"] = _thresholds(lab.text.length())
+		var text: String = e["text"]
+		var h: PackedFloat32Array = e["h"]
+		var out := ""
+		for i in text.length():
+			var ch := text[i]
+			if ch.strip_edges() == "" or p >= h[i]:
+				out += ch
+				continue
+			var g := CyberReveal.GLYPHS[absi(hash(Vector3i(i, glyph_bucket, lid & 0xffff))) % CyberReveal.GLYPHS.length()]
+			out += g.to_lower() if ch != ch.to_upper() else g
+		lab.text = out
+		e["last"] = out
+
+## A row is fully back: its real modulate and text, and it leaves the books.
+func _finish_row(id: int) -> void:
+	var r: Dictionary = _rows.get(id, {})
+	if r.is_empty():
+		return
+	_restore_row(r)
+	_rows.erase(id)
+	if _rows.is_empty():
+		_opening = false
+
+func _restore_row(r: Dictionary) -> void:
+	_kill_row_tween(r)
+	if is_instance_valid(r["node"]) and (r["node"] as Control).modulate == r["last"]:
+		(r["node"] as Control).modulate = r["orig"]
+	for lid in r["labels"]:
+		var e: Dictionary = _fade.get(lid, {})
+		if not e.is_empty() and is_instance_valid(e["node"]) and (e["node"] as Label).text == e["last"]:
+			(e["node"] as Label).text = e["text"]
+		_fade.erase(lid)
+
+## A row's own modulate — not a passing ScreenFX flicker.
+func _base_modulate(c: Control) -> Color:
+	var fx := get_node_or_null("/root/ScreenFX")
+	if fx != null and fx.has_method("base_modulate"):
+		return fx.call("base_modulate", c)
+	return c.modulate
+
+func _thresholds(n: int) -> PackedFloat32Array:
+	var h := PackedFloat32Array()
+	for i in n:
+		# -1: never scrambles (p >= -1 always)
+		h.append(_fade_rng.randf_range(SCRAMBLE_FROM.x, SCRAMBLE_FROM.y) \
+			if _fade_rng.randf() < SCRAMBLE_SHARE else -1.0)
+	return h
+
+## Puts every row back as it was (the panel is fully open again).
+func _end_fade() -> void:
+	for r: Dictionary in _rows.values():
+		_restore_row(r)
+	_rows.clear()
+	_fade.clear()
+	_opening = false
 
 ## Height of the HUD's resource bar — the panel starts below it.
 func _hud_bar_height() -> float:

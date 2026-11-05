@@ -132,7 +132,7 @@ var _base_radius:      float = 0.42
 # The right panel can slide off-screen; the planet view (and the HUD energy
 # readout) widen with it so the globe stays centred in whatever space is left.
 const PANEL_FRACTION:  float = LeftPanel.WIDTH   # panel width as a fraction of the screen
-const PANEL_SLIDE_SEC: float = 0.35
+const PANEL_SLIDE_SEC: float = 1.35   # slow, cinematic: LeftPanel scrambles + VHS-blinks over it
 var _panel_open:       bool    = true
 var _panel_t:          float   = 1.0  # 1 = fully open, 0 = fully hidden
 var _panel_tween:      Tween   = null
@@ -5358,9 +5358,12 @@ func _set_panel_open(open: bool) -> void:
 func _panel_edge_frac(t: float) -> float:
 	return LeftPanel.edge_frac(t)
 
+## The panel stays put while it opens / closes (its content scrambles away), so
+## the tab follows the slide instead: on the panel's right edge when open, by
+## its left stroke when closed.
 func _panel_right_edge() -> float:
-	var panel := $SidePanel as Control
-	return maxf(0.0, panel.position.x + panel.size.x)
+	var vw := get_viewport_rect().size.x
+	return maxf(LeftPanel.GAP * vw, _panel_edge_frac(_panel_t) * vw)
 
 ## Height of the HUD's resource bar — the side panel starts below it.
 func _hud_bar_height() -> float:
