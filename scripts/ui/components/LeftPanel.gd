@@ -23,23 +23,21 @@ const WIDTH := 0.3
 var slide_t := 1.0
 
 ## Overlay content (playtest 31.10: Trade opens inside the panel): the panel
-## slides out, its content is swapped for the overlay, and it slides back in;
+## stays where it is and its content is swapped for the overlay in place, with
+## the CyberReveal scramble as the only transition (no slide out / in);
 ## close_overlay() does the same the other way. The view's own content is only
 ## hidden meanwhile (and anything the view rebuilds stays hidden), so going
 ## back shows it as it was. The view's hide button hides the overlay with the
 ## panel and brings it back on unhide; opening an overlay on a closed panel asks
 ## the view to open it (or, in a view that can't, shows it anyway).
-const SWAP_SEC := 0.16
 var _overlay: Control = null
 var _hidden: Array = []          # the view's content hidden behind the overlay
-var _swap_k := 1.0               # 1 = in place, 0 = out (during a swap)
-var _swap_tw: Tween = null
 var _force_open := false   # a view with no open/close of its own: keep the overlay visible
 
 func overlay() -> Control:
 	return _overlay if _overlay != null and is_instance_valid(_overlay) else null
 
-## Shows `c` in place of the panel's content (slide out, swap, slide in).
+## Shows `c` in place of the panel's content (swapped in place, scrambled in).
 func show_overlay(c: Control) -> void:
 	if slide_t < 0.99:
 		var view := get_tree().current_scene
@@ -77,16 +75,9 @@ func close_overlay() -> void:
 		_hidden.clear()
 		reveal())
 
+## Swaps the content right away; reveal() inside `change` plays the scramble.
 func _swap(change: Callable) -> void:
-	if _swap_tw != null and _swap_tw.is_valid():
-		_swap_tw.kill()
-	_swap_tw = create_tween()
-	_swap_tw.tween_method(_set_swap, _swap_k, 0.0, SWAP_SEC * _swap_k).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	_swap_tw.tween_callback(change)
-	_swap_tw.tween_method(_set_swap, 0.0, 1.0, SWAP_SEC).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-
-func _set_swap(k: float) -> void:
-	_swap_k = k
+	change.call()
 	_place()
 
 ## Whatever the view adds while an overlay is up stays behind it.
@@ -134,7 +125,7 @@ static func edge_frac(t: float = 1.0) -> float:
 	return (GAP + WIDTH) * t
 
 func _place() -> void:
-	var t := (1.0 if _force_open and overlay() != null else slide_t) * _swap_k
+	var t := 1.0 if _force_open and overlay() != null else slide_t
 	anchor_left = lerpf(-WIDTH, GAP, t)
 	anchor_right = anchor_left + WIDTH
 	anchor_top = 0.0

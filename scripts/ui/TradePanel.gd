@@ -1,6 +1,6 @@
 ## TradePanel — the trade window (GDD §18, playtest 31.10). It opens inside the
-## view's left panel (LeftPanel.show_overlay: the panel slides out, swaps to it
-## and slides back; BACK returns), or docked in the same column where a view
+## view's left panel (LeftPanel.show_overlay: the content swaps in place with
+## the CyberReveal scramble; BACK returns), or docked in the same column where a view
 ## has no left panel. One compact row per tradeable product, every part a
 ## fixed size so nothing moves as research or prices change:
 ##   [▣] ▁▃▅ │ cr 4.50 │ [target][■] │ [SELL][BUY]
