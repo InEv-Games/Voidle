@@ -89,6 +89,7 @@ func _on_content_child(n: Node) -> void:
 
 func _ready() -> void:
 	add_to_group(GROUP)
+	_hide_native_frame()   # the stroke is drawn by hand (see Left stroke)
 	item_rect_changed.connect(queue_redraw)   # the backdrop follows the slide
 	content.child_entered_tree.connect(_on_content_child)
 	var hud := get_node_or_null("/root/HUDManager")
@@ -125,6 +126,7 @@ func _play_reveal() -> void:
 func _process(_delta: float) -> void:
 	if absf(offset_top - _hud_bar_height()) > 0.5:
 		_place()
+	_update_stroke_span()
 
 ## Slides the panel between hidden (0) and open (1).
 func set_slide(t: float) -> void:
@@ -142,13 +144,20 @@ const BACKDROP_STOPS := [[0.0, 0.88], [0.7, 0.78], [1.0, 0.5], [1.35, 0.0]]
 const BACKDROP_DARKEN := 0.5
 
 func _draw() -> void:
+	_draw_backdrop()
+	var f := _frame_style()
+	if f != null and f.border_width_left > 0:
+		draw_rect(Rect2(0.0, _stroke_span.x, f.border_width_left, _stroke_span.y - _stroke_span.x),
+			f.border_color)
+
+func _draw_backdrop() -> void:
 	var t := _effective_t()
 	if t <= 0.0:
 		return
-	var sb := get_theme_stylebox(&"panel")
+	var sb := _frame_style()
 	var col := Color(0.035, 0.094, 0.169)
-	if sb is StyleBoxFlat:
-		col = (sb as StyleBoxFlat).bg_color
+	if sb != null:
+		col = sb.bg_color
 	col = col.darkened(BACKDROP_DARKEN)
 	var xs: Array[float] = []
 	var alphas: Array[float] = []
@@ -163,8 +172,47 @@ func _draw() -> void:
 			PackedVector2Array([Vector2(xs[i], 0), Vector2(xs[i + 1], 0),
 				Vector2(xs[i + 1], size.y), Vector2(xs[i], size.y)]),
 			PackedColorArray([a, b, b, a]))
-	if sb != null:
-		draw_style_box(sb, Rect2(Vector2.ZERO, size))   # keep the border on top
+
+# ── Left stroke ───────────────────────────────────────────────────────────────
+# The SidePanel style's left border, drawn by hand and only between the
+# resource bar and the news bar: both lie on top of the panel and are a little
+# see-through, so a full-height stroke showed through them. The panel itself
+# gets an empty style with the same content margins.
+
+var _stroke_span := Vector2.ZERO   # (top, bottom) of the stroke, in panel space
+
+## The SidePanel style from the theme (not the override this panel carries).
+func _frame_style() -> StyleBoxFlat:
+	var th := ThemeDB.get_project_theme()
+	if th != null and th.has_stylebox(&"panel", theme_type_variation):
+		return th.get_stylebox(&"panel", theme_type_variation) as StyleBoxFlat
+	return null
+
+func _hide_native_frame() -> void:
+	var f := _frame_style()
+	var empty := StyleBoxEmpty.new()
+	if f != null:
+		empty.content_margin_left = f.content_margin_left
+		empty.content_margin_top = f.content_margin_top
+		empty.content_margin_right = f.content_margin_right
+		empty.content_margin_bottom = f.content_margin_bottom
+	add_theme_stylebox_override(&"panel", empty)
+
+## The gap between the resource bar's bottom and the news bar's top.
+func _update_stroke_span() -> void:
+	var top := 0.0
+	var bottom := size.y
+	var hud := get_node_or_null("/root/HUDManager")
+	var bar = hud.get("credits_panel") if hud != null else null
+	if bar != null and is_instance_valid(bar as Node) and (bar as Control).is_visible_in_tree():
+		top = (bar as Control).get_global_rect().end.y - global_position.y
+	var news := get_tree().get_first_node_in_group(&"news_panel") as Control
+	if news != null and news.is_visible_in_tree():
+		bottom = news.get_global_rect().position.y - global_position.y
+	var span := Vector2(clampf(top, 0.0, size.y), clampf(bottom, 0.0, size.y))
+	if not span.is_equal_approx(_stroke_span):
+		_stroke_span = span
+		queue_redraw()
 
 ## The panel's right edge as a fraction of the screen width, for a slide t.
 static func edge_frac(t: float = 1.0) -> float:
