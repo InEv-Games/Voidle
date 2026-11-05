@@ -288,7 +288,7 @@ func _build_ui(host: Node) -> void:
 		_bar.mouse_filter = Control.MOUSE_FILTER_STOP
 		_bar.gui_input.connect(_on_bar_input)
 
-## The bar sits in the left panel's parent, just before the panel; without one,
+## The bar sits in the left panel's parent, just after (on top of) the panel; without one,
 ## on this layer. A bar freed with its view is built again, or adopted from the scene.
 func _ensure_bar() -> void:
 	var panel: Control = null
@@ -311,11 +311,16 @@ func _ensure_bar() -> void:
 		_build_ui(host)
 	elif _bar.get_parent() != host:
 		_bar.reparent(host, false)
-	if panel != null and _bar.get_index() != panel.get_index() - 1:
-		var to := panel.get_index()
-		if _bar.get_index() < to:
-			to -= 1   # the bar's own slot frees up when it moves
-		host.move_child(_bar, to)
+	if panel != null:
+		# on top of the panel: just after it, on its z layer (the panel may
+		# carry its own z_index, e.g. in PlanetaryView)
+		if _bar.get_index() != panel.get_index() + 1:
+			var to := panel.get_index() + 1
+			if _bar.get_index() < to:
+				to -= 1   # the bar's own slot frees up when it moves
+			host.move_child(_bar, to)
+		_bar.z_as_relative = panel.z_as_relative
+		_bar.z_index = panel.z_index
 
 func _process(delta: float) -> void:
 	if _batch_left > 0.0:
