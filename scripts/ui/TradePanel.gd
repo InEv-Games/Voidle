@@ -74,9 +74,9 @@ func _ready() -> void:
 		_place()
 		get_viewport().size_changed.connect(_place)
 
-	# the market's name on top, then BACK (to the panel's own content)
-	var title := _label("MARKET", 22, UIStyle.color(&"accent"))
-	v.add_child(title)
+	# the market's name on top — the left panel's hero, like every other menu —
+	# then BACK (to the panel's own content)
+	v.add_child(HeroHeader.create("Trade", "MARKET"))
 	var back := IconButton.create_text("‹  BACK")
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	back.pressed.connect(close)
