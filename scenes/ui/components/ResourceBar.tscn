@@ -76,46 +76,38 @@ alignment = 0
 [node name="Credits" parent="Row" unique_id=947876999 instance=ExtResource("2_chip")]
 layout_mode = 2
 value_text = ""
-value_width = 62.0
 
 [node name="Science" parent="Row" unique_id=1497871144 instance=ExtResource("2_chip")]
 layout_mode = 2
 resource_id = "science"
 value_text = ""
-value_width = 38.0
 
 [node name="Energy" parent="Row" unique_id=203694312 instance=ExtResource("2_chip")]
 layout_mode = 2
 resource_id = "energy"
 value_text = ""
-value_width = 56.0
 
 [node name="Population" parent="Row" unique_id=255555737 instance=ExtResource("2_chip")]
 layout_mode = 2
 resource_id = "population"
 value_text = ""
-value_width = 70.0
 
 [node name="Raw" parent="Row" unique_id=1863673106 instance=ExtResource("2_chip")]
 layout_mode = 2
 resource_id = "raw"
 value_text = ""
-value_width = 46.0
 
 [node name="Goods" parent="Row" unique_id=1250797845 instance=ExtResource("2_chip")]
 layout_mode = 2
 resource_id = "goods"
 value_text = ""
-value_width = 32.0
 
 [node name="Fuel" parent="Row" unique_id=302142728 instance=ExtResource("2_chip")]
 layout_mode = 2
 resource_id = "fuel"
 value_text = ""
-value_width = 32.0
 
 [node name="Rare" parent="Row" unique_id=885310972 instance=ExtResource("2_chip")]
 layout_mode = 2
 resource_id = "rare_elements"
 value_text = ""
-value_width = 32.0

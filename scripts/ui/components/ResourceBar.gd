@@ -51,13 +51,17 @@ func _process(delta: float) -> void:
 ## Largest value size is the theme's ValueLabel font size (voidle_theme.tres).
 const VALUE_FONT_MIN := 7
 
-## Sets a value label's text, shrinking its font until it fits its fixed width.
+## Sets a value label's text. A label with a fixed width shrinks its font until
+## the text fits; the bar's chips have none and grow / shrink with their text.
 func _set_value(lbl: Label, text: String) -> void:
 	if lbl.text == text:
 		return
 	lbl.text = text
 	var font: Font = lbl.get_theme_font("font")
 	var w := lbl.custom_minimum_size.x
+	if w <= 0.0:
+		lbl.remove_theme_font_size_override("font_size")
+		return
 	var size := UIStyle.font_size(&"ValueLabel")
 	while size > VALUE_FONT_MIN and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > w:
 		size -= 1
