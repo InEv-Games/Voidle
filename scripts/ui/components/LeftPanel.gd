@@ -98,9 +98,10 @@ func _ready() -> void:
 	_place()
 	reveal()   # the view's first menu
 
-## Plays the cyberpunk entrance (CyberReveal) over the content once this
-## frame's building is done. Views call it when they switch to a new menu;
-## several calls in one frame play it once.
+## Plays the panel's opening animation over the content once this frame's
+## building is done: every row comes in on its own tween, as when the panel
+## opens (see "Open / close" below). Views call it when they switch to a new
+## menu; several calls in one frame play it once.
 var _reveal_queued := false
 
 func reveal() -> void:
@@ -111,9 +112,16 @@ func reveal() -> void:
 
 func _play_reveal() -> void:
 	_reveal_queued = false
-	# closed or mid open/close: the scramble-in on opening is the reveal
-	if is_inside_tree() and visible and _effective_t() >= 1.0 and _rows.is_empty():
-		CyberReveal.play(content)
+	# closed or mid open / close: the slide brings the rows in itself
+	if not is_inside_tree() or not visible or _effective_t() < 1.0:
+		return
+	for id in _rows.keys():   # rows of the menu just replaced
+		if not is_instance_valid(_rows[id]["node"]) or not (_rows[id]["node"] as Control).is_visible_in_tree():
+			_finish_row(id)
+	_opening = true
+	_collect_rows($Layout, 0)   # each new row starts its own tween
+	if _rows.is_empty():
+		_opening = false
 
 func _process(_delta: float) -> void:
 	if absf(offset_top - _hud_bar_height()) > 0.5:
