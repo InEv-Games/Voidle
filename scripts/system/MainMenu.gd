@@ -1,6 +1,5 @@
 extends Control
 
-const PLANET_SIZE   := 680.0
 const ROTATE_SPEED  := 0.018
 const ORBITRON      := "res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf"
 
@@ -19,7 +18,6 @@ const GLITCH_STEP_DUR  := 0.06
 
 var _planet_rect:   ColorRect
 var _rotation_off:  float = 0.0
-var _light_angle:   float = 0.8
 var _font:          Font
 var _credits_lbl:   Label
 var _credits_idx:   int   = 0
@@ -38,75 +36,131 @@ func _ready() -> void:
 	_build_bg()
 	_build_stars()
 	_build_planet()
+	_build_vignette()
 	_build_menu()
 	_build_credits()
 
 # ── Background ─────────────────────────────────────────────────────────────
+# A planet-rise shot: a big world rises out of the bottom-right corner, lit
+# from the upper left (an off-screen sun) so its bright rim faces the menu;
+# a blue glow behind it, still stars in three depths, a vignette over all.
+# The mouse moves the layers a few pixels against it, far ones least.
+
+## Planet size as a share of the screen height; its centre in screen shares.
+const PLANET_H_FRAC := 1.35
+const PLANET_CENTER := Vector2(0.80, 1.04)
+const LIGHT_DIR := Vector3(-0.75, -0.55, 0.35)   # from the upper left (shader: y down)
+## Parallax: px each layer shifts at the screen's edge (mouse at a corner).
+const PARALLAX_BACKDROP := 3.0
+const PARALLAX_STARS := [4.0, 8.0, 13.0]   # far, mid, near
+const PARALLAX_PLANET := 20.0
+const PARALLAX_EASE := 4.0      # 1/s — how fast the layers follow the mouse
+const PARALLAX_MARGIN := 24.0   # layers overhang the screen by this, so no edge shows
+## Stars per layer (far → near): count, size range px, alpha range, twinkle.
+const STAR_LAYERS := [
+	[220, Vector2(1.0, 1.0), Vector2(0.20, 0.45), 0.25],
+	[90,  Vector2(1.0, 2.0), Vector2(0.40, 0.70), 0.35],
+	[28,  Vector2(2.0, 2.0), Vector2(0.70, 0.95), 0.45],
+]
+
+var _parallax := Vector2.ZERO       # smoothed mouse offset, -0.5 … 0.5
+var _layers: Array = []             # [Control, base position, depth px]
+var _star_layers: Array[Control] = []
+var _stars: Array = []              # per layer: Array of [pos, size, alpha, twinkle, phase, speed]
+var _time := 0.0
+
+func _add_layer(c: Control, depth: float) -> void:
+	_layers.append([c, c.position, depth])
 
 func _build_bg() -> void:
+	var vp := get_viewport().get_visible_rect().size
 	var bg := ColorRect.new()
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.02, 0.02, 0.06)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.position = Vector2(-PARALLAX_MARGIN, -PARALLAX_MARGIN)
+	bg.size = vp + Vector2.ONE * PARALLAX_MARGIN * 2.0
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/menu_backdrop.gdshader")
+	mat.set_shader_parameter("aspect", bg.size.x / bg.size.y)
+	mat.set_shader_parameter("glow_pos", Vector2(
+		(vp.x * PLANET_CENTER.x + PARALLAX_MARGIN) / bg.size.x,
+		(vp.y * PLANET_CENTER.y * 0.94 + PARALLAX_MARGIN) / bg.size.y))
+	bg.material = mat
 	add_child(bg)
+	_add_layer(bg, PARALLAX_BACKDROP)
 
-# ── Drifting stars ─────────────────────────────────────────────────────────
+# ── Stars (still, twinkling a little) ──────────────────────────────────────
 
 func _build_stars() -> void:
 	var vp := get_viewport().get_visible_rect().size
+	var area := vp + Vector2.ONE * PARALLAX_MARGIN * 2.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7331
+	for li in STAR_LAYERS.size():
+		var spec: Array = STAR_LAYERS[li]
+		var list := []
+		for i in int(spec[0]):
+			var sz_range: Vector2 = spec[1]
+			var a_range: Vector2 = spec[2]
+			list.append([Vector2(rng.randf() * area.x, rng.randf() * area.y),
+				roundf(rng.randf_range(sz_range.x, sz_range.y)),
+				rng.randf_range(a_range.x, a_range.y),
+				float(spec[3]) * rng.randf(), rng.randf() * TAU, rng.randf_range(0.6, 2.2)])
+		_stars.append(list)
+		var layer := Control.new()
+		layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.position = Vector2(-PARALLAX_MARGIN, -PARALLAX_MARGIN)
+		layer.size = area
+		var cap := li
+		layer.draw.connect(func() -> void: _draw_stars(layer, cap))
+		add_child(layer)
+		_star_layers.append(layer)
+		_add_layer(layer, float(PARALLAX_STARS[li]))
 
-	# Slow background layer
-	_make_star_layer(vp, 180, 8.0,  Color(0.7, 0.75, 1.0, 0.45), 1.0)
-	# Medium layer
-	_make_star_layer(vp, 80,  18.0, Color(0.85, 0.90, 1.0, 0.65), 1.6)
-	# Fast bright layer
-	_make_star_layer(vp, 30,  32.0, Color(1.0,  1.0,  1.0, 0.90), 2.0)
+func _draw_stars(layer: Control, li: int) -> void:
+	for s: Array in _stars[li]:
+		var a: float = float(s[2]) * (1.0 - float(s[3]) * (0.5 + 0.5 * sin(_time * float(s[5]) + float(s[4]))))
+		var sz: float = s[1]
+		layer.draw_rect(Rect2(s[0], Vector2(sz, sz)), Color(0.86, 0.91, 1.0, a))
 
-func _make_star_layer(vp: Vector2, count: int, speed: float, col: Color, size: float) -> void:
-	var p := CPUParticles2D.new()
-	p.emitting              = true
-	p.amount                = count
-	p.lifetime              = (vp.x + 60.0) / speed
-	p.preprocess            = p.lifetime          # start full
-	p.explosiveness         = 0.0
-	p.randomness            = 1.0
+## A vignette over the whole shot (planet included), under the menu.
+func _build_vignette() -> void:
+	var v := ColorRect.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/menu_backdrop.gdshader")
+	mat.set_shader_parameter("overlay", true)
+	v.material = mat
+	add_child(v)
 
-	p.emission_shape        = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	p.emission_rect_extents = Vector2(vp.x * 0.5 + 40.0, vp.y * 0.5)
-	p.position              = Vector2(vp.x * 0.5, vp.y * 0.5)
-
-	p.direction             = Vector2(-1.0, 0.0)
-	p.spread                = 3.0
-	p.gravity               = Vector2.ZERO
-	p.initial_velocity_min  = speed * 0.8
-	p.initial_velocity_max  = speed * 1.2
-	p.scale_amount_min      = size * 0.6
-	p.scale_amount_max      = size * 1.4
-
-	# Twinkle: vary alpha over lifetime with a curve
-	var grad := Gradient.new()
-	grad.set_color(0, Color(col.r, col.g, col.b, 0.0))
-	grad.set_color(1, col)
-	grad.add_point(0.05, col)
-	grad.add_point(0.95, col)
-	p.color_ramp = grad
-
-	add_child(p)
+## Eases the layers toward the mouse (each by its depth) and twinkles the stars.
+func _tick_backdrop(delta: float) -> void:
+	_time += delta
+	var vp := get_viewport().get_visible_rect().size
+	var m := get_viewport().get_mouse_position()
+	var target := Vector2(clampf(m.x / vp.x, 0.0, 1.0) - 0.5, clampf(m.y / vp.y, 0.0, 1.0) - 0.5)
+	_parallax = _parallax.lerp(target, 1.0 - exp(-delta * PARALLAX_EASE))
+	for l: Array in _layers:
+		var c := l[0] as Control
+		if is_instance_valid(c):
+			c.position = (l[1] as Vector2) - _parallax * 2.0 * float(l[2])
+	for layer in _star_layers:
+		layer.queue_redraw()
 
 # ── Planet ─────────────────────────────────────────────────────────────────
 
 func _build_planet() -> void:
 	var vp := get_viewport().get_visible_rect().size
+	var side := vp.y * PLANET_H_FRAC
 
 	_planet_rect = ColorRect.new()
-	_planet_rect.custom_minimum_size = Vector2(PLANET_SIZE, PLANET_SIZE)
-	_planet_rect.size                = Vector2(PLANET_SIZE, PLANET_SIZE)
-	# Center sits just inside top-right; bottom-left half peeks into view
-	_planet_rect.position = Vector2(
-		vp.x - PLANET_SIZE * 0.78,
-		-PLANET_SIZE * 0.32
-	)
+	_planet_rect.custom_minimum_size = Vector2(side, side)
+	_planet_rect.size                = Vector2(side, side)
+	# rising out of the bottom-right corner (centre below the screen's edge)
+	_planet_rect.position = Vector2(vp.x * PLANET_CENTER.x, vp.y * PLANET_CENTER.y) - Vector2(side, side) * 0.5
 	_planet_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_planet_rect)
+	_add_layer(_planet_rect, PARALLAX_PLANET)
 
 	var data := PlanetData.from_seed_no_minor(7331)
 	# Force a nice terran planet for the main menu
@@ -128,7 +182,8 @@ func _build_planet() -> void:
 
 	var sz          : float = clamp(float(data.planet_size), 0.2, 2.0)
 	var base_radius : float = clamp(0.42 * sz, 0.10, 0.48)
-	var pcount       := 160.0
+	# same pixel size as the old 680px planet at 160 (≈4.25px a pixel), at any size
+	var pcount: float = clampf(160.0 * _planet_rect.size.x / 680.0, 32.0, 512.0)
 
 	mat.set_shader_parameter("rotation_offset",   0.0)
 	mat.set_shader_parameter("planet_radius",     base_radius)
@@ -276,18 +331,15 @@ func _glitch_to(target: String) -> void:
 # ── Planet animation ───────────────────────────────────────────────────────
 
 func _update_light(mat: ShaderMaterial) -> void:
-	var lx := cos(_light_angle) * 0.85
-	var lz := sin(_light_angle) * 0.55
-	mat.set_shader_parameter("light_direction", Vector3(lx, -0.45, lz).normalized())
+	mat.set_shader_parameter("light_direction", LIGHT_DIR.normalized())
 
 func _process(delta: float) -> void:
+	_tick_backdrop(delta)
 	if _planet_rect == null or _planet_rect.material == null:
 		return
 	_rotation_off = fposmod(_rotation_off + ROTATE_SPEED * delta, TAU)
-	_light_angle  = fposmod(_light_angle  + 0.004 * delta, TAU)
 	var mat := _planet_rect.material as ShaderMaterial
 	mat.set_shader_parameter("rotation_offset", _rotation_off)
-	_update_light(mat)
 
 # ── Button callbacks ────────────────────────────────────────────────────────
 
