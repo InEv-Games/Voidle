@@ -1,4 +1,7 @@
+@tool
 extends Control
+## Runs in the editor too (@tool): there only the backdrop is built — sun,
+## stars, planets, orbits — so the shot can be seen and tuned without playing.
 
 const ROTATE_SPEED  := 0.018
 const ORBITRON      := "res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf"
@@ -27,6 +30,14 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	anchor_right  = 1.0
 	anchor_bottom = 1.0
+	if Engine.is_editor_hint():
+		_build_bg()
+		_build_stars()
+		_build_system(false)
+		_build_planet()
+		_build_system(true)
+		_build_vignette()
+		return
 	HUDManager.set_game_hud(false)
 	_font = load(ORBITRON) as Font
 
@@ -76,11 +87,19 @@ var _star_layers: Array[Control] = []
 var _stars: Array = []              # per layer: Array of [pos, size, alpha, twinkle, phase, speed]
 var _time := 0.0
 
+## The screen size: the game window, or the project's in the editor (where the
+## viewport is the editor's own).
+func _vp() -> Vector2:
+	if Engine.is_editor_hint():
+		return Vector2(float(ProjectSettings.get_setting("display/window/size/viewport_width")),
+			float(ProjectSettings.get_setting("display/window/size/viewport_height")))
+	return get_viewport().get_visible_rect().size
+
 func _add_layer(c: Control, depth: float) -> void:
 	_layers.append([c, c.position, depth])
 
 func _build_bg() -> void:
-	var vp := get_viewport().get_visible_rect().size
+	var vp := _vp()
 	var bg := ColorRect.new()
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bg.position = Vector2(-PARALLAX_MARGIN, -PARALLAX_MARGIN)
@@ -102,7 +121,7 @@ func _build_bg() -> void:
 # ── Stars (still, twinkling a little) ──────────────────────────────────────
 
 func _build_stars() -> void:
-	var vp := get_viewport().get_visible_rect().size
+	var vp := _vp()
 	var area := vp + Vector2.ONE * PARALLAX_MARGIN * 2.0
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7331
@@ -153,8 +172,9 @@ func _planet_radius_px() -> float:
 ## Eases the layers toward the mouse (each by its depth) and twinkles the stars.
 func _tick_backdrop(delta: float) -> void:
 	_time += delta
-	var vp := get_viewport().get_visible_rect().size
-	var m := get_viewport().get_mouse_position()
+	var vp := _vp()
+	# the editor's mouse isn't the player's: there the shot only drifts
+	var m := vp * 0.5 if Engine.is_editor_hint() else get_viewport().get_mouse_position()
 	var target := Vector2(clampf(m.x / vp.x, 0.0, 1.0) - 0.5, clampf(m.y / vp.y, 0.0, 1.0) - 0.5)
 	# a slow camera drift under the mouse, so the shot never stands still
 	target += Vector2(sin(_time * DRIFT_SPEED.x) * DRIFT_AMOUNT.x,
@@ -211,6 +231,13 @@ const BODIES := [
 	[PlanetData.Type.MOON,      5519, Vector2(0.505, 0.615), 0.085, -0.9, 0.015, false, true],
 ]
 const GLOBE_FILL := 0.42   # planet_radius: the globe's share of its rect
+## Every planet and moon (rings too) is drawn at this brightness; the sun isn't.
+## Set on their colours, not laid over them, so nothing around a globe darkens.
+const PLANET_BRIGHTNESS := 0.70
+
+## Sets a planet shader's colour uniform at PLANET_BRIGHTNESS.
+static func _set_color(mat: ShaderMaterial, key: String, v: Vector3) -> void:
+	mat.set_shader_parameter(key, v * PLANET_BRIGHTNESS)
 ## Distance haze: a body (or orbit) `depth` radii behind the focus world is
 ## dimmed and cooled toward the night sky, DEPTH_FADE at DEPTH_FADE_AT and on.
 const DEPTH_FADE := 0.55
@@ -233,7 +260,7 @@ static func _depth_t(depth: float) -> float:
 	return 1.0 - (1.0 - t) * (1.0 - t)
 
 ## Soft occlusion over a globe of radius `r` px at `centre` (in `parent`):
-## limb shading, darkest away from the sun, plus its distance haze.
+## limb shading (darkest away from the sun) and its distance haze.
 func _add_ao(parent: Node, centre: Vector2, r: float, light: Vector2, px: float, depth: float = 0.0) -> void:
 	var rect := ColorRect.new()
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -252,12 +279,12 @@ func _add_ao(parent: Node, centre: Vector2, r: float, light: Vector2, px: float,
 var _bodies: Array = []    # [ShaderMaterial, spin rad/s, rotation]
 
 func _sun_px() -> Vector2:
-	var vp := get_viewport().get_visible_rect().size
+	var vp := _vp()
 	return Vector2(vp.x * SUN_CENTER.x, vp.y * SUN_CENTER.y)
 
 ## The far half (sun, orbits, far bodies) or the near half (bodies in front).
 func _build_system(front: bool) -> void:
-	var vp := get_viewport().get_visible_rect().size
+	var vp := _vp()
 	if not front:
 		_build_sun(vp)
 		# the focus world's own orbit, fixed with it
@@ -290,7 +317,7 @@ func _build_sun(vp: Vector2) -> void:
 
 ## A faint ellipse about the sun through `through`, on that body's depth.
 func _build_orbit(through: Vector2, depth: float) -> void:
-	var vp := get_viewport().get_visible_rect().size
+	var vp := _vp()
 	var layer := Control.new()
 	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.position = Vector2(-PARALLAX_MARGIN, -PARALLAX_MARGIN)
@@ -330,7 +357,7 @@ func _build_body(spec: Array, centre: Vector2, vp: Vector2) -> void:
 	var holder := Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.position = centre
-	holder.modulate = _depth_tint(float(spec[4]))
+	holder.modulate = _depth_tint(float(spec[4])) * Color(PLANET_BRIGHTNESS, PLANET_BRIGHTNESS, PLANET_BRIGHTNESS)
 	add_child(holder)
 	_add_layer(holder, float(spec[4]))
 
@@ -396,25 +423,25 @@ func _body_material(data: PlanetData, side: float, light: Vector3) -> ShaderMate
 			mat.set_shader_parameter("specular_strength", data.specular_strength)
 			mat.set_shader_parameter("city_lights", 0.0)
 			for key in colors:
-				mat.set_shader_parameter(key, colors[key])
+				_set_color(mat, key, colors[key])
 		PlanetData.ShaderType.GAS:
 			mat.set_shader_parameter("cloud_speed", data.cloud_speed)
 			mat.set_shader_parameter("atmosphere_density", data.atmosphere_density)
-			mat.set_shader_parameter("color_band_a", colors.get("color_sand", Vector3(0.72, 0.55, 0.35)))
-			mat.set_shader_parameter("color_band_b", colors.get("color_forest", Vector3(0.50, 0.32, 0.18)))
-			mat.set_shader_parameter("color_storm", colors.get("color_snow", Vector3(0.88, 0.82, 0.72)))
-			mat.set_shader_parameter("color_atmosphere", colors.get("color_atmosphere", Vector3(0.72, 0.55, 0.35)))
+			_set_color(mat, "color_band_a", colors.get("color_sand", Vector3(0.72, 0.55, 0.35)))
+			_set_color(mat, "color_band_b", colors.get("color_forest", Vector3(0.50, 0.32, 0.18)))
+			_set_color(mat, "color_storm", colors.get("color_snow", Vector3(0.88, 0.82, 0.72)))
+			_set_color(mat, "color_atmosphere", colors.get("color_atmosphere", Vector3(0.72, 0.55, 0.35)))
 		PlanetData.ShaderType.MOON:
-			mat.set_shader_parameter("color_highland", colors.get("color_mountain", Vector3(0.62, 0.60, 0.56)))
-			mat.set_shader_parameter("color_mare", colors.get("color_deep_ocean", Vector3(0.22, 0.21, 0.20)))
-			mat.set_shader_parameter("color_rim", colors.get("color_snow", Vector3(0.78, 0.76, 0.72)))
-			mat.set_shader_parameter("color_floor", colors.get("color_ocean", Vector3(0.16, 0.15, 0.14)))
+			_set_color(mat, "color_highland", colors.get("color_mountain", Vector3(0.62, 0.60, 0.56)))
+			_set_color(mat, "color_mare", colors.get("color_deep_ocean", Vector3(0.22, 0.21, 0.20)))
+			_set_color(mat, "color_rim", colors.get("color_snow", Vector3(0.78, 0.76, 0.72)))
+			_set_color(mat, "color_floor", colors.get("color_ocean", Vector3(0.16, 0.15, 0.14)))
 	return mat
 
 # ── Planet ─────────────────────────────────────────────────────────────────
 
 func _build_planet() -> void:
-	var vp := get_viewport().get_visible_rect().size
+	var vp := _vp()
 	var side := vp.y * PLANET_H_FRAC
 
 	_planet_rect = ColorRect.new()
@@ -465,7 +492,7 @@ func _build_planet() -> void:
 
 	var colors := PlanetData.get_colors(data.planet_type)
 	for key in colors:
-		mat.set_shader_parameter(key, colors[key])
+		_set_color(mat, key, colors[key])
 
 	_update_light(mat)
 	_planet_rect.material = mat
@@ -475,7 +502,7 @@ func _build_planet() -> void:
 # ── Menu UI ────────────────────────────────────────────────────────────────
 
 func _build_menu() -> void:
-	var vp := get_viewport().get_visible_rect().size
+	var vp := _vp()
 
 	var root := VBoxContainer.new()
 	root.position               = Vector2(vp.x * 0.07, vp.y * 0.22)
@@ -542,7 +569,7 @@ func _add_button(parent: Control, label: String, cb: Callable) -> Button:
 # ── Glitch credits ────────────────────────────────────────────────────────
 
 func _build_credits() -> void:
-	var vp := get_viewport().get_visible_rect().size
+	var vp := _vp()
 
 	_credits_lbl = Label.new()
 	_credits_lbl.text = CREDITS_LINES[0]
@@ -654,6 +681,8 @@ func _close_saves() -> void:
 	RowReveal.play(_menu_root, MENU_REVEAL_SLOW)
 
 func _input(event: InputEvent) -> void:
+	if Engine.is_editor_hint():
+		return
 	if is_instance_valid(_saves_root) and event is InputEventKey and (event as InputEventKey).pressed \
 			and (event as InputEventKey).keycode == KEY_ESCAPE:
 		_close_saves()
