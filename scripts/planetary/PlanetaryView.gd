@@ -7205,6 +7205,7 @@ func _build_add_district_card(data: PlanetData, enabled: bool, orbital_only: boo
 			layer.add_child(shade)
 			var dd := _build_district_type_dropdown(cap_data, null, dropdown_ref, orbital_only, parent)
 			layer.add_child(dd)
+			RowReveal.play(dd, 1.0, true)   # the district types come in one by one
 			dropdown_ref[0] = layer
 			var r := cap_card.get_global_rect()
 			dd.custom_minimum_size = Vector2(r.size.x, 0)
@@ -10969,6 +10970,7 @@ func _toggle_mineral_dropdown(btn: Control, raw_list: Array, target_key: String,
 	)
 	_dd_layer.add_child(bg)
 	_dd_layer.add_child(outer)
+	RowReveal.play(outer, 1.0, true)   # the minerals come in one by one
 	await get_tree().process_frame
 	if not is_instance_valid(outer):
 		return
@@ -11811,6 +11813,7 @@ func _show_rendezvous_picker(ship: ShipData, layer: OrbitalLayer) -> void:
 	cancel_btn.mouse_exited.connect( func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	cancel_btn.pressed.connect(func() -> void: overlay.queue_free())
 	vbox.add_child(cancel_btn)
+	RowReveal.play(vbox, 1.0, true)   # the targets come in one by one
 
 ## Transfer panel — shown when rendezvous is complete. Floating panel next to the ships.
 func _show_transfer_panel(ship: ShipData, target: ShipData, layer: OrbitalLayer) -> void:

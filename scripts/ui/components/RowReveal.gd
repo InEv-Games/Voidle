@@ -20,7 +20,8 @@ const GLYPH_SEC := 0.04
 const BLINK_SEC := 0.03
 const BLINK_CHANCE := 0.3
 const BLINK_DIP := Vector2(0.2, 0.6)
-const IN_ORDER_STEP := 0.05   # one-by-one: between one row's start and the next
+const IN_ORDER_STEP := 0.05   # one-by-one: between one row's start and the next…
+const IN_ORDER_MAX := 0.4     # …but a long list's last row starts no later than this
 
 var _root: Control
 var _t := 0.0
@@ -44,6 +45,10 @@ static func play(root: Control, slow: float = 1.0, in_order: bool = false) -> vo
 func _ready() -> void:
 	_rng.randomize()
 	_collect_rows(_root)
+	if _in_order and _rows.size() > 1:
+		var step := minf(IN_ORDER_STEP, IN_ORDER_MAX / float(_rows.size() - 1))
+		for i in _rows.size():
+			(_rows[i] as Dictionary)["start"] = i * step
 	_process(0.0)   # hidden before the first frame draws
 
 func _collect_rows(n: Node) -> void:

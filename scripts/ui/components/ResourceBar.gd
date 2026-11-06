@@ -520,6 +520,7 @@ func _toggle_raw_dropdown() -> void:
 	_raw_dd_list = list
 	_fill_raw_dropdown()
 	_refresh_resource_cells()
+	RowReveal.play(list, 1.0, true)   # the minerals come in one by one
 
 func _close_raw_dropdown() -> void:
 	if is_instance_valid(_raw_dd):
