@@ -661,7 +661,7 @@ func _cmd_buildings(filter: String) -> void:
 		for b: BuildingDef in groups[nm]:
 			var block := _building_block(b)
 			var site := _building_site_needs(b)
-			_log_info("  %s [color=#aaaaaa]T%d · %s[/color]%s%s" % [
+			_log_info("  %s [color=#aaaaaa]T%d // %s[/color]%s%s" % [
 				("[color=#88ddaa]%s[/color]" % b.display_name) if block == "" else ("[color=#777f8a]%s[/color]" % b.display_name),
 				b.tier, b.building_id,
 				("  [color=#ee8855]%s[/color]" % block) if block != "" else "",
@@ -695,7 +695,7 @@ func _cmd_building(q: String) -> void:
 	var types: Array[String] = []
 	for t in b.allowed_poi_types:
 		types.append(POIData.TYPE_LABELS[int(t)])
-	_log_info("[color=#ffdd66]%s[/color]  [color=#aaaaaa]%s · T%d · %s[/color]" % [b.display_name, b.building_id, b.tier, ", ".join(types)])
+	_log_info("[color=#ffdd66]%s[/color]  [color=#aaaaaa]%s // T%d // %s[/color]" % [b.display_name, b.building_id, b.tier, ", ".join(types)])
 	_log_info("  %s" % (("[color=#88ddaa]open[/color]") if block == "" else ("[color=#ee8855]closed — %s[/color]" % block)))
 	if b.description != "":
 		_log_info("  [color=#aaaaaa]%s[/color]" % b.description)
@@ -709,7 +709,7 @@ func _cmd_building(q: String) -> void:
 		_log_info("  energy  %s" % BuildingDef._num(b.energy_per_tick))
 	if b.pop_use() > 0:
 		_log_info("  workers %s" % Economy.fmt(b.pop_use()))
-	_log_info("  cycle   %s · build %ss · base cost %s credits" % [ProductionManager.cycle_text(ProductionManager.building_cycle_sec(b)),
+	_log_info("  cycle   %s // build %ss // base cost %s credits" % [ProductionManager.cycle_text(ProductionManager.building_cycle_sec(b)),
 		BuildingDef._num(b.construct_duration if b.construct_duration > 0.0 else b.tick_duration), Economy.fmt(b.base_cost)])
 	var site := _building_site_needs(b)
 	if site != "":
@@ -899,7 +899,7 @@ func _cmd_balance(parts: Array) -> void:
 	var names := Balance.available_profiles()
 	if parts.size() < 2:
 		_log_info("[color=#aaaaaa]balance profile[/color]  [color=#ffdd66]%s[/color]" % Balance.profile_name)
-		_log_info("  [color=#555f6a]available: %s  ·  `balance show` lists its values[/color]" % ", ".join(names))
+		_log_info("  [color=#555f6a]available: %s  //  `balance show` lists its values[/color]" % ", ".join(names))
 		return
 	var want := String(parts[1])
 	if want.to_lower() == "show":

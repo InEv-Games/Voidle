@@ -123,7 +123,7 @@ func _status_text(pd: PlanetData) -> String:
 	var kind: String = String(PlanetData.Type.keys()[pd.planet_type]).capitalize()
 	var status := "Not colonized"
 	if pp.is_colonized:
-		status = "Colony  ·  Lv %d" % pp.level
+		status = "Colony  //  Lv %d" % pp.level
 	elif pp.is_colonizing:
 		status = "Lander in transit"
 	elif pd.planet_type == PlanetData.Type.MOON and not GameState.moon_unlocked:

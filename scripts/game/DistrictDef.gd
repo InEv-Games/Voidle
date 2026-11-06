@@ -99,7 +99,7 @@ func site_breakdown(poi: POIData) -> Array:
 func income_from(key: String) -> Dictionary:
 	return neighbor_income.get(key, {})
 
-## District output by level (Balance.cfg): linear 1 + step·(L−1) — +50% per
+## District output by level (Balance.cfg): linear 1 + step//(L−1) — +50% per
 ## level in "current" — or geometric growth^(L−1).
 static func level_mult(level: int) -> float:
 	var c: BalanceConfig = Balance.cfg

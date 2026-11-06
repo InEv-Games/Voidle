@@ -129,7 +129,7 @@ func output_color() -> Color:
 		return Color(0.95, 0.82, 0.45)
 	return Color(0.5, 0.5, 0.5)
 
-## Short economy line, e.g. "+3 goods · −2 raw" or "+15% credits planet-wide".
+## Short economy line, e.g. "+3 goods // −2 raw" or "+15% credits planet-wide".
 func output_label() -> String:
 	var parts: Array[String] = []
 	for id: String in outputs:
@@ -151,14 +151,14 @@ func output_label() -> String:
 		shown[label] = true
 		parts.append("+%d%% %s %s" % [int(round(float(planet_bonus[id]) * 100.0)), label,
 			"planet-wide" if planet_wide else "in this city"])
-	return " · ".join(parts)
+	return " // ".join(parts)
 
 ## Upkeep line, e.g. "−2 goods" ("" when the building consumes nothing).
 func input_label() -> String:
 	var parts: Array[String] = []
 	for id: String in inputs:
 		parts.append("−%s %s" % [_num(float(inputs[id])), Economy.INFO.get(id, {}).get("short", Economy.display_name(id))])
-	return " · ".join(parts)
+	return " // ".join(parts)
 
 static func _num(v: float) -> String:
 	return "%d" % int(v) if is_equal_approx(v, round(v)) else "%.1f" % v

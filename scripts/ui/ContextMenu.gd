@@ -1,7 +1,7 @@
 ## Right-click context menu: a title, then one row per GameCommand. Blocked
 ## commands stay listed, greyed out, with the reason in their tooltip.
 ## Closes on a pick, a click outside, or ESC. Only one is open at a time.
-##   ContextMenu.open(self, "Riva", "City · Lv 2", commands, mouse_pos)
+##   ContextMenu.open(self, "Riva", "City // Lv 2", commands, mouse_pos)
 class_name ContextMenu
 extends CanvasLayer
 

@@ -320,7 +320,7 @@ static func pay(cost: Dictionary) -> bool:
 			_:       GameState.consume_resource(id, v)
 	return true
 
-## Short cost text for plain labels: "450 credits · 30 Ferrite · 5 goods"
+## Short cost text for plain labels: "450 credits // 30 Ferrite // 5 goods"
 ## (where icons can stand, PlanetaryView._cost_items / _full_cost_bb).
 static func cost_text(cost: Dictionary) -> String:
 	var parts: Array[String] = []
@@ -329,7 +329,7 @@ static func cost_text(cost: Dictionary) -> String:
 	for id: String in cost:
 		if id != CREDITS:
 			parts.append("%s %s" % [fmt(float(cost[id])), INFO.get(id, {}).get("short", display_name(id))])
-	return " · ".join(parts)
+	return " // ".join(parts)
 
 ## How many of a model can be bought in a district now (slots, per-district
 ## limit and every part of the cost), up to `cap`.
@@ -354,7 +354,7 @@ static func max_buildable(pp: PlanetProgress, def: BuildingDef, poi: POIData, ca
 ## districts cost population (see below); max_district_level caps districts.
 
 ## Population the k-th district of a City (0-based, Residential ones not
-## counted) takes to found: base × (1 + step·k) — 3K, 4.5K, 6K … in "current".
+## counted) takes to found: base × (1 + step//k) — 3K, 4.5K, 6K … in "current".
 static func district_found_pop(k: int) -> int:
 	var c: BalanceConfig = Balance.cfg
 	return int(round(c.district_found_pop_base * (1.0 + c.district_found_pop_step * float(k))))

@@ -21,7 +21,7 @@ const HEIGHT := 22.0
 ## Crawl speed, px per second.
 const SPEED := 70.0
 ## Between two items.
-const SEPARATOR := "     ·     "
+const SEPARATOR := "     //     "
 ## Buildings finished within this many seconds are told as one entry.
 const BUILD_BATCH_SEC := 6.0
 ## Most events kept waiting (older ones drop).
@@ -119,7 +119,7 @@ func post_planet_level(planet_seed: int, level: int) -> void:
 	post("%s reaches planet level %d.%s" % [pname, level, "  A trait slot can be opened." if new_pick else ""],
 		Kind.EVENT, "The planet can now hold %d Cities.%s" % [Leveling.max_cities(GameState.get_planet(planet_seed)),
 			"\nOpen it on the planet page (Science + Rare Elements) and pick a trait." if new_pick else ""],
-		"%s · Level %d" % [pname, level], {"seed": planet_seed})
+		"%s // Level %d" % [pname, level], {"seed": planet_seed})
 
 # ── Sources ──────────────────────────────────────────────────────────────────
 

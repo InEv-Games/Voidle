@@ -271,7 +271,7 @@ func _show_explore_bar() -> void:
 	UIStyle.style_button(back, UIStyle.DEFAULT)
 	_explore_layer.add_child(back)
 	var lbl := Label.new()
-	lbl.text = "EXPLORING  ·  look around freely — nothing here can be built  ·  ESC return  ·  H hide navigation"
+	lbl.text = "EXPLORING  //  look around freely — nothing here can be built  //  ESC return  //  H hide navigation"
 	if font:
 		lbl.add_theme_font_override("font", font)
 	lbl.add_theme_font_size_override("font_size", 10)

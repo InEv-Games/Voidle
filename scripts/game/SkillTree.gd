@@ -1032,7 +1032,7 @@ func get_housing_mult() -> float:
 func get_energy_consume_mult() -> float:
 	return maxf(0.1, 1.0 - 0.05 * _lv("grid_efficiency") + _bonus("energy_consume"))
 
-## Cluster Planning: every proximity / centre contribution ×(1 + 0.1·level).
+## Cluster Planning: every proximity / centre contribution ×(1 + 0.1//level).
 func get_proximity_mult() -> float:
 	return 1.0 + 0.10 * _lv("cluster_planning") + _bonus("proximity")
 
@@ -1040,7 +1040,7 @@ func get_proximity_mult() -> float:
 func get_distance_bonus_add() -> float:
 	return 0.10 * _lv("independent_centers")
 
-## Geography specialisation: the feature's bonus ×(1 + 0.1·level).
+## Geography specialisation: the feature's bonus ×(1 + 0.1//level).
 func get_feature_mult(feature_id: String) -> float:
 	return 1.0 + 0.10 * _lv("geography_specialization:" + feature_id)
 

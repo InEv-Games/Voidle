@@ -7,7 +7,7 @@
 ##   building stacks  entry["paid"], entry["paid_mats"]   (PlanetProgress.stack_paid / stack_mats)
 ##   district shell   POIData.paid_credits, paid_materials (the first, free City paid 0)
 ##   levels           PlanetProgress.level_paid    (district label, "city:<label>")
-## k of N buildings give back rate × C·k/N and C drops by the whole share, so
+## k of N buildings give back rate × C//k/N and C drops by the whole share, so
 ## nothing is refunded twice. Credits and materials come back at the same rate
 ## (KARARLAR §10): 50%, 65% with Recycling I, 75% with Recycling II.
 ##

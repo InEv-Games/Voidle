@@ -1095,7 +1095,7 @@ func _set_action_text(hint: String, after_done: bool) -> void:
 	var opts := {"sec": 0.0}
 	if GRANTS_ENABLED and _action_step.has("reward_text"):
 		opts["extra"] = "Reward: " + String(_action_step["reward_text"])
-	NewsFeed.show_message(ACTION_MSG, "Tutorial  ·  Objective", hint.to_upper(),
+	NewsFeed.show_message(ACTION_MSG, "Tutorial  //  Objective", hint.to_upper(),
 		"Done. Next step:" if after_done else String(_action_step.get("instruction", "")), opts)
 
 func _hide_action_bar() -> void:
@@ -1220,7 +1220,7 @@ func _show_quest_step(idx: int) -> void:
 	_reward_lbl.text = ("Reward: " + String(q.get("reward_text", ""))) if GRANTS_ENABLED and q.has("reward_text") \
 		else "Main goal: reach Civilization 1"
 	if idx >= TUTORIAL_QUEST_COUNT and GRANTS_ENABLED and q.has("reward_text"):
-		_reward_lbl.text += "   ·   Main goal: Civilization 1"
+		_reward_lbl.text += "   //   Main goal: Civilization 1"
 	# keep the list short: the previous one, the current one and the next four
 	for i in _tracker_items.size():
 		var row := (_tracker_items[i]["dot"] as Label).get_parent() as Control

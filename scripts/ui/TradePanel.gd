@@ -183,7 +183,7 @@ func _show_trade_tip() -> void:
 	var opts: Array[String] = []
 	for i in 3:
 		opts.append(("[color=#%s]%s[/color]" % [UIStyle.hex(&"text_bright"), ["one lot", "Shift ×10", "Ctrl/Cmd all"][i]]) if i == mode else ["one lot", "Shift ×10", "Ctrl/Cmd all"][i])
-	lines.append("[color=#%s]%s[/color]" % [UIStyle.hex(&"text_muted"), " · ".join(opts)])
+	lines.append("[color=#%s]%s[/color]" % [UIStyle.hex(&"text_muted"), " // ".join(opts)])
 	# then the deal on one line: what comes in, then what goes out
 	if qty <= 0.0:
 		lines.append("[color=#%s]%s[/color]" % [UIStyle.hex(&"bad"),
@@ -382,7 +382,7 @@ func _product_row(id: String) -> Control:
 	_tip(mode, "Automation", func() -> String:
 		if not auto_ok:
 			return "Research Trade Automation for standing orders."
-		return "%s\n\n%s\n\nClick to change: Off · Sell until · Buy until · Keep it at." % [
+		return "%s\n\n%s\n\nClick to change: Off // Sell until // Buy until // Keep it at." % [
 			Trade.mode_label(String(Trade.order(id)["mode"])), Trade.order_text(id)])
 	row.add_child(target)
 	row.add_child(mode)

@@ -70,7 +70,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.9608, 0.7686, 0.2627, 1)
 theme_override_fonts/font = ExtResource("2_orbitron")
 theme_override_font_sizes/font_size = 11
-text = "{minutes} min played  ·  {worlds} worlds settled  ·  {cities} cities  ·  {research} research"
+text = "{minutes} min played  //  {worlds} worlds settled  //  {cities} cities  //  {research} research"
 horizontal_alignment = 1
 
 [node name="Thanks" type="Label" parent="Center/Content"]

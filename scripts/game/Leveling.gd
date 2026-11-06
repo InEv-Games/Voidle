@@ -70,7 +70,7 @@ static func city_district_levels(pd: PlanetData, pp: PlanetProgress, city: POIDa
 			total += int(pp.district_levels.get(p.label, 1))
 	return total
 
-## Total district levels a City needs to reach level `next`: round(a·n² + b·n + c)
+## Total district levels a City needs to reach level `next`: round(a//n² + b//n + c)
 ## — 3, 9, 18, 30 … in "current".
 static func city_level_req(next: int) -> int:
 	var c: BalanceConfig = Balance.cfg
@@ -182,7 +182,7 @@ static func planet_city_levels(pd: PlanetData, pp: PlanetProgress) -> int:
 			total += city_level(pp, p)
 	return total
 
-## Total city levels a planet needs to reach level `next`: a·n + b — 3, 5, 7 … in "current".
+## Total city levels a planet needs to reach level `next`: a//n + b — 3, 5, 7 … in "current".
 static func planet_level_req(next: int) -> int:
 	return Balance.cfg.planet_level_req_a * next + Balance.cfg.planet_level_req_b
 

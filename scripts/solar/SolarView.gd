@@ -150,7 +150,7 @@ func _draw_rocket_fx() -> void:
 	if st != "in_transit" or target == null:
 		var txt := "Final rocket: preparing…" if st == "preparing" else "Final rocket: ready"
 		if target == null:
-			txt += "  ·  right-click a planet to set its target"
+			txt += "  //  right-click a planet to set its target"
 		_rocket_fx.draw_string(font, a + Vector2(16, -22), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ROCKET_COL)
 		return
 	# the rocket: a small dart along the path with a flickering flame
@@ -166,7 +166,7 @@ func _draw_rocket_fx() -> void:
 	var flame := 4.0 + 2.0 * sin(Time.get_ticks_msec() * 0.03)
 	_rocket_fx.draw_line(p - dir * 4.0, p - dir * (4.0 + flame), Color(1.0, 0.6, 0.2, 0.9), 2.0, true)
 	var left := int(ceil(float(ex.get("flight_left", 0.0))))
-	_rocket_fx.draw_string(font, p + Vector2(10, -10), "→ %s  ·  %d:%02d" % [target.planet_data.planet_name, left / 60, left % 60],
+	_rocket_fx.draw_string(font, p + Vector2(10, -10), "→ %s  //  %d:%02d" % [target.planet_data.planet_name, left / 60, left % 60],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ROCKET_COL)
 
 func _ready() -> void:

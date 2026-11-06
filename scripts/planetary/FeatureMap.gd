@@ -50,9 +50,9 @@ const WIDTH:  int = 384
 const HEIGHT: int = 192
 
 # Texture encoding (RGBA8, sampled with filter_nearest):
-#   R  land cover   0 none · 1 forest · 2 desert · 3 tundra · 4 volcanic · 5 caves · 6 ion storm
-#   G  lines        0 none · 1 river  · 2 geothermal rift
-#   B  spots        0 none · 1 crater floor · 2 crater rim · 3 ruins
+#   R  land cover   0 none // 1 forest // 2 desert // 3 tundra // 4 volcanic // 5 caves // 6 ion storm
+#   G  lines        0 none // 1 river  // 2 geothermal rift
+#   B  spots        0 none // 1 crater floor // 2 crater rim // 3 ruins
 #   A  unused (the windy region is no longer a feature)
 const COVER_FOREST := 1
 const COVER_DESERT := 2

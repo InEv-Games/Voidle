@@ -56,7 +56,7 @@ extends Resource
 ## Credits to go from level L to L+1: base × growth^(L−1).
 @export var level_credit_base: float = 400.0
 @export var level_credit_growth: float = 2.2
-## District output by level: linear 1 + step·(L−1), or geometric growth^(L−1).
+## District output by level: linear 1 + step//(L−1), or geometric growth^(L−1).
 @export_enum("linear", "geometric") var level_output_mode: String = "linear"
 @export var level_output_step: float = 0.5
 @export var level_output_growth: float = 1.25
@@ -67,7 +67,7 @@ extends Resource
 @export var city_cost_growth: float = 2.5
 ## Housing every City gives before any Population buildings.
 @export var city_base_pop: int = 15000
-## Total district levels needed for City level n: round(a·n² + b·n + c).
+## Total district levels needed for City level n: round(a//n² + b//n + c).
 @export var city_level_req_a: float = 1.5
 @export var city_level_req_b: float = -1.5
 @export var city_level_req_c: float = 0.0
@@ -80,7 +80,7 @@ extends Resource
 @export var city_level_pop_growth: float = 1.0
 
 @export_group("Population")
-## Population the k-th district of a City takes to found: base × (1 + step·k).
+## Population the k-th district of a City takes to found: base × (1 + step//k).
 @export var district_found_pop_base: float = 3000.0
 @export var district_found_pop_step: float = 0.25   # 0.5 starved the early game of housing (playtest 23.10)
 ## Population for a district level L → L+1: base × growth^(L−1).
@@ -91,10 +91,10 @@ extends Resource
 @export var energy_max_slowdown: float = 0.5
 
 @export_group("Planet")
-## City levels needed for planet level n: a·n + b.
+## City levels needed for planet level n: a//n + b.
 @export var planet_level_req_a: int = 2
 @export var planet_level_req_b: int = -1
-## "legacy": 4k, 12k (+200 raw), then 8k·n (+250·n raw, Goods past Lv4).
+## "legacy": 4k, 12k (+200 raw), then 8k//n (+250//n raw, Goods past Lv4).
 ## "geometric": credit_base × credit_growth^(n−2), same materials.
 @export_enum("legacy", "geometric") var planet_level_credit_mode: String = "legacy"
 @export var planet_level_credit_base: float = 2500.0

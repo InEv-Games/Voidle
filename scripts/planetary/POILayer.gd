@@ -585,7 +585,7 @@ func _draw_sites() -> void:
 			draw_string_outline(font, bp, below, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, 3, Color(0, 0, 0, marker_vis))
 			draw_string(font, bp, below, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, Color(col, marker_vis))
 		if hov:
-			var text := "%s · %s" % [String(r["name"]).to_upper(), "DIGGING" if digging else "CLICK"]
+			var text := "%s // %s" % [String(r["name"]).to_upper(), "DIGGING" if digging else "CLICK"]
 			var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE).x
 			var box := Rect2(sp + Vector2(-tw * 0.5 - 5.0, -head - 15.0), Vector2(tw + 10.0, 15.0))
 			draw_rect(box, Color(0.04, 0.07, 0.14, 0.88))
@@ -1363,7 +1363,7 @@ func _draw_scene(font: Font) -> void:
 				cap_lv > 0 and not close_city)
 		if dist_lv > 0 and close_city:
 			const LV_SIZE := 10
-			var lv_str := "Capital District  ·  City Lv %d" % dist_lv
+			var lv_str := "Capital District  //  City Lv %d" % dist_lv
 			var lv_pos := label_pos + Vector2(0, text_size.y * 0.9)
 			if horiz_dir < 0.0:
 				var lv_w := font.get_string_size(lv_str, HORIZONTAL_ALIGNMENT_LEFT, -1, LV_SIZE).x

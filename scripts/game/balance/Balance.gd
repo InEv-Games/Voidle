@@ -55,7 +55,7 @@ func geometric(base: float, growth: float, n: float) -> float:
 	return base * pow(growth, n)
 
 ## Price of buying `count` more when `owned` are already bought, each costing
-## base × growth^(index): base·g^owned · (g^count − 1)/(g − 1).
+## base × growth^(index): base//g^owned // (g^count − 1)/(g − 1).
 func geometric_sum(base: float, growth: float, owned: int, count: int) -> float:
 	if count <= 0:
 		return 0.0

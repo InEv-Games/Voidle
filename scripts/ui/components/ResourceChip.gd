@@ -1,5 +1,5 @@
 ## Top-bar resource box (design: Resource Panels.png):
-##   [icon] 50.000 ⁺¹·⁵
+##   [icon] 50.000 ⁺¹//⁵
 ## States: normal, hover (accent edge), inactive (dim value and icon — nothing
 ## stored and nothing coming in). `alert` paints the value in the palette's
 ## "bad" colour (stock at its cap, energy deficit, overcrowding).

@@ -349,7 +349,7 @@ func _build_state_row(state: Dictionary) -> Control:
 
 	if not has_cargo:
 		var empty_lbl := Label.new()
-		empty_lbl.text = "· empty"
+		empty_lbl.text = "(empty)"
 		_font_apply(empty_lbl, 6)
 		empty_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.50))
 		empty_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE

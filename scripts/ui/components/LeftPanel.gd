@@ -1,7 +1,7 @@
 ## The one left panel every view uses (design: Side Panel):
 ##   PanelContent       the view's own lists — each view fills this (scene nodes or code)
 ##   ─────────────────
-##   Shortcuts          Upgrade Tree · Trade · Explore, built by HUDManager
+##   Shortcuts          Upgrade Tree // Trade // Explore, built by HUDManager
 ## Layout: scenes/ui/components/LeftPanel.tscn. Look: SidePanel.
 ## The panel places itself (GAP / WIDTH, under the HUD's resource bar), so it
 ## sits in the same spot in every view; views only slide it (set_slide).

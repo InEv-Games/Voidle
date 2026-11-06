@@ -780,7 +780,7 @@ func _show_intro(start: Callable) -> void:
 		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn"))
 	layer.add_child(card)
 
-## "Civ 0 · 1h 12m played · 28.10 14:05", "Empty", or why it can't load.
+## "Civ 0 // 1h 12m played // 28.10 14:05", "Empty", or why it can't load.
 static func _slot_text(info: Dictionary) -> String:
 	if info.is_empty():
 		return "Empty"
@@ -790,7 +790,7 @@ static func _slot_text(info: Dictionary) -> String:
 	var played := "%dh %02dm" % [secs / 3600, (secs / 60) % 60] if secs >= 3600 else "%dm" % (secs / 60)
 	var t: int = int(info.get("saved_at", 0.0)) + Time.get_time_zone_from_system().get("bias", 0) * 60
 	var d := Time.get_datetime_dict_from_unix_time(t)
-	return "Civ %d  ·  %s played  ·  %02d.%02d %02d:%02d" % [int(info.get("civilization_type", 0)), played,
+	return "Civ %d  //  %s played  //  %02d.%02d %02d:%02d" % [int(info.get("civilization_type", 0)), played,
 		d["day"], d["month"], d["hour"], d["minute"]]
 
 func _on_settings() -> void:
