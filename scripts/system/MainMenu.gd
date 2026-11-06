@@ -47,13 +47,14 @@ func _ready() -> void:
 const PLANET_H_FRAC := 1.35
 const PLANET_CENTER := Vector2(0.80, 1.04)
 const LIGHT_DIR := Vector3(-0.75, -0.55, 0.35)   # from the upper left (shader: y down)
-## Parallax as a turn about the planet's centre: moving the mouse around the
-## planet turns each layer a little the other way. Per layer, how far (px) the
-## screen's farthest corner travels with the mouse at the edge; the globe
-## itself turns PARALLAX_PLANET_SPIN rad.
+## Parallax as a camera orbiting the planet: the mouse left / right turns the
+## globe on its axis, up / down tilts it (up shows the north pole), and the
+## stars and backdrop shift the other way, nearer layers more. Per layer, px
+## at the screen's edge; the globe's turn and tilt in rad.
 const PARALLAX_BACKDROP := 3.0
 const PARALLAX_STARS := [4.0, 8.0, 13.0]   # far, mid, near
-const PARALLAX_PLANET_SPIN := 0.12
+const PARALLAX_YAW := 0.22
+const PARALLAX_PITCH := 0.14
 const PARALLAX_EASE := 4.0      # 1/s — how fast the layers follow the mouse
 const PARALLAX_MARGIN := 24.0   # layers overhang the screen by this, so no edge shows
 ## Stars per layer (far → near): count, size range px, alpha range, twinkle.
@@ -65,6 +66,7 @@ const STAR_LAYERS := [
 
 var _parallax := Vector2.ZERO       # smoothed mouse offset, -0.5 … 0.5
 var _planet_spin := 0.0             # the globe's extra turn from the mouse (rad)
+var _planet_tilt := 0.0             # …and its tilt
 var _layers: Array = []             # [Control, base position, depth px]
 var _star_layers: Array[Control] = []
 var _stars: Array = []              # per layer: Array of [pos, size, alpha, twinkle, phase, speed]
@@ -141,20 +143,14 @@ func _tick_backdrop(delta: float) -> void:
 	var m := get_viewport().get_mouse_position()
 	var target := Vector2(clampf(m.x / vp.x, 0.0, 1.0) - 0.5, clampf(m.y / vp.y, 0.0, 1.0) - 0.5)
 	_parallax = _parallax.lerp(target, 1.0 - exp(-delta * PARALLAX_EASE))
-	# the mouse's movement around the planet (across the line to its centre)
-	var centre := Vector2(vp.x * PLANET_CENTER.x, vp.y * PLANET_CENTER.y)
-	var to_view := (vp * 0.5 - centre).normalized()
-	var around := (_parallax * 2.0).dot(Vector2(-to_view.y, to_view.x))   # -1 … 1
-	var reach := 0.0   # farthest screen corner from the centre
-	for corner: Vector2 in [Vector2.ZERO, Vector2(vp.x, 0), Vector2(0, vp.y), vp]:
-		reach = maxf(reach, corner.distance_to(centre))
+	# the camera orbits: the globe turns and tilts, what lies behind it slides
+	var k := _parallax * 2.0   # -1 … 1
 	for l: Array in _layers:
 		var c := l[0] as Control
 		if is_instance_valid(c):
-			c.position = l[1]
-			c.pivot_offset = centre - (l[1] as Vector2)
-			c.rotation = -around * float(l[2]) / maxf(reach, 1.0)
-	_planet_spin = around * PARALLAX_PLANET_SPIN
+			c.position = (l[1] as Vector2) - k * float(l[2])
+	_planet_spin = k.x * PARALLAX_YAW
+	_planet_tilt = -k.y * PARALLAX_PITCH
 	for layer in _star_layers:
 		layer.queue_redraw()
 
@@ -349,6 +345,7 @@ func _process(delta: float) -> void:
 	_rotation_off = fposmod(_rotation_off + ROTATE_SPEED * delta, TAU)
 	var mat := _planet_rect.material as ShaderMaterial
 	mat.set_shader_parameter("rotation_offset", fposmod(_rotation_off + _planet_spin, TAU))
+	mat.set_shader_parameter("tilt", _planet_tilt)
 
 # ── Button callbacks ────────────────────────────────────────────────────────
 
