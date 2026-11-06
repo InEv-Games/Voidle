@@ -535,7 +535,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		toggle_objectives()
 
 ## The button sits right of NEWS, left of the market box; while it is hidden
-## NEWS (and the crawl's clip) take its place back.
+## NEWS (and the crawl's clip) take its place back, as they take the market
+## box's while there is no Trade Access.
 func _layout_objectives_btn() -> void:
 	if _obj_btn == null or not is_instance_valid(_obj_btn):
 		return
@@ -547,7 +548,8 @@ func _layout_objectives_btn() -> void:
 	var v := IconButton.Variant.NEUTRAL if lit else IconButton.Variant.DEFAULT
 	if _obj_btn.variant != v:
 		_obj_btn.variant = v   # lit while the card is open, like a lens that is on
-	var ticker_left := -(TICKER_W + 4.0)
+	# no market box until Trade Access: NEWS takes its place at the right end
+	var ticker_left := -(TICKER_W + 4.0) if _ticker != null and _ticker.visible else 0.0
 	var right := ticker_left - OBJ_BTN_GAP
 	if on:
 		_obj_btn.anchor_left = 1.0
@@ -651,8 +653,8 @@ func _tick_ticker(delta: float) -> void:
 	if _ticker == null or not is_instance_valid(_ticker):
 		return
 	var ids := _ticker_ids()
-	_ticker.visible = not ids.is_empty()
-	if ids.is_empty():
+	_ticker.visible = Trade.has_access() and not ids.is_empty()
+	if not _ticker.visible:
 		return
 	_tk_t += delta
 	if _tk_t < TICKER_SEC:

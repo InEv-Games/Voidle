@@ -92,6 +92,7 @@ func _ready() -> void:
 ## HUD's own bottom-left row). Each row gets its own buttons.
 var _skill_btns: Array[Button] = []
 var _explore_btns: Array[Button] = []
+var _trade_btns: Array[Button] = []   # shown only once Trade Access is researched
 
 func fill_shortcuts(row: HBoxContainer) -> void:
 	var skill_btn := _make_skill_button()
@@ -99,16 +100,18 @@ func fill_shortcuts(row: HBoxContainer) -> void:
 	var companions_btn := _make_companions_button()
 	var explore_btn := _make_explore_button()
 	explore_btn.visible = GameState.explore_available()
+	trade_btn.visible = Trade.has_access()
 	for b: Button in [skill_btn, trade_btn, companions_btn, explore_btn]:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # share the row evenly
 		row.add_child(b)
 	companions_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # square, icon only
-	for list: Array[Button] in [_skill_btns, _explore_btns]:   # drop rows freed with their view
+	for list: Array[Button] in [_skill_btns, _explore_btns, _trade_btns]:   # drop rows freed with their view
 		for i in range(list.size() - 1, -1, -1):
 			if not is_instance_valid(list[i]):
 				list.remove_at(i)
 	_skill_btns.append(skill_btn)
 	_explore_btns.append(explore_btn)
+	_trade_btns.append(trade_btn)
 
 ## Upgrade Tree button (opens / closes the SkillTreeView layer).
 func _make_skill_button() -> Button:
@@ -604,6 +607,9 @@ func _process(delta: float) -> void:
 		for b: Button in _explore_btns:
 			if is_instance_valid(b):
 				b.visible = GameState.explore_available()
+		for b: Button in _trade_btns:
+			if is_instance_valid(b):
+				b.visible = Trade.has_access()
 
 ## The demo's high point: the first City on the Moon, in the news bar.
 func _maybe_celebrate_moon() -> void:
