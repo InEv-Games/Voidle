@@ -59,7 +59,7 @@ func _ready() -> void:
 	# (no settings button: Esc opens the pause menu)
 
 
-	# Upgrade Tree · Trade · Explore live at the bottom of the view's LeftPanel
+	# Upgrade Tree // Trade // Explore live at the bottom of the view's LeftPanel
 	# (fill_shortcuts). This bottom-left row only shows when no LeftPanel is on
 	# screen (Galaxy view, a hidden or slid-out panel).
 	var sci_panel := PanelContainer.new()
@@ -88,7 +88,7 @@ func _ready() -> void:
 	GameState.science_changed.connect(_on_science_changed)
 	AchievementManager.achievement_unlocked.connect(_on_achievement_unlocked)
 
-## Upgrade Tree · Trade · Explore into `row` (a LeftPanel's Shortcuts, or the
+## Upgrade Tree // Trade // Explore into `row` (a LeftPanel's Shortcuts, or the
 ## HUD's own bottom-left row). Each row gets its own buttons.
 var _skill_btns: Array[Button] = []
 var _explore_btns: Array[Button] = []
@@ -457,7 +457,7 @@ func _add_theme_builder(p: ModalPopup) -> void:
 	var viv_lbl: Label = viv_parts[1]
 
 	var prev_row: HBoxContainer = row_of.call("Preview")
-	prev_row.tooltip_text = "Backgrounds (60%) · items (30%) · accent (10%)"
+	prev_row.tooltip_text = "Backgrounds (60%) // items (30%) // accent (10%)"
 	var prev_sbs: Array[StyleBoxFlat] = []
 	for i in 3:
 		var sb: StyleBoxFlat = swatch_of.call(prev_row, Color.BLACK)
@@ -645,12 +645,12 @@ func _maybe_show_offline() -> void:
 	if scene == null or scene.scene_file_path.ends_with("MainMenu.tscn"):
 		return
 	GameState.offline_pending = false
-	var body := "You were away for [b]%s[/b]." % _duration_text(GameState.offline_seconds)
-	if GameState.offline_progress_enabled():
-		body += "\n\nOffline progress is switched on in this profile, but it isn't implemented yet — nothing was produced."
-	else:
-		body += "\n\nNothing was produced while the game was closed. Your economy picks up where you left it."
-	ConfirmPanel.ask(self, "WELCOME BACK", body, "CONTINUE", Callable(), false)
+	# the hero's caption says how long ("Away for 4 min")
+	var body := "Offline progress is switched on in this profile, but it isn't implemented yet — nothing was produced." \
+		if GameState.offline_progress_enabled() \
+		else "Nothing was produced while the game was closed. Your economy picks up where you left it."
+	ConfirmPanel.ask(self, "WELCOME BACK", body, "CONTINUE", Callable(), false) \
+		.use_hero("Away for %s" % _duration_text(GameState.offline_seconds), "WELCOME BACK")
 
 static func _duration_text(sec: float) -> String:
 	var d := floori(sec / 86400.0)

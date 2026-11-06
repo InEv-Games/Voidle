@@ -41,6 +41,26 @@ func _ready() -> void:
 	card.close_pressed.connect(close)
 	cancel_button().pressed.connect(close)
 
+## Swaps the card's small header (icon, title, close button, rule) for a hero
+## right above the card: `caption` over a big `title`. Esc, a click outside and
+## the card's buttons still close it.
+func use_hero(caption: String, title: String) -> HeroHeader:
+	var center := card.get_parent()
+	var box := VBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override(&"separation", 8)
+	center.remove_child(card)
+	center.add_child(box)
+	var hero := HeroHeader.create(caption, title)
+	# a popup's title is short: one line, and the card widens to it
+	(hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF
+	box.add_child(hero)
+	box.add_child(card)
+	card.size_flags_horizontal = Control.SIZE_FILL   # as wide as the hero
+	(card.get_node("VBox/Header") as Control).visible = false
+	(card.get_node("VBox/Rule") as Control).visible = false
+	return hero
+
 func content() -> VBoxContainer:
 	return card.get_node("VBox/Content") as VBoxContainer
 
