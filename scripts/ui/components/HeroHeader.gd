@@ -25,11 +25,15 @@ static func create(cap: String, t: String, title_size := 0) -> HeroHeader:
 	h.caption = cap
 	h.title = t
 	if title_size > 0:
-		h.get_node("Title").add_theme_font_size_override(&"font_size", title_size)
-		# the scene's tight spacing is tuned for the big size: shrink it with it
-		h.get_node("Title").add_theme_constant_override(&"line_spacing", -int(title_size * 0.4))
-		h.add_theme_constant_override(&"separation", -int(round(8.0 * (title_size / 36.0) * 0.4)))
+		h.set_title_size(title_size)
 	return h
+
+## Shrinks the title below the theme's HeaderHero; the scene's tight spacing is
+## tuned for the big size, so it shrinks with it.
+func set_title_size(title_size: int) -> void:
+	get_node("Title").add_theme_font_size_override(&"font_size", title_size)
+	get_node("Title").add_theme_constant_override(&"line_spacing", -int(title_size * 0.4))
+	add_theme_constant_override(&"separation", -int(round(8.0 * (title_size / 36.0) * 0.4)))
 
 func _ready() -> void:
 	_sync()

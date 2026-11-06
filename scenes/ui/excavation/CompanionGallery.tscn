@@ -1,9 +1,7 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/excavation/CompanionGallery.gd" id="1_script"]
-[ext_resource type="PackedScene" path="res://scenes/ui/components/IconButton.tscn" id="2_button"]
-[ext_resource type="Texture2D" path="res://resources/companions/portraits/silhouette.svg" id="3_portrait"]
-[ext_resource type="Texture2D" path="res://resources/ui/icons/groups.svg" id="4_icon"]
+[ext_resource type="PackedScene" uid="uid://dcaw5kheox1ap" path="res://scenes/ui/components/HeroHeader.tscn" id="5_hero"]
 
 [node name="CompanionGallery" type="Control"]
 layout_mode = 3
@@ -33,117 +31,81 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="Card" type="PanelContainer" parent="Center"]
-custom_minimum_size = Vector2(640, 340)
-layout_mode = 2
-theme_type_variation = &"PopupCard"
-
-[node name="VBox" type="VBoxContainer" parent="Center/Card"]
+[node name="Card" type="VBoxContainer" parent="Center"]
+custom_minimum_size = Vector2(720, 0)
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Header" type="HBoxContainer" parent="Center/Card/VBox"]
+[node name="Hero" parent="Center/Card" instance=ExtResource("5_hero")]
 layout_mode = 2
-theme_override_constants/separation = 5
+caption = "Companions"
+title = "COMPANIONS"
 
-[node name="Icon" type="TextureRect" parent="Center/Card/VBox/Header"]
-self_modulate = Color(0.137, 0.725, 0.906, 1)
-custom_minimum_size = Vector2(14, 14)
-layout_mode = 2
-size_flags_vertical = 4
-mouse_filter = 2
-texture = ExtResource("4_icon")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="Title" type="Label" parent="Center/Card/VBox/Header"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_type_variation = &"HeaderLabel"
-text = "COMPANIONS"
-
-[node name="Counter" type="Label" parent="Center/Card/VBox/Header"]
-layout_mode = 2
-theme_type_variation = &"CounterLabel"
-text = "0 / 0"
-
-[node name="Close" parent="Center/Card/VBox/Header" instance=ExtResource("2_button")]
-layout_mode = 2
-label_text = ""
-icon_name = "close"
-min_size = Vector2(0, 20)
-
-[node name="Rule" type="VBoxContainer" parent="Center/Card/VBox"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 0
-
-[node name="A" type="HSeparator" parent="Center/Card/VBox/Rule"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DoubleRule"
-
-[node name="B" type="HSeparator" parent="Center/Card/VBox/Rule"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DoubleRule"
-
-[node name="Row" type="HBoxContainer" parent="Center/Card/VBox"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 12
-
-[node name="Scroll" type="ScrollContainer" parent="Center/Card/VBox/Row"]
-custom_minimum_size = Vector2(250, 0)
-layout_mode = 2
-horizontal_scroll_mode = 0
-
-[node name="List" type="VBoxContainer" parent="Center/Card/VBox/Row/Scroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 4
-
-[node name="Detail" type="VBoxContainer" parent="Center/Card/VBox/Row"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_constants/separation = 6
-
-[node name="Top" type="HBoxContainer" parent="Center/Card/VBox/Row/Detail"]
+[node name="Row" type="HBoxContainer" parent="Center/Card"]
+custom_minimum_size = Vector2(0, 335)
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Frame" type="PanelContainer" parent="Center/Card/VBox/Row/Detail/Top"]
-custom_minimum_size = Vector2(132, 170)
+[node name="ListCard" type="PanelContainer" parent="Center/Card/Row"]
+custom_minimum_size = Vector2(280, 0)
 layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"IconCell"
+theme_type_variation = &"PopupCard"
 
-[node name="Portrait" type="TextureRect" parent="Center/Card/VBox/Row/Detail/Top/Frame"]
+[node name="Scroll" type="ScrollContainer" parent="Center/Card/Row/ListCard"]
 layout_mode = 2
-mouse_filter = 2
-texture = ExtResource("3_portrait")
-expand_mode = 1
-stretch_mode = 6
+horizontal_scroll_mode = 0
 
-[node name="Info" type="VBoxContainer" parent="Center/Card/VBox/Row/Detail/Top"]
-custom_minimum_size = Vector2(190, 0)
+[node name="List" type="VBoxContainer" parent="Center/Card/Row/ListCard/Scroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 4
 
-[node name="Name" type="Label" parent="Center/Card/VBox/Row/Detail/Top/Info"]
+[node name="Detail" type="Control" parent="Center/Card/Row"]
 layout_mode = 2
-theme_type_variation = &"HeaderLabel"
-text = "NAME"
-autowrap_mode = 3
+size_flags_horizontal = 3
+mouse_filter = 2
 
-[node name="Role" type="Label" parent="Center/Card/VBox/Row/Detail/Top/Info"]
+[node name="Portrait" type="TextureRect" parent="Center/Card/Row/Detail"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -136.0
+offset_bottom = 260.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Foot" type="VBoxContainer" parent="Center/Card/Row/Detail"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 48.0
+offset_right = -48.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="NameHero" parent="Center/Card/Row/Detail/Foot" instance=ExtResource("5_hero")]
 layout_mode = 2
-theme_type_variation = &"SubLabel"
-text = "Role"
-autowrap_mode = 3
+caption = "Role"
+title = "NAME"
 
-[node name="Bonus" type="RichTextLabel" parent="Center/Card/VBox/Row/Detail/Top/Info"]
+[node name="BioCard" type="PanelContainer" parent="Center/Card/Row/Detail/Foot"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"PopupCard"
+
+[node name="Info" type="VBoxContainer" parent="Center/Card/Row/Detail/Foot/BioCard"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="Bonus" type="RichTextLabel" parent="Center/Card/Row/Detail/Foot/BioCard/Info"]
 layout_mode = 2
 mouse_filter = 2
 theme_override_font_sizes/normal_font_size = 11
@@ -151,9 +113,8 @@ bbcode_enabled = true
 fit_content = true
 scroll_active = false
 
-[node name="Bio" type="RichTextLabel" parent="Center/Card/VBox/Row/Detail"]
+[node name="Bio" type="RichTextLabel" parent="Center/Card/Row/Detail/Foot/BioCard/Info"]
 layout_mode = 2
-size_flags_vertical = 3
 mouse_filter = 2
 theme_type_variation = &"PopupBody"
 theme_override_font_sizes/normal_font_size = 11
