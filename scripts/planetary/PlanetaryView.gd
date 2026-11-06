@@ -350,12 +350,12 @@ func _open_context_menu(global_pos: Vector2) -> void:
 				else (odef.display_name if odef != null else "Orbit district")
 		elif poi.is_city():
 			kind = "city"
-			subtitle = "City  ·  Lv %d" % Leveling.city_level(pp, poi)
+			subtitle = "City  //  Lv %d" % Leveling.city_level(pp, poi)
 		else:
 			kind = "district"
-			subtitle = "%s  ·  Lv %d" % [poi.type_tag.capitalize(), int(pp.district_levels.get(poi.label, 1))]
+			subtitle = "%s  //  Lv %d" % [poi.type_tag.capitalize(), int(pp.district_levels.get(poi.label, 1))]
 		if poi.constructing:
-			subtitle += "  ·  under construction"
+			subtitle += "  //  under construction"
 	else:
 		kind = "surface"
 		target = {"pos": global_pos, "hit": _screen_to_lonlat(global_pos)}
@@ -1723,7 +1723,7 @@ func _draw_transit_label(cv: CanvasItem, spos: Vector2, ship: ShipData, from_c: 
 	cv.draw_line(diag_end, horiz_end, Color(accent, 0.65), 1.0, true)
 	var dest := GameState.get_planet_data(ship.dest_seed)
 	var left := int(ceil((1.0 - ship.travel_progress) * ship.travel_duration))
-	var label := "%s → %s · %d:%02d" % [ship.ship_name, dest.planet_name if dest != null else "?",
+	var label := "%s → %s // %d:%02d" % [ship.ship_name, dest.planet_name if dest != null else "?",
 		floori(float(left) / 60.0), left % 60]
 	var text_size := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE)
 	var label_pos := horiz_end + Vector2(horiz_dir * 3.0, text_size.y * 0.35)
@@ -1941,7 +1941,7 @@ func _ensure_objectives() -> void:
 		return
 	_objectives = ObjectivesCard.new()
 	_objectives.tip_title = "Final rocket"
-	_objectives.content.add_child(HeroHeader.create("Objective  ·  Civilization 1", "FINAL ROCKET",
+	_objectives.content.add_child(HeroHeader.create("Objective  //  Civilization 1", "FINAL ROCKET",
 		ObjectivesCard.HERO_SIZE))
 	var pd := GameState.get_planet_data(GameState.home_planet_seed)
 	_add_rocket_section(_objectives.content, pd if pd != null else current_data, false)
@@ -1998,7 +1998,7 @@ func _add_rocket_section(page: Control, data: PlanetData, with_head := true) -> 
 		match st:
 			"":
 				lines.append("Cost  " + _full_cost_bb(GameState.ROCKET_COST, 0, data, GameState.get_planet(data.seed)))
-				lines.append("Preparation %ds · flight %ds" % [int(GameState.ROCKET_PREP_SEC), int(GameState.ROCKET_FLIGHT_SEC)])
+				lines.append("Preparation %ds // flight %ds" % [int(GameState.ROCKET_PREP_SEC), int(GameState.ROCKET_FLIGHT_SEC)])
 				btn.label_text = "PREPARE ROCKET"
 				var block := GameState.rocket_block()
 				if block != "":
@@ -2838,7 +2838,7 @@ func _setup_material(data: PlanetData) -> void:
 ## tests) uses every district; only the drawing is capped — to the ones nearest
 ## the middle of the view, refreshed as the globe turns (_push_shader_districts).
 const MAX_TERRITORIES:     int   = 128
-# Settlement radius = BASE + SIZE·√(Σ building weights).
+# Settlement radius = BASE + SIZE//√(Σ building weights).
 # A fresh district is a hamlet of a few pixels; housing grows it fastest.
 const SETTLE_BASE_DEG:     float = TerrainSampler.SETTLE_BASE_DEG
 const SETTLE_SIZE_DEG:     float = 1.1
@@ -3787,7 +3787,7 @@ func _mineral_icon_cell(rd: ResourceData, show_count: bool, stored: float = 0.0)
 		count_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		inner.add_child(count_lbl)
 
-	var tip_body := "R%d  ·  %s" % [rd.rarity, _tier_text(rd)]
+	var tip_body := "R%d  //  %s" % [rd.rarity, _tier_text(rd)]
 	cell.mouse_entered.connect(func() -> void:
 		TooltipManager.show_tip(rd.unique_name, tip_body))
 	cell.mouse_exited.connect(func() -> void:
@@ -3877,7 +3877,7 @@ func _mineral_grid_card(rd: ResourceData, stored: float, show_count: bool, sub_l
 	var cap_rd := rd
 	var cap_pp := pp
 	card.mouse_entered.connect(func() -> void:
-		var header := "R%d  ·  %s" % [cap_rd.rarity, _tier_text(cap_rd)]
+		var header := "R%d  //  %s" % [cap_rd.rarity, _tier_text(cap_rd)]
 		var rid    := cap_rd.resource_id()
 		if cap_pp == null:
 			TooltipManager.show_tip(cap_rd.unique_name, header)
@@ -5070,7 +5070,7 @@ func _rebuild_lens_bar() -> void:
 		if not GameState.is_scanned(current_data.seed):
 			b.modulate = Color(0.5, 0.5, 0.55, 0.6)   # locked until the surface is scanned
 		b.set_meta("tint", tint)
-		var tip := "Where %s thrives here:\n%s\n\nOn a painted feature: %s  ·  within %d km of one: %s." % [
+		var tip := "Where %s thrives here:\n%s\n\nOn a painted feature: %s  //  within %d km of one: %s." % [
 			String(info["label"]).to_lower(), FeatureMap.role_features_text(role),
 			Economy.mult_text(1.0 + Balance.cfg.terrain_on_bonus), int(Balance.cfg.terrain_near_km),
 			Economy.mult_text(1.0 + Balance.cfg.terrain_near_bonus)]
@@ -5690,17 +5690,17 @@ func _end_district_placement() -> void:
 ## What is being placed, in the objectives card (until placement ends).
 func _show_place_hint(def: DistrictDef) -> void:
 	var title := "PLACE %s" % def.display_name.to_upper()
-	var help := "Click a site on %s  ·  Drag to rotate  ·  Scroll to zoom  ·  Right-click to cancel" \
+	var help := "Click a site on %s  //  Drag to rotate  //  Scroll to zoom  //  Right-click to cancel" \
 		% TerrainSampler.placement_label(def.placement)
 	var extra := "Cost %s credits" % HUDManager.fmt_credits(DistrictDef.placement_cost(def, current_data, _parent_label()))
 	var found_pop := Economy.founding_pop(def, current_data, _parent_label())
 	if found_pop > 0:
-		extra += "  ·  %s workers" % Economy.fmt(found_pop)
+		extra += "  //  %s workers" % Economy.fmt(found_pop)
 	if _lunar_landing:
 		title = "CHOOSE THE LANDING SITE"
 	if _mandatory_city:
 		title = "CHOOSE THE SITE OF YOUR CAPITAL"
-		help = "Click a site on %s  ·  Drag to rotate  ·  Scroll to zoom" \
+		help = "Click a site on %s  //  Drag to rotate  //  Scroll to zoom" \
 			% TerrainSampler.placement_label(def.placement)
 	NewsFeed.show_message(PLACE_MSG, current_data.planet_name if current_data != null else "Placement",
 		title, help, {"sec": 0.0, "extra": extra, "extra_color": &"neutral_stroke"})
@@ -5763,7 +5763,7 @@ func _update_placement_hover() -> void:
 	for fid: String in FeatureMap.CATALOGUE:
 		if float(here.get(fid, 0.0)) >= 1.0:
 			on_names.append(FeatureMap.feature_name(fid))
-	var site_name := " · ".join(on_names) if not on_names.is_empty() else "Open ground"
+	var site_name := " // ".join(on_names) if not on_names.is_empty() else "Open ground"
 	var sys := _placement_system_check(_placing_def, hit["lon"], hit["lat"])
 	_update_ghost_roads(hit["lon"], hit["lat"], sys["neighbors"])
 	poi_layer.ghost_card = _placement_card(_placing_def, chk, sys, site_name, hit["lon"], hit["lat"], t)
@@ -5946,7 +5946,7 @@ func _location_lines(loc: Dictionary, detailed: bool = false) -> Array[String]:
 		out.append("  +%s%%  City centres in reach" % _pct(float(loc["centre"])))
 	if detailed:
 		for src: Dictionary in loc["sources"]:
-			out.append("      +%s%%  %s  · %s%s" % [_pct(float(src["share"])), (src["poi"] as POIData).shown_name(),
+			out.append("      +%s%%  %s  // %s%s" % [_pct(float(src["share"])), (src["poi"] as POIData).shown_name(),
 				_km_text(float(src["km"])), "  (linked)" if src["kind"] == "cross" else ""])
 	return out
 
@@ -6326,7 +6326,7 @@ func _show_planet_level_tip(data: PlanetData, pp: PlanetProgress) -> void:
 	for k in cost.keys():
 		can_pay = can_pay and (GameState.credits if str(k) == "credits" else _level_cost_have(str(k))) >= float(cost[k])
 	TooltipManager.show_tip("Planet level up", "\n".join(lines))
-	TooltipManager.set_footer("", "  ·  ".join(parts), can_pay)
+	TooltipManager.set_footer("", "  //  ".join(parts), can_pay)
 
 func _show_level_up_popup(pp: PlanetProgress) -> void:
 	if pp.is_upgrading:
@@ -6903,7 +6903,7 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	var title := (poi.capital_shown_name() if as_capital else poi.shown_name()).to_upper()
 	# the Capital's role stays readable next to its lore name
 	var card := ListItem.create(title, _district_icon(poi, as_city, as_capital),
-		"" if poi.is_orbital() else ("Capital  ·  Level %d" if as_capital else "Level %d") % lv)
+		"" if poi.is_orbital() else ("Capital  //  Level %d" if as_capital else "Level %d") % lv)
 	card.set_meta("poi_label", poi.label)
 	_poi_overview_cards[poi.label] = card
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -6915,7 +6915,7 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	if poi.is_orbital():
 		var odef := ProductionManager.district_def(poi)
 		if Leveling.is_orbit_city(planet, poi):
-			card.description = "Orbit City  ·  the Orbit's centre"
+			card.description = "Orbit City  //  the Orbit's centre"
 			if not poi.constructing:
 				card.stats = _income_stats(pp, poi)
 		elif odef != null and not odef.planet_support.is_empty():
@@ -6925,10 +6925,10 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 					"raw & processed" if rid in [Economy.RAW, Economy.GOODS, Economy.FUEL, Economy.RARE] else Economy.display_name(rid)])
 				if rid in [Economy.RAW, Economy.GOODS, Economy.FUEL, Economy.RARE]:
 					break
-			card.description = "%s  ·  %s planet-wide  ·  Lv %d  ·  %d building%s" % [odef.display_name, sup[0],
+			card.description = "%s  //  %s planet-wide  //  Lv %d  //  %d building%s" % [odef.display_name, sup[0],
 				int(pp.district_levels.get(poi.label, 1)), total_size, "" if total_size == 1 else "s"]
 		else:
-			card.description = "Station  ·  %d module%s" % [total_size, "" if total_size == 1 else "s"]
+			card.description = "Station  //  %d module%s" % [total_size, "" if total_size == 1 else "s"]
 	else:
 		var stats := PackedStringArray()
 		if as_city:
@@ -7402,7 +7402,7 @@ func _on_district_clicked(index: int, _data: Dictionary) -> void:
 		_focus_city(_city_of(poi))
 		return   # the first click already chose the panel
 	if poi.constructing:
-		TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\n%d%% built · %.0fs total\n\nRight-click it to cancel (full refund)." % [
+		TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\n%d%% built // %.0fs total\n\nRight-click it to cancel (full refund)." % [
 			int(poi.construct_progress * 100.0), poi.construct_duration])
 		_hide_tip_when_mouse_leaves(get_viewport().get_mouse_position())
 		return
@@ -8231,9 +8231,9 @@ func _tick_one_rocket(d: Dictionary, delta: float) -> void:
 		d["hover_active"] = true
 		CursorManager.set_state(CursorManager.State.POINTER)
 		if String(d.get("ship_type", "")) == "lander":
-			TooltipManager.show_tip("Colony Lander", "· lifting off from the Spaceport\nDouble-click to follow it")
+			TooltipManager.show_tip("Colony Lander", "Lifting off from the Spaceport\nDouble-click to follow it")
 		else:
-			TooltipManager.show_tip("Shuttle", "· launching to orbit")
+			TooltipManager.show_tip("Shuttle", "Launching to orbit")
 	elif not near and d["hover_active"]:
 		d["hover_active"] = false
 		CursorManager.set_state(CursorManager.State.NORMAL)
@@ -8626,7 +8626,7 @@ func _entry_output_text(pp: PlanetProgress, entry: Dictionary, def: BuildingDef)
 	for id: String in def.planet_bonus:
 		parts.append("+%d%% %s" % [int(round(float(def.planet_bonus[id]) * n * 100.0)),
 			Economy.INFO.get(id, {}).get("short", id)])
-	return " · ".join(parts)
+	return " // ".join(parts)
 
 ## Upkeep line of a building entry, e.g. "−4 Ferrite" or "−2 goods".
 func _entry_input_text(entry: Dictionary, def: BuildingDef) -> String:
@@ -8635,7 +8635,7 @@ func _entry_input_text(entry: Dictionary, def: BuildingDef) -> String:
 	for id: String in def.inputs:
 		var name: String = Economy.INFO.get(id, {}).get("short", Economy.display_name(id))
 		parts.append("−%s %s" % [BuildingDef._num(float(def.inputs[id]) * n), name])
-	return " · ".join(parts)
+	return " // ".join(parts)
 
 # ── Coloured tooltip text (BBCode) ──────────────────────────────────────────
 const BB_BAD  := "#e36a6a"
@@ -8701,7 +8701,7 @@ func _cost_bb(credits: float, pop: int, pd: PlanetData, pp: PlanetProgress) -> S
 		var ok := Economy.free_population(pd, pp) >= pop
 		var wcol: Color = Color(0.85, 0.88, 1.0) if ok else Color.html(BB_WARN)
 		parts.append(UIIcons.bb("worker", 11, wcol) + " " + _bb(Economy.fmt(pop), wcol))
-	return "  ·  ".join(parts)
+	return "  //  ".join(parts)
 
 ## Tooltip text for a full cost ({credits, materials…}) plus workers; short
 ## parts in red.
@@ -8716,7 +8716,7 @@ func _full_cost_bb(cost: Dictionary, pop: int, pd: PlanetData, pp: PlanetProgres
 		mats.append((UIIcons.bb(id, 11, mcol) + " " + _bb(Economy.fmt(need), mcol)) if UIIcons.has_icon(id) \
 			else _bb("%s %s" % [Economy.fmt(need), Economy.display_name(id)], mcol))
 	if not mats.is_empty():
-		txt += ("  ·  " if txt != "" else "") + "  ·  ".join(mats)
+		txt += ("  //  " if txt != "" else "") + "  //  ".join(mats)
 	return txt
 
 ## The build-list row under the mouse (its tip follows Shift / Ctrl live).
@@ -8760,7 +8760,7 @@ func _show_build_row_tip() -> void:
 	if not bonus.is_empty():
 		body.append("\n" + "\n".join(bonus))
 	var b_time: float = def.construct_duration if def.construct_duration > 0.0 else def.tick_duration
-	body.append(_bb("Build %.0fs%s" % [b_time, "  ·  %d slots" % def.slot_cost if def.slot_cost > 1 else ""], BB_DIM))
+	body.append(_bb("Build %.0fs%s" % [b_time, "  //  %d slots" % def.slot_cost if def.slot_cost > 1 else ""], BB_DIM))
 	var cost := Economy.building_full_cost(pp, def, poi.label, n)
 	var one := Economy.building_full_cost(pp, def, poi.label, 1)
 	if not Economy.can_pay(one) and String(c["reason"]) == Economy.cost_block(one):
@@ -8775,7 +8775,7 @@ func _show_build_row_tip() -> void:
 	var opts: Array[String] = []
 	for i in 3:
 		opts.append(_bb(["one", "Shift ×5", "Ctrl/Cmd all"][i], "#e8ecf6" if i == mode else BB_DIM))
-	body.append("\n" + "  ·  ".join(opts))
+	body.append("\n" + "  //  ".join(opts))
 	# bottom row: what it makes and uses │ the cost, for `n`
 	var flow: Array[String] = []
 	for oid: String in def.outputs:
@@ -8823,7 +8823,7 @@ static func _bulk_count() -> int:
 		return 5
 	return 1
 
-const BULK_HINT := "Shift-click ×5  ·  Ctrl/Cmd-click as many as possible"
+const BULK_HINT := "Shift-click ×5  //  Ctrl/Cmd-click as many as possible"
 
 ## Buys up to `want` of a model in a district with one payment (bulk buy) —
 ## never more than slots, limits and every part of the cost allow. Returns how
@@ -8846,7 +8846,7 @@ func _buy_buildings(poi: POIData, planet: PlanetData, def: BuildingDef, want: in
 	_refresh_overview_energy()
 	return n
 
-## "+4 cr · +0.5 ⚡" for an income dictionary (neighbour gains).
+## "+4 cr // +0.5 ⚡" for an income dictionary (neighbour gains).
 func _income_text(inc: Dictionary) -> String:
 	var parts: Array[String] = []
 	for id: String in inc:
@@ -8855,10 +8855,10 @@ func _income_text(inc: Dictionary) -> String:
 			Economy.ENERGY:     parts.append("+%s ⚡" % BuildingDef._num(v))
 			Economy.POPULATION: parts.append("+%s pop" % Economy.fmt(v))
 			_: parts.append("+%s %s" % [BuildingDef._num(v), Economy.INFO.get(id, {}).get("short", id)])
-	return " · ".join(parts)
+	return " // ".join(parts)
 
 ## Thin bar that fills over a district's base-income cycle (redraws itself).
-## "+12 cr · +2 ⚡  ·  20s cycle" — what a district makes on its own (ProductionManager.district_base).
+## "+12 cr // +2 ⚡  //  20s cycle" — what a district makes on its own (ProductionManager.district_base).
 func _district_base_text(pp: PlanetProgress, poi: POIData) -> String:
 	var ddef := ProductionManager.district_def(poi)
 	if ddef == null:
@@ -8876,9 +8876,9 @@ func _district_base_text(pp: PlanetProgress, poi: POIData) -> String:
 			_: parts.append("+%s %s" % [BuildingDef._num(snappedf(v, 0.1)),
 				Economy.INFO.get(id, {}).get("short", id)])
 		stock = stock or (id != Economy.ENERGY and id != Economy.POPULATION)
-	var txt := "  ·  ".join(parts)
+	var txt := "  //  ".join(parts)
 	if stock:
-		txt += "  ·  %s cycle" % ProductionManager.cycle_text(ProductionManager.district_cycle_sec(ddef))
+		txt += "  //  %s cycle" % ProductionManager.cycle_text(ProductionManager.district_cycle_sec(ddef))
 	return txt
 
 ## A small key of a panel row: an icon and a short word (tooltip optional).
@@ -9006,7 +9006,7 @@ func _district_buildings_text(pp: PlanetProgress, poi: POIData) -> String:
 			Economy.POPULATION: parts.append("+%s pop" % Economy.fmt(v))
 			Economy.RAW:        parts.append("+%s %s" % [BuildingDef._num(snappedf(v, 0.1)), _raw_label()])
 			_: parts.append("+%s %s" % [BuildingDef._num(snappedf(v, 0.1)), Economy.INFO.get(id, {}).get("short", id)])
-	return "  ·  ".join(parts)
+	return "  //  ".join(parts)
 
 ## District panel row: base income, the site multiplier (tooltip breaks it down)
 ## and the site-only buildings this spot unlocks.
@@ -9191,7 +9191,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 			{"icon": "▶" if off else "⏸",
 			 "tooltip": "Switch it back on." if off else "Switch it off: no output, no upkeep, no energy use until resumed."})]
 		AudioManager.play("click")
-		ContextMenu.open(self, cap_name, "Building  ·  " + ("switched off" if off else "running"), cmds,
+		ContextMenu.open(self, cap_name, "Building  //  " + ("switched off" if off else "running"), cmds,
 			get_viewport().get_mouse_position()))
 
 	# [-] demolish one / [+] stack one more
@@ -9215,7 +9215,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		var st: Dictionary = stack_state.call()
 		var stack_tip := "Stack one more %s\n\nCost  %s" % [cap_def.display_name,
 			_full_cost_bb(st["cost"], cap_def.pop_use(), cap_planet, pp)]
-		stack_tip += "  ·  " + _bb("%d slot" % cap_def.slot_cost, Color(0.75, 0.82, 1.0) if st["slots"] else Color.html(BB_BAD))
+		stack_tip += "  //  " + _bb("%d slot" % cap_def.slot_cost, Color(0.75, 0.82, 1.0) if st["slots"] else Color.html(BB_BAD))
 		if not st["slots"]:
 			stack_tip += "\n\n" + _bb("➡ No free slots — level the district up", BB_BAD)
 		elif not st["credits"]:
@@ -10669,7 +10669,7 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		# a row like the Add District list (playtest 31.10): icon, name, cost on
 		# the right; its tip ends with what it makes (cycle beside) and the cost
 		var preview_entry := {"amount": 1, "district_id": poi.label, "building_id": def.building_id}
-		var row_panel := IconButton.create(def.display_name.to_upper() + ("  ·  MOON ONLY" if def.is_moon_only() else ""), _building_icon(def))
+		var row_panel := IconButton.create(def.display_name.to_upper() + ("  //  MOON ONLY" if def.is_moon_only() else ""), _building_icon(def))
 		row_panel.counter_items = _cost_items(full_cost, pop_need)
 		row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row_panel.disabled = not enabled
@@ -10994,34 +10994,27 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	root.name = "DistrictBuildPanel"
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 8)
-	root.add_child(HSeparator.new())
 	var back := LeftPanel.back_button(planet.planet_name.to_upper())
 	back.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_build_planet_overview(planet))
 	_mount_above_hero(back, root)
-	var header := HBoxContainer.new()
-	var title := Label.new()
-	title.text = "Orbit"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_apply_orbitron(title, 12)
-	title.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
-	header.add_child(title)
-	header.add_child(_level_badge(lv, true))
-	root.add_child(header)
-	var info := Label.new()
-	info.text = "Districts  %d / %d   ·   Orbit City + support districts" % [orbit_used, orbit_cap]
+	# Hero, like a City's: the Orbit City's name, its level in the caption
+	var hub := Leveling.orbit_hub(planet)
+	_set_hero("Orbit City - Level %d" % lv, hub.shown_name() if hub != null else "Orbit", [])
+	# the details, as rows between two rules (the hero's own rule is the top one)
 	var psup: Array[String] = []
 	for rid: String in [Economy.CREDITS, Economy.SCIENCE, Economy.POPULATION, Economy.ENERGY, Economy.RAW]:
 		var m := Economy.planet_bonus(pp, rid, planet)
 		if m > 1.0001:
 			psup.append("+%d%% %s" % [roundi((m - 1.0) * 100.0),
 				"raw & processed" if rid == Economy.RAW else Economy.display_name(rid)])
+	root.add_child(_info_line("Districts", "%d / %d" % [orbit_used, orbit_cap],
+		"The Orbit City and its support districts / how many the Orbit's level allows."))
 	if not psup.is_empty():
-		info.text += "\nPlanet support: " + ", ".join(psup)
-	_apply_orbitron(info, 8)
-	info.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
-	root.add_child(info)
+		root.add_child(_info_line("Planet support", " // ".join(psup),
+			"What the Orbit's districts add to the whole planet."))
+	root.add_child(HSeparator.new())
 
 	var body_scroll := ScrollContainer.new()
 	body_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -11036,10 +11029,7 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	for st: POIData in stations:
 		body.add_child(_build_district_overview_card(st, planet, pp, panel_content, body))
 	# each district added here launches one more Orbit district
-	var d_hdr := Label.new()
-	d_hdr.text = "DISTRICTS"
-	_apply_orbitron(d_hdr, 9)
-	d_hdr.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
+	var d_hdr := SectionHeader.create("DISTRICTS", "%d/%d" % [orbit_used, orbit_cap])
 	body.add_child(d_hdr)
 	if orbit_used < orbit_cap:
 		body.add_child(_build_add_district_card(planet, true, true))
@@ -11118,7 +11108,7 @@ func _info_line(key: String, value: String, tip: String = "") -> Control:
 		row.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	return row
 
-## "+10% housing · +20% Credits" — every Capital support of the City.
+## "+10% housing // +20% Credits" — every Capital support of the City.
 func _city_support_summary(planet: PlanetData, pp: PlanetProgress, city: POIData) -> String:
 	var parts: Array[String] = []
 	var shown := {}
@@ -11127,7 +11117,7 @@ func _city_support_summary(planet: PlanetData, pp: PlanetProgress, city: POIData
 		if m > 1.0001 and not shown.has(id):
 			shown[id] = true
 			parts.append("+%d%% %s" % [roundi((m - 1.0) * 100.0), PlanetTags.resource_label(id)])
-	return " · ".join(parts)
+	return " // ".join(parts)
 
 ## Hero tag with the City's Capital supports (§7.2): per resource, what its
 ## districts and buildings make, the support on top, and the City's result.
@@ -11447,7 +11437,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		min_lbl.text = "Minerals"
 		min_lbl.theme_type_variation = &"SubLabel"
 		min_row.add_child(min_lbl)
-		for part: String in mins_txt.split("  ·  "):
+		for part: String in mins_txt.split("  //  "):
 			min_row.add_child(_info_chip(part, UIStyle.color(&"icon"), "Minerals", "Share of this site's mining output.",
 				UIIcons.get_icon(UIIcons.RAW_PLACEHOLDER)))
 		root.add_child(min_row)
