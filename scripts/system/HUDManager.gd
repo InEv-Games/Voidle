@@ -474,8 +474,12 @@ func _add_theme_builder(p: ModalPopup) -> void:
 		var cols := SettingsManager.theme_preview(hue_sl.value, harmony, viv_sl.value)
 		for i in 3:
 			prev_sbs[i].bg_color = cols[i]
+	# the colour controls only while the theme is Custom (picking Custom opens them)
+	var builder_rows: Array[Control] = [harm_row, hue_row, viv_row, prev_row]
 	var sync := func() -> void:
 		syncing[0] = true
+		for r in builder_rows:
+			r.visible = SettingsManager.theme_id == "custom"
 		theme_opt.selected = SettingsManager.THEME_ORDER.find(SettingsManager.theme_id)
 		harm_opt.selected = maxi(ThemeBuilder.HARMONY_ORDER.find(SettingsManager.theme_harmony), 0)
 		hue_sl.value = SettingsManager.theme_hue
@@ -501,6 +505,8 @@ func _add_theme_builder(p: ModalPopup) -> void:
 		AudioManager.play("ui_click")
 		var tid: String = SettingsManager.THEME_ORDER[idx]
 		if tid == "custom":
+			for r in builder_rows:
+				r.visible = true   # at once; the theme follows after the debounce
 			on_builder.call()
 		else:
 			SettingsManager.set_theme_id(tid)
@@ -515,12 +521,9 @@ func _add_theme_builder(p: ModalPopup) -> void:
 func show_settings_popup() -> void:
 	AudioManager.play("ui_click")
 	var p := ModalPopup.open(self, "Settings", "settings", "", 300)   # above the pause menu
-	p.cancel_button().visible = false
-	var done := p.confirm_button()
-	done.label_text = "CLOSE"
-	done.icon_name = "close"
-	done.variant = IconButton.Variant.DEFAULT
-	done.pressed.connect(p.close)
+	p.use_hero("Audio // Display // Tutorial", "SETTINGS")
+	# one way out: the X beside the hero (and Esc / a click outside)
+	(p.card.get_node("VBox/Buttons") as Control).visible = false
 	var section := func(t: String) -> void:
 		var l := Label.new()
 		l.text = t

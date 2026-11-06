@@ -20,7 +20,12 @@ var dismissable: bool = true:
 	set(v):
 		dismissable = v
 		(card.get_node("VBox/Header/Close") as Control).visible = v
+		if _hero_close != null:
+			_hero_close.visible = v
 		cancel_button().visible = v
+
+## The close button beside the hero (use_hero), which takes the header's place.
+var _hero_close: Control = null
 
 static func open(host: Node, title: String, icon_name: String, body := "", layer := 235) -> ModalPopup:
 	var cl := CanvasLayer.new()
@@ -42,8 +47,8 @@ func _ready() -> void:
 	cancel_button().pressed.connect(close)
 
 ## Swaps the card's small header (icon, title, close button, rule) for a hero
-## right above the card: `caption` over a big `title`. Esc, a click outside and
-## the card's buttons still close it.
+## right above the card: `caption` over a big `title`, the close button at its
+## right end. Esc, a click outside and the card's buttons still close it.
 func use_hero(caption: String, title: String) -> HeroHeader:
 	var center := card.get_parent()
 	var box := VBoxContainer.new()
@@ -54,7 +59,17 @@ func use_hero(caption: String, title: String) -> HeroHeader:
 	var hero := HeroHeader.create(caption, title)
 	# a popup's title is short: one line, and the card widens to it
 	(hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF
-	box.add_child(hero)
+	var head := HBoxContainer.new()
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hero.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(hero)
+	var x := IconButton.create("", "close")
+	x.size_flags_vertical = Control.SIZE_SHRINK_END   # level with the title
+	x.visible = dismissable
+	x.pressed.connect(close)
+	head.add_child(x)
+	_hero_close = x
+	box.add_child(head)
 	box.add_child(card)
 	card.size_flags_horizontal = Control.SIZE_FILL   # as wide as the hero
 	(card.get_node("VBox/Header") as Control).visible = false
