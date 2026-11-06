@@ -1,7 +1,9 @@
 class_name StoryDialog
 extends Control
 
-## An excavation, start to end: the site; its opening (a VSM graph's "start"
+## An excavation, start to end (laid out as a wide, low story card with the
+## site's name as a hero right above it, the choices stacked down its left, and
+## behind both, large, the speaker's portrait or the scene's icon): the site; its opening (a VSM graph's "start"
 ## entry); the price and how long it takes; the crews at work; when they're done,
 ## the rest of the story ("return" entry) with its choices; what it paid and who
 ## joined. Opened again from the map mark, it picks up at the stage the dig is at.
@@ -21,23 +23,22 @@ var _typing: Tween = null
 var _bb_len := 0
 
 @onready var _card: Control = $Center/Card
-@onready var _title: Label = $Center/Card/VBox/Header/Title
-@onready var _counter: Label = $Center/Card/VBox/Header/Counter
-@onready var _scene_icon: TextureRect = $Center/Card/VBox/Row/Frame/SceneIcon
-@onready var _portrait: TextureRect = $Center/Card/VBox/Row/Frame/Portrait
-@onready var _speaker: Label = $Center/Card/VBox/Row/Col/Speaker
-@onready var _body: RichTextLabel = $Center/Card/VBox/Row/Col/Body
-@onready var _details: Control = $Center/Card/VBox/Row/Col/Details
-@onready var _time_row: InfoRow = $Center/Card/VBox/Row/Col/Details/TimeRow
-@onready var _returns: RichTextLabel = $Center/Card/VBox/Row/Col/Details/ReturnsRow/Value
-@onready var _time_box: PanelContainer = $Center/Card/VBox/Row/Col/TimeBox
-@onready var _time: Label = $Center/Card/VBox/Row/Col/TimeBox/Time
-@onready var _rewards: RichTextLabel = $Center/Card/VBox/Row/Col/Rewards
-@onready var _block: RichTextLabel = $Center/Card/VBox/Row/Col/Block
-@onready var _choices: VBoxContainer = $Center/Card/VBox/Row/Col/Choices
-@onready var _buttons: Control = $Center/Card/VBox/Buttons
-@onready var _later: IconButton = $Center/Card/VBox/Buttons/Later
-@onready var _next: IconButton = $Center/Card/VBox/Buttons/Next
+@onready var _hero: HeroHeader = $Center/Card/Front/Hero
+@onready var _scene_icon: TextureRect = $Center/Card/Art/SceneIcon
+@onready var _portrait: TextureRect = $Center/Card/Art/Portrait
+@onready var _speaker: Label = $Center/Card/Front/Panel/Col/Speaker
+@onready var _body: RichTextLabel = $Center/Card/Front/Panel/Col/Body
+@onready var _details: Control = $Center/Card/Front/Panel/Col/Details
+@onready var _time_row: InfoRow = $Center/Card/Front/Panel/Col/Details/TimeRow
+@onready var _returns: RichTextLabel = $Center/Card/Front/Panel/Col/Details/ReturnsRow/Value
+@onready var _time_box: PanelContainer = $Center/Card/Front/Panel/Col/TimeBox
+@onready var _time: Label = $Center/Card/Front/Panel/Col/TimeBox/Time
+@onready var _rewards: RichTextLabel = $Center/Card/Front/Panel/Col/Rewards
+@onready var _block: RichTextLabel = $Center/Card/Front/Panel/Col/Block
+@onready var _choices: VBoxContainer = $Center/Card/Front/Panel/Col/Choices
+@onready var _buttons: Control = $Center/Card/Front/Panel/Col/Buttons
+@onready var _later: IconButton = $Center/Card/Front/Panel/Col/Buttons/Later
+@onready var _next: IconButton = $Center/Card/Front/Panel/Col/Buttons/Next
 
 ## The panels of this mechanic open and close the same way.
 static func pop_in(card: Control) -> void:
@@ -69,9 +70,9 @@ static func open(host: Node, site_id: String) -> void:
 func _ready() -> void:
 	_later.pressed.connect(_close)
 	_next.pressed.connect(_on_next)
-	_counter.text = _counter_text()
-	_title.text = site.display_name.to_upper()
-	($Center/Card as Control).gui_input.connect(func(ev: InputEvent) -> void:
+	_hero.caption = _counter_text()
+	_hero.title = site.display_name.to_upper()
+	($Center/Card/Front/Panel as Control).gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and (ev as InputEventMouseButton).pressed:
 			_skip_typing())
 	ProgressFill.attach(_time_box, UIStyle.color(&"accent"), _dig_progress, true)
@@ -111,13 +112,13 @@ func _unhandled_input(event: InputEvent) -> void:
 func _dig_progress() -> float:
 	return 1.0 - Excavations.time_left(site) / maxf(site.duration_sec, 1.0)
 
-## "VESYN  2 / 5".
+## "Excavation  //  VESYN 2 / 5", the hero's caption.
 func _counter_text() -> String:
 	var w := Excavations.world_of_site(site.site_id)
 	var world := w.planet() if w != null else null
 	var at := w.sites.find(site) + 1 if w != null else 1
 	var total := w.sites.size() if w != null else 1
-	return "%s  %d / %d" % [world.planet_name.to_upper() if world != null else "", at, total]
+	return "Excavation  //  %s %d / %d" % [world.planet_name.to_upper() if world != null else "", at, total]
 
 func _close() -> void:
 	set_process_unhandled_input(false)
@@ -150,13 +151,15 @@ func _done_typing() -> void:
 func _reveal(c: Control) -> void:
 	create_tween().tween_property(c, "modulate:a", 1.0, 0.18)
 
-## A portrait for who's speaking; the scene's icon when no one is.
+## Behind the panel, large: the portrait of who's speaking; the scene's icon
+## when no one is, or when they have no portrait yet (no placeholder box).
 func _show_face(who: CompanionDef) -> void:
 	var was: Texture2D = _portrait.texture if _portrait.visible else null
-	_portrait.visible = who != null
-	_scene_icon.visible = who == null
-	if who != null:
-		_portrait.texture = who.portrait_texture()
+	var tex: Texture2D = who.portrait if who != null else null
+	_portrait.visible = tex != null
+	_scene_icon.visible = tex == null
+	if tex != null:
+		_portrait.texture = tex
 		if was != _portrait.texture:
 			_portrait.modulate.a = 0.0
 			_reveal(_portrait)
@@ -239,7 +242,7 @@ func _on_choices(texts: Array[String]) -> void:
 	_next.visible = false
 	for i in texts.size():
 		var b := IconButton.create(texts[i], "confirm", IconButton.Variant.DEFAULT)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # stacked down the left
 		var at := i
 		b.pressed.connect(func() -> void:
 			if _typing != null:
@@ -313,7 +316,7 @@ func _show_end() -> void:
 	if who != null:
 		AudioManager.play("achievement")
 		_show_face(who)
-		_title.text = "%s JOINS YOU" % who.display_name.to_upper()
+		_hero.title = "%s JOINS YOU" % who.display_name.to_upper()
 		_speaker.text = who.role
 		_speaker.visible = true
 		_type("%s\n\n%s" % [who.bonus_bb(13), who.bio])

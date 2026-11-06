@@ -1,7 +1,7 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/excavation/StoryDialog.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://resources/companions/portraits/silhouette.svg" id="2_portrait"]
+[ext_resource type="PackedScene" uid="uid://dcaw5kheox1ap" path="res://scenes/ui/components/HeroHeader.tscn" id="2_hero"]
 [ext_resource type="PackedScene" path="res://scenes/ui/components/IconButton.tscn" id="3_button"]
 [ext_resource type="PackedScene" path="res://scenes/ui/components/InfoRow.tscn" id="4_row"]
 [ext_resource type="Texture2D" path="res://resources/ui/icons/explore.svg" id="5_icon"]
@@ -34,99 +34,78 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="Card" type="PanelContainer" parent="Center"]
-custom_minimum_size = Vector2(580, 290)
+[node name="Card" type="Control" parent="Center"]
+custom_minimum_size = Vector2(680, 440)
+layout_mode = 2
+
+[node name="Art" type="Control" parent="Center/Card"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 120.0
+offset_right = -120.0
+offset_bottom = -60.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="SceneIcon" type="TextureRect" parent="Center/Card/Art"]
+self_modulate = Color(0.137, 0.725, 0.906, 0.45)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("5_icon")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Portrait" type="TextureRect" parent="Center/Card/Art"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Front" type="VBoxContainer" parent="Center/Card"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Hero" parent="Center/Card/Front" instance=ExtResource("2_hero")]
+layout_mode = 2
+caption = "VESYN  //  1 / 5"
+title = "SITE NAME"
+
+[node name="Panel" type="PanelContainer" parent="Center/Card/Front"]
 layout_mode = 2
 theme_type_variation = &"PopupCard"
 
-[node name="VBox" type="VBoxContainer" parent="Center/Card"]
+[node name="Col" type="VBoxContainer" parent="Center/Card/Front/Panel"]
 layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="Header" type="HBoxContainer" parent="Center/Card/VBox"]
-layout_mode = 2
-theme_override_constants/separation = 5
-
-[node name="Icon" type="TextureRect" parent="Center/Card/VBox/Header"]
-self_modulate = Color(0.137, 0.725, 0.906, 1)
-custom_minimum_size = Vector2(14, 14)
-layout_mode = 2
-size_flags_vertical = 4
-mouse_filter = 2
-texture = ExtResource("5_icon")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="Title" type="Label" parent="Center/Card/VBox/Header"]
-layout_mode = 2
-size_flags_horizontal = 3
-theme_type_variation = &"HeaderLabel"
-text = "SITE NAME"
-
-[node name="Counter" type="Label" parent="Center/Card/VBox/Header"]
-layout_mode = 2
-theme_type_variation = &"CounterLabel"
-text = "VESYN  1 / 5"
-
-[node name="Rule" type="VBoxContainer" parent="Center/Card/VBox"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 0
-
-[node name="A" type="HSeparator" parent="Center/Card/VBox/Rule"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DoubleRule"
-
-[node name="B" type="HSeparator" parent="Center/Card/VBox/Rule"]
-layout_mode = 2
-mouse_filter = 2
-theme_type_variation = &"DoubleRule"
-
-[node name="Row" type="HBoxContainer" parent="Center/Card/VBox"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 12
-
-[node name="Frame" type="PanelContainer" parent="Center/Card/VBox/Row"]
-custom_minimum_size = Vector2(132, 170)
-layout_mode = 2
-size_flags_vertical = 0
-mouse_filter = 2
-theme_type_variation = &"IconCell"
-
-[node name="SceneIcon" type="TextureRect" parent="Center/Card/VBox/Row/Frame"]
-self_modulate = Color(0.137, 0.725, 0.906, 0.55)
-custom_minimum_size = Vector2(56, 56)
-layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 4
-mouse_filter = 2
-texture = ExtResource("5_icon")
-expand_mode = 1
-stretch_mode = 5
-
-[node name="Portrait" type="TextureRect" parent="Center/Card/VBox/Row/Frame"]
-visible = false
-layout_mode = 2
-mouse_filter = 2
-texture = ExtResource("2_portrait")
-expand_mode = 1
-stretch_mode = 6
-
-[node name="Col" type="VBoxContainer" parent="Center/Card/VBox/Row"]
-layout_mode = 2
-size_flags_horizontal = 3
 theme_override_constants/separation = 6
 
-[node name="Speaker" type="Label" parent="Center/Card/VBox/Row/Col"]
+[node name="Speaker" type="Label" parent="Center/Card/Front/Panel/Col"]
 visible = false
 layout_mode = 2
 theme_type_variation = &"HeaderLabel"
 text = "Speaker"
 
-[node name="Body" type="RichTextLabel" parent="Center/Card/VBox/Row/Col"]
-custom_minimum_size = Vector2(410, 0)
+[node name="Body" type="RichTextLabel" parent="Center/Card/Front/Panel/Col"]
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"PopupBody"
@@ -137,31 +116,30 @@ fit_content = true
 scroll_active = false
 visible_characters_behavior = 1
 
-[node name="Spacer" type="Control" parent="Center/Card/VBox/Row/Col"]
+[node name="Spacer" type="Control" parent="Center/Card/Front/Panel/Col"]
+custom_minimum_size = Vector2(0, 4)
 layout_mode = 2
-size_flags_vertical = 3
 mouse_filter = 2
-
-[node name="Details" type="VBoxContainer" parent="Center/Card/VBox/Row/Col"]
+[node name="Details" type="VBoxContainer" parent="Center/Card/Front/Panel/Col"]
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="TimeRow" parent="Center/Card/VBox/Row/Col/Details" instance=ExtResource("4_row")]
+[node name="TimeRow" parent="Center/Card/Front/Panel/Col/Details" instance=ExtResource("4_row")]
 layout_mode = 2
 key = "Digging time"
 value = "5:00"
 
-[node name="ReturnsRow" type="HBoxContainer" parent="Center/Card/VBox/Row/Col/Details"]
+[node name="ReturnsRow" type="HBoxContainer" parent="Center/Card/Front/Panel/Col/Details"]
 layout_mode = 2
 
-[node name="Key" type="Label" parent="Center/Card/VBox/Row/Col/Details/ReturnsRow"]
+[node name="Key" type="Label" parent="Center/Card/Front/Panel/Col/Details/ReturnsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"SubLabel"
 text = "Returns at least"
 
-[node name="Value" type="RichTextLabel" parent="Center/Card/VBox/Row/Col/Details/ReturnsRow"]
+[node name="Value" type="RichTextLabel" parent="Center/Card/Front/Panel/Col/Details/ReturnsRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
@@ -170,20 +148,20 @@ bbcode_enabled = true
 fit_content = true
 scroll_active = false
 
-[node name="TimeBox" type="PanelContainer" parent="Center/Card/VBox/Row/Col"]
+[node name="TimeBox" type="PanelContainer" parent="Center/Card/Front/Panel/Col"]
 visible = false
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"ItemPanel"
 
-[node name="Time" type="Label" parent="Center/Card/VBox/Row/Col/TimeBox"]
+[node name="Time" type="Label" parent="Center/Card/Front/Panel/Col/TimeBox"]
 layout_mode = 2
 theme_type_variation = &"HeaderLabel"
 text = "5:00"
 horizontal_alignment = 1
 
-[node name="Rewards" type="RichTextLabel" parent="Center/Card/VBox/Row/Col"]
+[node name="Rewards" type="RichTextLabel" parent="Center/Card/Front/Panel/Col"]
 visible = false
 layout_mode = 2
 mouse_filter = 2
@@ -192,7 +170,7 @@ bbcode_enabled = true
 fit_content = true
 scroll_active = false
 
-[node name="Block" type="RichTextLabel" parent="Center/Card/VBox/Row/Col"]
+[node name="Block" type="RichTextLabel" parent="Center/Card/Front/Panel/Col"]
 visible = false
 layout_mode = 2
 mouse_filter = 2
@@ -202,21 +180,22 @@ bbcode_enabled = true
 fit_content = true
 scroll_active = false
 
-[node name="Choices" type="VBoxContainer" parent="Center/Card/VBox/Row/Col"]
+[node name="Choices" type="VBoxContainer" parent="Center/Card/Front/Panel/Col"]
 layout_mode = 2
+size_flags_horizontal = 0
 theme_override_constants/separation = 4
 
-[node name="Buttons" type="HBoxContainer" parent="Center/Card/VBox"]
+[node name="Buttons" type="HBoxContainer" parent="Center/Card/Front/Panel/Col"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="Later" parent="Center/Card/VBox/Buttons" instance=ExtResource("3_button")]
+[node name="Later" parent="Center/Card/Front/Panel/Col/Buttons" instance=ExtResource("3_button")]
 layout_mode = 2
 size_flags_horizontal = 3
 label_text = "LATER"
 icon_name = "cancel"
 
-[node name="Next" parent="Center/Card/VBox/Buttons" instance=ExtResource("3_button")]
+[node name="Next" parent="Center/Card/Front/Panel/Col/Buttons" instance=ExtResource("3_button")]
 layout_mode = 2
 size_flags_horizontal = 3
 label_text = "CONTINUE"
