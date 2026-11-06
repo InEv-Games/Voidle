@@ -9,11 +9,12 @@ shader_type canvas_item;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
 uniform float intensity : hint_range(0.0, 1.0) = 0.35;
 uniform vec4 phosphor : source_color = vec4(0.72, 1.0, 0.93, 1.0);   // the cast's colour
-uniform float tint = 0.22;             // how much of the cast
-uniform float glow = 0.6;              // bloom of what is brighter than glow_threshold
-uniform float glow_threshold = 0.32;
-uniform float glow_lod = 2.5;          // blur size (mip level) of the glow
-uniform float scanline = 0.2;          // darkness of every other line
+uniform float tint = 0.3;             // how much of the cast
+uniform float glow = 1.0;              // bloom of what is brighter than glow_threshold
+uniform float glow_threshold = 0.2;
+uniform float glow_lod = 3.0;          // blur size (mip level) of the glow
+uniform float scanline = 0.3;          // darkness of the dark half of each line pair
+uniform float scan_period = 3.0;       // px per scanline pair (physical pixels)
 uniform float bleed = 0.0012;          // colour fringe (UV), more toward the edges
 uniform float wobble = 0.0007;         // per-line drift (UV)
 uniform float flicker = 0.02;
@@ -52,8 +53,8 @@ void fragment() {
 	col += max(blur - glow_threshold, vec3(0.0)) * glow;
 	// the cast
 	col = mix(col, col * phosphor.rgb * 1.12, tint);
-	// scanlines (a 2px period)
-	col *= 1.0 - scanline * (0.5 + 0.5 * cos(FRAGCOORD.y * PI));
+	// scanlines
+	col *= 1.0 - scanline * (0.5 + 0.5 * cos(FRAGCOORD.y * TAU / scan_period));
 	// flicker and grain
 	col *= 1.0 + (noise1(t * 9.0) - 0.5) * flicker * 2.0;
 	col += (hash(FRAGCOORD.xy + fract(t) * 100.0) - 0.5) * grain;

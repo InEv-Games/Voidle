@@ -6,7 +6,7 @@
 extends Node
 
 const LAYER := 495
-const OPACITY := 0.35   # subtle: each part of the effect is mild on its own
+const OPACITY := 0.5   # subtle: each part of the effect is mild on its own
 const CRT_SHADER := preload("res://shaders/crt_phosphor.gdshader")
 
 var _rect: ColorRect
