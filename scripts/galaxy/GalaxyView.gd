@@ -7,8 +7,9 @@ const ZOOM_MAX     := 4.0
 const TILT_MIN     := 0.20
 const TILT_MAX     := 0.90
 const ENTRY_CHARGE := 4   # scroll-in steps on a star to trigger entry
-const CAM_EASE     := 13.0  # 1/s — how fast the view glides to where input put it
-const PAN_FRICTION := 4.5   # 1/s — how fast a flung pan slows down
+const CAM_TIME     := 0.17  # s — the view's spring (Spring): eases in and out of every move
+var _cam_v := {"zoom": 0.0, "offset": Vector2.ZERO, "rot": 0.0, "tilt": 0.0}   # spring velocities
+const PAN_FRICTION := 2.6   # 1/s — how fast a flung pan slows down
 
 const STAR_R: Dictionary = {
 	SolarData.StarType.WHITE_DWARF:     2.5,
@@ -268,13 +269,17 @@ func _tick_camera(delta: float) -> void:
 		_pan_vel *= exp(-delta * PAN_FRICTION)
 		if _pan_vel.length_squared() < 25.0:
 			_pan_vel = Vector2.ZERO
-	# screen pos is linear in zoom and offset, so easing both by the same k keeps
-	# the point under the cursor put while a wheel zoom plays out
-	var k := 1.0 - exp(-delta * CAM_EASE)
-	_zoom     = lerpf(_zoom, _zoom_t, k)
-	_offset   = _offset.lerp(_offset_t, k)
-	_rotation = lerp_angle(_rotation, _rotation_t, k)
-	_tilt     = lerpf(_tilt, _tilt_t, k)
+	# screen pos is linear in zoom and offset and the spring is linear too, so
+	# easing both on the same spring keeps the point under the cursor put
+	var z := Spring.damp(_zoom, _cam_v["zoom"], _zoom_t, CAM_TIME, delta)
+	var o := Spring.damp_v2(_offset, _cam_v["offset"], _offset_t, CAM_TIME, delta)
+	var r := Spring.damp_angle(_rotation, _cam_v["rot"], _rotation_t, CAM_TIME, delta)
+	var t := Spring.damp(_tilt, _cam_v["tilt"], _tilt_t, CAM_TIME, delta)
+	_zoom = z.x
+	_offset = o[0]
+	_rotation = r.x
+	_tilt = t.x
+	_cam_v = {"zoom": z.y, "offset": o[1], "rot": r.y, "tilt": t.y}
 
 ## Showcase reveals and lights every star; otherwise only explored ones and their neighbours.
 func _star_visible(i: int) -> bool:
@@ -440,7 +445,7 @@ func _input(event: InputEvent) -> void:
 			var now := Time.get_ticks_usec()
 			var dt := clampf(float(now - _last_pan_usec) / 1e6, 0.004, 0.1)
 			_last_pan_usec = now
-			_pan_vel = _pan_vel.lerp(mm.relative / dt, 0.5)
+			_pan_vel = _pan_vel.lerp(mm.relative / dt, 1.0 - exp(-dt / 0.06))   # ~60 ms average
 			get_viewport().set_input_as_handled()
 
 # ── Right-click actions (CommandRegistry + ContextMenu) ──────────────────────

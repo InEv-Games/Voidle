@@ -36,9 +36,11 @@ var _max_orbit_px:    float     = 200.0  # updated after build_planets
 var _view_angle_t:    float     = 0.0
 var _orbit_tilt_t:    float     = 0.38
 var _spin_vel:        float     = 0.0    # rad/s
+var _view_angle_v := 0.0   # spring velocities of the view (Spring)
+var _orbit_tilt_v := 0.0
 var _last_spin_usec:  int       = 0
-const VIEW_EASE      := 12.0   # 1/s
-const SPIN_FRICTION  := 4.0    # 1/s
+const VIEW_TIME      := 0.17   # s — the view's spring (Spring): eases in and out
+const SPIN_FRICTION  := 2.6    # 1/s
 var _dragging:        bool      = false
 var _left_drag_from:  Vector2   = Vector2.ZERO
 var _right_dragging:  bool      = false
@@ -78,15 +80,20 @@ func _tick_view(delta: float) -> void:
 		_spin_vel *= exp(-delta * SPIN_FRICTION)
 		if absf(_spin_vel) < 0.002:
 			_spin_vel = 0.0
-	if is_equal_approx(_view_angle, _view_angle_t) and is_equal_approx(_orbit_tilt, _orbit_tilt_t):
+	if _view_angle == _view_angle_t and _orbit_tilt == _orbit_tilt_t and _view_angle_v == 0.0 and _orbit_tilt_v == 0.0:
 		return
-	var k := 1.0 - exp(-delta * VIEW_EASE)
-	_view_angle = lerpf(_view_angle, _view_angle_t, k)
-	_orbit_tilt = lerpf(_orbit_tilt, _orbit_tilt_t, k)
-	if absf(_view_angle - _view_angle_t) < 0.0002:
+	var a := Spring.damp(_view_angle, _view_angle_v, _view_angle_t, VIEW_TIME, delta)
+	var b := Spring.damp(_orbit_tilt, _orbit_tilt_v, _orbit_tilt_t, VIEW_TIME, delta)
+	_view_angle = a.x
+	_view_angle_v = a.y
+	_orbit_tilt = b.x
+	_orbit_tilt_v = b.y
+	if Spring.settled(_view_angle, _view_angle_v, _view_angle_t, 0.0002):
 		_view_angle = _view_angle_t
-	if absf(_orbit_tilt - _orbit_tilt_t) < 0.0002:
+		_view_angle_v = 0.0
+	if Spring.settled(_orbit_tilt, _orbit_tilt_v, _orbit_tilt_t, 0.0002):
 		_orbit_tilt = _orbit_tilt_t
+		_orbit_tilt_v = 0.0
 	_apply_current_angles()
 
 # ── Final rocket (GDD §20.15–§20.18) ─────────────────────────────────────────
@@ -795,7 +802,7 @@ func _input(event: InputEvent) -> void:
 			var now := Time.get_ticks_usec()
 			var dt := clampf(float(now - _last_spin_usec) / 1e6, 0.004, 0.1)
 			_last_spin_usec = now
-			_spin_vel = lerpf(_spin_vel, d / dt, 0.5)
+			_spin_vel = lerpf(_spin_vel, d / dt, 1.0 - exp(-dt / 0.06))   # ~60 ms average
 		get_viewport().set_input_as_handled()
 
 

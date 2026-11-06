@@ -1240,6 +1240,7 @@ func load_planet(data: PlanetData) -> void:
 		_panel_scroll_pos = 0   # reset scroll on planet switch
 		_zoom = ZOOM_MIN
 		_zoom_target = ZOOM_MIN
+		_zoom_vel = 0.0
 		planet_renderer.stop_motion()   # no fling carried over from the last world
 		planet_renderer.set_tilt(0.0)
 		_end_district_placement()
@@ -1471,7 +1472,7 @@ static func _hidden_by(v: Vector3, b: Dictionary) -> bool:
 ## in the console, or with the Upgrade Tree open. Slower when zoomed in. The
 ## turn speeds up and settles smoothly instead of starting / stopping dead.
 const KEY_SPIN_SPEED := 1.6   # rad/s at the widest zoom
-const KEY_SPIN_EASE  := 7.0   # 1/s — how fast the turn reaches / leaves full speed
+const KEY_SPIN_EASE  := 5.0   # 1/s — how fast the turn reaches / leaves full speed
 var _key_spin_vel := Vector2.ZERO   # (spin, tilt) rad/s
 func _tick_key_spin(delta: float) -> void:
 	if _switching_body:
@@ -1862,6 +1863,7 @@ func _switch_to_body(pd: PlanetData, from_rect: Rect2) -> void:
 	planet_renderer.set_rotation_offset(rot_new)   # exactly where the stand-in stopped
 	_zoom = ZOOM_SYSTEM
 	_zoom_target = ZOOM_SYSTEM
+	_zoom_vel = 0.0
 	_apply_zoom()
 	_companions.fade = 1.0
 	_planet_view.modulate.a = 1.0
@@ -2339,9 +2341,15 @@ func _tick_follow_ship(delta: float) -> void:
 		_cam_follow_ship_id = ""
 		return
 	var f := _orbital_layer._frame_point(ship, ship.orbit_angle).normalized()
-	var k := 1.0 - exp(-delta * 5.0)
-	planet_renderer.set_rotation_offset(lerp_angle(planet_renderer.get_rotation_offset(), atan2(f.x, -f.z), k))
-	planet_renderer.set_tilt(lerpf(planet_renderer.tilt, asin(clampf(-f.y, -1.0, 1.0)), k))
+	_follow_step(atan2(f.x, -f.z), asin(clampf(-f.y, -1.0, 1.0)), delta)
+
+## Turns the globe toward (rot, tilt) on a spring, easing in and out.
+func _follow_step(rot: float, tilt: float, delta: float) -> void:
+	var r := Spring.damp_angle(planet_renderer.get_rotation_offset(), _follow_vel.x, rot, FOLLOW_TIME, delta)
+	var t := Spring.damp(planet_renderer.tilt, _follow_vel.y, tilt, FOLLOW_TIME, delta)
+	planet_renderer.set_rotation_offset(r.x)
+	planet_renderer.set_tilt(t.x)
+	_follow_vel = Vector2(r.y, t.y)
 
 ## Where the lander is on screen right now (Vector2.INF if not here).
 func _lander_screen_pos() -> Vector2:
@@ -2395,6 +2403,8 @@ func _try_follow_lander(at: Vector2) -> bool:
 func _tick_cam_follow(delta: float) -> void:
 	if planet_renderer._dragging and _focus_tween != null and _focus_tween.is_valid():
 		_focus_tween.kill()   # the player took the camera
+	if _cam_follow_ship_id == "" and not _cam_follow_lander:
+		_follow_vel = Vector2.ZERO   # a new follow starts from rest
 	if _cam_follow_ship_id != "":
 		_tick_follow_ship(delta)
 		return
@@ -2410,9 +2420,7 @@ func _tick_cam_follow(delta: float) -> void:
 		if GameState.expedition_state("lander") != "launching":
 			_cam_follow_lander = false   # it has left this world
 		return
-	var k := 1.0 - exp(-delta * 5.0)
-	planet_renderer.set_rotation_offset(lerp_angle(planet_renderer.get_rotation_offset(), ll.x, k))
-	planet_renderer.set_tilt(lerpf(planet_renderer.tilt, ll.y, k))
+	_follow_step(ll.x, ll.y, delta)
 
 func _on_lander_lifted() -> void:
 	var newest: ShipData = null
@@ -5504,6 +5512,7 @@ func overlay_zoom_out(sec: float) -> void:
 	_overlay_zoom_tw.tween_method(func(z: float) -> void:
 		_zoom_target = z
 		_zoom = z   # the tween does the easing; no extra lag on top
+		_zoom_vel = 0.0
 		_apply_zoom(),
 		_zoom_target, _zoom_target * OVERLAY_ZOOM_OUT, sec)
 
@@ -5583,14 +5592,22 @@ func _apply_zoom() -> void:
 	_update_aspect()
 	planet_renderer._update_radius()
 
-const ZOOM_EASE := 10.0   # 1/s — how fast the zoom glides to its target
+## The zoom eases in and out on a spring (Spring): ~90% of the way in 2 × this.
+const ZOOM_TIME := 0.2
+## The globe turning after something it follows (a ship, the lander), same way.
+const FOLLOW_TIME := 0.37
+var _zoom_vel := 0.0
+var _follow_vel := Vector2.ZERO   # rotation, tilt
 func _tick_zoom(delta: float) -> void:
-	if is_equal_approx(_zoom, _zoom_target):
+	if _zoom == _zoom_target and _zoom_vel == 0.0:
 		return
 	var prev := _zoom
-	_zoom = lerpf(_zoom, _zoom_target, 1.0 - exp(-delta * ZOOM_EASE))
-	if absf(_zoom - _zoom_target) < 0.002:
+	var r := Spring.damp(_zoom, _zoom_vel, _zoom_target, ZOOM_TIME, delta)
+	_zoom = r.x
+	_zoom_vel = r.y
+	if Spring.settled(_zoom, _zoom_vel, _zoom_target, 0.001):
 		_zoom = _zoom_target
+		_zoom_vel = 0.0
 	_keep_anchor_fixed(prev, _zoom)
 	_apply_zoom()
 

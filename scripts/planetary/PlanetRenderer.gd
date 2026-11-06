@@ -4,9 +4,9 @@ extends ColorRect
 signal planet_clicked(screen_pos: Vector2)
 
 ## How fast a flung globe slows down (1/s; frame-rate independent).
-@export var momentum_friction: float = 4.5
+@export var momentum_friction: float = 2.6
 ## How fast the globe catches up with the drag (1/s). Higher = tighter, lower = silkier.
-@export var drag_smoothing: float = 30.0
+@export var drag_smoothing: float = 14.0
 
 ## Editor preview controls — no effect at runtime.
 @export_group("Editor Preview")
@@ -30,6 +30,7 @@ signal planet_clicked(screen_pos: Vector2)
 			else: call_deferred("_apply_preview")
 @export_group("")
 
+const VEL_WINDOW := 0.06   # s — how much recent movement the fling speed averages
 var _dragging := false
 var _drag_velocity := 0.0   # rad/s, kept for the fling after release
 var _last_drag_time := 0
@@ -38,6 +39,8 @@ var _last_drag_usec := 0
 ## instead of stepping with each mouse event.
 var _pending_rot := 0.0
 var _pending_tilt := 0.0
+var _pending_rot_v := 0.0    # spring velocities of the catch-up (Spring)
+var _pending_tilt_v := 0.0
 var _motion_frame := -1
 var _drag_total_px := 0.0
 var _rotation_offset := 0.0
@@ -277,8 +280,11 @@ func drag_to(pos: Vector2) -> void:
 	_pending_rot -= delta_rot
 	# Velocity in rad/s (time-weighted, so the fling is the same at any mouse
 	# or frame rate); smoothed so one odd event doesn't kill the momentum.
-	_drag_velocity = lerpf(_drag_velocity, -delta_rot / dt, 0.5)
-	_tilt_velocity = lerpf(_tilt_velocity, delta_tilt / dt, 0.5)
+	# Averaged over ~60 ms of movement, not per event, so a fast mouse (many
+	# small events) and a slow one fling alike.
+	var a := 1.0 - exp(-dt / VEL_WINDOW)
+	_drag_velocity = lerpf(_drag_velocity, -delta_rot / dt, a)
+	_tilt_velocity = lerpf(_tilt_velocity, delta_tilt / dt, a)
 	_last_drag_time = Time.get_ticks_msec()
 
 ## Feeds a turn into the eased drag path (trackpad pan and the like).
@@ -291,6 +297,8 @@ func nudge(d_rot: float, d_tilt: float) -> void:
 func stop_motion() -> void:
 	_pending_rot = 0.0
 	_pending_tilt = 0.0
+	_pending_rot_v = 0.0
+	_pending_tilt_v = 0.0
 	_drag_velocity = 0.0
 	_tilt_velocity = 0.0
 
@@ -315,20 +323,32 @@ func tick_motion(delta: float) -> void:
 				_tilt_velocity = 0.0
 	if tilt_locked:
 		_pending_tilt = 0.0
+		_pending_tilt_v = 0.0
 		_tilt_velocity = 0.0
-	if _pending_rot == 0.0 and _pending_tilt == 0.0:
+	if _pending_rot == 0.0 and _pending_tilt == 0.0 and _pending_rot_v == 0.0 and _pending_tilt_v == 0.0:
 		return
-	var k := 1.0 - exp(-delta * drag_smoothing)
-	var step_rot := _pending_rot if absf(_pending_rot) < 1e-5 else _pending_rot * k
-	var step_tilt := _pending_tilt if absf(_pending_tilt) < 1e-5 else _pending_tilt * k
-	_pending_rot -= step_rot
-	_pending_tilt -= step_tilt
+	# the globe works off what's pending on a spring: it eases into a drag and
+	# out of it, and each mouse event bends the motion instead of kicking it
+	var t := Spring.time_for_rate(drag_smoothing)
+	var r := Spring.damp(_pending_rot, _pending_rot_v, 0.0, t, delta)
+	var ti := Spring.damp(_pending_tilt, _pending_tilt_v, 0.0, t, delta)
+	if Spring.settled(r.x, r.y, 0.0, 1e-5):
+		r = Vector2.ZERO
+	if Spring.settled(ti.x, ti.y, 0.0, 1e-5):
+		ti = Vector2.ZERO
+	var step_rot := _pending_rot - r.x
+	var step_tilt := _pending_tilt - ti.x
+	_pending_rot = r.x
+	_pending_rot_v = r.y
+	_pending_tilt = ti.x
+	_pending_tilt_v = ti.y
 	set_rotation_offset(_rotation_offset + step_rot)
 	if step_tilt != 0.0:
 		var want := tilt + step_tilt
 		set_tilt(want)
 		if not is_equal_approx(tilt, want):   # hit the pole limit: stop pushing
 			_pending_tilt = 0.0
+			_pending_tilt_v = 0.0
 			_tilt_velocity = 0.0
 
 func _process(_delta: float) -> void:
