@@ -195,7 +195,7 @@ func _tick_backdrop(delta: float) -> void:
 ## as a share of the screen height.
 const SUN_CENTER := Vector2(0.03, -0.05)
 const SUN_H_FRAC := 0.80
-const SUN_DEPTH := 3.2
+const SUN_DEPTH := 4.0
 ## Orbits: tilted ellipses about the sun (tilt rad, minor / major axis).
 const ORBIT_TILT := 0.32
 const ORBIT_FLAT := 0.40
@@ -207,14 +207,14 @@ const DRIFT_SPEED := Vector2(0.085, 0.061)
 ## share), depth (planet radii behind the focus world's centre; < 0 in front),
 ## spin rad/s, ringed, in front of the focus world.
 const BODIES := [
-	[PlanetData.Type.GAS_GIANT, 8803, Vector2(0.585, 0.215), 0.250, 1.6,  0.010, true,  false],
+	[PlanetData.Type.GAS_GIANT, 8803, Vector2(0.600, 0.200), 0.190, 3.0,  0.008, true,  false],
 	[PlanetData.Type.MOON,      5519, Vector2(0.505, 0.615), 0.085, -0.9, 0.015, false, true],
 ]
 const GLOBE_FILL := 0.42   # planet_radius: the globe's share of its rect
 ## Distance haze: a body (or orbit) `depth` radii behind the focus world is
 ## dimmed and cooled toward the night sky, DEPTH_FADE at DEPTH_FADE_AT and on.
 const DEPTH_FADE := 0.55
-const DEPTH_FADE_AT := 2.8
+const DEPTH_FADE_AT := 3.2
 const DEPTH_FOG := 0.42   # haze over a globe at DEPTH_FADE_AT
 const HAZE := Color(0.62, 0.72, 0.98)
 
