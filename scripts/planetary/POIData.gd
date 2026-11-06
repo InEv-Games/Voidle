@@ -14,7 +14,7 @@ enum POIType {
 }
 
 static var TYPE_LABELS: Array[String] = ["City", "Industrial", "Energy", "Outpost", "Science", "Spaceport", "Station", "Residential", "Commercial"]
-static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⚗", "🚀", "◈", "⌂", "◈"]
+static var TYPE_ICONS:  Array[String] = ["⬡", "⛏", "⚡", "⬡", "⚗", "🚀", "⊙", "⌂", "¤"]
 
 @export var label:         String  = "Site"
 @export var poi_type:      POIType = POIType.CITY

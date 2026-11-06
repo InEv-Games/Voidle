@@ -83,7 +83,7 @@ func _ready() -> void:
 
 	GameState.credits_changed.connect(_on_credits_changed)
 	GameState.civilization_reached.connect(func(_civ: int) -> void: _show_act1_complete())
-	GameState.lander_reached_moon.connect(_show_lander_notice)
+	GameState.lander_reached_moon.connect(func(_moon_seed: int) -> void: AudioManager.play("building_done"))   # the news bar tells it
 	GameState.expedition_changed.connect(_on_expedition_changed)
 	GameState.science_changed.connect(_on_science_changed)
 	AchievementManager.achievement_unlocked.connect(_on_achievement_unlocked)
@@ -602,7 +602,7 @@ func _process(delta: float) -> void:
 			if is_instance_valid(b):
 				b.visible = GameState.explore_available()
 
-## The demo's high point: the first City on the Moon gets a short banner.
+## The demo's high point: the first City on the Moon, in the news bar.
 func _maybe_celebrate_moon() -> void:
 	if GameState.moon_city_celebrated or GameState.showcase_mode or not SkillTree.event_met("moon_city"):
 		return
@@ -610,51 +610,18 @@ func _maybe_celebrate_moon() -> void:
 	if scene == null or scene.scene_file_path.ends_with("MainMenu.tscn"):
 		return
 	GameState.moon_city_celebrated = true
-	# scenes/ui/MoonBanner.tscn — texts and timing are edited there
-	var layer := CanvasLayer.new()
-	layer.layer = 230
-	get_tree().root.add_child(layer)
-	layer.add_child((load("res://scenes/ui/MoonBanner.tscn") as PackedScene).instantiate())
+	AudioManager.play("building_done")
+	NewsFeed.post("First step on the Moon: your civilization now spans two worlds.")
 
-## The lander parked in the Moon's orbit: a notice that flies the camera there
-## (the Moon, its orbit and the lander's INITIATE COLONIZATION card).
-func _show_lander_notice(moon_seed: int) -> void:
-	_show_notice("THE LANDER REACHED THE MOON'S ORBIT  —  CLICK TO GO THERE", "moon", go_to_lander.bind(moon_seed))
-
-## The final rocket left the Moon: point the player at the star system view,
-## where its flight is drawn.
+## The final rocket left the Moon: the news bar tells it; clicking the item
+## opens the star system view, where its flight is drawn.
 func _on_expedition_changed(kind: String) -> void:
 	if kind != "rocket" or GameState.expedition_state("rocket") != "in_transit":
 		return
-	var scene := get_tree().current_scene
-	if scene != null and scene.scene_file_path.ends_with("SolarView.tscn"):
-		return   # already watching
 	var tgt := GameState.get_planet_data(int(GameState.expedition("rocket").get("target_seed", -1)))
-	_show_notice("THE FINAL ROCKET LEFT FOR %s  —  CLICK TO WATCH" % (tgt.planet_name if tgt != null else "a new world").to_upper(), "rocket",
-		func() -> void: SceneTransition.go("res://scenes/solar/SolarView.tscn", GameState.get_home_solar()))
-
-## A clickable banner under the top bar; fades after a while.
-func _show_notice(text: String, icon_id: String, on_click: Callable) -> void:
-	if _top_layer == null or not is_instance_valid(_top_layer):
-		return
-	var btn := IconButton.create(text, icon_id, IconButton.Variant.POSITIVE)
-	btn.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	btn.offset_top = 132.0
-	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
-	btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
-	btn.pressed.connect(func() -> void:
-		CursorManager.set_state(CursorManager.State.NORMAL)
-		btn.queue_free()
-		AudioManager.play("click")
-		on_click.call())
-	_top_layer.add_child(btn)
 	AudioManager.play("building_done")
-	# stays a while, then fades away
-	var tw := btn.create_tween()
-	tw.tween_interval(20.0)
-	tw.tween_property(btn, "modulate:a", 0.0, 1.0)
-	tw.tween_callback(btn.queue_free)
+	NewsFeed.post("The final rocket leaves for %s. Click to watch its flight." % (tgt.planet_name if tgt != null else "a new world"),
+		NewsFeed.Kind.EVENT, "", "", {"solar": true})
 
 ## Shows the Moon with the lander: in place when the planet view is open,
 ## otherwise through a scene change (PlanetaryView picks up the request).

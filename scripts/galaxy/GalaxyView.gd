@@ -216,7 +216,7 @@ func _update_right_panel() -> void:
 		var is_home := (_hovered == GameState.home_star_idx)
 		var unlocked := _galaxy.is_unlocked(_hovered)
 		if is_home:
-			_panel_hov_status.text = "◈ Home System"
+			_panel_hov_status.text = "Home System"
 			_panel_hov_status.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 		elif unlocked:
 			_panel_hov_status.text = "✓ Visited"

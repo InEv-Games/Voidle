@@ -21,7 +21,7 @@ const HEIGHT := 22.0
 ## Crawl speed, px per second.
 const SPEED := 70.0
 ## Between two items.
-const SEPARATOR := "     ◈     "
+const SEPARATOR := "     ·     "
 ## Buildings finished within this many seconds are told as one entry.
 const BUILD_BATCH_SEC := 6.0
 ## Most events kept waiting (older ones drop).
@@ -167,7 +167,7 @@ func _connect_sources() -> void:
 	GameState.lander_reached_moon.connect(func(moon_seed: int) -> void:
 		post("The lander reaches lunar orbit. Settlers wait for a landing site.", Kind.EVENT,
 			"Open the Moon, scan its surface (free) and pick where the first City lands.", "Lander in orbit",
-			{"seed": moon_seed}))
+			{"seed": moon_seed, "lander": true}))
 	GameState.civilization_reached.connect(func(civ: int) -> void:
 		post("The rocket arrives. Historians already call it the dawn of Civilization %d." % civ, Kind.EVENT,
 			"Civilization 0 is complete.", "Civilization %d" % civ))
@@ -408,6 +408,83 @@ func set_objectives_open(open: bool) -> void:
 		return
 	objectives_open = open
 	objectives_changed.emit(open)
+
+# ── Messages in the objectives card ──────────────────────────────────────────
+## Hints, notices and toasts (placing a district, a mineral found, the lander
+## in orbit …) show at the top of the objectives card, in its layout: a small
+## hero (caption + title), a line of text, an optional coloured line and an
+## optional button. The card that has an objective hosts them; without one a
+## card of their own takes the same spot. Newest first, MAX_MESSAGES at most.
+##   NewsFeed.show_message("id", "Caption", "TITLE", "body", {"sec": 4.0})
+## opts: "sec" (0 = stays until clear_message), "extra" + "extra_color"
+## (a UIStyle color name), "action" + "action_icon" + "on_action" (a button).
+## The same id replaces its message in place.
+signal messages_changed
+const MAX_MESSAGES := 3
+const MESSAGE_SEC := 4.0
+var messages: Array[Dictionary] = []
+var _msg_serial := 0
+var _msg_card: ObjectivesCard = null   # the card of their own
+
+func show_message(id: String, caption: String, title: String, body := "", opts := {}) -> void:
+	_msg_serial += 1
+	var m := {"id": id, "caption": caption, "title": title, "body": body, "serial": _msg_serial,
+		"extra": String(opts.get("extra", "")), "extra_color": StringName(opts.get("extra_color", &"good")),
+		"action": String(opts.get("action", "")), "action_icon": String(opts.get("action_icon", "")),
+		"on_action": opts.get("on_action", Callable())}
+	var at := _msg_index(id)
+	m["fresh"] = at < 0
+	if at >= 0:
+		messages[at] = m
+	else:
+		messages.push_front(m)
+		while messages.size() > MAX_MESSAGES:
+			messages.pop_back()
+	var sec := float(opts.get("sec", MESSAGE_SEC))
+	if sec > 0.0:
+		var serial := _msg_serial
+		get_tree().create_timer(sec, true).timeout.connect(func() -> void:
+			var i := _msg_index(id)
+			if i >= 0 and int(messages[i]["serial"]) == serial:
+				clear_message(id))
+	_ensure_msg_card()
+	messages_changed.emit()
+
+func clear_message(id: String) -> void:
+	var at := _msg_index(id)
+	if at < 0:
+		return
+	messages.remove_at(at)
+	messages_changed.emit()
+
+func has_message(id: String) -> bool:
+	return _msg_index(id) >= 0
+
+func _msg_index(id: String) -> int:
+	for i in messages.size():
+		if String(messages[i]["id"]) == id:
+			return i
+	return -1
+
+## Some card has an objective to show right now (it hosts the messages).
+func has_objective_card() -> bool:
+	return not _obj_sources.is_empty()
+
+## Messages show over the game, not on the main menu or while paused.
+func messages_allowed() -> bool:
+	return not on_main_menu() and HUDManager.visible and not get_tree().paused
+
+func on_main_menu() -> bool:
+	var scene := get_tree().current_scene
+	return scene == null or scene.scene_file_path.ends_with("MainMenu.tscn")
+
+func _ensure_msg_card() -> void:
+	if _msg_card != null and is_instance_valid(_msg_card):
+		return
+	_msg_card = ObjectivesCard.new()
+	_msg_card.messages_only = true
+	_msg_card.active = false
+	add_child(_msg_card)
 
 ## A new objective is up: blink the button if the card is closed.
 func flag_new_objective() -> void:
@@ -679,6 +756,12 @@ func _on_bar_input(ev: InputEvent) -> void:
 ## Takes the camera to a place: the planet view focuses it in place, or opens
 ## on its world first (PlanetaryView picks the request up on load).
 func go_to(loc: Dictionary) -> void:
+	if loc.get("solar", false):   # the star system view (e.g. the final rocket's flight)
+		SceneTransition.go("res://scenes/solar/SolarView.tscn", GameState.get_home_solar())
+		return
+	if loc.get("lander", false):   # the Moon with the lander and its card
+		HUDManager.go_to_lander(int(loc.get("seed", -1)))
+		return
 	var scene := get_tree().current_scene
 	if scene != null and scene.has_method("focus_news_location"):
 		scene.call("focus_news_location", loc)

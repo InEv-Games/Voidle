@@ -41,8 +41,6 @@ var _mission_builder_overlay: Control = null  # non-null while Mission Builder i
 var _rocket_anims: Array[Dictionary] = []
 ## Station deploy particle anims: {ship, ctrl, t, duration}
 var _deploy_anims: Array[Dictionary] = []
-## Toast log container — created lazily, anchored bottom-left.
-var _toast_container: VBoxContainer = null
 var _ship_panel: PanelContainer = null
 var _radial_menu: Control = null
 ## Maps building pm_key -> bool indicating if its mineral switcher tray is expanded
@@ -167,7 +165,8 @@ var _route_cache: Dictionary = {}       # "lonA,latA|lonB,latB" -> route
 var _placing_def: DistrictDef = null   # non-null while the player picks a site
 var _placing_parent: POIData   = null   # City the new district is built under (null = founding a City)
 var _moving_poi: POIData       = null   # settlement being moved (placement mode commits a move)
-var _place_hint:  Control     = null
+## The placement hint's message id in the objectives card (NewsFeed.show_message).
+const PLACE_MSG := "planet_place"
 
 func _make_system(root: PlanetData) -> Array[PlanetData]:
 	var arr: Array[PlanetData] = [root]
@@ -193,6 +192,7 @@ func _ready() -> void:
 	ProductionManager.city_leveled.connect(_on_city_leveled)
 	_build_panel_toggle()
 	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - _panel_edge_frac(1.0)))
+	tree_exiting.connect(func() -> void: NewsFeed.clear_message(PLACE_MSG))   # placement ends with the view
 	poi_layer.territory_lookup = _territory_at_screen
 	SettingsManager.night_shadow_changed.connect(func(v: float) -> void:
 		if planet_renderer.material:
@@ -468,18 +468,18 @@ func _city_commands(city: POIData) -> Array:
 		GameCommand.make("city_level_up", "Level up City  (Lv %d → %d)" % [lv, lv + 1],
 			_city_level_up_and_open.bind(city), _city_level_up_block.bind(city, current_data),
 			{"icon": "▲", "color": CMD_LEVEL_COL,
-			 "cost": "◈ " + HUDManager.fmt_credits(Leveling.city_level_credits(lv + 1)),
+			 "cost": HUDManager.fmt_credits(Leveling.city_level_credits(lv + 1)) + " cr",
 			 "tooltip": "Needs %d total district levels in the City." % Leveling.city_level_req(lv + 1)}),
 		GameCommand.make("capital_level_up", "Level up Capital District  (Lv %d → %d)" % [cap_lv, cap_lv + 1],
 			_district_level_up_and_open.bind(city), _district_menu_block.bind(city),
 			{"icon": "△", "color": CMD_LEVEL_COL,
-			 "cost": "◈ " + HUDManager.fmt_credits(Leveling.district_level_credits(cap_lv))}),
+			 "cost": HUDManager.fmt_credits(Leveling.district_level_credits(cap_lv)) + " cr"}),
 	]
 	for def: DistrictDef in _district_options(current_data, false, city):
 		out.append(GameCommand.make("add_district_" + def.type_key(), "Add %s" % def.display_name,
 			_begin_district_placement.bind(def, city), _add_district_block.bind(city, def),
 			{"icon": def.icon if def.icon != "" else "+", "color": CMD_BUILD_COL,
-			 "cost": "◈ " + HUDManager.fmt_credits(DistrictDef.placement_cost(def, current_data, city.label)),
+			 "cost": HUDManager.fmt_credits(DistrictDef.placement_cost(def, current_data, city.label)) + " cr",
 			 "tooltip": "Pick a site near %s for the new district." % city.shown_name()}))
 	out.append_array(_manage_commands(city))
 	return out
@@ -493,7 +493,7 @@ func _district_commands(poi: POIData) -> Array:
 		GameCommand.make("district_level_up", "Level up  (Lv %d → %d)" % [lv, lv + 1],
 			_district_level_up_and_open.bind(poi), _district_menu_block.bind(poi),
 			{"icon": "▲", "color": CMD_LEVEL_COL,
-			 "cost": "◈ " + HUDManager.fmt_credits(Leveling.district_level_credits(lv))}),
+			 "cost": HUDManager.fmt_credits(Leveling.district_level_credits(lv)) + " cr"}),
 	]
 	var city := _city_of(poi)
 	if city != null:
@@ -530,7 +530,7 @@ func _manage_commands(poi: POIData) -> Array:
 	out.append(GameCommand.make("move", "Move %s…" % what, _begin_move.bind(poi),
 		Settlement.move_block.bind(current_data, poi),
 		{"icon": "✥", "color": CMD_MANAGE_COL,
-		 "cost": "◈ " + HUDManager.fmt_credits(Settlement.move_fee(current_data, poi)),
+		 "cost": HUDManager.fmt_credits(Settlement.move_fee(current_data, poi)) + " cr",
 		 "tooltip": "Pick a new site. Fee: 10%% of the credits paid for it%s." % (
 			" and its districts — they move with it" if poi.is_city() else "")}))
 	out.append(GameCommand.make("demolish", "Demolish %s…" % what, _confirm_settlement.bind("demolish", poi),
@@ -577,7 +577,7 @@ func _cancel_commands(poi: POIData, pp: PlanetProgress) -> Array:
 			out.append(GameCommand.make("cancel_level_" + ("city" if city_lv else "district"),
 				"Cancel %s level-up" % ("City" if city_lv else ("Capital" if poi.is_city() else "district")),
 				_cancel_level.bind(poi, city_lv), Callable(),
-				{"icon": "✖", "color": CMD_DANGER_COL, "cost": "+◈ " + HUDManager.fmt_credits(paid * Settlement.refund_rate()),
+				{"icon": "✖", "color": CMD_DANGER_COL, "cost": "+" + HUDManager.fmt_credits(paid * Settlement.refund_rate()) + " cr",
 				 "tooltip": "Calls off the level-up. %d%% of its price comes back." % _refund_pct()}))
 	for b: Dictionary in pp.buildings_in_district(poi.label):
 		var def := BuildingDef.find(b.get("building_id", ""))
@@ -597,7 +597,7 @@ func _cancel_district(poi: POIData) -> void:
 		AudioManager.play("error")
 		return
 	AudioManager.play("click")
-	_show_unlock_toast("%s called off" % poi.shown_name(), "+%s refunded" % Economy.cost_text(back))
+	_notify("%s called off. %s refunded." % [poi.shown_name(), Economy.cost_text(back)], poi)
 	if _panel_open and (_active_district_poi == poi or _city_panel_poi == poi):
 		_set_panel_open(false)
 	load_planet(current_data)
@@ -614,7 +614,7 @@ func _ask_cancel_upgrade(what: String, cancel: Callable) -> void:
 		"CANCEL IT", func() -> void:
 			var got: String = cancel.call()
 			AudioManager.play("click")
-			_show_unlock_toast("Level-up called off", "+%s refunded" % got)
+			_notify("The %s was called off. %s refunded." % [what, got])
 			_refresh_active_panel())
 
 func _cancel_level(poi: POIData, city_lv: bool) -> void:
@@ -623,7 +623,7 @@ func _cancel_level(poi: POIData, city_lv: bool) -> void:
 		AudioManager.play("error")
 		return
 	AudioManager.play("click")
-	_show_unlock_toast("Level-up called off", "+%s credits refunded" % Economy.fmt(back))
+	_notify("Level-up of %s called off. %s credits refunded." % [poi.shown_name(), Economy.fmt(back)], poi)
 	_refresh_active_panel()
 
 func _cancel_building(entry: Dictionary) -> void:
@@ -632,7 +632,7 @@ func _cancel_building(entry: Dictionary) -> void:
 		AudioManager.play("error")
 		return
 	AudioManager.play("click")
-	_show_unlock_toast("Building called off", "+%s refunded" % Economy.cost_text(back))
+	_notify("Building called off. %s refunded." % Economy.cost_text(back))
 	_refresh_active_panel()
 
 ## What removing one building of a stack gives back: { credits, material: amount }.
@@ -645,7 +645,7 @@ func _remove_one_building(entry: Dictionary) -> void:
 	var back := _refund_cost(entry)   # before the stack shrinks
 	Settlement.remove_buildings(GameState.get_planet(current_data.seed), entry, 1)
 	AudioManager.play("click")
-	_show_unlock_toast("Building removed", "+%s refunded" % Economy.cost_text(back))
+	_notify("Building removed. %s refunded." % Economy.cost_text(back))
 	_refresh_active_panel()
 
 func _confirm_settlement(kind: String, poi: POIData) -> void:
@@ -665,7 +665,7 @@ func _confirm_settlement(kind: String, poi: POIData) -> void:
 			AudioManager.play("click")
 			var back := {Economy.CREDITS: refund}
 			back.merge(pv.get("materials", {}))   # materials go back with the credits
-			_show_unlock_toast("%s done" % verb, "+%s refunded" % Economy.cost_text(back))
+			_notify("%s done on %s. %s refunded." % [verb, poi.shown_name(), Economy.cost_text(back)])
 			if kind == "demolish" and _panel_open:
 				_set_panel_open(false)
 			load_planet(data))
@@ -687,7 +687,7 @@ func _try_move_here(site: Vector2) -> void:
 		return
 	AudioManager.play("construct")
 	_end_district_placement()
-	_show_unlock_toast("%s moved" % poi.shown_name(), "Fee %s credits" % Economy.fmt(fee))
+	_notify("%s moved. Fee %s credits." % [poi.shown_name(), Economy.fmt(fee)], poi)
 	load_planet(current_data)
 
 ## Starts placement mode for moving a settlement (its whole subtree follows).
@@ -702,7 +702,7 @@ func _begin_move(poi: POIData) -> void:
 
 func _station_commands(poi: POIData) -> Array:
 	return [GameCommand.make("open_orbit", "Open Orbit", _open_poi_panel.bind(poi), Callable(),
-		{"icon": "◈", "color": CMD_OPEN_COL})]
+		{"icon": "⊙", "color": CMD_OPEN_COL})]
 
 func _surface_commands(t: Dictionary) -> Array:
 	var out: Array = []
@@ -711,7 +711,7 @@ func _surface_commands(t: Dictionary) -> Array:
 		out.append(GameCommand.make("found_city_here", "Found City here",
 			_found_city_at.bind(city_def, t["pos"]), _found_city_here_block.bind(bool(t["hit"]["hit"])),
 			{"icon": "✚", "color": CMD_BUILD_COL,
-			 "cost": "◈ " + HUDManager.fmt_credits(DistrictDef.placement_cost(city_def, current_data)),
+			 "cost": HUDManager.fmt_credits(DistrictDef.placement_cost(city_def, current_data)) + " cr",
 			 "tooltip": "Starts City placement at this spot. If it can't be built exactly here, placement stays open so you can pick another site."}))
 	out.append(GameCommand.make("planet_overview", "Planet overview", _show_planet_overview, Callable(),
 		{"icon": "▤", "color": CMD_OPEN_COL}))
@@ -2057,7 +2057,7 @@ func _add_found_settlement_button(page: Control) -> void:
 	row.add_theme_constant_override("separation", 2)
 	card.add_child(row)
 	var hub_lbl := Label.new()
-	hub_lbl.text = "◈  Central Orbit — set up by the lander"
+	hub_lbl.text = "Central Orbit — set up by the lander"
 	_apply_orbitron(hub_lbl, 9)
 	hub_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	row.add_child(hub_lbl)
@@ -3530,13 +3530,13 @@ func _show_district_name_form_modal(data: PlanetData, def: DistrictDef) -> void:
 	var cost: float = DistrictDef.placement_cost(def, data)
 	var cost_row := HBoxContainer.new()
 	var cost_icon := Label.new()
-	cost_icon.text = "◈"
+	cost_icon.text = "Cost"
 	_apply_orbitron(cost_icon, 9)
 	cost_icon.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 	cost_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_icon)
 	var cost_lbl := Label.new()
-	cost_lbl.text = HUDManager.fmt_credits(cost)
+	cost_lbl.text = HUDManager.fmt_credits(cost) + " cr"
 	_apply_orbitron(cost_lbl, 9)
 	cost_lbl.add_theme_color_override("font_color",
 		UIStyle.color(&"good") if GameState.credits >= cost else UIStyle.color(&"bad"))
@@ -5548,8 +5548,6 @@ func _apply_panel_t(t: float) -> void:
 	if _panel_toggle_btn != null:
 		_panel_toggle_btn.text = "‹" if _panel_open else "›"
 		_place_panel_toggle()
-	if _toast_container != null and is_instance_valid(_toast_container):
-		_toast_container.offset_left = _panel_edge_frac(t) * get_viewport_rect().size.x + 14.0
 	_place_lens_bar()
 	if poi_layer != null and is_instance_valid(poi_layer):
 		poi_layer.update_screen_positions()   # markers move with the globe this frame
@@ -5687,50 +5685,25 @@ func _end_district_placement() -> void:
 	if poi_layer:
 		poi_layer.placement_mode = false
 		poi_layer.clear_ghost()
-	if _place_hint != null and is_instance_valid(_place_hint):
-		_place_hint.queue_free()
-	_place_hint = null
+	NewsFeed.clear_message(PLACE_MSG)
 
+## What is being placed, in the objectives card (until placement ends).
 func _show_place_hint(def: DistrictDef) -> void:
-	var cont := planet_renderer.get_parent() as Control
-	var hint := PanelContainer.new()
-	hint.add_theme_stylebox_override("panel", _make_hud_style(Color(0.06, 0.08, 0.16, 0.92), 6))
-	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hint.z_index = 50
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 3)
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hint.add_child(vbox)
-	var title := Label.new()
-	title.text = "PLACE  %s  %s   ·   ◈ %s" % [def.icon, def.display_name.to_upper(),
-		HUDManager.fmt_credits(DistrictDef.placement_cost(def, current_data, _parent_label()))]
+	var title := "PLACE %s" % def.display_name.to_upper()
+	var help := "Click a site on %s  ·  Drag to rotate  ·  Scroll to zoom  ·  Right-click to cancel" \
+		% TerrainSampler.placement_label(def.placement)
+	var extra := "Cost %s credits" % HUDManager.fmt_credits(DistrictDef.placement_cost(def, current_data, _parent_label()))
 	var found_pop := Economy.founding_pop(def, current_data, _parent_label())
 	if found_pop > 0:
-		title.text += "   ·   %s workers" % Economy.fmt(found_pop)
-	_apply_orbitron(title, 10)
-	title.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(title)
-	var help := Label.new()
-	help.text = "Click a site on %s  ·  Drag to rotate  ·  Scroll to zoom  ·  Right-click to cancel" \
-		% TerrainSampler.placement_label(def.placement)
+		extra += "  ·  %s workers" % Economy.fmt(found_pop)
 	if _lunar_landing:
-		title.text = "CHOOSE THE LANDING SITE"
+		title = "CHOOSE THE LANDING SITE"
 	if _mandatory_city:
-		title.text = "CHOOSE THE SITE OF YOUR CAPITAL"
-		help.text = "Click a site on %s  ·  Drag to rotate  ·  Scroll to zoom" \
+		title = "CHOOSE THE SITE OF YOUR CAPITAL"
+		help = "Click a site on %s  ·  Drag to rotate  ·  Scroll to zoom" \
 			% TerrainSampler.placement_label(def.placement)
-	_apply_orbitron(help, 7)
-	help.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	help.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(help)
-	cont.add_child(hint)
-	# Sits below the top HUD bar now that the globe extends behind it.
-	hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 88)
-	hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_place_hint = hint
+	NewsFeed.show_message(PLACE_MSG, current_data.planet_name if current_data != null else "Placement",
+		title, help, {"sec": 0.0, "extra": extra, "extra_color": &"neutral_stroke"})
 
 ## Faint preview of the roads a district placed here would get: to every
 ## would-be neighbour and to the nearest settlement of its City. Routed without
@@ -6882,7 +6855,7 @@ func _station_tile() -> PanelContainer:
 	tile.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tile.theme_type_variation = &"IconCell"
 	var l := Label.new()
-	l.text = "◈"
+	l.text = "⊙"
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -7812,10 +7785,8 @@ func _on_building_constructed(planet_seed: int, key: String, _building_id: Strin
 				if def != null:
 					building_name = def.display_name
 
-	# Always show a toast — never auto-select / reopen the district.
-	_show_construction_toast(
-		building_name if building_name != "" else "Building",
-		poi_label)
+	# the news bar tells it ("Ribbon cut …") — never auto-select / reopen the district
+	AudioManager.play("building_done", 2.0)
 
 	# If a spaceport just finished construction, mark planet and refresh ships
 	var pp_check := GameState.get_planet(planet_seed)
@@ -8563,89 +8534,6 @@ func _tick_deploy_anims(delta: float) -> void:
 			ctrl2.queue_redraw()
 	for da: Dictionary in done:
 		_deploy_anims.erase(da)
-
-# ── Toast / build-log notification ───────────────────────────────────────────
-
-func _get_toast_container() -> VBoxContainer:
-	if _toast_container != null and is_instance_valid(_toast_container):
-		return _toast_container
-	var tc := VBoxContainer.new()
-	tc.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	tc.grow_vertical   = Control.GROW_DIRECTION_BEGIN   # stack upward
-	tc.grow_horizontal = Control.GROW_DIRECTION_END
-	tc.custom_minimum_size = Vector2(260, 0)
-	tc.offset_left = _panel_edge_frac(_panel_t) * get_viewport_rect().size.x + 14.0   # follows the panel
-	tc.add_theme_constant_override("separation", 5)
-	tc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(tc)
-	_toast_container = tc
-	return tc
-
-## Keeps the toast stack at the bottom-left of the planet area (right of the
-## side panel), above the marker (eye) button. Safe to call every time.
-func _reanchor_toast_above_credits() -> void:
-	var tc := _get_toast_container()
-	tc.offset_left = _panel_edge_frac(_panel_t) * get_viewport_rect().size.x + 14.0
-	tc.offset_bottom = -(12.0 + 36.0 + 10.0)
-
-## Shows a brief construction-complete notification at the bottom-left of the planet area,
-## then fades it out after a few seconds.
-func _show_construction_toast(building_name: String, district_label: String) -> void:
-	# Re-measure credits panel height each time in case it changed after layout
-	_reanchor_toast_above_credits()
-	var tc := _get_toast_container()
-
-	# ── Outer panel ─────────────────────────────────────────────────────────
-	var panel := PanelContainer.new()
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.theme_type_variation = &"TooltipPanel"
-
-	# ── Content row ─────────────────────────────────────────────────────────
-	var hbox := HBoxContainer.new()
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_theme_constant_override("separation", 8)
-	panel.add_child(hbox)
-
-	# Checkmark icon
-	var icon := Label.new()
-	icon.text = "✓"
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon.add_theme_font_size_override("font_size", 13)
-	icon.add_theme_color_override("font_color", UIStyle.color(&"good"))
-	icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hbox.add_child(icon)
-
-	# Text column
-	var tvbox := VBoxContainer.new()
-	tvbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tvbox.add_theme_constant_override("separation", 1)
-	hbox.add_child(tvbox)
-
-	var name_lbl := Label.new()
-	name_lbl.text = building_name
-	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_apply_orbitron(name_lbl, 9)
-	name_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
-	tvbox.add_child(name_lbl)
-
-	if district_label != "":
-		var sub := Label.new()
-		sub.text = "Built in " + district_label
-		sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_apply_orbitron(sub, 7)
-		sub.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
-		tvbox.add_child(sub)
-
-	tc.add_child(panel)
-	AudioManager.play("building_done", 2.0)
-
-	# ── Tween: fade-in → hold → fade-out → free ─────────────────────────────
-	panel.modulate.a = 0.0
-	var tw := panel.create_tween()
-	tw.tween_property(panel, "modulate:a", 1.0, 0.25)
-	tw.tween_interval(3.0)
-	tw.tween_property(panel, "modulate:a", 0.0, 0.75)
-	tw.tween_callback(panel.queue_free)
 
 ## Card look from the theme (ItemPanel/panel), as an editable copy.
 func _card_panel_style() -> StyleBoxFlat:
@@ -11039,7 +10927,7 @@ func _orbit_found_block(data: PlanetData) -> String:
 		return "Not enough credits"
 	return ""
 
-## "◈ Orbit" row in the FOUND CITY dropdown.
+## "Orbit" row in the FOUND CITY dropdown.
 func _build_orbit_type_row(data: PlanetData, dropdown_ref: Array[Node]) -> Control:
 	var cost := DistrictDef.placement_cost(DistrictDef.find(DistrictDef.Type.CITY), data)
 	var block := _orbit_found_block(data)
@@ -11403,7 +11291,7 @@ func _on_city_leveled(planet_seed: int, _city_label: String, _level: int, unlock
 		return
 	AudioManager.play("building_done")
 	if unlocked_planet_view:
-		_show_unlock_toast("PLANET VIEW UNLOCKED", "Found more cities and level up the planet.")
+		_notify("Planet view unlocked on %s: found more Cities and level up the planet." % current_data.planet_name)
 	_refresh_active_panel()
 
 func _notify_tutorial_city_level_btn(btn: Button) -> void:
@@ -11412,46 +11300,28 @@ func _notify_tutorial_city_level_btn(btn: Button) -> void:
 	_tut_highlight_node = btn
 	_start_tut_node_pulse(btn)
 
-## Short banner in the middle of the view (milestones like a new view opening).
-func _on_minerals_discovered(body_seed: int, ids: Array) -> void:
+## New minerals on this world: the details panel lists them (the news bar
+## tells it: "Prospectors … report").
+func _on_minerals_discovered(body_seed: int, _ids: Array) -> void:
 	if current_data == null or current_data.seed != body_seed:
 		return
-	var names: Array[String] = []
-	for id in ids:
-		names.append(Economy.display_name(String(id)))
-	_show_unlock_toast("MINERAL DISCOVERED", ", ".join(names) + " — extracted anywhere on this world.")
 	_build_details_panel(current_data)
 
+## A notification for the news bar: refunds, moves, milestones. Clicking it
+## brings the camera back to `poi` (or this world).
+func _notify(text: String, poi: POIData = null) -> void:
+	var loc := {}
+	if current_data != null:
+		loc = {"seed": current_data.seed}
+		if poi != null:
+			loc["label"] = poi.label
+	NewsFeed.post(text, NewsFeed.Kind.EVENT, "", "", loc)
+
+## A hint in the objectives card (what to do now, why something can't be
+## done); the same title replaces its earlier one.
 func _show_unlock_toast(title_txt: String, body_txt: String) -> void:
-	var cont := planet_renderer.get_parent() as Control
-	var box := PanelContainer.new()
-	box.add_theme_stylebox_override("panel", _make_hud_style(Color(0.06, 0.10, 0.08, 0.95), 8))
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.z_index = 60
-	var v := VBoxContainer.new()
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(v)
-	var t := Label.new()
-	t.text = title_txt
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_apply_orbitron(t, 13)
-	t.add_theme_color_override("font_color", UIStyle.color(&"good"))
-	v.add_child(t)
-	var b := Label.new()
-	b.text = body_txt
-	b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_apply_orbitron(b, 8)
-	b.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
-	v.add_child(b)
-	cont.add_child(box)
-	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 140)
-	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	box.modulate.a = 0.0
-	var tw := create_tween()
-	tw.tween_property(box, "modulate:a", 1.0, 0.3)
-	tw.tween_interval(3.0)
-	tw.tween_property(box, "modulate:a", 0.0, 0.6)
-	tw.tween_callback(box.queue_free)
+	NewsFeed.show_message("planet_toast:" + title_txt.to_lower(),
+		current_data.planet_name if current_data != null else "Notice", title_txt.to_upper(), body_txt)
 
 func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	_orbit_panel_open = false

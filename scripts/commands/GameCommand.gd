@@ -12,7 +12,7 @@ var id: String = ""
 var label: String = ""
 var icon: String = ""
 var color: Color = Color(0.75, 0.85, 1.0)
-## Short cost shown on the right of the row, e.g. "◈ 1.2k cr".
+## Short cost shown on the right of the row, e.g. "1.2k cr".
 var cost: String = ""
 ## Extra text for the row's tooltip.
 var tooltip: String = ""

@@ -360,15 +360,16 @@ var _narr_typing: bool           = false
 var _narr_instant: bool          = false
 
 # ── Action banner (non-blocking) ───────────────────────────────────────────────
-var _action_bar:  PanelContainer = null
-var _action_lbl:  Label          = null
+## The guided step's instruction, in the objectives card (NewsFeed.show_message).
+const ACTION_MSG := "tutorial_action"
+const CONSTRUCTION_MSG := "tutorial_construction"
+var _action_step: Dictionary = {}   # the step whose instruction is up
 var _pulse_ring:      Control = null
 var _action_block_on: bool   = false  # whether input blocking is active
 var _allowed_rects:   Array[Rect2]  = []      # clicks inside any of these pass through
 var _waiting_for_bid: String        = ""      # if set, waiting for this building to finish constructing
 var _waiting_for_district: int      = -1      # if >= 0, waiting for a district of this type to finish constructing
 var _topup_key: String              = ""      # the step target last topped up once it became doable
-var _construction_lbl: Label        = null    # non-blocking "under construction" label
 
 # ── Quest UI ───────────────────────────────────────────────────────────────────
 var _quest_panel:    PanelContainer   = null
@@ -416,7 +417,7 @@ func start() -> void:
 func _on_root_child_entered(node: Node) -> void:
 	# Hide tutorial UI whenever a new top-level scene is added (scene transition)
 	if node.scene_file_path.ends_with("MainMenu.tscn"):
-		for n in [_dim, _narr_panel, _action_bar, _quest_panel, _pulse_ring, _construction_lbl, _side_tab, _overlay_lbl]:
+		for n in [_dim, _narr_panel, _quest_panel, _pulse_ring, _side_tab, _overlay_lbl]:
 			if is_instance_valid(n): (n as CanvasItem).visible = false
 		_active = false
 
@@ -439,9 +440,10 @@ func _on_new_game() -> void:
 	_narr_instant     = false
 	_narr_pages    = []
 	_narr_done_cb  = Callable()
-	for n in [_dim, _narr_panel, _action_bar, _quest_panel, _pulse_ring, _side_tab, _overlay_lbl]:
+	for n in [_dim, _narr_panel, _quest_panel, _pulse_ring, _side_tab, _overlay_lbl]:
 		if is_instance_valid(n): n.queue_free()
-	_dim = null; _narr_panel = null; _action_bar = null; _quest_panel = null; _pulse_ring = null
+	NewsFeed.clear_message(ACTION_MSG)
+	_dim = null; _narr_panel = null; _quest_panel = null; _pulse_ring = null
 
 # ── Signal handlers ────────────────────────────────────────────────────────────
 ## Fired when player clicks BUILD — advances guided tutorial immediately (don't wait for construction).
@@ -654,8 +656,8 @@ func _advance_action() -> void:
 	else:
 		# Update sub-target label and highlight
 		var tgt: Dictionary = step["targets"][_action_sub]
-		if is_instance_valid(_action_lbl):
-			_action_lbl.text = "✓ Done!  Now:  " + _target_hint(tgt)
+		if NewsFeed.has_message(ACTION_MSG):
+			_set_action_text(_target_hint(tgt), true)
 		highlight_changed.emit(_highlight_id_for(tgt))
 
 ## Called by PlanetaryView to query what building the current action step wants.
@@ -722,7 +724,7 @@ func _finish_district_wait(step: Dictionary) -> void:
 	if _action_sub + 1 < (step["targets"] as Array).size():
 		_action_sub += 1
 		_show_action_bar(step)
-		_action_lbl.text = "✓ Done!  Now:  " + _target_hint(step["targets"][_action_sub])
+		_set_action_text(_target_hint(step["targets"][_action_sub]), true)
 	else:
 		_advance_action()
 
@@ -867,58 +869,10 @@ func _run_finale() -> void:
 
 	# Reward was already given by _advance_action before _run_finale — nothing extra needed here
 
-	# Big "Tutorial Complete" banner at top of planet area
-	var banner := PanelContainer.new()
-	var sb := _panel_style(Color(0.02, 0.04, 0.10, 0.96), Color(0.35, 0.70, 1.0, 0.85))
-	banner.add_theme_stylebox_override("panel", sb)
-	banner.custom_minimum_size = Vector2(520, 0)
-	var _ca := _planet_area_center_anchor()
-	banner.anchor_left   = _ca;  banner.anchor_right  = _ca
-	banner.anchor_top    = 0.0;  banner.anchor_bottom = 0.0
-	banner.offset_left   = -260; banner.offset_right  = 260
-	banner.offset_top    = 52
-	banner.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	banner.modulate.a    = 0.0
-	add_child(banner)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	banner.add_child(vbox)
-
-	var tag := Label.new()
-	tag.text = "◈  TUTORIAL COMPLETE  ◈"
-	if _orbitron: tag.add_theme_font_override("font", _orbitron)
-	tag.add_theme_font_size_override("font_size", 9)
-	tag.add_theme_color_override("font_color", UIStyle.color(&"text"))
-	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(tag)
-
-	var title := Label.new()
-	title.text = "The void is no longer empty."
-	if _orbitron: title.add_theme_font_override("font", _orbitron)
-	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(title)
-
-	var sub := Label.new()
-	sub.text = "You have shelter. Power. Knowledge. Minerals.\nFrom this foothold, the stars are reachable."
-	if _orbitron: sub.add_theme_font_override("font", _orbitron)
-	sub.add_theme_font_size_override("font_size", 10)
-	sub.add_theme_color_override("font_color", UIStyle.color(&"text"))
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	sub.custom_minimum_size = Vector2(460, 0)
-	vbox.add_child(sub)
-
-	create_tween().tween_property(banner, "modulate:a", 1.0, 0.7)
-	await get_tree().create_timer(4.2).timeout
-
-	var tw := create_tween()
-	tw.tween_property(banner, "modulate:a", 0.0, 0.8)
-	await tw.finished
-	if is_instance_valid(banner): banner.queue_free()
+	# "Tutorial complete" in the news bar
+	NewsFeed.post("Tutorial complete. The void is no longer empty.", NewsFeed.Kind.EVENT,
+		"You have shelter. Power. Knowledge. Minerals.\nFrom this foothold, the stars are reachable.",
+		"Tutorial complete")
 	_end_guided_tutorial()
 
 ## The guided tutorial is over (this game or ever) — Explore mode opens.
@@ -1126,115 +1080,37 @@ func _all_bbcode(segs: Array[Dictionary]) -> String:
 
 # ── Action instruction bar ─────────────────────────────────────────────────────
 func _show_action_bar(step: Dictionary) -> void:
-	if is_instance_valid(_action_bar): _action_bar.queue_free()
-
-	_action_bar = PanelContainer.new()
-	var sb := _panel_style(Color(0.04, 0.05, 0.12, 0.88), Color(0.28, 0.55, 0.75, 0.55))
-	_action_bar.add_theme_stylebox_override("panel", sb)
-	_action_bar.custom_minimum_size = Vector2(420, 0)
-	var _aa := _planet_area_center_anchor()
-	_action_bar.anchor_left   = _aa;  _action_bar.anchor_right  = _aa
-	_action_bar.anchor_top    = 1.0;  _action_bar.anchor_bottom = 1.0
-	_action_bar.offset_left   = -210; _action_bar.offset_right  = 210
-	_action_bar.offset_top    = -110; _action_bar.offset_bottom = -12
-	_action_bar.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	_action_bar.modulate.a    = 0.0
-	add_child(_action_bar)
-	create_tween().tween_property(_action_bar, "modulate:a", 1.0, 0.3)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	_action_bar.add_child(vbox)
-
-	var tag := Label.new()
-	tag.text = "◈  OBJECTIVE"
-	if _orbitron: tag.add_theme_font_override("font", _orbitron)
-	tag.add_theme_font_size_override("font_size", 8)
-	tag.add_theme_color_override("font_color", UIStyle.color(&"text"))
-	vbox.add_child(tag)
-
-	_action_lbl = Label.new()
-	_action_lbl.text = ""  # set below by _target_hint
-	if _orbitron: _action_lbl.add_theme_font_override("font", _orbitron)
-	_action_lbl.add_theme_font_size_override("font_size", 12)
-	_action_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
-	vbox.add_child(_action_lbl)
-
+	_action_step = step
 	var tgt0: Dictionary = step["targets"][mini(_action_sub, (step["targets"] as Array).size() - 1)]
-	_action_lbl.text = _target_hint(tgt0)
+	_set_action_text(_target_hint(tgt0), false)
 
 	# Spawn pulse ring and signal which element to highlight
 	_action_block_on = true
 	_spawn_pulse_ring()
 	highlight_changed.emit(_highlight_id_for(tgt0))
 
-	if GRANTS_ENABLED and step.has("reward_text"):
-		var rew := Label.new()
-		rew.text = "Reward: " + step["reward_text"]
-		if _orbitron: rew.add_theme_font_override("font", _orbitron)
-		rew.add_theme_font_size_override("font_size", 8)
-		rew.add_theme_color_override("font_color", UIStyle.color(&"good"))
-		vbox.add_child(rew)
+## The step's instruction in the objectives card; `after_done`: the one before
+## it was just met.
+func _set_action_text(hint: String, after_done: bool) -> void:
+	var opts := {"sec": 0.0}
+	if GRANTS_ENABLED and _action_step.has("reward_text"):
+		opts["extra"] = "Reward: " + String(_action_step["reward_text"])
+	NewsFeed.show_message(ACTION_MSG, "Tutorial  ·  Objective", hint.to_upper(),
+		"Done. Next step:" if after_done else String(_action_step.get("instruction", "")), opts)
 
 func _hide_action_bar() -> void:
 	_action_block_on = false
 	_allowed_rects   = []
 	highlight_cleared.emit()
 	_clear_pulse_ring()
-	if not is_instance_valid(_action_bar): return
-	var bar := _action_bar; _action_bar = null
-	var tw := create_tween()
-	tw.tween_property(bar, "modulate:a", 0.0, 0.25)
-	tw.tween_callback(bar.queue_free)
+	NewsFeed.clear_message(ACTION_MSG)
 
 func _show_construction_wait() -> void:
-	if is_instance_valid(_construction_lbl): _construction_lbl.queue_free()
-
-	var bar := PanelContainer.new()
-	var sb := _panel_style(Color(0.04, 0.05, 0.12, 0.88), Color(0.55, 0.45, 0.20, 0.55))
-	bar.add_theme_stylebox_override("panel", sb)
-	bar.custom_minimum_size = Vector2(480, 0)
-	var _ba := _planet_area_center_anchor()
-	bar.anchor_left   = _ba;  bar.anchor_right  = _ba
-	bar.anchor_top    = 1.0;  bar.anchor_bottom = 1.0
-	bar.offset_left   = -240; bar.offset_right  = 240
-	bar.offset_top    = -110; bar.offset_bottom = -12
-	bar.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	bar.modulate.a    = 0.0
-	add_child(bar)
-	create_tween().tween_property(bar, "modulate:a", 1.0, 0.4)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	bar.add_child(vbox)
-
-	var tag := Label.new()
-	tag.text = "⚙  CONSTRUCTION"
-	if _orbitron: tag.add_theme_font_override("font", _orbitron)
-	tag.add_theme_font_size_override("font_size", 8)
-	tag.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
-	vbox.add_child(tag)
-
-	_construction_lbl = Label.new()
-	_construction_lbl.text = "Building underway — explore freely while you wait."
-	if _orbitron: _construction_lbl.add_theme_font_override("font", _orbitron)
-	_construction_lbl.add_theme_font_size_override("font_size", 12)
-	_construction_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
-	_construction_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(_construction_lbl)
-
-	# Store ref on the bar so we can free it in _hide_construction_wait
-	bar.set_meta("is_construction_bar", true)
-	_construction_lbl.set_meta("bar_ref", bar)
+	NewsFeed.show_message(CONSTRUCTION_MSG, "Tutorial", "CONSTRUCTION",
+		"Building underway — explore freely while you wait.", {"sec": 0.0})
 
 func _hide_construction_wait() -> void:
-	if not is_instance_valid(_construction_lbl): return
-	var bar: Node = _construction_lbl.get_meta("bar_ref", null) if _construction_lbl.has_meta("bar_ref") else _construction_lbl
-	_construction_lbl = null
-	if not is_instance_valid(bar): return
-	var tw := create_tween()
-	tw.tween_property(bar, "modulate:a", 0.0, 0.3)
-	tw.tween_callback(bar.queue_free)
+	NewsFeed.clear_message(CONSTRUCTION_MSG)
 
 # ── Quest panel ────────────────────────────────────────────────────────────────
 func _build_quest_ui() -> void:
@@ -1491,7 +1367,12 @@ func _flash_skip_reward(pos: Vector2) -> void:
 
 # ── Reward flash ──────────────────────────────────────────────────────────────
 func _flash_reward(text: String) -> void:
-	var anchor: Control = _hero if is_instance_valid(_hero) and _hero.is_visible_in_tree() else _action_bar
+	var anchor: Control = _hero if is_instance_valid(_hero) and _hero.is_visible_in_tree() else null
+	if anchor == null:   # the objectives card that shows the step's instruction
+		for n in get_tree().get_nodes_in_group(ObjectivesCard.GROUP):
+			if (n as Control).is_visible_in_tree():
+				anchor = n
+				break
 	if not is_instance_valid(anchor): return
 	var flash := Label.new()
 	flash.text = "+ " + text
@@ -1509,23 +1390,8 @@ func _flash_reward(text: String) -> void:
 
 # ── Inventory hint ─────────────────────────────────────────────────────────────
 func _show_inventory_hint() -> void:
-	var hint := Label.new()
-	hint.text = "◈  Your stockpile is in the top bar — hover ⛏ Raw for details"
-	if _orbitron: hint.add_theme_font_override("font", _orbitron)
-	hint.add_theme_font_size_override("font_size", 10)
-	hint.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
-	hint.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	hint.add_theme_constant_override("outline_size", 3)
-	hint.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	hint.position = Vector2(_side_panel_edge() + 20.0, -140)
-	hint.modulate.a = 0.0
-	add_child(hint)
-	var tw := create_tween()
-	tw.tween_property(hint, "modulate:a", 1.0, 0.4)
-	tw.tween_interval(4.5)
-	tw.tween_property(hint, "modulate:a", 0.0, 0.6)
-	await tw.finished
-	if is_instance_valid(hint): hint.queue_free()
+	NewsFeed.show_message("tutorial_stockpile", "Tip", "YOUR STOCKPILE",
+		"It is in the top bar — hover ⛏ Raw for details.", {"sec": 5.0})
 
 # ── Typewriter (plain Label) ──────────────────────────────────────────────────
 func _tw_label(lbl: Label, text: String, spd: float) -> void:
