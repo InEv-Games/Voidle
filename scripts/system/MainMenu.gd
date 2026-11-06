@@ -32,7 +32,9 @@ func _ready() -> void:
 
 	_build_bg()
 	_build_stars()
+	_build_system(false)
 	_build_planet()
+	_build_system(true)
 	_build_vignette()
 	_build_menu()
 	_build_credits()
@@ -89,6 +91,10 @@ func _build_bg() -> void:
 	mat.set_shader_parameter("glow_pos", Vector2(
 		(vp.x * PLANET_CENTER.x + PARALLAX_MARGIN) / bg.size.x,
 		(vp.y * PLANET_CENTER.y * 0.94 + PARALLAX_MARGIN) / bg.size.y))
+	mat.set_shader_parameter("warm_pos", Vector2(
+		(vp.x * SUN_CENTER.x + PARALLAX_MARGIN) / bg.size.x,
+		(vp.y * SUN_CENTER.y + PARALLAX_MARGIN) / bg.size.y))
+	mat.set_shader_parameter("warm_strength", 0.16)
 	bg.material = mat
 	add_child(bg)
 	_add_layer(bg, PARALLAX_BACKDROP)
@@ -150,6 +156,9 @@ func _tick_backdrop(delta: float) -> void:
 	var vp := get_viewport().get_visible_rect().size
 	var m := get_viewport().get_mouse_position()
 	var target := Vector2(clampf(m.x / vp.x, 0.0, 1.0) - 0.5, clampf(m.y / vp.y, 0.0, 1.0) - 0.5)
+	# a slow camera drift under the mouse, so the shot never stands still
+	target += Vector2(sin(_time * DRIFT_SPEED.x) * DRIFT_AMOUNT.x,
+		sin(_time * DRIFT_SPEED.y + 1.3) * DRIFT_AMOUNT.y)
 	_parallax = _parallax.lerp(target, 1.0 - exp(-delta * PARALLAX_EASE))
 	# the camera orbits: one turn for everything (yaw: + moves the globe's front
 	# right; pitch: + moves it down, bringing the north into view)
@@ -168,6 +177,239 @@ func _tick_backdrop(delta: float) -> void:
 	_planet_tilt = pitch
 	for layer in _star_layers:
 		layer.queue_redraw()
+	for b: Array in _bodies:
+		var bm := b[0] as ShaderMaterial
+		b[2] = fposmod(float(b[2]) + float(b[1]) * delta, TAU)
+		bm.set_shader_parameter("rotation_offset", fposmod(float(b[2]) + _planet_spin, TAU))
+		bm.set_shader_parameter("tilt", _planet_tilt)
+
+# ── Star system ────────────────────────────────────────────────────────────
+# The rest of the system around the focus world: its sun just inside the
+# top-left corner (the light every body takes its shading from), one big ringed
+# gas giant far behind, and a moon a little in front of the
+# focus world. Each body sits at its own depth, so the mouse (and the slow
+# drift) slides them past each other; a faint orbit line runs through each,
+# centred on the sun and brightest at its body.
+
+## The sun's centre in screen shares (mostly off screen) and its rect's size
+## as a share of the screen height.
+const SUN_CENTER := Vector2(0.03, -0.05)
+const SUN_H_FRAC := 0.80
+const SUN_DEPTH := 3.2
+## Orbits: tilted ellipses about the sun (tilt rad, minor / major axis).
+const ORBIT_TILT := 0.32
+const ORBIT_FLAT := 0.40
+const ORBIT_ALPHA := Vector2(0.05, 0.20)   # line alpha: far from / at its body
+## The slow camera drift, in mouse shares (amount) and rad/s (speed).
+const DRIFT_AMOUNT := Vector2(0.16, 0.10)
+const DRIFT_SPEED := Vector2(0.085, 0.061)
+## Bodies: type, seed, centre (screen shares), globe diameter (screen-height
+## share), depth (planet radii behind the focus world's centre; < 0 in front),
+## spin rad/s, ringed, in front of the focus world.
+const BODIES := [
+	[PlanetData.Type.GAS_GIANT, 8803, Vector2(0.585, 0.215), 0.250, 1.6,  0.010, true,  false],
+	[PlanetData.Type.MOON,      5519, Vector2(0.505, 0.615), 0.085, -0.9, 0.015, false, true],
+]
+const GLOBE_FILL := 0.42   # planet_radius: the globe's share of its rect
+## Distance haze: a body (or orbit) `depth` radii behind the focus world is
+## dimmed and cooled toward the night sky, DEPTH_FADE at DEPTH_FADE_AT and on.
+const DEPTH_FADE := 0.55
+const DEPTH_FADE_AT := 2.8
+const DEPTH_FOG := 0.42   # haze over a globe at DEPTH_FADE_AT
+const HAZE := Color(0.62, 0.72, 0.98)
+
+## The tint for something `depth` radii behind the focus world (white in front).
+static func _depth_tint(depth: float) -> Color:
+	var t := _depth_t(depth)
+	var b := 1.0 - DEPTH_FADE * t
+	var c := Color.WHITE.lerp(HAZE, t) * b
+	c.a = 1.0
+	return c
+
+## 0 at the focus world (or in front of it) … 1 at DEPTH_FADE_AT and beyond,
+## fast at first, then levelling off.
+static func _depth_t(depth: float) -> float:
+	var t := clampf(depth / DEPTH_FADE_AT, 0.0, 1.0)
+	return 1.0 - (1.0 - t) * (1.0 - t)
+
+## Soft occlusion over a globe of radius `r` px at `centre` (in `parent`):
+## limb shading, darkest away from the sun, plus its distance haze.
+func _add_ao(parent: Node, centre: Vector2, r: float, light: Vector2, px: float, depth: float = 0.0) -> void:
+	var rect := ColorRect.new()
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var side := 2.0 * r + 4.0
+	rect.size = Vector2(side, side)
+	rect.position = centre - rect.size * 0.5
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/menu_body_ao.gdshader")
+	mat.set_shader_parameter("radius", r / side)
+	mat.set_shader_parameter("pixel_count", maxf(side / px, 8.0))
+	mat.set_shader_parameter("light", light)
+	mat.set_shader_parameter("fog", DEPTH_FOG * _depth_t(depth))
+	rect.material = mat
+	parent.add_child(rect)
+
+var _bodies: Array = []    # [ShaderMaterial, spin rad/s, rotation]
+
+func _sun_px() -> Vector2:
+	var vp := get_viewport().get_visible_rect().size
+	return Vector2(vp.x * SUN_CENTER.x, vp.y * SUN_CENTER.y)
+
+## The far half (sun, orbits, far bodies) or the near half (bodies in front).
+func _build_system(front: bool) -> void:
+	var vp := get_viewport().get_visible_rect().size
+	if not front:
+		_build_sun(vp)
+		# the focus world's own orbit, fixed with it
+		_build_orbit(Vector2(vp.x * PLANET_CENTER.x, vp.y * PLANET_CENTER.y), 0.0)
+	for spec: Array in BODIES:
+		if bool(spec[7]) != front:
+			continue
+		var c: Vector2 = spec[2]
+		var centre := Vector2(vp.x * c.x, vp.y * c.y)
+		if not front:
+			_build_orbit(centre, float(spec[4]))
+		_build_body(spec, centre, vp)
+
+func _build_sun(vp: Vector2) -> void:
+	var side := vp.y * SUN_H_FRAC
+	var sun := ColorRect.new()
+	sun.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sun.size = Vector2(side, side)
+	sun.position = _sun_px() - sun.size * 0.5
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/star.gdshader")
+	mat.set_shader_parameter("star_radius", 0.20)
+	mat.set_shader_parameter("corona_size", 0.28)
+	mat.set_shader_parameter("pixel_count", maxf(side / 4.25, 32.0))
+	mat.set_shader_parameter("flicker_speed", 0.25)
+	mat.set_shader_parameter("seed", 911)
+	sun.material = mat
+	add_child(sun)
+	_add_layer(sun, SUN_DEPTH)
+
+## A faint ellipse about the sun through `through`, on that body's depth.
+func _build_orbit(through: Vector2, depth: float) -> void:
+	var vp := get_viewport().get_visible_rect().size
+	var layer := Control.new()
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.position = Vector2(-PARALLAX_MARGIN, -PARALLAX_MARGIN)
+	layer.size = vp + Vector2.ONE * PARALLAX_MARGIN * 2.0
+	var off := Vector2.ONE * PARALLAX_MARGIN
+	var sun := _sun_px() + off
+	var local := (through + off - sun).rotated(-ORBIT_TILT)
+	var rx := sqrt(local.x * local.x + pow(local.y / ORBIT_FLAT, 2.0))
+	var at := atan2(local.y / ORBIT_FLAT, local.x)   # the body's angle on it
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	var segs := 360
+	var line := UIStyle.color(&"text_bright")
+	for i in segs + 1:
+		var t := TAU * float(i) / float(segs)
+		pts.append(sun + Vector2(cos(t) * rx, sin(t) * rx * ORBIT_FLAT).rotated(ORBIT_TILT))
+		var d := absf(wrapf(t - at, -PI, PI))
+		var a := lerpf(ORBIT_ALPHA.x, ORBIT_ALPHA.y, exp(-d * d / 0.08))
+		cols.append(Color(line, a))
+	layer.draw.connect(func() -> void: layer.draw_polyline_colors(pts, cols, 1.0))
+	layer.modulate = _depth_tint(depth * 0.5)
+	add_child(layer)
+	_add_layer(layer, depth)
+
+## One body: a holder at its depth with the ring's far half, the globe, and
+## the ring's near half.
+func _build_body(spec: Array, centre: Vector2, vp: Vector2) -> void:
+	var type: PlanetData.Type = spec[0]
+	var data: PlanetData
+	match type:
+		PlanetData.Type.GAS_GIANT: data = PlanetData.make_gas_giant(int(spec[1]))
+		PlanetData.Type.MOON:      data = PlanetData.make_moon(int(spec[1]))
+		_:                         data = PlanetData.from_seed_as_type(int(spec[1]), type)
+	var disc := vp.y * float(spec[3])
+	var side := disc / (GLOBE_FILL * 2.0)
+
+	var holder := Control.new()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.position = centre
+	holder.modulate = _depth_tint(float(spec[4]))
+	add_child(holder)
+	_add_layer(holder, float(spec[4]))
+
+	var ringed := bool(spec[6])
+	if ringed:
+		holder.draw.connect(func() -> void: _draw_ring(holder, disc * 0.5, false))
+
+	var globe := ColorRect.new()
+	globe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	globe.size = Vector2(side, side)
+	globe.position = -globe.size * 0.5
+	var light2 := (_sun_px() - centre).normalized()
+	var mat := _body_material(data, side, Vector3(light2.x, light2.y, 0.25).normalized())
+	globe.material = mat
+	holder.add_child(globe)
+	_add_ao(holder, Vector2.ZERO, disc * 0.5, light2, 4.25, float(spec[4]))
+	var rot := randf() * TAU
+	_bodies.append([mat, float(spec[5]), rot])
+
+	if ringed:
+		var near := Control.new()
+		near.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(near)
+		near.draw.connect(func() -> void: _draw_ring(near, disc * 0.5, true))
+
+## A tilted ring around a globe of radius `r` (px): bands of ellipse arcs, the
+## near half (below the centre) drawn over the globe, the far half under it.
+const RING_TILT := -0.38
+const RING_FLAT := 0.26
+const RING_BANDS := [[1.30, 0.30], [1.42, 0.55], [1.55, 0.70], [1.66, 0.40], [1.78, 0.62], [1.92, 0.32]]
+
+func _draw_ring(on: CanvasItem, r: float, near: bool) -> void:
+	var col := Color(0.86, 0.76, 0.56)
+	var w := maxf(r * 0.10, 1.5)
+	for band: Array in RING_BANDS:
+		var rx := r * float(band[0])
+		var pts := PackedVector2Array()
+		var from := 0.0 if near else PI
+		for i in 49:
+			var t := from + PI * float(i) / 48.0
+			pts.append(Vector2(cos(t) * rx, sin(t) * rx * RING_FLAT).rotated(RING_TILT))
+		on.draw_polyline(pts, Color(col, float(band[1]) * (0.85 if near else 0.55)), w)
+
+## The globe's material for `data` at a rect `side` px across, lit from `light`.
+func _body_material(data: PlanetData, side: float, light: Vector3) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load(PlanetData.get_shader_path(data.planet_type)) as Shader
+	mat.set_shader_parameter("planet_radius", GLOBE_FILL)
+	mat.set_shader_parameter("pixel_count", maxf(side / 4.25, 20.0))
+	mat.set_shader_parameter("seed", data.seed)
+	mat.set_shader_parameter("terrain_roughness", data.terrain_roughness)
+	mat.set_shader_parameter("aspect_ratio", 1.0)
+	mat.set_shader_parameter("light_direction", light)
+	var colors := PlanetData.get_colors(data.planet_type)
+	match PlanetData.get_shader_type(data.planet_type):
+		PlanetData.ShaderType.ROCKY:
+			mat.set_shader_parameter("cloud_speed", data.cloud_speed)
+			mat.set_shader_parameter("cloud_coverage", data.cloud_coverage)
+			mat.set_shader_parameter("has_clouds", 1.0 if data.has_clouds else 0.0)
+			mat.set_shader_parameter("atmosphere_density", data.atmosphere_density if data.has_atmosphere else 0.0)
+			mat.set_shader_parameter("sea_level", data.sea_level)
+			mat.set_shader_parameter("continent_scale", data.continent_scale)
+			mat.set_shader_parameter("specular_strength", data.specular_strength)
+			mat.set_shader_parameter("city_lights", 0.0)
+			for key in colors:
+				mat.set_shader_parameter(key, colors[key])
+		PlanetData.ShaderType.GAS:
+			mat.set_shader_parameter("cloud_speed", data.cloud_speed)
+			mat.set_shader_parameter("atmosphere_density", data.atmosphere_density)
+			mat.set_shader_parameter("color_band_a", colors.get("color_sand", Vector3(0.72, 0.55, 0.35)))
+			mat.set_shader_parameter("color_band_b", colors.get("color_forest", Vector3(0.50, 0.32, 0.18)))
+			mat.set_shader_parameter("color_storm", colors.get("color_snow", Vector3(0.88, 0.82, 0.72)))
+			mat.set_shader_parameter("color_atmosphere", colors.get("color_atmosphere", Vector3(0.72, 0.55, 0.35)))
+		PlanetData.ShaderType.MOON:
+			mat.set_shader_parameter("color_highland", colors.get("color_mountain", Vector3(0.62, 0.60, 0.56)))
+			mat.set_shader_parameter("color_mare", colors.get("color_deep_ocean", Vector3(0.22, 0.21, 0.20)))
+			mat.set_shader_parameter("color_rim", colors.get("color_snow", Vector3(0.78, 0.76, 0.72)))
+			mat.set_shader_parameter("color_floor", colors.get("color_ocean", Vector3(0.16, 0.15, 0.14)))
+	return mat
 
 # ── Planet ─────────────────────────────────────────────────────────────────
 
@@ -227,6 +469,8 @@ func _build_planet() -> void:
 
 	_update_light(mat)
 	_planet_rect.material = mat
+	_add_ao(self, _planet_rect.position + _planet_rect.size * 0.5, base_radius * side,
+		Vector2(LIGHT_DIR.x, LIGHT_DIR.y).normalized(), side / pcount)
 
 # ── Menu UI ────────────────────────────────────────────────────────────────
 
