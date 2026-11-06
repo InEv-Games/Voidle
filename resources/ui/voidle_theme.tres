@@ -36,6 +36,9 @@ corner_radius_bottom_left = 5
 
 [sub_resource type="StyleBoxEmpty" id="empty"]
 
+[sub_resource type="StyleBoxEmpty" id="italic_pad"]
+content_margin_right = 2.0
+
 [sub_resource type="StyleBoxFlat" id="button_h"]
 content_margin_left = 8.0
 content_margin_top = 4.0
@@ -862,6 +865,7 @@ BadgeLabel/base_type = &"Label"
 BadgeLabel/colors/font_color = Color(0.7216, 0.8471, 0.9333, 1)
 BadgeLabel/font_sizes/font_size = 8
 BadgeLabel/fonts/font = ExtResource("f_italic")
+BadgeLabel/styles/normal = SubResource("italic_pad")
 BodyLabel/base_type = &"Label"
 BodyLabel/colors/font_color = Color(0.7216, 0.8471, 0.9333, 1)
 BodyLabel/font_sizes/font_size = 8
@@ -977,10 +981,12 @@ CounterLabel/base_type = &"Label"
 CounterLabel/colors/font_color = Color(0.2196, 0.8157, 1, 1)
 CounterLabel/font_sizes/font_size = 10
 CounterLabel/fonts/font = ExtResource("f_italic")
+CounterLabel/styles/normal = SubResource("italic_pad")
 CrumbCurrent/base_type = &"Label"
 CrumbCurrent/colors/font_color = Color(0.2196, 0.8157, 1, 1)
 CrumbCurrent/font_sizes/font_size = 9
 CrumbCurrent/fonts/font = ExtResource("f_italic")
+CrumbCurrent/styles/normal = SubResource("italic_pad")
 DoubleRule/base_type = &"HSeparator"
 DoubleRule/constants/separation = 1
 HScrollBar/styles/grabber = SubResource("hscrollbar_g")
@@ -1006,6 +1012,7 @@ InfoValue/base_type = &"Label"
 InfoValue/colors/font_color = Color(0.2196, 0.8157, 1, 1)
 InfoValue/font_sizes/font_size = 10
 InfoValue/fonts/font = ExtResource("f_italic")
+InfoValue/styles/normal = SubResource("italic_pad")
 ItemPanel/base_type = &"PanelContainer"
 ItemPanel/styles/panel = SubResource("item")
 ItemPanel/styles/panel_hover = SubResource("item_hover")
@@ -1087,6 +1094,7 @@ StatLabel/base_type = &"Label"
 StatLabel/colors/font_color = Color(0.7216, 0.8471, 0.9333, 1)
 StatLabel/font_sizes/font_size = 8
 StatLabel/fonts/font = ExtResource("f_italic")
+StatLabel/styles/normal = SubResource("italic_pad")
 StepperMinus/base_type = &"ButtonNegative"
 StepperMinus/colors/font_color = Color(0.9176, 0.9686, 1, 1)
 StepperMinus/colors/font_disabled_color = Color(0.9176, 0.9686, 1, 0.4)
@@ -1111,10 +1119,12 @@ SubLabel/base_type = &"Label"
 SubLabel/colors/font_color = Color(0.7216, 0.8471, 0.9333, 1)
 SubLabel/font_sizes/font_size = 8
 SubLabel/fonts/font = ExtResource("f_italic")
+SubLabel/styles/normal = SubResource("italic_pad")
 TagLabel/base_type = &"Label"
 TagLabel/colors/font_color = Color(0.4314, 0.5725, 0.6902, 1)
 TagLabel/font_sizes/font_size = 8
 TagLabel/fonts/font = ExtResource("f_italic")
+TagLabel/styles/normal = SubResource("italic_pad")
 TitleLabel/base_type = &"Label"
 TitleLabel/colors/font_color = Color(0.9176, 0.9686, 1, 1)
 TitleLabel/font_sizes/font_size = 10
