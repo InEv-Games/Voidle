@@ -358,7 +358,10 @@ func _collect_rows(n: Node, row: int) -> void:
 				continue
 			rid = c.get_instance_id()
 			if not _rows.has(rid):
-				var start := 0.0 if _opening or _fade_t < 1.0 else 1.0
+				# a row found as an opening starts is hidden till its tween; one found
+				# as a close starts (or reverses) is still fully there — not judged by
+				# _fade_t, which already dropped below 1 when a close begins
+				var start := 0.0 if _opening else 1.0
 				_rows[rid] = {"node": c, "orig": _base_modulate(c as Control),
 					"last": (c as Control).modulate, "p": start, "cap": 1.0,
 					"s": _fade_rng.randf_range(0.0, 1.0 - ROW_FADE), "seed": _fade_rng.randi(),
