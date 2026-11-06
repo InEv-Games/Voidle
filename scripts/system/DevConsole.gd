@@ -326,9 +326,6 @@ func _exec(line: String) -> void:
 			_log_info("[color=#33cc55]── COLONY / ASTEROID ────────────────────[/color]")
 			_log_info("  [color=#88ddcc]colonize[/color]  [color=#88ddcc]scan asteroid[/color] [color=#aaaaaa][all][/color]")
 			_log_info("  [color=#88ddcc]asteroids[/color]")
-			_log_info("[color=#33cc55]── TRAITS ───────────────────────────────[/color]")
-			_log_info("  [color=#88ddcc]trait[/color]               — a pick of three on this world (opens it)")
-			_log_info("  [color=#88ddcc]trait reset[/color]         — empty this world's trait slots")
 			_log_info("[color=#33cc55]── SKILL TREE ───────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]skilltree unhide -all[/color]  [color=#88ddcc]hide -all[/color]  [color=#88ddcc]grant <id>|all[/color]")
 			_log_info("[color=#33cc55]── BUILDINGS ─────────────────────────────[/color]")
@@ -495,31 +492,6 @@ func _exec(line: String) -> void:
 				_:
 					_log_err("Try: excavate ready | reset")
 
-		# ── Traits (the pick of three) ──────────────────────────────────────
-		"trait", "traits":
-			var seed := GameState.active_planet_seed if GameState.active_planet_seed >= 0 else GameState.home_planet_seed
-			var pd := GameState.get_planet_data(seed)
-			if pd == null: _log_err("No planet to give a trait to."); return
-			var key := str(seed)
-			if parts.size() > 1 and parts[1].to_lower() == "reset":
-				# empties this world's slots (the home world keeps its Cradle trait)
-				GameState.planet_tags.erase(key)
-				GameState.tag_offers.erase(key)
-				GameState.tag_rerolls.erase(key)
-				PlanetTags.ensure_home(GameState.get_planet_data(GameState.home_planet_seed))
-				GameState.tag_offers_changed.emit()
-				_log_ok("Trait slots of [color=#aabbff]%s[/color] emptied." % pd.planet_name)
-				return
-			if PlanetTags.traits_of(seed).size() + PlanetTags.offers_of(seed).size() >= PlanetTags.SLOTS:
-				_log_err("%s has no free trait slot. Try: trait reset" % pd.planet_name); return
-			# a real offer, as a scan or a bought slot makes: the slot shows
-			# "+ Choose a trait" until it is picked
-			PlanetTags.queue_offer(pd)
-			if PlanetTags.offers_of(seed).is_empty(): _log_err("No trait left to offer."); return
-			GameState.save()
-			_log_ok("A pick of three waits on [color=#aabbff]%s[/color]." % pd.planet_name)
-			if _open: _toggle()
-			GameOverlays.open_trait_picker(get_tree().current_scene, seed)
 		"colonize":
 			var seed := GameState.active_planet_seed
 			if seed < 0: _log_err("Not viewing a planet."); return
