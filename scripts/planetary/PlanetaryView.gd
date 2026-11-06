@@ -155,6 +155,7 @@ var _role: String = ""
 var _lens_bar: Control = null
 var _lens_buttons: Dictionary = {}      # role -> Button (in the lens menu)
 var _lens_main: Button = null            # the one lens button: opens the menu
+var _lens_top: HBoxContainer = null      # its row: the orbit toggle, then LENS
 var _lens_menu: PanelContainer = null    # the lenses, above the button
 var _lens_menu_open := false
 var _lens_menu_tw: Tween = null
@@ -1930,81 +1931,43 @@ func _setup_moon_colonize_button(btn: IconButton, data: PlanetData) -> void:
 		else:
 			AudioManager.play("error"))
 
-# ── Objectives panel (playtest 31.10) ────────────────────────────────────────
-## Quest-like goals (the final rocket …) sit in a small panel on the right that
-## slides away behind a tab, apart from the world's own page.
-static var _objectives_hidden := false
-var _objectives: PanelContainer = null
-var _objectives_body: VBoxContainer = null
-var _objectives_tab: Button = null
-const OBJECTIVES_W := 280.0
+# ── Objectives card (playtest 31.10) ─────────────────────────────────────────
+## Quest-like goals (the final rocket …) sit in the small objectives card at
+## the bottom-right (ObjectivesCard), opened by the flag button in the news bar.
+var _objectives: ObjectivesCard = null
 
 func _ensure_objectives() -> void:
 	if _objectives != null and is_instance_valid(_objectives):
 		return
-	_objectives = PanelContainer.new()
-	_objectives.add_theme_stylebox_override("panel", UIStyle.box(&"PopupCard"))
-	_objectives.custom_minimum_size = Vector2(OBJECTIVES_W, 0)
-	_objectives.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(_objectives)
-	_objectives_body = VBoxContainer.new()
-	_objectives_body.add_theme_constant_override("separation", 6)
-	_objectives.add_child(_objectives_body)
-	var head := Label.new()
-	head.text = "◈  OBJECTIVES"
-	_apply_orbitron(head, 9)
-	head.add_theme_color_override("font_color", Color(0.50, 0.65, 0.95))
-	_objectives_body.add_child(head)
-	_objectives_body.add_child(HSeparator.new())
+	_objectives = ObjectivesCard.new()
+	_objectives.tip_title = "Final rocket"
+	_objectives.content.add_child(HeroHeader.create("Objective  ·  Civilization 1", "FINAL ROCKET",
+		ObjectivesCard.HERO_SIZE))
 	var pd := GameState.get_planet_data(GameState.home_planet_seed)
-	_add_rocket_section(_objectives_body, pd if pd != null else current_data)
-	_objectives_tab = Button.new()
-	_objectives_tab.focus_mode = Control.FOCUS_NONE
-	UIStyle.style_button(_objectives_tab, UIStyle.DEFAULT)
-	_objectives_tab.custom_minimum_size = Vector2(22, 48)
-	_objectives_tab.pressed.connect(func() -> void:
-		_objectives_hidden = not _objectives_hidden
-		AudioManager.play("click"))
-	_objectives_tab.mouse_entered.connect(func() -> void:
-		TooltipManager.show_tip("Objectives", ("Show" if _objectives_hidden else "Hide") + " the objectives."))
-	_objectives_tab.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
-	add_child(_objectives_tab)
-	_place_objectives(true)
+	_add_rocket_section(_objectives.content, pd if pd != null else current_data, false)
+	add_child(_objectives)
+	_place_objectives()
 
-## Top-right under the settings button (below the neighbouring bodies when they
-## take that corner); hidden, it slides off the right edge and the tab stays.
-func _place_objectives(snap := false) -> void:
+## The tutorial's own objectives card takes the same spot: this one waits
+## while that one is up.
+func _place_objectives() -> void:
 	if _objectives == null or not is_instance_valid(_objectives):
 		return
-	var vp := get_viewport_rect().size
-	var y := 72.0
-	for n in get_tree().get_nodes_in_group("companion_bodies"):
-		var bottom: float = n.call("occupied_bottom")
-		if bottom > 0.0:
-			y = maxf(y, bottom + 12.0)
-	_objectives.reset_size()
-	var w := maxf(_objectives.size.x, OBJECTIVES_W)
-	var target := Vector2(vp.x + 8.0 if _objectives_hidden else vp.x - w - 16.0, y)
-	_objectives.position = target if snap else _objectives.position.lerp(target, 0.2)
-	_objectives_tab.text = "‹" if _objectives_hidden else "›"
-	_objectives_tab.reset_size()
-	var tab_x := vp.x - _objectives_tab.size.x if _objectives_hidden \
-		else _objectives.position.x - _objectives_tab.size.x + 1.0
-	_objectives_tab.position = Vector2(tab_x, y + 12.0)
-	var shown := not GameState.showcase_mode
-	_objectives.visible = shown
-	_objectives_tab.visible = shown
+	var tut = TutorialManager.get("_quest_panel")
+	var tut_up: bool = tut != null and is_instance_valid(tut) and bool((tut as ObjectivesCard).active)
+	_objectives.active = not GameState.showcase_mode and not tut_up
 
 ## The final rocket (GDD §20.12–§20.18): its state, cost, target and the button
 ## that starts its preparation — in the Objectives panel.
-func _add_rocket_section(page: Control, data: PlanetData) -> void:
+func _add_rocket_section(page: Control, data: PlanetData, with_head := true) -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
-	var head := Label.new()
-	head.text = "FINAL ROCKET"
-	_apply_orbitron(head, 10)
-	head.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
-	box.add_child(head)
+	if with_head:   # the Objectives panel shows the name as its hero instead
+		var head := Label.new()
+		head.text = "FINAL ROCKET"
+		_apply_orbitron(head, 10)
+		head.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
+		box.add_child(head)
 	var info := RichTextLabel.new()
 	info.bbcode_enabled = true
 	info.fit_content = true
@@ -4752,77 +4715,83 @@ func _show_radial_menu_at(actions: Array[Dictionary], global_pos: Vector2,
 			btn_ctrl.queue_redraw()
 			lines_ctrl.queue_redraw(), 0.0, 1.0, FADE_DUR)
 
-## Orbit visibility toggle — bottom-right corner of planet view.
+## Orbit visibility toggle: next to the LENS button (left of it) in the top
+## row; at the planet view's bottom-left while this world has no lens bar.
+var _orbit_btn: Button = null
+const ORBIT_OFF_ALPHA := 0.45
+var _orbit_home: Control = null   # the planet view's container (the fallback spot)
+
 func _add_orbit_toggle(planet_cont: Control, layer: OrbitalLayer) -> void:
 	for ch: Node in planet_cont.get_children():
 		if ch.get_meta("orbit_toggle", false):
 			ch.queue_free()
+	if is_instance_valid(_orbit_btn):
+		_orbit_btn.queue_free()
 
-	const SIZE := 36.0
-	var btn := Control.new()
+	# an icon-only themed button beside the lens button; dimmed while off
+	var btn := IconButton.create("", "orbit")
 	btn.set_meta("orbit_toggle", true)
-	btn.custom_minimum_size = Vector2(SIZE, SIZE)
 	btn.z_index = 12
-	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	btn.tooltip_text = "Toggle orbits"
+	var sync := func() -> void:
+		btn.modulate.a = 1.0 if layer.visible else ORBIT_OFF_ALPHA
+	sync.call()
+	btn.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		layer.visible = not layer.visible
+		_orbits_shown = layer.visible   # flights and lanes between worlds too
+		sync.call())
+	btn.mouse_entered.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.POINTER)
+		TooltipManager.show_tip("Orbits", ("Hide" if layer.visible else "Show") + " the orbits, flights and lanes."))
+	btn.mouse_exited.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		TooltipManager.hide_tip())
 
-	var visible_ref: Array = [true]   # [0] = orbits visible
-	btn.draw.connect(func() -> void:
-		var is_vis: bool = visible_ref[0]
-		var bg    := Color(0.06, 0.08, 0.14, 0.82)
-		var border := Color(0.35, 0.55, 0.90, 0.55 if is_vis else 0.30)
-		var icon_c := Color(0.55, 0.78, 1.0, 1.0 if is_vis else 0.35)
-		var c      := Vector2(SIZE * 0.5, SIZE * 0.5)
-		# Background rounded rect
-		btn.draw_rect(Rect2(1, 1, SIZE - 2, SIZE - 2), bg)
-		btn.draw_rect(Rect2(1, 1, SIZE - 2, SIZE - 2), border, false, 1.5)
-		# Orbit ellipse: wide ellipse around center
-		var pts: PackedVector2Array = []
-		for i in 32:
-			var a: float = (float(i) / 32.0) * TAU
-			pts.append(c + Vector2(cos(a) * 12.0, sin(a) * 5.0))
-		btn.draw_polyline(pts + PackedVector2Array([pts[0]]), Color(icon_c, 0.70), 1.2, true)
-		# Small satellite: cross at orbit's right side
-		var sp := c + Vector2(12.0, 0.0)
-		btn.draw_rect(Rect2(sp + Vector2(-1, -1), Vector2(2, 2)), icon_c)
-		btn.draw_rect(Rect2(sp + Vector2(-3, 0),  Vector2(2, 1)), icon_c)
-		btn.draw_rect(Rect2(sp + Vector2( 2, 0),  Vector2(2, 1)), icon_c)
-		# Eye shape in center
-		if is_vis:
-			btn.draw_arc(c, 5.0, -PI * 0.55, PI * 0.55, 12, icon_c, 1.2, true)
-			btn.draw_arc(c, 5.0,  PI * 0.45, PI * 1.55, 12, icon_c, 1.2, true)
-			btn.draw_circle(c, 2.0, icon_c)
-		else:
-			# Crossed-out eye
-			btn.draw_line(c + Vector2(-5, -5), c + Vector2(5, 5), icon_c, 1.5, true))
-
-	btn.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton:
-			var mb := ev as InputEventMouseButton
-			if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
-				layer.visible = not layer.visible
-				visible_ref[0] = layer.visible
-				_orbits_shown = layer.visible   # flights and lanes between worlds too
-				btn.queue_redraw())
-
-	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
-	btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
-
+	_orbit_btn = btn
+	_orbit_home = planet_cont
 	planet_cont.add_child(btn)
-	btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	btn.offset_bottom = -12
-	btn.offset_left   = 40   # clear of the panel's open/close tab
-	btn.offset_top    = btn.offset_bottom - SIZE
-	btn.offset_right  = btn.offset_left + SIZE
+	_mount_orbit_toggle()
 	# nothing to toggle until the world has an Orbit
 	var show_if_orbit := func() -> void:
-		btn.visible = current_data != null and Leveling.orbit_hub(current_data) != null
+		var v := current_data != null and Leveling.orbit_hub(current_data) != null
+		if btn.visible != v:
+			btn.visible = v
+			if btn.get_parent() == _lens_top:
+				_place_lens_bar.call_deferred()   # the row's width changed
 	show_if_orbit.call()
 	var t := Timer.new()
 	t.wait_time = 0.5
 	t.autostart = true
 	t.timeout.connect(show_if_orbit)
 	btn.add_child(t)
+
+## Puts the orbit toggle beside the LENS button, or back at the bottom-left
+## of the planet view when there is no lens bar.
+func _mount_orbit_toggle() -> void:
+	if not is_instance_valid(_orbit_btn):
+		return
+	var to_lens := is_instance_valid(_lens_top)
+	var target: Node = _lens_top if to_lens else _orbit_home
+	if not is_instance_valid(target):
+		return
+	if _orbit_btn.get_parent() != target:
+		if _orbit_btn.get_parent() != null:
+			_orbit_btn.get_parent().remove_child(_orbit_btn)
+		target.add_child(_orbit_btn)
+	if to_lens:
+		_lens_top.move_child(_orbit_btn, 0)   # left of the LENS button
+		_orbit_btn.size_flags_vertical = Control.SIZE_FILL
+		# a square as tall as the lens button, so the row stays inside the
+		# resource bar (IconButton's own minimum, 26 px, stuck out of it)
+		var h := _lens_main.get_combined_minimum_size().y if is_instance_valid(_lens_main) else 20.0
+		var sb := _orbit_btn.get_theme_stylebox("normal")
+		var icon_px := maxf(10.0, h - sb.content_margin_top - sb.content_margin_bottom)
+		(_orbit_btn.get_node("Row/Icon") as Control).custom_minimum_size = Vector2(icon_px, icon_px)
+		(_orbit_btn as IconButton).min_size = Vector2(h, h)
+	else:
+		_orbit_btn.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 12)
+		_orbit_btn.offset_left  += 28   # clear of the panel's open/close arrow
+		_orbit_btn.offset_right += 28
 
 var _last_hud_h := -1.0
 
@@ -5046,12 +5015,19 @@ func _make_lens_button(text: String, tint: Color, on_press: Callable) -> Button:
 ## visible features that boost it, strong (solid) or good (dotted). Same data as
 ## the map and the economy (FeatureMap.role_texture). Click again to clear.
 func _rebuild_lens_bar() -> void:
+	# the orbit toggle rides in the old bar's top row: take it out first
+	if is_instance_valid(_orbit_btn) and is_instance_valid(_lens_top) and _orbit_btn.get_parent() == _lens_top:
+		_lens_top.remove_child(_orbit_btn)
+		if is_instance_valid(_orbit_home):
+			_orbit_home.add_child(_orbit_btn)
+	_lens_top = null
 	if _lens_bar != null and is_instance_valid(_lens_bar):
 		if tree_exiting.is_connected(_lens_bar.queue_free):
 			tree_exiting.disconnect(_lens_bar.queue_free)
 		_lens_bar.queue_free()
 	_lens_buttons.clear()
 	if current_data == null or not FeatureMap.has_map(current_data.seed):
+		_mount_orbit_toggle()   # no lens bar: back to the bottom-left
 		return
 	if _role != "" and not GameState.is_scanned(current_data.seed):
 		_set_role("")   # a lens left on from another world
@@ -5107,15 +5083,27 @@ func _rebuild_lens_bar() -> void:
 	# the one button: shows the lens that is on, opens / closes the menu
 	_lens_main = Button.new()
 	UIStyle.style_button(_lens_main, UIStyle.DEFAULT)   # like every other button
-	_lens_main.text = "LENS"
+	_lens_main.text = "NORMAL"
 	_lens_main.size_flags_horizontal = Control.SIZE_SHRINK_END   # stays put as the wider menu opens
-	_lens_main.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
-	_lens_main.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
+	_lens_main.mouse_entered.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.POINTER)
+		if not _lens_menu_open:
+			TooltipManager.show_tip("Lens", "Pick a lens: where each role thrives on this world."))
+	_lens_main.mouse_exited.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		TooltipManager.hide_tip())
 	_lens_main.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_set_lens_menu(not _lens_menu_open))
-	row.add_child(_lens_main)
-	row.move_child(_lens_main, 0)
+	# top row: [orbit toggle] [LENS], right-aligned so the button stays put
+	_lens_top = HBoxContainer.new()
+	_lens_top.alignment = BoxContainer.ALIGNMENT_END
+	_lens_top.add_theme_constant_override("separation", 4)
+	_lens_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lens_top.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_lens_top.add_child(_lens_main)
+	row.add_child(_lens_top)
+	row.move_child(_lens_top, 0)
 	# in the HUD's top layer (the resource bar's), freed with this view
 	var bar := HUDManager.credits_panel
 	var host: Node = bar.get_parent() if bar != null and is_instance_valid(bar) and bar.get_parent() != null else cont
@@ -5126,6 +5114,7 @@ func _rebuild_lens_bar() -> void:
 	if host != cont:
 		tree_exiting.connect(row.queue_free)
 	_lens_bar = row
+	_mount_orbit_toggle()
 	_style_lens_bar()
 	_place_lens_bar()
 
@@ -5235,10 +5224,10 @@ func _style_lens_bar() -> void:
 	for role: String in _lens_buttons:
 		var b: IconButton = _lens_buttons[role]
 		b.variant = IconButton.Variant.NEUTRAL if role == _role else IconButton.Variant.DEFAULT
-	# the one button names the lens that's on
+	# the one button names the lens that's on (no "LENS": the menu says it)
 	if _lens_main != null and is_instance_valid(_lens_main):
 		var on := "NORMAL" if _role == "" else String(FeatureMap.ROLES[_role]["label"]).to_upper()
-		_lens_main.text = "LENS  ·  " + on
+		_lens_main.text = on   # just the lens that's on
 		# a lens on reads as selected (Neutral), like the lenses in its menu
 		_lens_main.theme_type_variation = UIStyle.DEFAULT if _role == "" else UIStyle.NEUTRAL
 
@@ -10674,7 +10663,6 @@ var _slot_dd_sig: String = ""
 var _slot_dd_poll: float = 0.0
 var _slot_dd_keep_scroll: int = 0
 var _slot_dd_rebuilding := false   # a rebuild in place: no entrance
-
 ## Which picker rows are affordable right now (credits + free population).
 func _slot_dd_signature() -> String:
 	if _slot_dd_args.size() < 4:

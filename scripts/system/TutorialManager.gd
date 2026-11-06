@@ -334,10 +334,13 @@ var _solar_count:   int  = 0       # solar_panel builds total
 var _active:        bool = false
 
 var _quest_step:    int  = 0
-## Objectives panel folded to a small "OBJECTIVES" tab (O toggles; saved).
-var _collapsed:     bool = false
-var _side_tab:      Button = null
-var _overlay_lbl:   Label = null
+## Objectives card closed (the news bar's flag button or O toggles; saved).
+## The open / closed state itself lives in NewsFeed, shared by every card.
+var _collapsed: bool:
+	get: return not NewsFeed.objectives_open
+	set(v): NewsFeed.set_objectives_open(not v)
+var _side_tab:      Button = null   # gone: the news bar's flag button toggles
+var _overlay_lbl:   Label = null    # gone with it
 var _quest_body:    Array[Control] = []
 var _event_poll:    float = 0.0
 var _quest_sub:     int  = 0
@@ -370,7 +373,8 @@ var _construction_lbl: Label        = null    # non-blocking "under construction
 # ── Quest UI ───────────────────────────────────────────────────────────────────
 var _quest_panel:    PanelContainer   = null
 var _skip_btn:       Button           = null
-var _title_lbl:      Label            = null
+var _title_lbl:      Label            = null    # unused since the hero took the title
+var _hero:           HeroHeader       = null    # the current objective's name
 var _desc_lbl:       Label            = null
 var _sub_lbl:        Label            = null
 var _reward_lbl:     Label            = null
@@ -934,6 +938,7 @@ func _end_guided_tutorial() -> void:
 	if not _quest_done:
 		_build_quest_ui()
 		_show_quest_step(_quest_step)
+		NewsFeed.flag_new_objective()
 
 ## The side panel sits on the left: the planet area is the rest of the screen.
 func _side_panel_edge() -> float:
@@ -1236,28 +1241,18 @@ func _build_quest_ui() -> void:
 	if is_instance_valid(_quest_panel): _quest_panel.queue_free()
 	_tracker_items.clear()
 
-	_quest_panel = PanelContainer.new()
-	var sb := _panel_style(Color(0.04, 0.05, 0.10, 0.90), Color(0.28, 0.38, 0.72, 0.55))
-	_quest_panel.add_theme_stylebox_override("panel", sb)
-	_quest_panel.custom_minimum_size = Vector2(260, 0)
-	_quest_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	_place_quest_panel()   # top-right of the screen, kept there in _process
-	_quest_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_quest_panel.modulate.a  = 0.0
-	add_child(_quest_panel)
-	create_tween().tween_property(_quest_panel, "modulate:a", 1.0, 0.4)
+	# the small card at the bottom-right, opened by the news bar's flag button
+	var card := ObjectivesCard.new()
+	_quest_panel = card
+	add_child(card)
+	_place_quest_panel()
 
-	var rv := VBoxContainer.new()
-	rv.add_theme_constant_override("separation", 8)
-	_quest_panel.add_child(rv)
+	var rv := card.content
 
+	# the hero says it is an objective: this row only holds "skip tutorial"
 	var hdr := HBoxContainer.new()
 	hdr.add_theme_constant_override("separation", 6)
 	rv.add_child(hdr)
-
-	_mk_lbl(hdr, "◈", 10, Color(0.55, 0.75, 1.0))
-	_mk_lbl(hdr, "OBJECTIVES", 9, Color(0.50, 0.65, 0.95))
-	_build_quest_side_ui()
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1282,15 +1277,10 @@ func _build_quest_ui() -> void:
 	skip_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	hdr.add_child(skip_btn)
 
-	var sep1 := _hsep()
-	rv.add_child(sep1)
-	_quest_body.append(sep1)
-
-	_title_lbl = Label.new()
-	if _orbitron: _title_lbl.add_theme_font_override("font", _orbitron)
-	_title_lbl.add_theme_font_size_override("font_size", 11)
-	_title_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
-	rv.add_child(_title_lbl)
+	# the objective's name, as the left panel's hero (caption: where we are)
+	_hero = HeroHeader.create("", "", ObjectivesCard.HERO_SIZE)
+	rv.add_child(_hero)
+	_quest_body.append(_hero)
 
 	_desc_lbl = Label.new()
 	_desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1306,7 +1296,7 @@ func _build_quest_ui() -> void:
 	rv.add_child(_reward_lbl)
 	var sep2 := _hsep()
 	rv.add_child(sep2)
-	_quest_body.append_array([_title_lbl, _desc_lbl, _reward_lbl, sep2])
+	_quest_body.append_array([_desc_lbl, _reward_lbl, sep2])
 
 	for i in QUESTS.size():
 		var row := HBoxContainer.new()
@@ -1332,7 +1322,6 @@ func _build_quest_ui() -> void:
 			(_tracker_items[i]["dot"] as Label).text = "✓"
 			(_tracker_items[i]["dot"] as Label).add_theme_color_override("font_color", UIStyle.color(&"good"))
 			(_tracker_items[i]["lbl"] as Label).add_theme_color_override("font_color", UIStyle.color(&"good"))
-	_apply_collapsed()
 
 func _show_quest_step(idx: int) -> void:
 	_refresh_overlay_text()
@@ -1360,8 +1349,12 @@ func _show_quest_step(idx: int) -> void:
 	for i in _tracker_items.size():
 		var row := (_tracker_items[i]["dot"] as Label).get_parent() as Control
 		row.visible = i >= idx - 1 and i <= idx + 4
-	_tw_label(_title_lbl, q["title"].to_upper(), 0.022)
-	await get_tree().create_timer(0.022 * q["title"].length() + 0.1).timeout
+	_hero.caption = "Objective %d / %d" % [idx + 1, QUESTS.size()]
+	_hero.title = String(q["title"]).to_upper()
+	_desc_lbl.text = ""
+	(_quest_panel as ObjectivesCard).tip_title = String(q["title"])
+	(_quest_panel as ObjectivesCard).reveal()   # the cyber entrance, as a new objective
+	await get_tree().create_timer(0.6).timeout
 	_tw_label(_desc_lbl, q["desc"], 0.022)
 	if idx < TUTORIAL_QUEST_COUNT and GRANTS_ENABLED:
 		_grant_step_needs(q["sub_steps"], "target")
@@ -1420,102 +1413,23 @@ func _advance_quest_sub() -> void:
 		else:
 			await get_tree().create_timer(0.9).timeout
 			_show_quest_step(_quest_step)
+			NewsFeed.flag_new_objective()
 	else:
 		# More sub-steps remain — check if the next one is already done too
 		_check_quest_sub_already_done()
 
-## Slides the objectives off to the right (like the left side panel); only the
-## current objective stays, as a small outlined line of text. O toggles; saved.
+## Opens / closes the objectives card (O, or the news bar's flag button). Saved.
 func toggle_objectives() -> void:
 	_collapsed = not _collapsed
-	_apply_collapsed()
 	GameState.save()
 
-func _apply_collapsed() -> void:
-	if is_instance_valid(_side_tab):
-		_side_tab.text = "‹" if _collapsed else "›"
-	if is_instance_valid(_overlay_lbl):
-		var tw := _overlay_lbl.create_tween()
-		tw.tween_property(_overlay_lbl, "modulate:a", 1.0 if _collapsed else 0.0, 0.25)
-
-## The edge tab (hide / show) and the outlined current-objective line.
-func _build_quest_side_ui() -> void:
-	for n: Node in [_side_tab, _overlay_lbl]:
-		if is_instance_valid(n):
-			n.queue_free()
-	_side_tab = Button.new()
-	_side_tab.focus_mode = Control.FOCUS_NONE
-	var ts := _panel_style(Color(0.04, 0.05, 0.10, 0.90), Color(0.28, 0.38, 0.72, 0.55))
-	ts.content_margin_left = 5
-	ts.content_margin_right = 5
-	ts.content_margin_top = 14
-	ts.content_margin_bottom = 14
-	_side_tab.pressed.connect(toggle_objectives)
-	_side_tab.mouse_entered.connect(func() -> void:
-		TooltipManager.show_tip("Objectives", ("Show" if _collapsed else "Hide") + " the objectives (O).", ""))
-	_side_tab.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
-	UIStyle.style_button(_side_tab, UIStyle.DEFAULT)
-	add_child(_side_tab)
-
-	_overlay_lbl = Label.new()
-	if _orbitron: _overlay_lbl.add_theme_font_override("font", _orbitron)
-	_overlay_lbl.add_theme_font_size_override("font_size", 11)
-	_overlay_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
-	_overlay_lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.95))
-	_overlay_lbl.add_theme_constant_override("outline_size", 6)
-	_overlay_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_overlay_lbl.mouse_filter = Control.MOUSE_FILTER_STOP
-	_overlay_lbl.modulate.a = 1.0 if _collapsed else 0.0
-	_overlay_lbl.gui_input.connect(func(e: InputEvent) -> void:
-		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
-				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and _collapsed:
-			toggle_objectives())
-	add_child(_overlay_lbl)
-	_refresh_overlay_text()
-
 func _refresh_overlay_text() -> void:
-	if not is_instance_valid(_overlay_lbl):
-		return
-	if _quest_done or _quest_step >= QUESTS.size():
-		_overlay_lbl.text = ""
-		return
-	_overlay_lbl.text = "◈  " + String(QUESTS[_quest_step]["title"])
+	pass   # the collapsed one-liner is gone: the flag button's tooltip names it
 
-func _unhandled_key_input(event: InputEvent) -> void:
-	var k := event as InputEventKey
-	if k == null or not k.pressed or k.echo or k.keycode != KEY_O or k.ctrl_pressed or k.meta_pressed:
-		return
-	if is_instance_valid(_quest_panel) and _quest_panel.visible and not _quest_done:
-		get_viewport().set_input_as_handled()
-		toggle_objectives()
-
-## Objectives sit at the top-right, below the settings button and clear of the map's middle.
+## The card places itself (bottom-right, above the news bar); it shows while
+## the tutorial is running and has objectives left.
 func _place_quest_panel() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var y := 72.0
-	# the planet view's neighbouring bodies take the same corner when zoomed
-	# out — step below them so they stay clickable
-	for n in get_tree().get_nodes_in_group("companion_bodies"):
-		var bottom: float = n.call("occupied_bottom")
-		if bottom > 0.0:
-			y = maxf(y, bottom + 12.0)
-	var w := maxf(_quest_panel.size.x, 260.0)
-	# hidden: slid off past the right edge (the tab and overlay stay)
-	var target := Vector2(vp.x + 8.0 if _collapsed else vp.x - w - 24.0, y)
-	# glide rather than jump (sliding away, bodies moving in and out)
-	_quest_panel.position = target if _quest_panel.position == Vector2.ZERO \
-		else _quest_panel.position.lerp(target, 0.2)
-	var live := not _quest_done and _active
-	if is_instance_valid(_side_tab):
-		_side_tab.visible = live
-		_side_tab.reset_size()
-		var tab_x := vp.x - _side_tab.size.x if _collapsed else _quest_panel.position.x - _side_tab.size.x + 1.0
-		_side_tab.position = Vector2(tab_x, y + 18.0)
-	if is_instance_valid(_overlay_lbl):
-		_overlay_lbl.visible = live
-		_overlay_lbl.reset_size()
-		var tab_w := _side_tab.size.x if is_instance_valid(_side_tab) else 0.0
-		_overlay_lbl.position = Vector2(vp.x - tab_w - _overlay_lbl.size.x - 10.0, y + 22.0)
+	(_quest_panel as ObjectivesCard).active = not _quest_done and _active
 
 func _dismiss_quest_panel() -> void:
 	_quest_done = true
@@ -1523,10 +1437,9 @@ func _dismiss_quest_panel() -> void:
 		if is_instance_valid(n):
 			n.queue_free()
 	if is_instance_valid(_quest_panel):
-		var tw := create_tween()
-		tw.tween_property(_quest_panel, "modulate:a", 0.0, 0.5)
-		await tw.finished
-		if is_instance_valid(_quest_panel): _quest_panel.queue_free(); _quest_panel = null
+		(_quest_panel as ObjectivesCard).active = false
+		_quest_panel.queue_free()
+		_quest_panel = null
 
 ## Skipping the optional objectives pays out the home world's raw resource.
 const SKIP_REWARD_RAW := "ferrite"
@@ -1578,14 +1491,14 @@ func _flash_skip_reward(pos: Vector2) -> void:
 
 # ── Reward flash ──────────────────────────────────────────────────────────────
 func _flash_reward(text: String) -> void:
-	var anchor: Control = _quest_panel if is_instance_valid(_quest_panel) else _action_bar
+	var anchor: Control = _hero if is_instance_valid(_hero) and _hero.is_visible_in_tree() else _action_bar
 	if not is_instance_valid(anchor): return
 	var flash := Label.new()
 	flash.text = "+ " + text
 	if _orbitron: flash.add_theme_font_override("font", _orbitron)
 	flash.add_theme_font_size_override("font_size", 14)
 	flash.add_theme_color_override("font_color", UIStyle.color(&"good"))
-	flash.position = anchor.position + Vector2(16, -28)
+	flash.position = anchor.global_position + Vector2(16, -28)
 	add_child(flash)
 	var tw := create_tween()
 	tw.set_parallel(true)

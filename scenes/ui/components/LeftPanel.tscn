@@ -18,7 +18,7 @@ theme_override_constants/separation = 8
 
 [node name="PanelContainer" type="PanelContainer" parent="Layout" unique_id=487196389]
 modulate = Color(1, 1, 1, 0)
-custom_minimum_size = Vector2(0, 50)
+custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 
 [node name="PanelContent" type="VBoxContainer" parent="Layout" unique_id=1938270561]
@@ -34,6 +34,7 @@ layout_mode = 2
 mouse_filter = 2
 theme_override_constants/separation = 4
 
-[node name="Container" type="Container" parent="Layout" unique_id=1936895358]
-custom_minimum_size = Vector2(0, 10)
+[node name="PanelContainer2" type="PanelContainer" parent="Layout" unique_id=1743199102]
+modulate = Color(1, 1, 1, 0)
+custom_minimum_size = Vector2(0, 20)
 layout_mode = 2

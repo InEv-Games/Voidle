@@ -1,10 +1,9 @@
 class_name GameOverlays
 extends RefCounted
 
-## Full-screen overlays of the 31.10 mechanics: the planet trait picker (one of
-## three cards, survivors-like), the relic site card and the Relic Museum.
-## Each opens on its own CanvasLayer above the HUD; ESC or a click on the shade
-## closes it (the trait pick stays waiting).
+## Full-screen overlay of the planet trait picker (one of three cards with a
+## re-roll, survivors-like). It opens on its own CanvasLayer above the HUD; ESC
+## or a click on the shade closes it (the trait pick stays waiting).
 
 const LAYER := 240
 const CARD_W := 230.0
@@ -12,14 +11,12 @@ const CARD_W := 230.0
 # ── Shared ───────────────────────────────────────────────────────────────────
 
 ## A dimmed full-screen layer with a centred column; returns [layer, column].
-## hero_w > 0: the heading is a left panel hero (HeroHeader: subtitle as its
-## caption above the title) that wide, instead of centred lines.
-static func _overlay(host: Node, title: String, subtitle: String, hero_w := 0.0) -> Array:
+static func _overlay(host: Node, title: String, subtitle: String, dim := 0.72) -> Array:
 	var layer := CanvasLayer.new()
 	layer.layer = LAYER
 	host.get_tree().root.add_child(layer)
 	var shade := ColorRect.new()
-	shade.color = Color(UIStyle.color(&"panel_bg"), 0.82)
+	shade.color = Color(UIStyle.color(&"panel_bg"), dim)
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	shade.gui_input.connect(func(ev: InputEvent) -> void:
@@ -37,12 +34,6 @@ static func _overlay(host: Node, title: String, subtitle: String, hero_w := 0.0)
 	col.add_theme_constant_override("separation", 12)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(col)
-	if hero_w > 0.0:
-		var hero := HeroHeader.create(subtitle, title.to_upper())
-		hero.custom_minimum_size.x = hero_w
-		col.add_child(hero)
-		AudioManager.play("click")
-		return [layer, col]
 	var t := Label.new()
 	t.text = title.to_upper()
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -99,138 +90,269 @@ static func _pop_in(c: Control, delay: float) -> void:
 
 # ── Planet trait picker ──────────────────────────────────────────────────────
 
-## Three trait cards for the world's first waiting pick; choosing one keeps it.
+const TRAIT_CARD_W := 272.0
+const TRAIT_CARD_H := 316.0
+const TRAIT_INNER_W := TRAIT_CARD_W - 32.0
+## Darker than the other overlays: the panels behind fought with the small print.
+const TRAIT_DIM := 0.90
+
+static var _trait_layer: CanvasLayer = null
+
+## The HUD hides its "choose a trait" button while the cards are up.
+static func trait_picker_open() -> bool:
+	return is_instance_valid(_trait_layer)
+
+## The world's first waiting pick, in icons more than words (the words are in
+## the tooltips): what it already has, three trait cards, the rarity odds of this
+## slot, a re-roll and "later" (the pick stays waiting).
 static func open_trait_picker(host: Node, planet_seed: int) -> void:
-	var offers := PlanetTags.offers_of(planet_seed)
-	if offers.is_empty():
+	if PlanetTags.offers_of(planet_seed).is_empty():
 		return
 	var pd := GameState.get_planet_data(planet_seed)
 	var o := _overlay(host, "A trait for %s" % (pd.planet_name if pd else "this world"),
-		"Choose one. It stays with the world and counts for its whole total.")
+		"Pick one. It stays for good.", TRAIT_DIM)
 	var layer: CanvasLayer = o[0]
+	_trait_layer = layer
+	var col: VBoxContainer = o[1]
+	if pd != null:
+		col.add_child(_trait_slot_strip(pd))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 16)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	(o[1] as VBoxContainer).add_child(row)
+	col.add_child(row)
+	col.add_child(_trait_odds_line(planet_seed))
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 12)
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(actions)
+	var reroll := IconButton.create("RE-ROLL", "cycle", IconButton.Variant.DEFAULT)
+	_tip_on(reroll, "Re-roll", "Three new cards. The first re-roll of each pick is free, then the price rises.")
+	actions.add_child(reroll)
+	var later := IconButton.create_text("LATER")
+	_tip_on(later, "Later", "The pick keeps waiting for this world.")
+	later.pressed.connect(func() -> void: close(layer))
+	actions.add_child(later)
+	var note := _rich("", 12, TRAIT_INNER_W)
+	note.custom_minimum_size.y = 18.0   # keeps the column still when it fills
+	note.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	col.add_child(note)
+	_fill_trait_cards(row, planet_seed, layer)
+	_sync_reroll(reroll, note, planet_seed)
+	reroll.pressed.connect(func() -> void:
+		if PlanetTags.reroll(planet_seed):
+			AudioManager.play("click")
+			_fill_trait_cards(row, planet_seed, layer)
+			_sync_reroll(reroll, note, planet_seed)
+		else:
+			AudioManager.play("error"))
+	# Science keeps coming in while the cards are up
+	var poll := Timer.new()
+	poll.wait_time = 0.5
+	poll.autostart = true
+	poll.timeout.connect(func() -> void: _sync_reroll(reroll, note, planet_seed))
+	layer.add_child(poll)
+
+static func _tip_on(c: Control, title: String, body: String) -> void:
+	c.mouse_entered.connect(func() -> void: TooltipManager.show_tip(title, body))
+	c.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+
+static func _fill_trait_cards(row: HBoxContainer, planet_seed: int, layer: CanvasLayer) -> void:
+	for c in row.get_children():
+		row.remove_child(c)
+		c.queue_free()
 	var i := 0
-	for id in offers[0]:
-		var tid := String(id)
-		var info := PlanetTags.info(tid)
-		var card := _card(220.0)
-		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 10)
-		card.add_child(v)
-		v.add_child(_text(String(info["name"]).to_upper(), 15))
-		var strong := int(info.get("min_slot", 0)) > 0
-		v.add_child(_text(PlanetTags.effect_text(tid), 13, Color(0.95, 0.82, 0.45) if strong \
-			else (_good() if PlanetTags.is_positive(tid) else Color(1.0, 0.85, 0.45))))
-		v.add_child(_text(String(info["desc"]), 11, UIStyle.color(&"text_subtle")))
-		var sp := Control.new()
-		sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		v.add_child(sp)
-		var btn := IconButton.create("CHOOSE", "confirm", IconButton.Variant.POSITIVE)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.pressed.connect(func() -> void:
-			if PlanetTags.choose(planet_seed, tid):
-				AudioManager.play("building_done")
-			close(layer))
-		v.add_child(btn)
+	for id in PlanetTags.offers_of(planet_seed)[0]:
+		var def := TraitDef.find(String(id))
+		if def == null:
+			continue
+		var card := _trait_card(def, planet_seed, layer)
 		row.add_child(card)
 		_pop_in(card, 0.08 * i)
 		i += 1
-	var later := IconButton.create_text("LATER")
-	later.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	later.pressed.connect(func() -> void: close(layer))
-	(o[1] as VBoxContainer).add_child(later)
 
-# ── Relic site ───────────────────────────────────────────────────────────────
+## "[star][star][star]": one more per rarity step.
+static func _stars_bb(rarity: int, px: int) -> String:
+	var out := ""
+	for i in rarity + 1:
+		out += UIIcons.bb("star", px, TraitDef.RARITY_COLORS[rarity])
+	return out
 
-## The card of a relic site on the map: its story and the excavation.
-static func open_relic_site(host: Node, relic_id: String) -> void:
-	var idx := Relics.index_of(relic_id)
-	if idx < 0:
-		return
-	var r: Dictionary = Relics.CATALOGUE[idx]
-	var o := _overlay(host, "Relic site", "Relic %d of %d" % [idx + 1, Relics.count()], 420.0)
-	var layer: CanvasLayer = o[0]
-	var card := _card()
-	card.custom_minimum_size.x = 420.0
+## Rarity on top, the effects as icons and amounts (words in their tooltips),
+## one line of story, CHOOSE.
+static func _trait_card(def: TraitDef, planet_seed: int, layer: CanvasLayer) -> PanelContainer:
+	var rc := def.rarity_color()
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(TRAIT_CARD_W, TRAIT_CARD_H)
+	card.add_theme_stylebox_override("panel", _trait_card_box(rc, false))
+	card.mouse_entered.connect(func() -> void: card.add_theme_stylebox_override("panel", _trait_card_box(rc, true)))
+	card.mouse_exited.connect(func() -> void:
+		if not card.get_global_rect().has_point(card.get_global_mouse_position()):   # not onto its own parts
+			card.add_theme_stylebox_override("panel", _trait_card_box(rc, false)))
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
+	v.add_theme_constant_override("separation", 8)
 	card.add_child(v)
-	var story := _text(String(r["story"]), 12)
-	story.custom_minimum_size.x = 396.0
+	v.add_child(_rich("[center]%s  [color=#%s]%s[/color][/center]" % [_stars_bb(def.rarity, 12), rc.to_html(false),
+		def.rarity_name().to_upper()], 11, TRAIT_INNER_W))
+	if not def.effects.is_empty():
+		var icon := TextureRect.new()
+		icon.texture = UIIcons.get_icon(PlanetTags.effect_icon(String(def.effects.keys()[0])))
+		icon.modulate = rc
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.custom_minimum_size = Vector2(44.0, 44.0)
+		icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		v.add_child(icon)
+	var title := _text(def.display_name.to_upper(), 17)
+	title.custom_minimum_size.x = TRAIT_INNER_W
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(title)
+	var line := ColorRect.new()
+	line.color = Color(rc, 0.35)
+	line.custom_minimum_size.y = 1.0
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(line)
+	for rid: String in def.effects:
+		var amount := float(def.effects[rid])
+		var row := _rich("[center]%s[/center]" % PlanetTags.effect_short_bb(rid, amount, 20), 20, TRAIT_INNER_W)
+		row.mouse_filter = Control.MOUSE_FILTER_PASS   # its tooltip; the card keeps its hover
+		_tip_on(row, def.display_name, PlanetTags.effect_explain(rid))
+		v.add_child(row)
+	var sp := Control.new()
+	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(sp)
+	var story := _text(def.description, 11, UIStyle.color(&"text_muted"))
+	story.custom_minimum_size.x = TRAIT_INNER_W
+	story.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(story)
-	var block := Relics.excavate_block(relic_id)
-	var btn := IconButton.create("EXCAVATE", "library", IconButton.Variant.POSITIVE,
-		"%s sci" % Economy.fmt(float(r["cost"])))
-	btn.disabled = block != ""
-	v.add_child(btn)
-	if block != "":
-		v.add_child(_text(block, 11, _bad()))
+	if not def.allowed_planet_types.is_empty():
+		var kinds: Array[String] = []
+		var muted := UIStyle.color(&"text_muted")
+		for t: int in def.allowed_planet_types:
+			var ic := "moon" if t == PlanetData.Type.MOON else "planet"
+			kinds.append("%s [color=#%s]%s[/color]" % [UIIcons.bb(ic, 12, muted), muted.to_html(false),
+				String(PlanetData.Type.keys()[t]).capitalize()])
+		v.add_child(_rich("[center]%s[/center]" % "   ".join(kinds), 11, TRAIT_INNER_W))
+	var btn := IconButton.create("CHOOSE", "confirm", IconButton.Variant.POSITIVE)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var tid := def.trait_id
 	btn.pressed.connect(func() -> void:
-		if not Relics.excavate(relic_id):
-			AudioManager.play("error")
-			return
-		AudioManager.play("achievement")
-		close(layer)
-		_found_card(host, r))
-	(o[1] as VBoxContainer).add_child(card)
-	_pop_in(card, 0.0)
+		if PlanetTags.choose(planet_seed, tid):
+			AudioManager.play("building_done")
+		close(layer))
+	v.add_child(btn)
+	return card
 
-static func _found_card(host: Node, r: Dictionary) -> void:
-	var o := _overlay(host, r["name"], "Added to the Museum  ·  %d / %d relics" % [Relics.found_count(), Relics.count()])
-	var card := _card()
-	card.custom_minimum_size.x = 420.0
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	card.add_child(v)
-	var b := _text(Relics.bonus_text(r), 14, _good())
-	b.custom_minimum_size.x = 396.0
-	v.add_child(b)
-	var h := _text("Next: " + String(r["hint"]), 12, Color(1.0, 0.85, 0.45))
-	h.custom_minimum_size.x = 396.0
-	v.add_child(h)
-	(o[1] as VBoxContainer).add_child(card)
-	_pop_in(card, 0.0)
+static func _trait_card_box(rc: Color, hover: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(rc.r * 0.14 + 0.03, rc.g * 0.14 + 0.04, rc.b * 0.14 + 0.07, 0.98) if hover \
+		else Color(0.04, 0.05, 0.09, 0.98)
+	sb.border_color = rc if hover else Color(rc, 0.55)
+	sb.set_border_width_all(1)
+	sb.border_width_top = 4
+	sb.set_corner_radius_all(3)
+	sb.content_margin_left = 16.0
+	sb.content_margin_right = 16.0
+	sb.content_margin_top = 12.0
+	sb.content_margin_bottom = 14.0
+	return sb
 
-# ── Museum ───────────────────────────────────────────────────────────────────
+## The world's three slots in a row: its traits as name and icons, a gold plus on
+## the one being picked, an empty box on the rest.
+static func _trait_slot_strip(pd: PlanetData) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var have := PlanetTags.traits_of(pd.seed)
+	var gold := TraitDef.RARITY_COLORS[TraitDef.Rarity.LEGENDARY]
+	for i in PlanetTags.SLOTS:
+		var c := UIStyle.color(&"text_muted")
+		var bb := UIIcons.bb("empty", 13, c)
+		var tip_title := "Trait slot %d" % (i + 1)
+		var tip := "Empty."
+		match PlanetTags.slot_state(pd, i):
+			PlanetTags.Slot.FILLED:
+				var def := TraitDef.find(String(have[i]))
+				if def != null:
+					c = def.rarity_color()
+					var parts: Array[String] = []
+					for rid: String in def.effects:
+						parts.append(PlanetTags.effect_short_bb(rid, float(def.effects[rid]), 13))
+					bb = "[color=#%s]%s[/color]  %s" % [c.to_html(false), def.display_name, "  ".join(parts)]
+					tip_title = def.display_name
+					tip = "%s\n\n%s" % [def.description, PlanetTags.effect_bb(def.trait_id)]
+			PlanetTags.Slot.PICKING:
+				if i == have.size():
+					c = gold
+					tip = "You are picking this one now."
+				else:
+					tip = "A pick waits for this one."
+				bb = UIIcons.bb("positive", 13, c)
+		var chip := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(c, 0.08)
+		sb.border_color = Color(c, 0.6)
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(3)
+		sb.content_margin_left = 8.0
+		sb.content_margin_right = 8.0
+		sb.content_margin_top = 3.0
+		sb.content_margin_bottom = 3.0
+		chip.add_theme_stylebox_override("panel", sb)
+		var l := _rich(bb, 11, 0.0)
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+		chip.add_child(l)
+		_tip_on(chip, tip_title, tip)
+		row.add_child(chip)
+	return row
 
-## Every relic of the game: found ones with their bonus and story, the one being
-## looked for with its hint, the rest unknown.
-static func open_museum(host: Node) -> void:
-	var o := _overlay(host, "Museum", "%d / %d relics found" % [Relics.found_count(), Relics.count()])
-	var layer: CanvasLayer = o[0]
-	var grid := HFlowContainer.new()
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 12)
-	grid.custom_minimum_size.x = (CARD_W + 12.0) * 3.0
-	grid.alignment = FlowContainer.ALIGNMENT_CENTER
-	(o[1] as VBoxContainer).add_child(grid)
-	for i in Relics.count():
-		var r: Dictionary = Relics.CATALOGUE[i]
-		var card := _card(200.0)
-		var v := VBoxContainer.new()
-		v.add_theme_constant_override("separation", 8)
-		card.add_child(v)
-		var found := Relics.is_found(r["id"])
-		v.add_child(_text("RELIC %d" % (i + 1), 10, UIStyle.color(&"text_muted")))
-		if found:
-			v.add_child(_text(String(r["name"]).to_upper(), 14))
-			v.add_child(_text(Relics.bonus_text(r), 12, _good()))
-			v.add_child(_text(String(r["story"]), 10, UIStyle.color(&"text_subtle")))
-		else:
-			v.add_child(_text("???", 14, UIStyle.color(&"text_muted")))
-			if Relics.is_hinted(r["id"]):
-				var hint: String = Relics.FIRST_HINT if i == 0 else String(Relics.CATALOGUE[i - 1]["hint"])
-				v.add_child(_text("Hint: " + hint, 11, Color(1.0, 0.85, 0.45)))
-			else:
-				v.add_child(_text("Not yet known.", 11, UIStyle.color(&"text_muted")))
-		if not found:
-			card.modulate = Color(0.75, 0.78, 0.85, 0.85)
-		grid.add_child(card)
-		_pop_in(card, 0.05 * i)
-	var shut := IconButton.create_text("CLOSE")
-	shut.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	shut.pressed.connect(func() -> void: close(layer))
-	(o[1] as VBoxContainer).add_child(shut)
+## Each rarity's stars and its share in this slot; the tooltip says what it is.
+static func _trait_odds_line(planet_seed: int) -> RichTextLabel:
+	var odds := PlanetTags.rarity_odds(PlanetTags.traits_of(planet_seed).size())
+	var total := 0
+	for r: String in odds:
+		total += int(odds[r])
+	var parts: Array[String] = []
+	var words: Array[String] = []
+	for i in TraitDef.RARITY_NAMES.size():
+		var n := int(odds.get(TraitDef.RARITY_NAMES[i].to_lower(), 0))
+		if n > 0:
+			var share := "%d%%" % roundi(100.0 * n / total)
+			var hex := TraitDef.RARITY_COLORS[i].to_html(false)
+			parts.append("%s [color=#%s]%s[/color]" % [_stars_bb(i, 12), hex, share])
+			words.append("[color=#%s]%s[/color] %s" % [hex, TraitDef.RARITY_NAMES[i], share])
+	var l := _rich("[center]%s[/center]" % "     ".join(parts), 12, TRAIT_CARD_W * 2.0)
+	l.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_STOP
+	_tip_on(l, "Rarity odds in this slot", "\n".join(words))
+	return l
+
+## The button's price (free, or Science); under it what's missing, if anything.
+static func _sync_reroll(btn: IconButton, note: RichTextLabel, planet_seed: int) -> void:
+	var cost := PlanetTags.reroll_cost(planet_seed)
+	var free := cost.is_empty()
+	var price := float(cost.get(Economy.SCIENCE, 0.0))
+	var items := PackedStringArray() if free else PackedStringArray(["%s:%s" % [Economy.SCIENCE, Economy.fmt(price)]])
+	if btn.counter_items != items:
+		btn.counter_items = items
+	var word := "FREE" if free else ""
+	if btn.counter != word:
+		btn.counter = word
+	var short := Economy.cost_block(cost) != ""
+	btn.disabled = short
+	var bad := _bad()
+	var text := "[center]%s [color=#%s]−%s[/color][/center]" % [UIIcons.bb(Economy.SCIENCE, 13, bad), bad.to_html(false),
+		Economy.fmt(price - GameState.science_points)] if short else ""
+	if note.text != text:
+		note.text = text
+
+static func _rich(bb: String, size: int, width: float) -> RichTextLabel:
+	var l := RichTextLabel.new()
+	l.bbcode_enabled = true
+	l.fit_content = true
+	l.scroll_active = false
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.custom_minimum_size.x = width
+	l.add_theme_font_size_override("normal_font_size", size)
+	l.text = bb
+	return l

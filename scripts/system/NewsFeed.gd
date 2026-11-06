@@ -149,6 +149,8 @@ func _connect_sources() -> void:
 			"A City of level %d may hold %d districts." % [level, Leveling.city_max_districts(level)],
 			city.shown_name() if city else "City", {"seed": seed_val, "label": label}))
 	SkillTree.skill_unlocked.connect(func(id: String) -> void:
+		if id == "lunar_program":
+			flag_new_objective()   # the final rocket joins the objectives
 		var node = SkillTree.nodes.get(id, null)
 		if node != null and float(node.cost) > 0.0:
 			post("Research complete: %s." % node.name, Kind.EVENT,
@@ -283,6 +285,7 @@ func _build_ui(host: Node) -> void:
 		c.queue_free()
 	_labels.clear()
 	_bind_ticker()
+	_bind_objectives_btn()
 	if not _bar.has_meta("news_bound"):
 		_bar.set_meta("news_bound", true)
 		_bar.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -335,6 +338,7 @@ func _process(delta: float) -> void:
 	_ensure_bar()
 	_bar.visible = true
 	_tick_ticker(delta)
+	_layout_objectives_btn()
 	var width := _clip.size.x
 	if width <= 1.0:
 		return
@@ -378,6 +382,108 @@ func _process(delta: float) -> void:
 		l.size.y = HEIGHT - 1.0
 		_labels.append(l)
 		end = l.position.x + _shown_width(l)
+
+# ── Objectives button ────────────────────────────────────────────────────────
+## A flag icon button between NEWS and the market box: opens / closes the
+## objectives card above the bar (ObjectivesCard). Shown while some card has
+## an objective to show (set_objectives_source); NEWS moves aside for it.
+signal objectives_changed(open: bool)
+var objectives_open := true          # saved through TutorialManager._collapsed
+var _obj_sources: Dictionary = {}    # source id → [active, tip title]
+var _obj_btn: IconButton = null
+## A new objective came in while the card is closed: the button blinks
+## yellow (its "on" look) until the card is opened.
+var _obj_blink := false
+const OBJ_BLINK_SEC := 0.45   # half a blink: yellow, then blue
+const OBJ_BTN_W := 22.0
+const OBJ_BTN_GAP := 4.0
+
+func toggle_objectives() -> void:
+	set_objectives_open(not objectives_open)
+
+func set_objectives_open(open: bool) -> void:
+	if open:
+		_obj_blink = false   # seen
+	if open == objectives_open:
+		return
+	objectives_open = open
+	objectives_changed.emit(open)
+
+## A new objective is up: blink the button if the card is closed.
+func flag_new_objective() -> void:
+	if not objectives_open:
+		_obj_blink = true
+
+## `active`: the source has an objective to show right now; `tip` names it.
+func set_objectives_source(id: int, active: bool, tip := "") -> void:
+	if active:
+		_obj_sources[id] = tip
+	else:
+		_obj_sources.erase(id)
+
+func _bind_objectives_btn() -> void:
+	_obj_btn = _bar.get_node_or_null("Objectives") as IconButton
+	if _obj_btn != null:
+		return
+	_obj_btn = IconButton.create("", "flag")
+	_obj_btn.name = "Objectives"
+	_obj_btn.min_size = Vector2(HEIGHT - 1.0, HEIGHT - 1.0)
+	_bar.add_child(_obj_btn)
+	var sb := _obj_btn.get_theme_stylebox("normal")
+	var icon_px := maxf(10.0, HEIGHT - 1.0 - sb.content_margin_top - sb.content_margin_bottom)
+	(_obj_btn.get_node("Row/Icon") as Control).custom_minimum_size = Vector2(icon_px, icon_px)
+	_obj_btn.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		TooltipManager.hide_tip()
+		toggle_objectives())
+	_obj_btn.mouse_entered.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.POINTER)
+		var cur := ""
+		for t in _obj_sources.values():
+			if String(t) != "":
+				cur = String(t)
+		TooltipManager.show_tip("Objectives", ("Hide" if objectives_open else "Show") + " the objectives (O)."
+			+ ("\nNow: " + cur if cur != "" else "")))
+	_obj_btn.mouse_exited.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		TooltipManager.hide_tip())
+
+## O opens / closes the card too, while there is one.
+func _unhandled_key_input(event: InputEvent) -> void:
+	var k := event as InputEventKey
+	if k == null or not k.pressed or k.echo or k.keycode != KEY_O or k.ctrl_pressed or k.meta_pressed:
+		return
+	if not _obj_sources.is_empty():
+		get_viewport().set_input_as_handled()
+		toggle_objectives()
+
+## The button sits right of NEWS, left of the market box; while it is hidden
+## NEWS (and the crawl's clip) take its place back.
+func _layout_objectives_btn() -> void:
+	if _obj_btn == null or not is_instance_valid(_obj_btn):
+		return
+	var on := not _obj_sources.is_empty()
+	_obj_btn.visible = on
+	var lit := objectives_open
+	if _obj_blink and on:
+		lit = int(Time.get_ticks_msec() / int(OBJ_BLINK_SEC * 1000.0)) % 2 == 0
+	var v := IconButton.Variant.NEUTRAL if lit else IconButton.Variant.DEFAULT
+	if _obj_btn.variant != v:
+		_obj_btn.variant = v   # lit while the card is open, like a lens that is on
+	var ticker_left := -(TICKER_W + 4.0)
+	var right := ticker_left - OBJ_BTN_GAP
+	if on:
+		_obj_btn.anchor_left = 1.0
+		_obj_btn.anchor_right = 1.0
+		_obj_btn.offset_right = right
+		_obj_btn.offset_left = right - OBJ_BTN_W
+		_obj_btn.offset_top = 2.0
+		_obj_btn.offset_bottom = HEIGHT + 1.0
+		right -= OBJ_BTN_W + OBJ_BTN_GAP
+	var tag := _bar.get_node("Tag") as Control
+	tag.offset_right = right
+	tag.offset_left = right - 46.0
+	_clip.offset_right = tag.offset_left
 
 # ── Market ticker (playtest 31.10) ───────────────────────────────────────────
 ## Beside NEWS, like a news channel's market box: one tradeable product at a
