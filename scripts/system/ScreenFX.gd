@@ -1,12 +1,13 @@
-## Whole-screen analog VHS look: shaders/vhs_glitch.gdshader at full strength,
-## blended faintly (OPACITY) over everything the game draws — above all UI,
-## under the cursor (CursorManager's layer 500). Also makes random interface
+## Whole-screen analog CRT look: shaders/crt_phosphor.gdshader (phosphor glow,
+## scanlines, a little analog wobble and flicker) laid at OPACITY over
+## everything the game draws — above all UI, under the cursor (CursorManager's
+## layer 500). Also makes random interface
 ## parts flicker now and then (see Interface flicker below).
 extends Node
 
 const LAYER := 495
-const OPACITY := 0.02
-const VHS_SHADER := preload("res://shaders/vhs_glitch.gdshader")
+const OPACITY := 0.35   # subtle: each part of the effect is mild on its own
+const CRT_SHADER := preload("res://shaders/crt_phosphor.gdshader")
 
 var _rect: ColorRect
 
@@ -19,9 +20,8 @@ func _ready() -> void:
 	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var mat := ShaderMaterial.new()
-	mat.shader = VHS_SHADER
-	mat.set_shader_parameter(&"amount", 1.0)
-	mat.set_shader_parameter(&"opacity", OPACITY)
+	mat.shader = CRT_SHADER
+	mat.set_shader_parameter(&"intensity", OPACITY)
 	_rect.material = mat
 	layer.add_child(_rect)
 	_next_flicker = randf_range(FLICKER_EVERY.x, FLICKER_EVERY.y)
