@@ -137,6 +137,7 @@ func _apply_theme() -> void:
 	var src := _base_theme if original else ThemeBuilder.build(_base_theme, theme_hue, theme_harmony, theme_vividness)
 	dst.clear()
 	dst.merge_with(src)
+	ThemeBuilder.set_slider_grabbers(dst)
 
 ## The accent colour of the current theme, for a swatch.
 func theme_swatch() -> Color:

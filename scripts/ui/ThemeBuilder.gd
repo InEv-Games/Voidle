@@ -69,6 +69,33 @@ static func build(base: Theme, accent_deg: float, harmony: int, vividness: float
 			t.set_stylebox(name, type, done[sb])
 	return t
 
+## Slider handle: a small upright bar (px), not Godot's default 16px knob.
+const GRABBER_SIZE := Vector2i(6, 16)
+## The dark edge that sets the handle off from the same-coloured fill.
+const GRABBER_EDGE := Color(0.02, 0.06, 0.1, 1.0)
+
+## Gives HSlider / VSlider a small upright-bar handle (lying flat on a VSlider)
+## in the slider's fill colour (the accent, so it follows the theme); a lighter
+## one on hover, a dim one disabled. Icons aren't recoloured by build(), so
+## they're drawn here from the theme.
+static func set_slider_grabbers(t: Theme) -> void:
+	var fill := t.get_stylebox(&"grabber_area", &"HSlider")
+	var col: Color = (fill as StyleBoxFlat).bg_color if fill is StyleBoxFlat else Color(0.22, 0.82, 1.0)
+	for type: StringName in [&"HSlider", &"VSlider"]:
+		var sz := GRABBER_SIZE if type == &"HSlider" else Vector2i(GRABBER_SIZE.y, GRABBER_SIZE.x)
+		t.set_icon(&"grabber", type, _bar(sz, col))
+		t.set_icon(&"grabber_highlight", type, _bar(sz, col.lightened(0.3)))
+		t.set_icon(&"grabber_disabled", type, _bar(sz, Color(col, 0.4)))
+
+## A filled rectangle `size` big with a 1px GRABBER_EDGE border.
+static func _bar(size: Vector2i, col: Color) -> ImageTexture:
+	var img := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
+	for y in size.y:
+		for x in size.x:
+			var edge := x == 0 or y == 0 or x == size.x - 1 or y == size.y - 1
+			img.set_pixel(x, y, Color(GRABBER_EDGE, col.a) if edge else col)
+	return ImageTexture.create_from_image(img)
+
 ## The base Palette's panel / item / accent colours as built, for a preview.
 static func preview(base: Theme, accent_deg: float, harmony: int, vividness: float = 1.0) -> Array[Color]:
 	var hues := role_hues(accent_deg, harmony)
