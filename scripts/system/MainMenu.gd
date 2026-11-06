@@ -47,16 +47,18 @@ func _ready() -> void:
 const PLANET_H_FRAC := 1.35
 const PLANET_CENTER := Vector2(0.80, 1.04)
 const LIGHT_DIR := Vector3(-0.75, -0.55, 0.35)   # from the upper left (shader: y down)
-## Parallax as a camera orbiting the planet: the mouse left / right turns the
-## globe on its axis, up / down tilts it (up shows the north pole), and the
-## stars and backdrop shift the other way, nearer layers more. Per layer, px
-## at the screen's edge; the globe's turn and tilt in rad.
-const PARALLAX_BACKDROP := 3.0
-const PARALLAX_STARS := [4.0, 8.0, 13.0]   # far, mid, near
-const PARALLAX_YAW := 0.22
-const PARALLAX_PITCH := 0.14
+## Parallax as a camera orbiting the planet: the whole shot turns as one body
+## about the planet's centre. The mouse left / right turns it by up to
+## PARALLAX_YAW rad, up / down by PARALLAX_PITCH (up shows the north pole). The
+## globe's front moves its radius × the angle; the stars and backdrop lie
+## behind it (depth in planet radii) and move depth × the angle the other way —
+## so they always keep step with the globe.
+const PARALLAX_YAW := 0.05
+const PARALLAX_PITCH := 0.035
+const PARALLAX_BACKDROP := 2.6
+const PARALLAX_STARS := [2.4, 2.0, 1.7]   # far, mid, near (planet radii behind its centre)
 const PARALLAX_EASE := 4.0      # 1/s — how fast the layers follow the mouse
-const PARALLAX_MARGIN := 24.0   # layers overhang the screen by this, so no edge shows
+const PARALLAX_MARGIN := 110.0   # layers overhang the screen by this, so no edge shows
 ## Stars per layer (far → near): count, size range px, alpha range, twinkle.
 const STAR_LAYERS := [
 	[220, Vector2(1.0, 1.0), Vector2(0.20, 0.45), 0.25],
@@ -136,6 +138,12 @@ func _build_vignette() -> void:
 	v.material = mat
 	add_child(v)
 
+## The globe's radius on screen (px): the shader's planet_radius share of the rect.
+func _planet_radius_px() -> float:
+	if _planet_rect == null or _planet_rect.material == null:
+		return 0.0
+	return float((_planet_rect.material as ShaderMaterial).get_shader_parameter("planet_radius")) * _planet_rect.size.y
+
 ## Eases the layers toward the mouse (each by its depth) and twinkles the stars.
 func _tick_backdrop(delta: float) -> void:
 	_time += delta
@@ -143,14 +151,21 @@ func _tick_backdrop(delta: float) -> void:
 	var m := get_viewport().get_mouse_position()
 	var target := Vector2(clampf(m.x / vp.x, 0.0, 1.0) - 0.5, clampf(m.y / vp.y, 0.0, 1.0) - 0.5)
 	_parallax = _parallax.lerp(target, 1.0 - exp(-delta * PARALLAX_EASE))
-	# the camera orbits: the globe turns and tilts, what lies behind it slides
+	# the camera orbits: one turn for everything (yaw: + moves the globe's front
+	# right; pitch: + moves it down, bringing the north into view)
 	var k := _parallax * 2.0   # -1 … 1
+	var yaw := -k.x * PARALLAX_YAW
+	var pitch := -k.y * PARALLAX_PITCH
+	var r := _planet_radius_px()
 	for l: Array in _layers:
 		var c := l[0] as Control
 		if is_instance_valid(c):
-			c.position = (l[1] as Vector2) - k * float(l[2])
-	_planet_spin = k.x * PARALLAX_YAW
-	_planet_tilt = -k.y * PARALLAX_PITCH
+			var depth := float(l[2]) * r   # behind the planet's centre
+			c.position = (l[1] as Vector2) + Vector2(-depth * yaw, -depth * pitch)
+	# the globe's own drag rule (PlanetRenderer): its front moves right as the
+	# spin offset goes down, and down as the tilt goes up
+	_planet_spin = -yaw
+	_planet_tilt = pitch
 	for layer in _star_layers:
 		layer.queue_redraw()
 
