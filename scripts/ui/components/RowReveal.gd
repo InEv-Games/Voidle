@@ -4,7 +4,8 @@
 ## comes in at its own random moment within STAGGER, over DUR, blinking like
 ## a weak tape signal; inside a row its items come left to right, labels
 ## scrambling into their text and rich text typing in.
-##   RowReveal.play(root)   # restarts if one is already running on root
+##   RowReveal.play(root)        # restarts if one is already running on root
+##   RowReveal.play(root, 1.5)   # the same, 1.5x slower (every timing scaled)
 ## A script that changes a label's text or an item's modulate meanwhile wins:
 ## that one stops animating and is left as the script set it.
 class_name RowReveal
@@ -21,10 +22,11 @@ const BLINK_DIP := Vector2(0.2, 0.6)
 
 var _root: Control
 var _t := 0.0
+var _slow := 1.0   # time scale: 1.5 runs every timing 1.5x slower
 var _rows: Array = []   # {node, orig, last, start, seed, items, labels, texts}
 var _rng := RandomNumberGenerator.new()
 
-static func play(root: Control) -> void:
+static func play(root: Control, slow: float = 1.0) -> void:
 	if root == null or not root.is_inside_tree():
 		return
 	for c in root.get_children(true):
@@ -32,6 +34,7 @@ static func play(root: Control) -> void:
 			(c as RowReveal)._finish()
 	var r := RowReveal.new()
 	r._root = root
+	r._slow = maxf(slow, 0.01)
 	root.add_child(r, false, Node.INTERNAL_MODE_BACK)   # unseen by get_children()
 
 func _ready() -> void:
@@ -84,7 +87,7 @@ func _leaves(n: Control, out: Array[Control]) -> void:
 			_leaves(ctl, out)
 
 func _process(delta: float) -> void:
-	_t += delta
+	_t += delta / _slow
 	if not is_instance_valid(_root):
 		_finish()
 		return

@@ -372,6 +372,7 @@ func _process(delta: float) -> void:
 # and can't be played. Rows come in with RowReveal; Esc or ‹ MENU goes back.
 
 const SLOT_CARD_W := 210.0
+const MENU_REVEAL_SLOW := 1.5   # the menu's transitions run 1.5x slower than a tooltip's
 
 var _menu_root: VBoxContainer
 var _saves_root: VBoxContainer
@@ -398,7 +399,7 @@ func _open_saves() -> void:
 	for slot in GameState.SAVE_SLOTS:
 		cards.add_child(_slot_card(slot))
 	_saves_root.add_child(cards)
-	RowReveal.play(_saves_root)
+	RowReveal.play(_saves_root, MENU_REVEAL_SLOW)
 
 func _close_saves() -> void:
 	AudioManager.play("click", 0.0)
@@ -406,7 +407,7 @@ func _close_saves() -> void:
 		_saves_root.queue_free()
 	_saves_root = null
 	_menu_root.visible = true
-	RowReveal.play(_menu_root)
+	RowReveal.play(_menu_root, MENU_REVEAL_SLOW)
 
 func _input(event: InputEvent) -> void:
 	if is_instance_valid(_saves_root) and event is InputEventKey and (event as InputEventKey).pressed \
