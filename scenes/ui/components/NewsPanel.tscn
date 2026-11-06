@@ -1,5 +1,15 @@
 [gd_scene format=3 uid="uid://cnewspanel01"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_whjcc"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.016799998, 0.044186667, 0.08, 0.92156863)
+border_width_top = 1
+border_width_bottom = 1
+border_color = Color(0.1373, 0.7255, 0.9059, 0.45)
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tag"]
 bg_color = Color(0.95, 0.75, 0.3, 1)
 
@@ -8,10 +18,12 @@ anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -22.0
+offset_top = -25.0
 grow_horizontal = 2
 grow_vertical = 0
+size_flags_vertical = 8
 theme_type_variation = &"NewsPanel"
+theme_override_styles/panel = SubResource("StyleBoxFlat_whjcc")
 
 [node name="Clip" type="Control" parent="." unique_id=1546688739]
 clip_contents = true
@@ -30,9 +42,8 @@ anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -158.0
-offset_top = 1.0
 offset_right = -112.0
-offset_bottom = 22.0
+offset_bottom = 25.0
 grow_horizontal = 0
 theme_type_variation = &"NewsTag"
 theme_override_colors/font_color = Color(0.04, 0.06, 0.12, 1)
@@ -43,16 +54,15 @@ horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="Ticker" type="PanelContainer" parent="." unique_id=135186969]
-visible = false
 clip_contents = true
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -104.0
-offset_top = 0.0
-offset_right = 0.0
-offset_bottom = 22.0
+offset_left = -108.0
+offset_top = 2.0
+offset_right = -4.0
+offset_bottom = 23.0
 grow_horizontal = 0
 theme_type_variation = &"NewsTicker"
 
