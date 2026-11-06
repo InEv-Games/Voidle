@@ -288,7 +288,7 @@ func _build_ui(host: Node) -> void:
 		_bar.mouse_filter = Control.MOUSE_FILTER_STOP
 		_bar.gui_input.connect(_on_bar_input)
 
-## The bar sits in the left panel's parent, just before the panel; without one,
+## The bar sits in the left panel's parent, just after (on top of) the panel; without one,
 ## on this layer. A bar freed with its view is built again, or adopted from the scene.
 func _ensure_bar() -> void:
 	var panel: Control = null
@@ -311,11 +311,16 @@ func _ensure_bar() -> void:
 		_build_ui(host)
 	elif _bar.get_parent() != host:
 		_bar.reparent(host, false)
-	if panel != null and _bar.get_index() != panel.get_index() - 1:
-		var to := panel.get_index()
-		if _bar.get_index() < to:
-			to -= 1   # the bar's own slot frees up when it moves
-		host.move_child(_bar, to)
+	if panel != null:
+		# on top of the panel: just after it, on its z layer (the panel may
+		# carry its own z_index, e.g. in PlanetaryView)
+		if _bar.get_index() != panel.get_index() + 1:
+			var to := panel.get_index() + 1
+			if _bar.get_index() < to:
+				to -= 1   # the bar's own slot frees up when it moves
+			host.move_child(_bar, to)
+		_bar.z_as_relative = panel.z_as_relative
+		_bar.z_index = panel.z_index
 
 func _process(delta: float) -> void:
 	if _batch_left > 0.0:
@@ -397,20 +402,40 @@ func _bind_ticker() -> void:
 	if not _ticker.has_meta("ticker_bound"):
 		_ticker.set_meta("ticker_bound", true)
 		_ticker.mouse_filter = Control.MOUSE_FILTER_STOP
+		_ticker_look(&"normal")
 		_ticker.mouse_entered.connect(func() -> void:
+			_ticker_look(&"hover")
 			CursorManager.set_state(CursorManager.State.POINTER)
 			TooltipManager.show_tip("Market", _ticker_tip()))
 		_ticker.mouse_exited.connect(func() -> void:
+			_ticker_look(&"normal")
 			CursorManager.set_state(CursorManager.State.NORMAL)
 			TooltipManager.hide_tip())
 		_ticker.gui_input.connect(func(ev: InputEvent) -> void:
 			var mb := ev as InputEventMouseButton
-			if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			if mb == null or mb.button_index != MOUSE_BUTTON_LEFT:
+				return
+			if mb.pressed:
+				_ticker_look(&"pressed")
 				AudioManager.play("click")
 				TooltipManager.hide_tip()
 				HUDManager.toggle_trade_panel()
-				_ticker.accept_event())
+			else:
+				_ticker_look(&"hover")
+			_ticker.accept_event())
 	_tk_t = TICKER_SEC   # fill it at once
+
+## The market box looks like every other button (theme ButtonDefault): normal /
+## hover / pressed, its padding trimmed so the fixed width holds the price.
+func _ticker_look(state: StringName) -> void:
+	if _ticker == null or not is_instance_valid(_ticker):
+		return
+	var sb := _ticker.get_theme_stylebox(state, UIStyle.DEFAULT).duplicate() as StyleBox
+	sb.content_margin_left = 4.0
+	sb.content_margin_right = 4.0
+	sb.content_margin_top = 0.0
+	sb.content_margin_bottom = 0.0
+	_ticker.add_theme_stylebox_override(&"panel", sb)
 
 ## Products the ticker may show (tradeable now).
 static func _ticker_ids() -> Array[String]:

@@ -132,7 +132,7 @@ var _base_radius:      float = 0.42
 # The right panel can slide off-screen; the planet view (and the HUD energy
 # readout) widen with it so the globe stays centred in whatever space is left.
 const PANEL_FRACTION:  float = LeftPanel.WIDTH   # panel width as a fraction of the screen
-const PANEL_SLIDE_SEC: float = 0.35
+const PANEL_SLIDE_SEC: float = 0.9   # slow, cinematic: LeftPanel scrambles + VHS-blinks over it
 var _panel_open:       bool    = true
 var _panel_t:          float   = 1.0  # 1 = fully open, 0 = fully hidden
 var _panel_tween:      Tween   = null
@@ -153,7 +153,11 @@ var _planet_view: TextureRect = null
 ## Role overlay shown by the role buttons ("" = none) — FeatureMap.ROLES keys.
 var _role: String = ""
 var _lens_bar: Control = null
-var _lens_buttons: Dictionary = {}      # role -> Button
+var _lens_buttons: Dictionary = {}      # role -> Button (in the lens menu)
+var _lens_main: Button = null            # the one lens button: opens the menu
+var _lens_menu: PanelContainer = null    # the lenses, above the button
+var _lens_menu_open := false
+var _lens_menu_tw: Tween = null
 var _roads_dirty: bool = false
 var _maps_ready_seed: int = -1          # planet whose terrain / resource / road maps are built
 var _route_cache: Dictionary = {}       # "lonA,latA|lonB,latB" -> route
@@ -1104,6 +1108,9 @@ func _try_force_buy() -> bool:
 	return true
 
 func _input(event: InputEvent) -> void:
+	if _lens_menu_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
 			and (event as InputEventKey).keycode == KEY_F and _try_force_buy():
 		get_viewport().set_input_as_handled()
@@ -4842,6 +4849,7 @@ func _process(delta: float) -> void:
 	_tick_zoom(delta)
 	_update_placement_hover()
 	_tick_lens_tip()
+	_fade_lens_ui()
 	_tick_lander(delta)
 	_tick_companions()
 	_tick_key_spin(delta)
@@ -5039,6 +5047,8 @@ func _make_lens_button(text: String, tint: Color, on_press: Callable) -> Button:
 ## the map and the economy (FeatureMap.role_texture). Click again to clear.
 func _rebuild_lens_bar() -> void:
 	if _lens_bar != null and is_instance_valid(_lens_bar):
+		if tree_exiting.is_connected(_lens_bar.queue_free):
+			tree_exiting.disconnect(_lens_bar.queue_free)
 		_lens_bar.queue_free()
 	_lens_buttons.clear()
 	if current_data == null or not FeatureMap.has_map(current_data.seed):
@@ -5046,18 +5056,30 @@ func _rebuild_lens_bar() -> void:
 	if _role != "" and not GameState.is_scanned(current_data.seed):
 		_set_role("")   # a lens left on from another world
 	var cont := planet_renderer.get_parent() as Control
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	# the lens button at the right end of the resource bar, its menu (hidden)
+	# dropping down under it
+	var row := VBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_BEGIN
 	row.add_theme_constant_override("separation", 4)
 	row.z_index = 50
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lens_menu = PanelContainer.new()
+	_lens_menu.theme_type_variation = &"PopupCard"
+	_lens_menu.visible = false
+	_lens_menu_open = false
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 3)
+	_lens_menu.add_child(list)
+	row.add_child(_lens_menu)
 	# NORMAL: the plain map, no lens
-	var nb := _make_lens_button("NORMAL", Color(0.80, 0.84, 0.95), func() -> void: _set_role(""))
+	var nb := _make_lens_button("NORMAL", Color(0.80, 0.84, 0.95), func() -> void:
+		_set_role("")
+		_set_lens_menu(false))
 	nb.set_meta("tint", Color(0.80, 0.84, 0.95))
 	nb.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Normal", "The plain map, no lens.\nHold Alt over the globe to name the geography under the mouse."))
 	nb.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	_lens_buttons[""] = nb
-	row.add_child(nb)
+	list.add_child(nb)
 	for role: String in FeatureMap.ROLES:
 		var info: Dictionary = FeatureMap.ROLES[role]
 		var tint: Color = info["tint"]
@@ -5067,7 +5089,8 @@ func _rebuild_lens_bar() -> void:
 				AudioManager.play("error")
 				_show_unlock_toast("Not scanned yet", "Scan this world's surface from orbit to use its lenses.")
 				return
-			_set_role("" if _role == cap_role else cap_role))
+			_set_role("" if _role == cap_role else cap_role)
+			_set_lens_menu(false))
 		if not GameState.is_scanned(current_data.seed):
 			b.modulate = Color(0.5, 0.5, 0.55, 0.6)   # locked until the surface is scanned
 		b.set_meta("tint", tint)
@@ -5078,50 +5101,73 @@ func _rebuild_lens_bar() -> void:
 		b.mouse_entered.connect(func() -> void: TooltipManager.show_tip(String(info["label"]), tip))
 		b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 		_lens_buttons[role] = b
-		row.add_child(b)
-	cont.add_child(row)
-	row.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 16)
-	row.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	row.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		list.add_child(b)
+	for c in list.get_children():
+		(c as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# the one button: shows the lens that is on, opens / closes the menu
+	_lens_main = Button.new()
+	UIStyle.style_button(_lens_main, UIStyle.DEFAULT)   # like every other button
+	_lens_main.text = "LENS"
+	_lens_main.size_flags_horizontal = Control.SIZE_SHRINK_END   # stays put as the wider menu opens
+	_lens_main.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
+	_lens_main.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
+	_lens_main.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		_set_lens_menu(not _lens_menu_open))
+	row.add_child(_lens_main)
+	row.move_child(_lens_main, 0)
+	# in the HUD's top layer (the resource bar's), freed with this view
+	var bar := HUDManager.credits_panel
+	var host: Node = bar.get_parent() if bar != null and is_instance_valid(bar) and bar.get_parent() != null else cont
+	host.add_child(row)
+	row.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	row.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	row.grow_vertical = Control.GROW_DIRECTION_END
+	if host != cont:
+		tree_exiting.connect(row.queue_free)
 	_lens_bar = row
 	_style_lens_bar()
 	_place_lens_bar()
 
-## The lens bar sits at the bottom of the view, above the news crawl.
-const LENS_BAR_MARGIN := 30.0   # clears the news crawl (NewsFeed.HEIGHT)
+## The lens button sits at the right end of the resource bar, centred on its
+## height; the lens colour key stays at the bottom of the view, above the news.
+const LENS_BAR_MARGIN := 30.0   # the colour key clears the news crawl (NewsFeed.HEIGHT)
+const LENS_BAR_RIGHT := 6.0     # gap to the screen's right edge
 
 func _place_lens_bar() -> void:
 	if _lens_bar == null or not is_instance_valid(_lens_bar):
 		return
-	var h := _lens_bar.get_combined_minimum_size().y
-	var lh := 0.0
-	if is_instance_valid(_lens_legend):
-		lh = (_lens_legend as Control).get_combined_minimum_size().y + LENS_LEGEND_GAP
-	# rides the panel's slide tween: up from below the screen as it opens
-	var drop := (1.0 - _panel_t) * (LENS_BAR_MARGIN + h + lh)
-	_lens_bar.offset_bottom = -LENS_BAR_MARGIN + drop
-	_lens_bar.offset_top = _lens_bar.offset_bottom - h
+	var bar_h := 0.0
+	var bar := HUDManager.credits_panel
+	if bar != null and is_instance_valid(bar):
+		bar_h = bar.size.y
+	var btn_h := _lens_main.get_combined_minimum_size().y if is_instance_valid(_lens_main) else 0.0
+	var w := _lens_bar.get_combined_minimum_size().x
+	_lens_bar.offset_right = -LENS_BAR_RIGHT
+	_lens_bar.offset_left = -LENS_BAR_RIGHT - w
+	_lens_bar.offset_top = maxf(0.0, (bar_h - btn_h) * 0.5)
+	_lens_bar.offset_bottom = _lens_bar.offset_top + _lens_bar.get_combined_minimum_size().y
 	_place_lens_legend()
 	_fade_lens_ui()
 
-## The lens colour key sits just above the lens bar and moves with it.
 const LENS_LEGEND_GAP := 6.0
 
 func _place_lens_legend() -> void:
-	if not is_instance_valid(_lens_legend) or not is_instance_valid(_lens_bar):
+	if not is_instance_valid(_lens_legend):
 		return
 	var row := _lens_legend as Control
 	var h := row.get_combined_minimum_size().y
-	row.offset_bottom = _lens_bar.offset_top - LENS_LEGEND_GAP
+	row.offset_bottom = -LENS_BAR_MARGIN
 	row.offset_top = row.offset_bottom - h
 
-## Lenses (and their colour key) only show with the left panel open; they slide
-## and fade with the panel.
+## The lens button lives in the HUD's top layer, which sits over the Upgrade
+## Tree: it hides while the tree is open (the colour key with it).
 func _fade_lens_ui() -> void:
 	for c in [_lens_bar, _lens_legend]:   # untyped: either may be a freed node
 		if is_instance_valid(c):
-			(c as Control).modulate.a = _panel_t
-			(c as Control).visible = _panel_t > 0.01
+			(c as Control).visible = not SkillTreeView.is_open
+	if SkillTreeView.is_open and _lens_menu_open:
+		_set_lens_menu(false)
 
 ## Orbital surface scan: a bright band sweeps the globe once, then the role
 ## lenses of this world work (GameState.scanned_bodies).
@@ -5189,6 +5235,83 @@ func _style_lens_bar() -> void:
 	for role: String in _lens_buttons:
 		var b: IconButton = _lens_buttons[role]
 		b.variant = IconButton.Variant.NEUTRAL if role == _role else IconButton.Variant.DEFAULT
+	# the one button names the lens that's on
+	if _lens_main != null and is_instance_valid(_lens_main):
+		var on := "NORMAL" if _role == "" else String(FeatureMap.ROLES[_role]["label"]).to_upper()
+		_lens_main.text = "LENS  ·  " + on
+		# a lens on reads as selected (Neutral), like the lenses in its menu
+		_lens_main.theme_type_variation = UIStyle.DEFAULT if _role == "" else UIStyle.NEUTRAL
+
+# ── Lens menu ─────────────────────────────────────────────────────────────────
+# Drops down under the lens button: the card grows down out of the button
+# while it fades in, then the lenses come in one by one from the top, each
+# settling down a little. Closing runs it backwards, quicker. Closes on a pick, on the button,
+# on a click anywhere else, or on Esc.
+
+const LENS_MENU_IN_SEC := 0.22
+const LENS_MENU_OUT_SEC := 0.14
+const LENS_ITEM_STEP := 0.035   # between one lens and the next
+const LENS_ITEM_RISE := 8.0     # px each lens drops as it comes in
+
+func _set_lens_menu(open: bool) -> void:
+	if _lens_menu == null or not is_instance_valid(_lens_menu) or open == _lens_menu_open:
+		return
+	_lens_menu_open = open
+	if _lens_menu_tw != null and _lens_menu_tw.is_valid():
+		_lens_menu_tw.kill()
+	var items: Array = (_lens_menu.get_child(0) as Control).get_children()
+	# top (next to the button) first
+	if open:
+		_lens_menu.visible = true
+		_place_lens_bar()
+		_lens_menu.scale = Vector2(1.0, 0.6)
+		_lens_menu.modulate.a = 0.0
+		for c in items:
+			(c as Control).modulate.a = 0.0
+		_lens_menu_tw = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_lens_menu_tw.tween_method(_lens_menu_grow, 0.6, 1.0, LENS_MENU_IN_SEC)
+		_lens_menu_tw.tween_property(_lens_menu, "modulate:a", 1.0, LENS_MENU_IN_SEC)
+		for i in items.size():
+			var c := items[i] as Control
+			var delay := 0.06 + i * LENS_ITEM_STEP
+			_lens_menu_tw.tween_property(c, "modulate:a", 1.0, LENS_MENU_IN_SEC).set_delay(delay)
+			_lens_menu_tw.tween_method(func(k: float) -> void:
+				if is_instance_valid(c):
+					c.offset_transform_position = Vector2(0.0, -(1.0 - k) * LENS_ITEM_RISE),
+				0.0, 1.0, LENS_MENU_IN_SEC).set_delay(delay)
+	else:
+		_lens_menu_tw = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		_lens_menu_tw.tween_method(_lens_menu_grow, 1.0, 0.6, LENS_MENU_OUT_SEC)
+		_lens_menu_tw.tween_property(_lens_menu, "modulate:a", 0.0, LENS_MENU_OUT_SEC)
+		_lens_menu_tw.chain().tween_callback(func() -> void:
+			if is_instance_valid(_lens_menu) and not _lens_menu_open:
+				_lens_menu.visible = false
+				_lens_menu.scale = Vector2.ONE
+				_place_lens_bar())
+
+## The card's height scale, grown from its top edge, under the button (the size
+## is only known once laid out, so the pivot is set each step).
+func _lens_menu_grow(k: float) -> void:
+	if not is_instance_valid(_lens_menu):
+		return
+	_lens_menu.pivot_offset = Vector2(_lens_menu.size.x * 0.5, 0.0)
+	_lens_menu.scale = Vector2(1.0, k)
+
+## Closes the lens menu on a click outside it (or on its button, which toggles
+## it itself) and on Esc. Returns true when it ate the event.
+func _lens_menu_input(event: InputEvent) -> bool:
+	if not _lens_menu_open:
+		return false
+	if event is InputEventKey and (event as InputEventKey).pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
+		_set_lens_menu(false)
+		return true
+	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+		var at := (event as InputEventMouseButton).global_position
+		var on_menu := is_instance_valid(_lens_menu) and _lens_menu.get_global_rect().has_point(at)
+		var on_btn := is_instance_valid(_lens_main) and _lens_main.get_global_rect().has_point(at)
+		if not on_menu and not on_btn:
+			_set_lens_menu(false)   # the click still goes through
+	return false
 
 ## With a lens on, hovering the globe tells what that spot gives the role:
 ## "Production here  +30%" and the features behind it (on them full, near half).
@@ -5285,12 +5408,12 @@ func _refresh_lens_legend() -> void:
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(sw)
 		row.add_child(l)
-	_lens_bar.get_parent().add_child(row)
+	(planet_renderer.get_parent() as Control).add_child(row)
 	row.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 0)
 	row.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	row.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_lens_legend = row
-	_place_lens_bar()   # the bar's slide offset counts the legend's height
+	_place_lens_bar()
 
 func _refresh_lens() -> void:
 	_style_lens_bar()
@@ -5312,8 +5435,12 @@ func _refresh_lens() -> void:
 # ── Side panel slide ──────────────────────────────────────────────────────────
 
 func _build_panel_toggle() -> void:
-	var btn := IconButton.create_text("‹")
-	btn.font_size = 12
+	# just the arrow: no background, no stroke
+	var btn := Button.new()
+	btn.text = "‹"
+	btn.flat = true
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_font_size_override("font_size", PANEL_TOGGLE_FONT)
 	btn.z_index = 201
 	btn.z_as_relative = false
 	btn.tooltip_text = ""
@@ -5324,22 +5451,24 @@ func _build_panel_toggle() -> void:
 		_set_panel_open(not _panel_open))
 	add_child(btn)
 	_panel_toggle_btn = btn
-	# If content ever widens the panel past its anchors, keep the tab on its edge
-	($SidePanel as Control).resized.connect(_place_panel_toggle)
-	($SidePanel as Control).item_rect_changed.connect(_place_panel_toggle)
+	($SidePanel as Control).resized.connect(_place_panel_toggle)   # window resized
 	_apply_panel_t(_panel_t)
 
-## Puts the open/close tab on the side panel's actual right edge.
+const PANEL_TOGGLE_FONT := 20
+const PANEL_TOGGLE_W := 24.0
+
+## Pins the open/close arrow in the strip left of the panel's stroke (the
+## panel never moves, so neither does the arrow), centred vertically.
 func _place_panel_toggle() -> void:
 	if _panel_toggle_btn == null:
 		return
-	var x := _panel_right_edge()
+	var stroke_x := LeftPanel.GAP * get_viewport_rect().size.x
 	_panel_toggle_btn.anchor_left   = 0.0
 	_panel_toggle_btn.anchor_right  = 0.0
 	_panel_toggle_btn.anchor_top    = 0.5
 	_panel_toggle_btn.anchor_bottom = 0.5
-	_panel_toggle_btn.offset_left   = x
-	_panel_toggle_btn.offset_right  = x + 26.0
+	_panel_toggle_btn.offset_left   = maxf(0.0, stroke_x - PANEL_TOGGLE_W)
+	_panel_toggle_btn.offset_right  = stroke_x
 	_panel_toggle_btn.offset_top    = -28.0
 	_panel_toggle_btn.offset_bottom = 28.0
 
@@ -5357,14 +5486,60 @@ func _set_panel_open(open: bool) -> void:
 	_panel_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_panel_tween.tween_method(_apply_panel_t, _panel_t, 1.0 if open else 0.0, PANEL_SLIDE_SEC)
 
+# ── Overlay transitions (the Upgrade Tree) ───────────────────────────────────
+# HUDManager calls these around a full-screen overlay: the left panel closes
+# first, then the overlay fades in while the planet eases out a little; when
+# it closes, zoom and panel go back to how they were.
+
+const OVERLAY_ZOOM_OUT := 0.85   # zoom factor while the overlay comes in
+
+var _overlay_restore: Dictionary = {}   # {panel_open, zoom} before the overlay
+
+## Closes the left panel; returns how long to wait before the overlay fades in.
+func overlay_begin() -> float:
+	_overlay_restore = {"panel_open": _panel_open, "zoom": _zoom_target}
+	if _panel_open:
+		_set_panel_open(false)
+		return PANEL_SLIDE_SEC
+	return 0.0
+
+var _overlay_zoom_tw: Tween = null
+
+## As the overlay fades in: a small, slow zoom-out over `sec` (eased in and
+## out; past ZOOM_MIN is fine, briefly).
+func overlay_zoom_out(sec: float) -> void:
+	if _overlay_zoom_tw != null and _overlay_zoom_tw.is_valid():
+		_overlay_zoom_tw.kill()
+	_zoom_anchor = Vector2.INF
+	_overlay_zoom_tw = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_overlay_zoom_tw.tween_method(func(z: float) -> void:
+		_zoom_target = z
+		_zoom = z   # the tween does the easing; no extra lag on top
+		_apply_zoom(),
+		_zoom_target, _zoom_target * OVERLAY_ZOOM_OUT, sec)
+
+## The overlay closed: zoom and panel as they were.
+func overlay_end() -> void:
+	if _overlay_restore.is_empty():
+		return
+	if _overlay_zoom_tw != null and _overlay_zoom_tw.is_valid():
+		_overlay_zoom_tw.kill()
+	_set_zoom_target(float(_overlay_restore["zoom"]), Vector2.INF)
+	if bool(_overlay_restore["panel_open"]):
+		_set_panel_open(true)
+	_overlay_restore = {}
+
 ## Screen x of the side panel's right edge (0 when it's slid away).
 ## The panel's right edge as a fraction of the screen width (t: 1 open, 0 hidden).
 func _panel_edge_frac(t: float) -> float:
 	return LeftPanel.edge_frac(t)
 
+## The panel stays put while it opens / closes (its content scrambles away), so
+## the tab follows the slide instead: on the panel's right edge when open, by
+## its left stroke when closed.
 func _panel_right_edge() -> float:
-	var panel := $SidePanel as Control
-	return maxf(0.0, panel.position.x + panel.size.x)
+	var vw := get_viewport_rect().size.x
+	return maxf(LeftPanel.GAP * vw, _panel_edge_frac(_panel_t) * vw)
 
 ## Height of the HUD's resource bar — the side panel starts below it.
 func _hud_bar_height() -> float:
@@ -5382,7 +5557,7 @@ func _apply_panel_t(t: float) -> void:
 	($PlanetContainer as Control).anchor_right = 1.0
 	HUDManager.set_view_area_fraction(1.0 - _panel_edge_frac(t))
 	if _panel_toggle_btn != null:
-		_panel_toggle_btn.label_text = "‹" if _panel_open else "›"
+		_panel_toggle_btn.text = "‹" if _panel_open else "›"
 		_place_panel_toggle()
 	if _toast_container != null and is_instance_valid(_toast_container):
 		_toast_container.offset_left = _panel_edge_frac(t) * get_viewport_rect().size.x + 14.0
@@ -10936,11 +11111,11 @@ func _build_orbit_panel(planet: PlanetData) -> void:
 	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_theme_constant_override("separation", 8)
 	root.add_child(HSeparator.new())
-	var back := IconButton.create_text("‹  " + planet.planet_name.to_upper())
+	var back := LeftPanel.back_button(planet.planet_name.to_upper())
 	back.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_build_planet_overview(planet))
-	root.add_child(back)
+	_mount_above_hero(back, root)
 	var header := HBoxContainer.new()
 	var title := Label.new()
 	title.text = "Orbit"
@@ -11115,13 +11290,13 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	root.add_theme_constant_override("separation", 8)
 
 	if GameState.planet_view_unlocked:
-		var back := IconButton.create_text("‹  " + planet.planet_name.to_upper())
+		var back := LeftPanel.back_button(planet.planet_name.to_upper())
 		back.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_city_panel_poi = null
 			_frame_zoom(ZOOM_MIN)
 			_build_planet_overview(planet))
-		root.add_child(back)
+		_mount_above_hero(back, root)
 
 	# Hero: the City, its level and how far it is from the next one
 	var count := Leveling.city_district_count(planet, city)
@@ -11321,7 +11496,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	top_row.alignment = BoxContainer.ALIGNMENT_END
 	var parent_city := _find_poi(planet, poi.parent_city) if not poi.is_city() else poi
 	if poi.is_orbital():
-		var oback := IconButton.create_text("‹  ORBIT")
+		var oback := LeftPanel.back_button("ORBIT")
 		oback.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		oback.pressed.connect(func() -> void:
 			AudioManager.play("click")
@@ -11329,7 +11504,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 			_build_orbit_panel(planet))
 		top_row.add_child(oback)
 	if parent_city != null:
-		var back := IconButton.create_text("‹  " + parent_city.shown_name().to_upper())
+		var back := LeftPanel.back_button(parent_city.shown_name().to_upper())
 		back.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		back.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		var cap_parent := parent_city

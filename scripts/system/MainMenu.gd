@@ -1,6 +1,5 @@
 extends Control
 
-const PLANET_SIZE   := 680.0
 const ROTATE_SPEED  := 0.018
 const ORBITRON      := "res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf"
 
@@ -19,11 +18,10 @@ const GLITCH_STEP_DUR  := 0.06
 
 var _planet_rect:   ColorRect
 var _rotation_off:  float = 0.0
-var _light_angle:   float = 0.8
 var _font:          Font
 var _credits_lbl:   Label
 var _credits_idx:   int   = 0
-var _cont_btn:      Button
+var _play_btn:      Button
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -35,73 +33,153 @@ func _ready() -> void:
 	_build_bg()
 	_build_stars()
 	_build_planet()
+	_build_vignette()
 	_build_menu()
 	_build_credits()
 
 # ── Background ─────────────────────────────────────────────────────────────
+# A planet-rise shot: a big world rises out of the bottom-right corner, lit
+# from the upper left (an off-screen sun) so its bright rim faces the menu;
+# a blue glow behind it, still stars in three depths, a vignette over all.
+# The mouse moves the layers a few pixels against it, far ones least.
+
+## Planet size as a share of the screen height; its centre in screen shares.
+const PLANET_H_FRAC := 1.35
+const PLANET_CENTER := Vector2(0.80, 1.04)
+const LIGHT_DIR := Vector3(-0.75, -0.55, 0.35)   # from the upper left (shader: y down)
+## Parallax as a camera orbiting the planet: the whole shot turns as one body
+## about the planet's centre. The mouse left / right turns it by up to
+## PARALLAX_YAW rad, up / down by PARALLAX_PITCH (up shows the north pole). The
+## globe's front moves its radius × the angle; the stars and backdrop lie
+## behind it (depth in planet radii) and move depth × the angle the other way —
+## so they always keep step with the globe.
+const PARALLAX_YAW := 0.05
+const PARALLAX_PITCH := 0.035
+const PARALLAX_BACKDROP := 2.6
+const PARALLAX_STARS := [2.4, 2.0, 1.7]   # far, mid, near (planet radii behind its centre)
+const PARALLAX_EASE := 4.0      # 1/s — how fast the layers follow the mouse
+const PARALLAX_MARGIN := 110.0   # layers overhang the screen by this, so no edge shows
+## Stars per layer (far → near): count, size range px, alpha range, twinkle.
+const STAR_LAYERS := [
+	[220, Vector2(1.0, 1.0), Vector2(0.20, 0.45), 0.25],
+	[90,  Vector2(1.0, 2.0), Vector2(0.40, 0.70), 0.35],
+	[28,  Vector2(2.0, 2.0), Vector2(0.70, 0.95), 0.45],
+]
+
+var _parallax := Vector2.ZERO       # smoothed mouse offset, -0.5 … 0.5
+var _planet_spin := 0.0             # the globe's extra turn from the mouse (rad)
+var _planet_tilt := 0.0             # …and its tilt
+var _layers: Array = []             # [Control, base position, depth px]
+var _star_layers: Array[Control] = []
+var _stars: Array = []              # per layer: Array of [pos, size, alpha, twinkle, phase, speed]
+var _time := 0.0
+
+func _add_layer(c: Control, depth: float) -> void:
+	_layers.append([c, c.position, depth])
 
 func _build_bg() -> void:
+	var vp := get_viewport().get_visible_rect().size
 	var bg := ColorRect.new()
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.color = Color(0.02, 0.02, 0.06)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.position = Vector2(-PARALLAX_MARGIN, -PARALLAX_MARGIN)
+	bg.size = vp + Vector2.ONE * PARALLAX_MARGIN * 2.0
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/menu_backdrop.gdshader")
+	mat.set_shader_parameter("aspect", bg.size.x / bg.size.y)
+	mat.set_shader_parameter("glow_pos", Vector2(
+		(vp.x * PLANET_CENTER.x + PARALLAX_MARGIN) / bg.size.x,
+		(vp.y * PLANET_CENTER.y * 0.94 + PARALLAX_MARGIN) / bg.size.y))
+	bg.material = mat
 	add_child(bg)
+	_add_layer(bg, PARALLAX_BACKDROP)
 
-# ── Drifting stars ─────────────────────────────────────────────────────────
+# ── Stars (still, twinkling a little) ──────────────────────────────────────
 
 func _build_stars() -> void:
 	var vp := get_viewport().get_visible_rect().size
+	var area := vp + Vector2.ONE * PARALLAX_MARGIN * 2.0
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7331
+	for li in STAR_LAYERS.size():
+		var spec: Array = STAR_LAYERS[li]
+		var list := []
+		for i in int(spec[0]):
+			var sz_range: Vector2 = spec[1]
+			var a_range: Vector2 = spec[2]
+			list.append([Vector2(rng.randf() * area.x, rng.randf() * area.y),
+				roundf(rng.randf_range(sz_range.x, sz_range.y)),
+				rng.randf_range(a_range.x, a_range.y),
+				float(spec[3]) * rng.randf(), rng.randf() * TAU, rng.randf_range(0.6, 2.2)])
+		_stars.append(list)
+		var layer := Control.new()
+		layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.position = Vector2(-PARALLAX_MARGIN, -PARALLAX_MARGIN)
+		layer.size = area
+		var cap := li
+		layer.draw.connect(func() -> void: _draw_stars(layer, cap))
+		add_child(layer)
+		_star_layers.append(layer)
+		_add_layer(layer, float(PARALLAX_STARS[li]))
 
-	# Slow background layer
-	_make_star_layer(vp, 180, 8.0,  Color(0.7, 0.75, 1.0, 0.45), 1.0)
-	# Medium layer
-	_make_star_layer(vp, 80,  18.0, Color(0.85, 0.90, 1.0, 0.65), 1.6)
-	# Fast bright layer
-	_make_star_layer(vp, 30,  32.0, Color(1.0,  1.0,  1.0, 0.90), 2.0)
+func _draw_stars(layer: Control, li: int) -> void:
+	for s: Array in _stars[li]:
+		var a: float = float(s[2]) * (1.0 - float(s[3]) * (0.5 + 0.5 * sin(_time * float(s[5]) + float(s[4]))))
+		var sz: float = s[1]
+		layer.draw_rect(Rect2(s[0], Vector2(sz, sz)), Color(0.86, 0.91, 1.0, a))
 
-func _make_star_layer(vp: Vector2, count: int, speed: float, col: Color, size: float) -> void:
-	var p := CPUParticles2D.new()
-	p.emitting              = true
-	p.amount                = count
-	p.lifetime              = (vp.x + 60.0) / speed
-	p.preprocess            = p.lifetime          # start full
-	p.explosiveness         = 0.0
-	p.randomness            = 1.0
+## A vignette over the whole shot (planet included), under the menu.
+func _build_vignette() -> void:
+	var v := ColorRect.new()
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/menu_backdrop.gdshader")
+	mat.set_shader_parameter("overlay", true)
+	v.material = mat
+	add_child(v)
 
-	p.emission_shape        = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	p.emission_rect_extents = Vector2(vp.x * 0.5 + 40.0, vp.y * 0.5)
-	p.position              = Vector2(vp.x * 0.5, vp.y * 0.5)
+## The globe's radius on screen (px): the shader's planet_radius share of the rect.
+func _planet_radius_px() -> float:
+	if _planet_rect == null or _planet_rect.material == null:
+		return 0.0
+	return float((_planet_rect.material as ShaderMaterial).get_shader_parameter("planet_radius")) * _planet_rect.size.y
 
-	p.direction             = Vector2(-1.0, 0.0)
-	p.spread                = 3.0
-	p.gravity               = Vector2.ZERO
-	p.initial_velocity_min  = speed * 0.8
-	p.initial_velocity_max  = speed * 1.2
-	p.scale_amount_min      = size * 0.6
-	p.scale_amount_max      = size * 1.4
-
-	# Twinkle: vary alpha over lifetime with a curve
-	var grad := Gradient.new()
-	grad.set_color(0, Color(col.r, col.g, col.b, 0.0))
-	grad.set_color(1, col)
-	grad.add_point(0.05, col)
-	grad.add_point(0.95, col)
-	p.color_ramp = grad
-
-	add_child(p)
+## Eases the layers toward the mouse (each by its depth) and twinkles the stars.
+func _tick_backdrop(delta: float) -> void:
+	_time += delta
+	var vp := get_viewport().get_visible_rect().size
+	var m := get_viewport().get_mouse_position()
+	var target := Vector2(clampf(m.x / vp.x, 0.0, 1.0) - 0.5, clampf(m.y / vp.y, 0.0, 1.0) - 0.5)
+	_parallax = _parallax.lerp(target, 1.0 - exp(-delta * PARALLAX_EASE))
+	# the camera orbits: one turn for everything (yaw: + moves the globe's front
+	# right; pitch: + moves it down, bringing the north into view)
+	var k := _parallax * 2.0   # -1 … 1
+	var yaw := -k.x * PARALLAX_YAW
+	var pitch := -k.y * PARALLAX_PITCH
+	var r := _planet_radius_px()
+	for l: Array in _layers:
+		var c := l[0] as Control
+		if is_instance_valid(c):
+			var depth := float(l[2]) * r   # behind the planet's centre
+			c.position = (l[1] as Vector2) + Vector2(-depth * yaw, -depth * pitch)
+	# the globe's own drag rule (PlanetRenderer): its front moves right as the
+	# spin offset goes down, and down as the tilt goes up
+	_planet_spin = -yaw
+	_planet_tilt = pitch
+	for layer in _star_layers:
+		layer.queue_redraw()
 
 # ── Planet ─────────────────────────────────────────────────────────────────
 
 func _build_planet() -> void:
 	var vp := get_viewport().get_visible_rect().size
+	var side := vp.y * PLANET_H_FRAC
 
 	_planet_rect = ColorRect.new()
-	_planet_rect.custom_minimum_size = Vector2(PLANET_SIZE, PLANET_SIZE)
-	_planet_rect.size                = Vector2(PLANET_SIZE, PLANET_SIZE)
-	# Center sits just inside top-right; bottom-left half peeks into view
-	_planet_rect.position = Vector2(
-		vp.x - PLANET_SIZE * 0.78,
-		-PLANET_SIZE * 0.32
-	)
+	_planet_rect.custom_minimum_size = Vector2(side, side)
+	_planet_rect.size                = Vector2(side, side)
+	# rising out of the bottom-right corner (centre below the screen's edge)
+	_planet_rect.position = Vector2(vp.x * PLANET_CENTER.x, vp.y * PLANET_CENTER.y) - Vector2(side, side) * 0.5
 	_planet_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_planet_rect)
 
@@ -125,7 +203,8 @@ func _build_planet() -> void:
 
 	var sz          : float = clamp(float(data.planet_size), 0.2, 2.0)
 	var base_radius : float = clamp(0.42 * sz, 0.10, 0.48)
-	var pcount       := 160.0
+	# same pixel size as the old 680px planet at 160 (≈4.25px a pixel), at any size
+	var pcount: float = clampf(160.0 * _planet_rect.size.x / 680.0, 32.0, 512.0)
 
 	mat.set_shader_parameter("rotation_offset",   0.0)
 	mat.set_shader_parameter("planet_radius",     base_radius)
@@ -159,6 +238,7 @@ func _build_menu() -> void:
 	root.custom_minimum_size    = Vector2(vp.x * 0.38, 0.0)
 	root.add_theme_constant_override("separation", 10)
 	add_child(root)
+	_menu_root = root
 
 	# Title
 	var title := Label.new()
@@ -180,16 +260,13 @@ func _build_menu() -> void:
 	gap.custom_minimum_size = Vector2(0, 28)
 	root.add_child(gap)
 
-	# Buttons — the browser demo has no saves (no CONTINUE), no tour and no QUIT
+	# Buttons — the browser demo has no saves (one PLAY DEMO), no tour and no QUIT
 	var demo := GameState.demo_build
-	if not demo:
-		_cont_btn = _add_button(root, "CONTINUE", _on_continue)
-		_update_continue_btn()
-		GameState.save_deleted.connect(_update_continue_btn)
-
-	if not demo:
-		_add_button(root, "LOAD GAME", _on_load)
-	_add_button(root, "PLAY DEMO" if demo else "NEW GAME", _on_new_game)
+	if demo:
+		_add_button(root, "PLAY DEMO", _on_new_game)
+	else:
+		# PLAY opens the save slots (pick one to play, or delete one)
+		_play_btn = _add_button(root, "PLAY", _on_play)
 
 	_add_button(root, "SETTINGS",  _on_settings)
 	if not demo:
@@ -207,7 +284,7 @@ func _build_menu() -> void:
 	root.add_child(ver)
 
 ## Menu item: icon-left Default button (NEW GAME, CONTINUE, SETTINGS, QUIT).
-const MENU_ICONS := {"CONTINUE": "save", "LOAD GAME": "save", "NEW GAME": "new", "PLAY DEMO": "new", "SETTINGS": "settings", "QUIT": "close"}
+const MENU_ICONS := {"PLAY": "new", "PLAY DEMO": "new", "SETTINGS": "settings", "QUIT": "close"}
 
 func _add_button(parent: Control, label: String, cb: Callable) -> Button:
 	var btn := IconButton.create(label, MENU_ICONS.get(label, "unknown"))
@@ -274,35 +351,170 @@ func _glitch_to(target: String) -> void:
 # ── Planet animation ───────────────────────────────────────────────────────
 
 func _update_light(mat: ShaderMaterial) -> void:
-	var lx := cos(_light_angle) * 0.85
-	var lz := sin(_light_angle) * 0.55
-	mat.set_shader_parameter("light_direction", Vector3(lx, -0.45, lz).normalized())
+	mat.set_shader_parameter("light_direction", LIGHT_DIR.normalized())
 
 func _process(delta: float) -> void:
+	_tick_backdrop(delta)
 	if _planet_rect == null or _planet_rect.material == null:
 		return
 	_rotation_off = fposmod(_rotation_off + ROTATE_SPEED * delta, TAU)
-	_light_angle  = fposmod(_light_angle  + 0.004 * delta, TAU)
 	var mat := _planet_rect.material as ShaderMaterial
-	mat.set_shader_parameter("rotation_offset", _rotation_off)
-	_update_light(mat)
+	mat.set_shader_parameter("rotation_offset", fposmod(_rotation_off + _planet_spin, TAU))
+	mat.set_shader_parameter("tilt", _planet_tilt)
 
 # ── Button callbacks ────────────────────────────────────────────────────────
 
-func _update_continue_btn() -> void:
-	if not is_instance_valid(_cont_btn): return
-	var block := GameState.save_block_reason()
-	var has := GameState.has_save() and block == ""
-	_cont_btn.disabled = not has
-	_cont_btn.modulate = Color(1, 1, 1, 1.0 if has else 0.3)
-	_cont_btn.tooltip_text = block   # why an existing save can't be continued
+# ── Save slots (PLAY) ────────────────────────────────────────────────────────
+# PLAY swaps the menu for the save panel in the same spot: ‹ MENU above a hero
+# ("Save slots" / PLAY, like the left panel's), then the three slots as cards
+# side by side. A card shows its save (or Empty) with PLAY / NEW GAME and a bin
+# that deletes the save after a confirm; a save this build can't read says why
+# and can't be played. Rows come in with RowReveal; Esc or ‹ MENU goes back.
 
+const SLOT_CARD_W := 210.0
+const MENU_REVEAL_SLOW := 1.5   # the menu's transitions run 1.5x slower than a tooltip's
+
+var _menu_root: VBoxContainer
+var _saves_root: VBoxContainer
+
+func _on_play() -> void:
+	AudioManager.play("click", 0.0)
+	_open_saves()
+
+func _open_saves() -> void:
+	if is_instance_valid(_saves_root):
+		_saves_root.queue_free()
+	_menu_root.visible = false
+	_saves_root = VBoxContainer.new()
+	_saves_root.position = _menu_root.position
+	_saves_root.add_theme_constant_override("separation", 8)
+	add_child(_saves_root)
+	var back := LeftPanel.back_button("MENU")
+	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	back.pressed.connect(_close_saves)
+	_saves_root.add_child(back)
+	_saves_root.add_child(HeroHeader.create("Save slots", "PLAY"))
+	var cards := HBoxContainer.new()
+	cards.add_theme_constant_override("separation", 10)
+	for slot in GameState.SAVE_SLOTS:
+		cards.add_child(_slot_card(slot))
+	_saves_root.add_child(cards)
+	RowReveal.play(_saves_root, MENU_REVEAL_SLOW)
+
+func _close_saves() -> void:
+	AudioManager.play("click", 0.0)
+	if is_instance_valid(_saves_root):
+		_saves_root.queue_free()
+	_saves_root = null
+	_menu_root.visible = true
+	RowReveal.play(_menu_root, MENU_REVEAL_SLOW)
+
+func _input(event: InputEvent) -> void:
+	if is_instance_valid(_saves_root) and event is InputEventKey and (event as InputEventKey).pressed \
+			and (event as InputEventKey).keycode == KEY_ESCAPE:
+		_close_saves()
+		get_viewport().set_input_as_handled()
+
+## One slot: SLOT n (+ LAST PLAYED), its save in a few lines, PLAY / NEW GAME
+## and the bin.
+func _slot_card(slot: int) -> Control:
+	var info := GameState.slot_info(slot)
+	var blocked := ""
+	if not info.is_empty() and not bool(info.get("ok", false)):
+		blocked = String(info.get("why", "Can't be loaded"))
+	elif not info.is_empty() and slot == GameState.save_slot and GameState.save_block_reason() != "":
+		blocked = GameState.save_block_reason()
+
+	var card := PanelContainer.new()
+	card.theme_type_variation = &"PopupCard"
+	card.custom_minimum_size = Vector2(SLOT_CARD_W, 0)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	card.add_child(v)
+
+	var head := HBoxContainer.new()
+	var name_lbl := Label.new()
+	name_lbl.text = "SLOT %d" % (slot + 1)
+	name_lbl.theme_type_variation = &"HeaderLabel"
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(name_lbl)
+	if slot == GameState.save_slot and not info.is_empty():
+		var last := Label.new()
+		last.text = "LAST PLAYED"
+		last.theme_type_variation = &"SubLabel"
+		head.add_child(last)
+	v.add_child(head)
+	v.add_child(HSeparator.new())
+
+	for line: String in _slot_lines(info, blocked):
+		var l := Label.new()
+		l.text = line
+		l.theme_type_variation = &"SubLabel"
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = SLOT_CARD_W - 24.0
+		v.add_child(l)
+	var fill := Control.new()
+	fill.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(fill)
+
+	var btns := HBoxContainer.new()
+	btns.add_theme_constant_override("separation", 4)
+	var play := IconButton.create("NEW GAME" if info.is_empty() else "PLAY", "new",
+		IconButton.Variant.DEFAULT if info.is_empty() else IconButton.Variant.POSITIVE)
+	play.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	play.disabled = blocked != ""
+	if blocked != "":
+		play.modulate.a = 0.35
+	play.pressed.connect(func() -> void: _play_slot(slot))
+	btns.add_child(play)
+	if not info.is_empty():
+		var del := IconButton.create("", "danger", IconButton.Variant.NEGATIVE)
+		del.tooltip_text = "Delete this save"
+		del.pressed.connect(func() -> void: _delete_slot(slot))
+		btns.add_child(del)
+	v.add_child(btns)
+	return card
+
+## The save's details, one per line ("Empty", or why it can't be played).
+static func _slot_lines(info: Dictionary, blocked: String) -> Array[String]:
+	if info.is_empty():
+		return ["Empty", "Starts a new game"]
+	if blocked != "":
+		return [blocked]
+	var secs := int(info.get("play_seconds", 0.0))
+	var played := "%dh %02dm" % [secs / 3600, (secs / 60) % 60] if secs >= 3600 else "%dm" % (secs / 60)
+	var t: int = int(info.get("saved_at", 0.0)) + Time.get_time_zone_from_system().get("bias", 0) * 60
+	var d := Time.get_datetime_dict_from_unix_time(t)
+	return ["Civilization %d" % int(info.get("civilization_type", 0)), "%s played" % played,
+		"Saved %02d.%02d  %02d:%02d" % [d["day"], d["month"], d["hour"], d["minute"]]]
+
+func _play_slot(slot: int) -> void:
+	AudioManager.play("click", 0.0)
+	var info := GameState.slot_info(slot)
+	if info.is_empty():
+		_show_intro(func() -> void: GameState.new_game_in(slot))
+		return
+	if not bool(info.get("ok", false)):
+		return
+	# the game already loaded at boot just goes on; another slot is opened first
+	if slot != GameState.save_slot or not GameState.has_save():
+		GameState.open_slot(slot)
+	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
+
+func _delete_slot(slot: int) -> void:
+	var info := GameState.slot_info(slot)
+	if info.is_empty():
+		return
+	AudioManager.play("click", 0.0)
+	ConfirmPanel.ask(self, "Delete slot %d?" % (slot + 1),
+		"%s\n\nThis can't be undone." % _slot_text(info), "DELETE", func() -> void:
+			GameState.delete_slot(slot)
+			_open_saves())
+
+## PLAY DEMO (the browser demo has no saves).
 func _on_new_game() -> void:
 	AudioManager.play("click", 0.0)
-	if GameState.demo_build:
-		_show_intro(func() -> void: GameState.delete_save())
-		return
-	_show_slots(true)
+	_show_intro(func() -> void: GameState.delete_save())
 
 ## The short goal card before the first scene (scenes/ui/IntroCard.tscn);
 ## `start` runs on BEGIN, before the galaxy opens.
@@ -316,57 +528,6 @@ func _show_intro(start: Callable) -> void:
 		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn"))
 	layer.add_child(card)
 
-func _on_load() -> void:
-	AudioManager.play("click", 0.0)
-	_show_slots(false)
-
-## Save slots: `for_new` picks where a new game starts (a used slot is
-## overwritten after a confirm); otherwise loads one. Each used slot can be deleted.
-func _show_slots(for_new: bool) -> void:
-	var p := ModalPopup.open(self, "New game — pick a slot" if for_new else "Load game", "save")
-	p.confirm_button().visible = false
-	for slot in GameState.SAVE_SLOTS:
-		var info := GameState.slot_info(slot)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 4)
-		var item := ListItem.create("SLOT %d" % (slot + 1), "save",
-			"CURRENT" if slot == GameState.save_slot and not info.is_empty() else "", [], _slot_text(info))
-		item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var usable: bool = for_new or (not info.is_empty() and info.get("ok", false))
-		item.clickable = usable
-		if not usable:
-			item.modulate.a = 0.45
-		var cap_slot := slot
-		item.pressed.connect(func() -> void:
-			AudioManager.play("click", 0.0)
-			if for_new:
-				if info.is_empty():
-					p.close()
-					_show_intro(func() -> void: GameState.new_game_in(cap_slot))
-				else:
-					ConfirmPanel.ask(self, "Overwrite slot %d?" % (cap_slot + 1),
-						"Its game (%s) is replaced by the new one." % _slot_text(info), "OVERWRITE",
-						func() -> void:
-							p.close()
-							_show_intro(func() -> void: GameState.new_game_in(cap_slot)))
-			else:
-				p.close()
-				GameState.open_slot(cap_slot)
-				SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn"))
-		row.add_child(item)
-		if not info.is_empty():
-			var del := IconButton.create("", "danger", IconButton.Variant.NEGATIVE)
-			del.tooltip_text = "Delete this save"
-			del.pressed.connect(func() -> void:
-				ConfirmPanel.ask(self, "Delete slot %d?" % (cap_slot + 1),
-					"%s\n\nThis can't be undone." % _slot_text(info), "DELETE", func() -> void:
-						GameState.delete_slot(cap_slot)
-						_update_continue_btn()
-						p.close()
-						_show_slots(for_new)))
-			row.add_child(del)
-		p.add_content(row)
-
 ## "Civ 0 · 1h 12m played · 28.10 14:05", "Empty", or why it can't load.
 static func _slot_text(info: Dictionary) -> String:
 	if info.is_empty():
@@ -379,10 +540,6 @@ static func _slot_text(info: Dictionary) -> String:
 	var d := Time.get_datetime_dict_from_unix_time(t)
 	return "Civ %d  ·  %s played  ·  %02d.%02d %02d:%02d" % [int(info.get("civilization_type", 0)), played,
 		d["day"], d["month"], d["hour"], d["minute"]]
-
-func _on_continue() -> void:
-	AudioManager.play("click", 0.0)
-	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
 
 func _on_settings() -> void:
 	HUDManager.show_settings_popup()

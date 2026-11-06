@@ -4,71 +4,38 @@
 [ext_resource type="PackedScene" uid="uid://bwscu25qeej2b" path="res://scenes/ui/components/ResourceChip.tscn" id="2_chip"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hdao2"]
-content_margin_left = 6.0
-content_margin_top = 4.0
-content_margin_right = 6.0
-content_margin_bottom = 4.0
-bg_color = Color(0.035699997, 0.09389667, 0.17, 0)
-anti_aliasing = false
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.016799998, 0.044186667, 0.08, 0.92156863)
+border_width_top = 1
+border_width_bottom = 1
+border_color = Color(0.1373, 0.7255, 0.9059, 0.45)
 
 [node name="ResourceBar" type="Panel" unique_id=1318284027]
 process_mode = 3
-anchors_preset = -1
+anchors_preset = 10
 anchor_right = 1.0
-anchor_bottom = 0.046000004
-offset_bottom = 0.19199753
+offset_bottom = 24.0
 grow_horizontal = 2
 theme_type_variation = &"ResourceBar"
 theme_override_styles/panel = SubResource("StyleBoxFlat_hdao2")
 script = ExtResource("1_script")
 
-[node name="Panel" type="Panel" parent="." unique_id=1451009247]
-modulate = Color(1, 1, 1, 0.11764706)
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -580.0
-offset_top = -4.0
-offset_right = 580.0
-offset_bottom = 5.0
-grow_horizontal = 2
-grow_vertical = 2
-offset_transform_position = Vector2(0, 3)
-
-[node name="HSeparator" type="HSeparator" parent="." unique_id=534812319]
-modulate = Color(1, 1, 1, 0.11764706)
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -579.0
-offset_top = -10.0
-offset_right = 579.0
-offset_bottom = 11.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 1
-
 [node name="Row" type="HBoxContainer" parent="." unique_id=423946139]
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
+anchors_preset = -1
+anchor_left = 0.005
 anchor_top = 0.5
-anchor_right = 0.5
+anchor_right = 1.0
 anchor_bottom = 0.5
-offset_left = -570.0
 offset_top = -11.0
-offset_right = 570.0
+offset_right = -6.0
 offset_bottom = 11.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 6
-alignment = 1
 
 [node name="Credits" parent="Row" unique_id=947876999 instance=ExtResource("2_chip")]
 layout_mode = 2

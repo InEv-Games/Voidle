@@ -225,10 +225,15 @@ func _unlock() -> void:
 	_panel.set_terms_active(false)
 	_hide_nest()
 
+const HIDE_FADE_SEC := 0.1
+
 func _process(delta: float) -> void:
 	if _hide_timer > 0.0:
 		_hide_timer -= delta
+		# the last bit of the grace fades it out
+		_hbox.modulate.a = clampf(_hide_timer / HIDE_FADE_SEC, 0.0, 1.0)
 		if _hide_timer <= 0.0:
+			_hbox.modulate.a = 1.0
 			_panel.get_parent().visible = false
 			_panel.visible = false
 			_sub_panel.visible = false
@@ -313,6 +318,9 @@ func show_tip(title: String, body = "", cost = "", sub_body = "") -> void:
 		and (_panel.get_parent() as Control).get_global_rect().grow(6.0).has_point(get_viewport().get_mouse_position())
 	if _ignored:
 		return
+	# a new tip (none on screen, or another one's) plays its entrance;
+	# updating the one on screen in place does not
+	var is_new := not _visible or title.to_upper() != _panel.title
 	if title.to_upper() != _panel.title:
 		_unlock()
 	_panel.title = title.to_upper()
@@ -353,6 +361,18 @@ func show_tip(title: String, body = "", cost = "", sub_body = "") -> void:
 
 	_hide_timer = 0.0
 	_visible    = true
+	_hbox.modulate.a = 1.0   # back from a fade-out in progress
+	if is_new:
+		_reveal.call_deferred()   # after the caller's set_title_icon / set_footer …
+
+## The entrance: the left panel's opening, quick (RowReveal), on the card and
+## its side panel.
+func _reveal() -> void:
+	if not _visible:
+		return
+	RowReveal.play(_panel.get_node("VBox") as Control)
+	if _sub_panel.visible:
+		RowReveal.play(_sub_panel)
 
 ## Short text keeps its own width (lines are broken by hand); text whose
 ## longest line runs past MAX_TEXT_W wraps at that width instead.

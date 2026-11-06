@@ -1,6 +1,6 @@
 ## TradePanel — the trade window (GDD §18, playtest 31.10). It opens inside the
-## view's left panel (LeftPanel.show_overlay: the panel slides out, swaps to it
-## and slides back; BACK returns), or docked in the same column where a view
+## view's left panel (LeftPanel.show_overlay: the content swaps in place with
+## the CyberReveal scramble; BACK returns), or docked in the same column where a view
 ## has no left panel. One compact row per tradeable product, every part a
 ## fixed size so nothing moves as research or prices change:
 ##   [▣] ▁▃▅ │ cr 4.50 │ [target][■] │ [SELL][BUY]
@@ -74,13 +74,12 @@ func _ready() -> void:
 		_place()
 		get_viewport().size_changed.connect(_place)
 
-	# the market's name on top, then BACK (to the panel's own content)
-	var title := _label("MARKET", 22, UIStyle.color(&"accent"))
-	v.add_child(title)
-	var back := IconButton.create_text("‹  BACK")
-	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# BACK (to the panel's own content) as a text button above the hero, then
+	# the market's name — the left panel's hero, like every other menu
+	var back := LeftPanel.back_button("BACK")
 	back.pressed.connect(close)
 	v.add_child(back)
+	v.add_child(HeroHeader.create("Trade", "MARKET"))
 	# one small line of colour under it (warnings show here for a moment)
 	_status = _label("", 9, UIStyle.color(&"text_subtle"))
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

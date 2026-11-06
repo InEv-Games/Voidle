@@ -56,25 +56,7 @@ func _ready() -> void:
 	credits_panel = ResourceBar.create()   # top-left
 	top_layer.call_deferred("add_child", credits_panel)
 
-	var settings_btn := IconButton.create("", "settings", IconButton.Variant.DEFAULT)   # square, icon only
-	settings_btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	
-	settings_btn.anchor_left = 1.0
-	settings_btn.anchor_right = 1.0
-	settings_btn.anchor_top = 0.0
-	settings_btn.anchor_bottom = 0.0
-	settings_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	settings_btn.grow_vertical = Control.GROW_DIRECTION_END
-	settings_btn.offset_right = -4
-	settings_btn.offset_top = 4
-	
-	settings_btn.mouse_entered.connect(func() -> void:
-		CursorManager.set_state(CursorManager.State.POINTER)
-		AudioManager.play("hover"))
-	settings_btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
-	settings_btn.pressed.connect(show_pause_menu)
-	
-	top_layer.call_deferred("add_child", settings_btn)
+	# (no settings button: Esc opens the pause menu)
 
 
 	# Upgrade Tree · Trade · Explore live at the bottom of the view's LeftPanel
@@ -161,12 +143,7 @@ func _make_skill_button() -> Button:
 					
 			existing_layer.queue_free()
 		else:
-			var st_layer := CanvasLayer.new()
-			st_layer.layer = 220
-			var st_view = load("res://scripts/ui/SkillTreeView.gd").new()
-			st_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-			st_layer.add_child(st_view)
-			root.add_child(st_layer))
+			_open_skill_tree())
 
 		
 	skill_btn.mouse_entered.connect(func() -> void:
@@ -177,6 +154,35 @@ func _make_skill_button() -> Button:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
 	return skill_btn
+
+const TREE_FADE_SEC := 1.2
+
+## Opens the Upgrade Tree: the view's left panel closes first (overlay_begin),
+## then the tree fades in while the planet zooms out a little
+## (overlay_zoom_out); closing it puts the view back (overlay_end). Views
+## without these hooks just get the fade.
+func _open_skill_tree() -> void:
+	var view := get_tree().current_scene
+	var wait := 0.0
+	if view != null and view.has_method("overlay_begin"):
+		wait = float(view.call("overlay_begin"))
+	var st_layer := CanvasLayer.new()
+	st_layer.layer = 220
+	var st_view: Control = load("res://scripts/ui/SkillTreeView.gd").new()
+	st_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	st_view.modulate.a = 0.0
+	st_layer.add_child(st_view)
+	get_tree().root.add_child(st_layer)
+	st_view.tree_exiting.connect(func() -> void:
+		if is_instance_valid(view) and view.has_method("overlay_end"):
+			view.call("overlay_end"))
+	var tw := st_view.create_tween()
+	tw.tween_interval(wait)
+	tw.tween_callback(func() -> void:
+		if is_instance_valid(view) and view.has_method("overlay_zoom_out"):
+			view.call("overlay_zoom_out", TREE_FADE_SEC))
+	tw.tween_property(st_view, "modulate:a", 1.0, TREE_FADE_SEC) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 ## Trade button next to the Upgrade Tree button (opens TradePanel).
 func _make_trade_button() -> Button:
