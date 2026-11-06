@@ -11,6 +11,8 @@ const CARD_W := 230.0
 # ── Shared ───────────────────────────────────────────────────────────────────
 
 ## A dimmed full-screen layer with a centred column; returns [layer, column].
+## A dimmed full-screen layer with a centred column headed by a hero
+## (`subtitle` as caption, `title` big); returns [layer, column].
 static func _overlay(host: Node, title: String, subtitle: String, dim := 0.72) -> Array:
 	var layer := CanvasLayer.new()
 	layer.layer = LAYER
@@ -34,17 +36,10 @@ static func _overlay(host: Node, title: String, subtitle: String, dim := 0.72) -
 	col.add_theme_constant_override("separation", 12)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	center.add_child(col)
-	var t := Label.new()
-	t.text = title.to_upper()
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_font_size_override("font_size", 20)
-	col.add_child(t)
-	if subtitle != "":
-		var s := Label.new()
-		s.text = subtitle
-		s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		s.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
-		col.add_child(s)
+	# a hero: `subtitle` as its caption over the big `title`
+	var hero := HeroHeader.create(subtitle, title.to_upper())
+	(hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF
+	col.add_child(hero)
 	AudioManager.play("click")
 	return [layer, col]
 
@@ -91,8 +86,11 @@ static func _pop_in(c: Control, delay: float) -> void:
 # ── Planet trait picker ──────────────────────────────────────────────────────
 
 const TRAIT_CARD_W := 272.0
-const TRAIT_CARD_H := 316.0
 const TRAIT_INNER_W := TRAIT_CARD_W - 32.0
+## A trait's head: its icon, the name on the icon's foot.
+const TRAIT_HEAD_H := 150.0
+const TRAIT_NAME_PX := 26
+const TRAIT_NAME_H := 34.0
 ## Darker than the other overlays: the panels behind fought with the small print.
 const TRAIT_DIM := 0.90
 
@@ -109,8 +107,8 @@ static func open_trait_picker(host: Node, planet_seed: int) -> void:
 	if PlanetTags.offers_of(planet_seed).is_empty():
 		return
 	var pd := GameState.get_planet_data(planet_seed)
-	var o := _overlay(host, "A trait for %s" % (pd.planet_name if pd else "this world"),
-		"Pick one. It stays for good.", TRAIT_DIM)
+	var o := _overlay(host, pd.planet_name if pd else "This world",
+		"Pick a trait // It stays for good", TRAIT_DIM)
 	var layer: CanvasLayer = o[0]
 	_trait_layer = layer
 	var col: VBoxContainer = o[1]
@@ -177,50 +175,63 @@ static func _stars_bb(rarity: int, px: int) -> String:
 		out += UIIcons.bb("star", px, TraitDef.RARITY_COLORS[rarity])
 	return out
 
-## Rarity on top, the effects as icons and amounts (words in their tooltips),
-## one line of story, CHOOSE.
-static func _trait_card(def: TraitDef, planet_seed: int, layer: CanvasLayer) -> PanelContainer:
+## One trait: its effect's icon large and faint, the name over the icon's foot,
+## and under them a small card with the rarity, the effects as icons and
+## amounts (words in their tooltips), one line of story and CHOOSE.
+static func _trait_card(def: TraitDef, planet_seed: int, layer: CanvasLayer) -> Control:
 	var rc := def.rarity_color()
+	var item := VBoxContainer.new()
+	item.custom_minimum_size.x = TRAIT_CARD_W
+	item.add_theme_constant_override("separation", 6)
+	# the head: the icon, the name sitting on its lower part
+	var head := Control.new()
+	head.custom_minimum_size = Vector2(TRAIT_CARD_W, TRAIT_HEAD_H)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	item.add_child(head)
+	if not def.effects.is_empty():
+		var icon := TextureRect.new()
+		icon.texture = UIIcons.get_icon(PlanetTags.effect_icon(String(def.effects.keys()[0])))
+		icon.modulate = Color(rc, 0.35)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		icon.offset_bottom = -TRAIT_NAME_H * 0.35   # the name covers its foot
+		head.add_child(icon)
+	var title := _text(def.display_name.to_upper(), TRAIT_NAME_PX, Color(0, 0, 0, 0), false)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	title.offset_top = -TRAIT_NAME_H
+	head.add_child(title)
+	# the card
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(TRAIT_CARD_W, TRAIT_CARD_H)
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL   # cards in a row end level
 	card.add_theme_stylebox_override("panel", _trait_card_box(rc, false))
 	card.mouse_entered.connect(func() -> void: card.add_theme_stylebox_override("panel", _trait_card_box(rc, true)))
 	card.mouse_exited.connect(func() -> void:
 		if not card.get_global_rect().has_point(card.get_global_mouse_position()):   # not onto its own parts
 			card.add_theme_stylebox_override("panel", _trait_card_box(rc, false)))
+	item.add_child(card)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	card.add_child(v)
-	v.add_child(_rich("[center]%s  [color=#%s]%s[/color][/center]" % [_stars_bb(def.rarity, 12), rc.to_html(false),
-		def.rarity_name().to_upper()], 11, TRAIT_INNER_W))
-	if not def.effects.is_empty():
-		var icon := TextureRect.new()
-		icon.texture = UIIcons.get_icon(PlanetTags.effect_icon(String(def.effects.keys()[0])))
-		icon.modulate = rc
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		icon.custom_minimum_size = Vector2(44.0, 44.0)
-		icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		v.add_child(icon)
-	var title := _text(def.display_name.to_upper(), 17)
-	title.custom_minimum_size.x = TRAIT_INNER_W
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(title)
-	var line := ColorRect.new()
-	line.color = Color(rc, 0.35)
-	line.custom_minimum_size.y = 1.0
-	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(line)
+	var rarity := _rich("[center][color=#%s]%s[/color][/center]" % [rc.to_html(false), def.rarity_name().to_upper()], 11, TRAIT_INNER_W)
+	rarity.mouse_filter = Control.MOUSE_FILTER_PASS
+	_tip_on(rarity, def.rarity_name(), "Rarity: later slots roll rarer traits.")
+	v.add_child(rarity)
 	for rid: String in def.effects:
 		var amount := float(def.effects[rid])
 		var row := _rich("[center]%s[/center]" % PlanetTags.effect_short_bb(rid, amount, 20), 20, TRAIT_INNER_W)
 		row.mouse_filter = Control.MOUSE_FILTER_PASS   # its tooltip; the card keeps its hover
 		_tip_on(row, def.display_name, PlanetTags.effect_explain(rid))
 		v.add_child(row)
-	var sp := Control.new()
-	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(sp)
+	var line := ColorRect.new()
+	line.color = Color(rc, 0.35)
+	line.custom_minimum_size.y = 1.0
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(line)
 	var story := _text(def.description, 11, UIStyle.color(&"text_muted"))
 	story.custom_minimum_size.x = TRAIT_INNER_W
 	story.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -233,6 +244,10 @@ static func _trait_card(def: TraitDef, planet_seed: int, layer: CanvasLayer) -> 
 			kinds.append("%s [color=#%s]%s[/color]" % [UIIcons.bb(ic, 12, muted), muted.to_html(false),
 				String(PlanetData.Type.keys()[t]).capitalize()])
 		v.add_child(_rich("[center]%s[/center]" % "   ".join(kinds), 11, TRAIT_INNER_W))
+	var sp := Control.new()
+	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL   # CHOOSE at the foot of each card
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(sp)
 	var btn := IconButton.create("CHOOSE", "confirm", IconButton.Variant.POSITIVE)
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var tid := def.trait_id
@@ -241,7 +256,7 @@ static func _trait_card(def: TraitDef, planet_seed: int, layer: CanvasLayer) -> 
 			AudioManager.play("building_done")
 		close(layer))
 	v.add_child(btn)
-	return card
+	return item
 
 static func _trait_card_box(rc: Color, hover: bool) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -249,7 +264,6 @@ static func _trait_card_box(rc: Color, hover: bool) -> StyleBoxFlat:
 		else Color(0.04, 0.05, 0.09, 0.98)
 	sb.border_color = rc if hover else Color(rc, 0.55)
 	sb.set_border_width_all(1)
-	sb.border_width_top = 4
 	sb.set_corner_radius_all(3)
 	sb.content_margin_left = 16.0
 	sb.content_margin_right = 16.0
