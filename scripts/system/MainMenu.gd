@@ -6,15 +6,6 @@ extends Control
 const ROTATE_SPEED  := 0.018
 const ORBITRON      := "res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf"
 
-const CREDITS_LINES := [
-	"Developed by Tufan T. Iskender",
-	"Thanks to Irem Iskender",
-	"Mira Iskender",
-	"Ada Iskender",
-	"Adem Ozcan",
-	"InEv Games",
-]
-const CREDITS_HOLD     := 4.2   # seconds per line
 const GLITCH_CHARS     := "!@#$%^&*<>?/\\|[]{}~±§"
 const GLITCH_STEPS     := 16
 const GLITCH_STEP_DUR  := 0.06
@@ -22,8 +13,7 @@ const GLITCH_STEP_DUR  := 0.06
 var _planet_rect:   ColorRect
 var _rotation_off:  float = 0.0
 var _font:          Font
-var _credits_lbl:   Label
-var _credits_idx:   int   = 0
+var _version_lbl:   Label
 var _play_btn:      Button
 
 func _ready() -> void:
@@ -48,7 +38,7 @@ func _ready() -> void:
 	_build_system(true)
 	_build_vignette()
 	_build_menu()
-	_build_credits()
+	_build_version()
 
 # ── Background ─────────────────────────────────────────────────────────────
 # A planet-rise shot: a big world rises out of the bottom-right corner, lit
@@ -566,41 +556,30 @@ func _add_button(parent: Control, label: String, cb: Callable) -> Button:
 	parent.add_child(btn)
 	return btn
 
-# ── Glitch credits ────────────────────────────────────────────────────────
+# ── Version ──────────────────────────────────────────────────────────────
+# Bottom right: "Voidle v0.1 680a54d" (BuildInfo), glitching in once.
 
-func _build_credits() -> void:
-	var vp := _vp()
-
-	_credits_lbl = Label.new()
-	_credits_lbl.text = CREDITS_LINES[0]
-	if _font: _credits_lbl.add_theme_font_override("font", _font)
-	_credits_lbl.add_theme_font_size_override("font_size", 9)
-	_credits_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.75))
-	_credits_lbl.anchor_left   = 1.0
-	_credits_lbl.anchor_right  = 1.0
-	_credits_lbl.anchor_top    = 1.0
-	_credits_lbl.anchor_bottom = 1.0
-	_credits_lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_credits_lbl.grow_vertical   = Control.GROW_DIRECTION_BEGIN
-	_credits_lbl.offset_right  = -18.0
-	_credits_lbl.offset_bottom = -14.0
-	_credits_lbl.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	add_child(_credits_lbl)
-
-	_cycle_credits()
-
-func _cycle_credits() -> void:
-	await get_tree().create_timer(CREDITS_HOLD).timeout
-	if not is_instance_valid(_credits_lbl):
-		return
-	_credits_idx = (_credits_idx + 1) % CREDITS_LINES.size()
-	await _glitch_to(CREDITS_LINES[_credits_idx])
-	_cycle_credits()
+func _build_version() -> void:
+	_version_lbl = Label.new()
+	if _font: _version_lbl.add_theme_font_override("font", _font)
+	_version_lbl.add_theme_font_size_override("font_size", 9)
+	_version_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_muted"), 0.75))
+	_version_lbl.anchor_left   = 1.0
+	_version_lbl.anchor_right  = 1.0
+	_version_lbl.anchor_top    = 1.0
+	_version_lbl.anchor_bottom = 1.0
+	_version_lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_version_lbl.grow_vertical   = Control.GROW_DIRECTION_BEGIN
+	_version_lbl.offset_right  = -18.0
+	_version_lbl.offset_bottom = -14.0
+	_version_lbl.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	add_child(_version_lbl)
+	_glitch_to(BuildInfo.label())
 
 func _glitch_to(target: String) -> void:
 	var rng   := RandomNumberGenerator.new()
 	var chars := GLITCH_CHARS
-	var orig  := _credits_lbl.text
+	var orig  := _version_lbl.text
 	var max_len := maxi(orig.length(), target.length())
 
 	for step in GLITCH_STEPS:
@@ -613,11 +592,11 @@ func _glitch_to(target: String) -> void:
 				out += chars[rng.randi() % chars.length()]
 			else:
 				out += chars[rng.randi() % chars.length()]
-		_credits_lbl.text = out
+		_version_lbl.text = out
 		await get_tree().create_timer(GLITCH_STEP_DUR).timeout
 
-	if is_instance_valid(_credits_lbl):
-		_credits_lbl.text = target
+	if is_instance_valid(_version_lbl):
+		_version_lbl.text = target
 
 # ── Planet animation ───────────────────────────────────────────────────────
 
