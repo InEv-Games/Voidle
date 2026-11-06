@@ -10672,6 +10672,7 @@ var _slot_dd_args: Array = []
 var _slot_dd_sig: String = ""
 var _slot_dd_poll: float = 0.0
 var _slot_dd_keep_scroll: int = 0
+var _slot_dd_rebuilding := false   # a rebuild in place: no entrance
 
 ## Which picker rows are affordable right now (credits + free population).
 func _slot_dd_signature() -> String:
@@ -10709,6 +10710,7 @@ func _poll_slot_dropdown(delta: float) -> void:
 		_dd_layer.queue_free()
 	_dd_layer = null
 	_active_slot_dropdown = null
+	_slot_dd_rebuilding = true
 	_toggle_slot_dropdown(args[0], args[1], args[2], args[3], args[4], args[5])
 
 func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetData,
@@ -10852,6 +10854,10 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 	)
 	_dd_layer.add_child(bg)
 	_dd_layer.add_child(outer)
+	# the buildings come in one by one, top to bottom (not when it only rebuilt)
+	if not _slot_dd_rebuilding:
+		RowReveal.play(list, 1.0, true)
+	_slot_dd_rebuilding = false
 	# CanvasLayer children use screen-space coordinates directly
 	await get_tree().process_frame
 	if not is_instance_valid(outer):

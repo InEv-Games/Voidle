@@ -6,6 +6,7 @@
 ## scrambling into their text and rich text typing in.
 ##   RowReveal.play(root)        # restarts if one is already running on root
 ##   RowReveal.play(root, 1.5)   # the same, 1.5x slower (every timing scaled)
+##   RowReveal.play(root, 1.0, true)   # rows one by one, top to bottom (lists)
 ## A script that changes a label's text or an item's modulate meanwhile wins:
 ## that one stops animating and is left as the script set it.
 class_name RowReveal
@@ -19,14 +20,16 @@ const GLYPH_SEC := 0.04
 const BLINK_SEC := 0.03
 const BLINK_CHANCE := 0.3
 const BLINK_DIP := Vector2(0.2, 0.6)
+const IN_ORDER_STEP := 0.05   # one-by-one: between one row's start and the next
 
 var _root: Control
 var _t := 0.0
 var _slow := 1.0   # time scale: 1.5 runs every timing 1.5x slower
+var _in_order := false   # rows start one after another, in tree order
 var _rows: Array = []   # {node, orig, last, start, seed, items, labels, texts}
 var _rng := RandomNumberGenerator.new()
 
-static func play(root: Control, slow: float = 1.0) -> void:
+static func play(root: Control, slow: float = 1.0, in_order: bool = false) -> void:
 	if root == null or not root.is_inside_tree():
 		return
 	for c in root.get_children(true):
@@ -35,6 +38,7 @@ static func play(root: Control, slow: float = 1.0) -> void:
 	var r := RowReveal.new()
 	r._root = root
 	r._slow = maxf(slow, 0.01)
+	r._in_order = in_order
 	root.add_child(r, false, Node.INTERNAL_MODE_BACK)   # unseen by get_children()
 
 func _ready() -> void:
@@ -52,7 +56,8 @@ func _collect_rows(n: Node) -> void:
 			_collect_rows(ctl)   # a stack of rows, not a row
 			continue
 		var row := {"node": ctl, "orig": ctl.modulate, "last": ctl.modulate,
-			"start": _rng.randf_range(0.0, STAGGER), "seed": _rng.randi(),
+			"start": _rows.size() * IN_ORDER_STEP if _in_order else _rng.randf_range(0.0, STAGGER),
+			"seed": _rng.randi(),
 			"items": [], "labels": [], "texts": []}
 		var leaves: Array[Control] = []
 		_leaves(ctl, leaves)
