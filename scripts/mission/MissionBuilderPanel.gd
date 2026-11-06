@@ -510,14 +510,16 @@ func _build_destination_card(index: int, state_before: Dictionary) -> Control:
 	var cs := _card_style(Color(0.20, 0.52, 0.38, 0.35))
 	card.add_theme_stylebox_override("panel", cs)
 
-	# Outer row: content fills left, × button on right
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	# Outer row: card fills left, × button beside it (outside the card)
 	var outer := HBoxContainer.new()
 	outer.add_theme_constant_override("separation", 4)
-	card.add_child(outer)
+	outer.add_child(card)
 
 	var content := HBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	outer.add_child(content)
+	card.add_child(content)
 
 	var entry: Dictionary = _tasks[index]
 	var def: MissionTaskDef = MissionTaskRegistry.get_def("move_station")
@@ -527,11 +529,13 @@ func _build_destination_card(index: int, state_before: Dictionary) -> Control:
 		def.build_params_ui.call(content, entry, func() -> void: _refresh_cost(), task_ctx)
 
 	var cap_i := index
-	outer.add_child(_make_x_btn(func() -> void:
+	var x_btn := _make_x_btn(func() -> void:
 		_tasks.resize(cap_i)
-		_rebuild_task_list()))
+		_rebuild_task_list())
+	x_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	outer.add_child(x_btn)
 
-	return card
+	return outer
 
 
 func _build_land_row(index: int) -> Control:

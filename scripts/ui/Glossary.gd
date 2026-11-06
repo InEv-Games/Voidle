@@ -61,9 +61,9 @@ static func entry(id: String) -> Array:
 
 ## "[icon] +10" in the resource's colour (a malus red); a mineral by name.
 static func _res(id: String, v: float, sign := "+") -> String:
-	var col := Economy.color_of(id) if id != Economy.RAW else Color(0.85, 0.78, 0.70)
+	var col := Economy.color_of(id) if id != Economy.RAW else UIStyle.color(&"icon")
 	if sign == "−":
-		col = Color(0.89, 0.42, 0.42)
+		col = UIStyle.color(&"bad")
 	var num := Economy.fmt(absf(v)) if absf(v) >= 1000.0 else BuildingDef._num(snappedf(absf(v), 0.1))
 	if UIIcons.has_icon(id):
 		return "%s [color=#%s]%s%s[/color]" % [UIIcons.bb(id, 11, col), col.to_html(false), sign, num]
@@ -96,8 +96,8 @@ static func _building_entry(bid: String) -> Array:
 	for id: String in b.inputs:
 		flow.append(_res(id, float(b.inputs[id]), "−"))
 	if not flow.is_empty():
-		var lead := ("%s [color=#8a93b0]%s[/color]   " % [UIIcons.bb("cycle", 11, Color(0.54, 0.58, 0.69)),
-			ProductionManager.cycle_text(ProductionManager.building_cycle_sec(b))]) if stock else ""
+		var lead := ("%s [color=#%s]%s[/color]   " % [UIIcons.bb("cycle", 11, UIStyle.color(&"text_muted")),
+			UIStyle.hex(&"text_muted"), ProductionManager.cycle_text(ProductionManager.building_cycle_sec(b))]) if stock else ""
 		lines.append("")
 		lines.append(lead + "   ".join(flow))
 	var once: Array[String] = []
@@ -107,13 +107,13 @@ static func _building_entry(bid: String) -> Array:
 		for id: String in cost:
 			once.append(_res(id, float(cost[id]), ""))
 	if b.pop_use() > 0:
-		once.append("%s [color=#d9e0ff]%s[/color]" % [UIIcons.bb("worker", 11, Color(0.85, 0.88, 1.0)), Economy.fmt(b.pop_use())])
+		once.append("%s [color=#%s]%s[/color]" % [UIIcons.bb("worker", 11, UIStyle.color(&"text_bright")), UIStyle.hex(&"text_bright"), Economy.fmt(b.pop_use())])
 	if not once.is_empty():
 		lines.append("[right]%s[/right]" % "   ".join(once))
 	var types: Array[String] = []
 	for t in b.allowed_poi_types:
 		types.append(POIData.TYPE_LABELS[int(t)])
-	var corner := "%s [color=#8a93b0]%s[/color]" % [UIIcons.bb("district", 11, Color(0.54, 0.58, 0.69)), ", ".join(types)]
+	var corner := "%s [color=#%s]%s[/color]" % [UIIcons.bb("district", 11, UIStyle.color(&"text_muted")), UIStyle.hex(&"text_muted"), ", ".join(types)]
 	return [b.display_name, "\n".join(lines), corner]
 
 static func _district_entry(key: String) -> Array:
@@ -125,7 +125,7 @@ static func _district_entry(key: String) -> Array:
 		var parts: Array[String] = []
 		for id: String in d.base_outputs:
 			parts.append("+%s %s" % [BuildingDef._num(float(d.base_outputs[id])), Economy.display_name(id)])
-		lines.append("[color=#8fe39a]Makes[/color]  %s per cycle (before bonuses)" % ", ".join(parts))
+		lines.append("[color=#%s]Makes[/color]  %s per cycle (before bonuses)" % [UIStyle.hex(&"good"), ", ".join(parts)])
 	return [d.display_name, "\n".join(lines)]
 
 static func _source_entry(rid: String, label: String) -> Array:
@@ -137,10 +137,10 @@ static func _source_entry(rid: String, label: String) -> Array:
 	var lines: Array[String] = []
 	for k in keys.slice(0, 12):
 		var v := float(units[k])
-		lines.append("[color=#%s]%s%s /s[/color]  %s" % ["8fe39a" if v >= 0.0 else "e36a6a", "+" if v >= 0.0 else "−",
+		lines.append("[color=#%s]%s%s /s[/color]  %s" % [UIStyle.hex(&"good") if v >= 0.0 else UIStyle.hex(&"bad"), "+" if v >= 0.0 else "−",
 			BuildingDef._num(snappedf(absf(v), 0.01)), k])
 	if keys.size() > 12:
-		lines.append("[color=#8a93b0]… and %d more[/color]" % (keys.size() - 12))
+		lines.append("[color=#%s]… and %d more[/color]" % [UIStyle.hex(&"text_muted"), keys.size() - 12])
 	return [label, "\n".join(lines)]
 
 ## Wraps known names in a plain text — buildings, district types — in nested

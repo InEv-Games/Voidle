@@ -3,7 +3,10 @@ extends ColorRect
 
 signal planet_clicked(screen_pos: Vector2)
 
-@export var momentum_decay: float = 0.92
+## How fast a flung globe slows down (1/s; frame-rate independent).
+@export var momentum_friction: float = 4.5
+## How fast the globe catches up with the drag (1/s). Higher = tighter, lower = silkier.
+@export var drag_smoothing: float = 30.0
 
 ## Editor preview controls — no effect at runtime.
 @export_group("Editor Preview")
@@ -28,8 +31,14 @@ signal planet_clicked(screen_pos: Vector2)
 @export_group("")
 
 var _dragging := false
-var _drag_velocity := 0.0
+var _drag_velocity := 0.0   # rad/s, kept for the fling after release
 var _last_drag_time := 0
+var _last_drag_usec := 0
+## Drag / momentum not yet shown: eased in by tick_motion() so the globe glides
+## instead of stepping with each mouse event.
+var _pending_rot := 0.0
+var _pending_tilt := 0.0
+var _motion_frame := -1
 var _drag_total_px := 0.0
 var _rotation_offset := 0.0
 ## Camera tilt around the screen X axis (radians). + brings the north pole into view.
@@ -235,6 +244,7 @@ func begin_drag(pos: Vector2) -> void:
 	_drag_total_px = 0.0
 	_last_mouse_x = pos.x
 	_last_mouse_y = pos.y
+	_last_drag_usec = Time.get_ticks_usec()
 
 func end_drag() -> void:
 	if Time.get_ticks_msec() - _last_drag_time > 100:
@@ -251,45 +261,82 @@ func drag_to(pos: Vector2) -> void:
 	_drag_total_px += abs(delta_x) + abs(delta_y)
 	_last_mouse_x = pos.x
 	_last_mouse_y = pos.y
+	if _planet_radius_px <= 0.0:
+		return
+	var now := Time.get_ticks_usec()
+	var dt := clampf(float(now - _last_drag_usec) / 1e6, 0.004, 0.1)
+	_last_drag_usec = now
 	# Vertical drag tilts the globe: dragging down brings the north into view.
-	if delta_y != 0.0 and not tilt_locked:
-		var delta_tilt: float = delta_y / _planet_radius_px
-		set_tilt(tilt + delta_tilt)
-		_tilt_velocity = delta_tilt if _tilt_velocity == 0.0 else lerp(_tilt_velocity, delta_tilt, 0.6)
-	# 1:1 surface mapping: dragging by r_px = π radians rotation
+	var delta_tilt := 0.0
+	if not tilt_locked:
+		delta_tilt = delta_y / _planet_radius_px
+		_pending_tilt += delta_tilt
 	# Keep the surface under the cursor moving 1:1: the view centre sits at
 	# latitude = tilt, where a radian of spin covers only cos(tilt) of the radius.
 	var delta_rot: float = delta_x / (_planet_radius_px * maxf(cos(tilt), 0.35))
-	_rotation_offset = fposmod(_rotation_offset - delta_rot, TAU)
-	
-	# Smooth velocity so a single tiny mouse event doesn't kill momentum
-	if _drag_velocity == 0.0:
-		_drag_velocity = -delta_rot
-	else:
-		_drag_velocity = lerp(_drag_velocity, -delta_rot, 0.6)
-		
+	_pending_rot -= delta_rot
+	# Velocity in rad/s (time-weighted, so the fling is the same at any mouse
+	# or frame rate); smoothed so one odd event doesn't kill the momentum.
+	_drag_velocity = lerpf(_drag_velocity, -delta_rot / dt, 0.5)
+	_tilt_velocity = lerpf(_tilt_velocity, delta_tilt / dt, 0.5)
 	_last_drag_time = Time.get_ticks_msec()
-	
-	if material:
-		material.set_shader_parameter("rotation_offset", _rotation_offset)
-		# light_direction synced at end of _process every frame
+
+## Feeds a turn into the eased drag path (trackpad pan and the like).
+func nudge(d_rot: float, d_tilt: float) -> void:
+	_pending_rot += d_rot
+	if not tilt_locked:
+		_pending_tilt += d_tilt
+
+## Drops any glide still in flight — call before a scripted camera move.
+func stop_motion() -> void:
+	_pending_rot = 0.0
+	_pending_tilt = 0.0
+	_drag_velocity = 0.0
+	_tilt_velocity = 0.0
+
+## Advances the drag easing and the fling. PlanetaryView calls this first in its
+## _process so every layer drawn this frame sees the same globe; otherwise our
+## own _process does. Runs once per frame either way.
+func tick_motion(delta: float) -> void:
+	var frame := Engine.get_process_frames()
+	if frame == _motion_frame:
+		return
+	_motion_frame = frame
+	if not _dragging:
+		if _drag_velocity != 0.0 or _tilt_velocity != 0.0:
+			_pending_rot += _drag_velocity * delta
+			_pending_tilt += _tilt_velocity * delta
+			var f := exp(-delta * momentum_friction)
+			_drag_velocity *= f
+			_tilt_velocity *= f
+			if absf(_drag_velocity) < 0.003:
+				_drag_velocity = 0.0
+			if absf(_tilt_velocity) < 0.003:
+				_tilt_velocity = 0.0
+	if tilt_locked:
+		_pending_tilt = 0.0
+		_tilt_velocity = 0.0
+	if _pending_rot == 0.0 and _pending_tilt == 0.0:
+		return
+	var k := 1.0 - exp(-delta * drag_smoothing)
+	var step_rot := _pending_rot if absf(_pending_rot) < 1e-5 else _pending_rot * k
+	var step_tilt := _pending_tilt if absf(_pending_tilt) < 1e-5 else _pending_tilt * k
+	_pending_rot -= step_rot
+	_pending_tilt -= step_tilt
+	set_rotation_offset(_rotation_offset + step_rot)
+	if step_tilt != 0.0:
+		var want := tilt + step_tilt
+		set_tilt(want)
+		if not is_equal_approx(tilt, want):   # hit the pole limit: stop pushing
+			_pending_tilt = 0.0
+			_tilt_velocity = 0.0
 
 func _process(_delta: float) -> void:
 	# @tool script: in the editor only the preview runs. Hot-reloaded editor
 	# instances also carry null for newly added members, so stay out entirely.
 	if Engine.is_editor_hint():
 		return
-	if not _dragging and abs(_drag_velocity) > 0.0001:
-		_drag_velocity *= momentum_decay
-		_rotation_offset = fposmod(_rotation_offset + _drag_velocity, TAU)
-		if material:
-			material.set_shader_parameter("rotation_offset", _rotation_offset)
-	if not _dragging and abs(_tilt_velocity) > 0.0001:
-		_tilt_velocity *= momentum_decay
-		if tilt_locked:
-			_tilt_velocity = 0.0
-		else:
-			set_tilt(tilt + _tilt_velocity)
+	tick_motion(_delta)
 	# Always sync light direction at the END of every frame so both
 	# rotation_offset (updated above or in _input) and light_angle
 	# (updated by PlanetaryView._process which runs before us as the parent)

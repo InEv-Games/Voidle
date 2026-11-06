@@ -752,9 +752,15 @@ func _show_planet_overview() -> void:
 func _star_system_block() -> String:
 	return "" if GameState.can_view_solar() else "Star system not unlocked yet"
 
+var _panel_menu_key := ""   # the menu the side panel last showed (CyberReveal on change)
+
 func _nav_visit(planet: PlanetData, sub: Dictionary, label: String) -> void:
 	if planet != null:
-		NavigationManager.visit(NavigationManager.planet_entry(planet, sub, label))
+		var entry := NavigationManager.planet_entry(planet, sub, label)
+		if entry["key"] != _panel_menu_key:   # a new menu, not the same one rebuilt
+			_panel_menu_key = entry["key"]
+			($SidePanel as LeftPanel).reveal()
+		NavigationManager.visit(entry)
 
 ## Records whichever panel is showing (same precedence as _refresh_active_panel).
 func _nav_visit_current() -> void:
@@ -1216,9 +1222,7 @@ func _input(event: InputEvent) -> void:
 			var r_px := _planet_r_px()
 			if r_px > 0.0:
 				var spin_r := r_px * maxf(cos(planet_renderer.tilt), 0.35)
-				planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset() + pg.delta.x / spin_r)
-				if not planet_renderer.tilt_locked:
-					planet_renderer.set_tilt(planet_renderer.tilt - pg.delta.y / r_px)
+				planet_renderer.nudge(pg.delta.x / spin_r, -pg.delta.y / r_px)
 			get_viewport().set_input_as_handled()
 
 func load_planet(data: PlanetData) -> void:
@@ -1228,6 +1232,7 @@ func load_planet(data: PlanetData) -> void:
 		_panel_scroll_pos = 0   # reset scroll on planet switch
 		_zoom = ZOOM_MIN
 		_zoom_target = ZOOM_MIN
+		planet_renderer.stop_motion()   # no fling carried over from the last world
 		planet_renderer.set_tilt(0.0)
 		_end_district_placement()
 		_orbit_panel_open = false
@@ -1455,34 +1460,44 @@ static func _hidden_by(v: Vector3, b: Dictionary) -> bool:
 	return v.z > 0.0 and Vector2(v.x, v.y).distance_to(b["c"]) < float(b["r"])
 
 ## WASD / arrow keys turn the globe (A/D spin, W/S tilt) — not while typing,
-## in the console, or with the Upgrade Tree open. Slower when zoomed in.
+## in the console, or with the Upgrade Tree open. Slower when zoomed in. The
+## turn speeds up and settles smoothly instead of starting / stopping dead.
 const KEY_SPIN_SPEED := 1.6   # rad/s at the widest zoom
+const KEY_SPIN_EASE  := 7.0   # 1/s — how fast the turn reaches / leaves full speed
+var _key_spin_vel := Vector2.ZERO   # (spin, tilt) rad/s
 func _tick_key_spin(delta: float) -> void:
-	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()) or _naming_open or _switching_body:
+	if _switching_body:
+		_key_spin_vel = Vector2.ZERO
 		return
+	var dir := Vector2.ZERO
+	if _key_spin_allowed():
+		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
+			dir.x -= 1.0
+		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
+			dir.x += 1.0
+		if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
+			dir.y += 1.0
+		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
+			dir.y -= 1.0
+	var target := dir * KEY_SPIN_SPEED / maxf(_zoom, 0.5) * Vector2(1.0, 0.6)
+	_key_spin_vel = _key_spin_vel.lerp(target, 1.0 - exp(-delta * KEY_SPIN_EASE))
+	if dir == Vector2.ZERO and _key_spin_vel.length_squared() < 1e-4:
+		_key_spin_vel = Vector2.ZERO
+		return
+	if planet_renderer.tilt_locked:
+		_key_spin_vel.y = 0.0
+	planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset() + _key_spin_vel.x * delta)
+	if _key_spin_vel.y != 0.0:
+		planet_renderer.set_tilt(planet_renderer.tilt + _key_spin_vel.y * delta)
+
+func _key_spin_allowed() -> bool:
+	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()) or _naming_open:
+		return false
 	var focus := get_viewport().gui_get_focus_owner()
 	if focus is LineEdit or focus is TextEdit:
-		return
+		return false
 	var dc := get_node_or_null("/root/DevConsole")
-	if dc != null and bool(dc.get("_open")):
-		return
-	var spin := 0.0
-	var tilt := 0.0
-	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
-		spin -= 1.0
-	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
-		spin += 1.0
-	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
-		tilt += 1.0
-	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
-		tilt -= 1.0
-	if spin == 0.0 and tilt == 0.0:
-		return
-	var speed := KEY_SPIN_SPEED / maxf(_zoom, 0.5) * delta
-	if spin != 0.0:
-		planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset() + spin * speed)
-	if tilt != 0.0 and not planet_renderer.tilt_locked:
-		planet_renderer.set_tilt(planet_renderer.tilt + tilt * speed * 0.6)
+	return not (dc != null and bool(dc.get("_open")))
 
 ## Picks the burn / arrival angles the first time a route is drawn: the burn on
 ## the side of the origin facing the destination, the arrival on the side of
@@ -2395,17 +2410,21 @@ func _try_follow_lander(at: Vector2) -> bool:
 			if hit != null:
 				_cam_follow_ship_id = hit.ship_id
 				_cam_follow_lander = false
+				planet_renderer.stop_motion()
 				AudioManager.play("click")
 				_show_unlock_toast("Following %s" % hit.ship_name, "Drag the planet to release the camera.")
 				return true
 		return false
 	_cam_follow_ship_id = ""
 	_cam_follow_lander = true
+	planet_renderer.stop_motion()
 	AudioManager.play("click")
 	_show_unlock_toast("Following the lander", "Drag the planet to release the camera.")
 	return true
 
 func _tick_cam_follow(delta: float) -> void:
+	if planet_renderer._dragging and _focus_tween != null and _focus_tween.is_valid():
+		_focus_tween.kill()   # the player took the camera
 	if _cam_follow_ship_id != "":
 		_tick_follow_ship(delta)
 		return
@@ -4801,6 +4820,8 @@ func _add_orbit_toggle(planet_cont: Control, layer: OrbitalLayer) -> void:
 var _last_hud_h := -1.0
 
 func _process(delta: float) -> void:
+	# drag easing / fling first, so every layer this frame sees the same globe
+	planet_renderer.tick_motion(delta)
 	_place_objectives()
 	if not _build_tip_ctx.is_empty():
 		_show_build_row_tip()   # Shift / Ctrl change how many a click buys
@@ -4963,11 +4984,22 @@ func _apply_light_angle() -> void:
 
 
 
+## The running scripted camera turn (_rotate_to_lon / _focus_on_site); a new
+## one replaces it, and grabbing the globe cancels it.
+var _focus_tween: Tween = null
+
+func _new_focus_tween() -> Tween:
+	if _focus_tween != null and _focus_tween.is_valid():
+		_focus_tween.kill()
+	planet_renderer.stop_motion()
+	_focus_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	return _focus_tween
+
 func _rotate_to_lon(lon_deg: float, duration: float = 0.45) -> void:
 	var target  := fposmod(deg_to_rad(lon_deg), TAU)
 	var current := fposmod(planet_renderer.get_rotation_offset(), TAU)
 	var diff    := fposmod(target - current + PI, TAU) - PI
-	var tween   := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	var tween   := _new_focus_tween()
 	tween.tween_method(
 		func(v: float) -> void: planet_renderer.set_rotation_offset(v),
 		current, current + diff, duration)
@@ -4980,7 +5012,7 @@ func _focus_on_site(lon_deg: float, lat_deg: float, duration: float = 0.45) -> v
 	var target  := fposmod(deg_to_rad(lon_deg), TAU)
 	var current := fposmod(planet_renderer.get_rotation_offset(), TAU)
 	var diff    := fposmod(target - current + PI, TAU) - PI
-	var tween   := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	var tween   := _new_focus_tween()
 	tween.tween_method(
 		func(v: float) -> void: planet_renderer.set_rotation_offset(v),
 		current, current + diff, duration)
@@ -5061,13 +5093,35 @@ const LENS_BAR_MARGIN := 30.0   # clears the news crawl (NewsFeed.HEIGHT)
 func _place_lens_bar() -> void:
 	if _lens_bar == null or not is_instance_valid(_lens_bar):
 		return
-	# always on screen (playtest 30.10): with the panel closed — a game without
-	# the tutorial, founding a City — the lenses are needed just as much
 	var h := _lens_bar.get_combined_minimum_size().y
-	_lens_bar.offset_bottom = -LENS_BAR_MARGIN
+	var lh := 0.0
+	if is_instance_valid(_lens_legend):
+		lh = (_lens_legend as Control).get_combined_minimum_size().y + LENS_LEGEND_GAP
+	# rides the panel's slide tween: up from below the screen as it opens
+	var drop := (1.0 - _panel_t) * (LENS_BAR_MARGIN + h + lh)
+	_lens_bar.offset_bottom = -LENS_BAR_MARGIN + drop
 	_lens_bar.offset_top = _lens_bar.offset_bottom - h
-	_lens_bar.modulate.a = 1.0
-	_lens_bar.visible = true
+	_place_lens_legend()
+	_fade_lens_ui()
+
+## The lens colour key sits just above the lens bar and moves with it.
+const LENS_LEGEND_GAP := 6.0
+
+func _place_lens_legend() -> void:
+	if not is_instance_valid(_lens_legend) or not is_instance_valid(_lens_bar):
+		return
+	var row := _lens_legend as Control
+	var h := row.get_combined_minimum_size().y
+	row.offset_bottom = _lens_bar.offset_top - LENS_LEGEND_GAP
+	row.offset_top = row.offset_bottom - h
+
+## Lenses (and their colour key) only show with the left panel open; they slide
+## and fade with the panel.
+func _fade_lens_ui() -> void:
+	for c in [_lens_bar, _lens_legend]:   # untyped: either may be a freed node
+		if is_instance_valid(c):
+			(c as Control).modulate.a = _panel_t
+			(c as Control).visible = _panel_t > 0.01
 
 ## Orbital surface scan: a bright band sweeps the globe once, then the role
 ## lenses of this world work (GameState.scanned_bodies).
@@ -5235,10 +5289,8 @@ func _refresh_lens_legend() -> void:
 	row.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 0)
 	row.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	row.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	var h := row.get_combined_minimum_size().y
-	row.offset_bottom = _lens_bar.offset_top - 6.0
-	row.offset_top = row.offset_bottom - h
 	_lens_legend = row
+	_place_lens_bar()   # the bar's slide offset counts the legend's height
 
 func _refresh_lens() -> void:
 	_style_lens_bar()
@@ -5369,11 +5421,12 @@ func _apply_zoom() -> void:
 	_update_aspect()
 	planet_renderer._update_radius()
 
+const ZOOM_EASE := 10.0   # 1/s — how fast the zoom glides to its target
 func _tick_zoom(delta: float) -> void:
 	if is_equal_approx(_zoom, _zoom_target):
 		return
 	var prev := _zoom
-	_zoom = lerpf(_zoom, _zoom_target, 1.0 - exp(-delta * 14.0))
+	_zoom = lerpf(_zoom, _zoom_target, 1.0 - exp(-delta * ZOOM_EASE))
 	if absf(_zoom - _zoom_target) < 0.002:
 		_zoom = _zoom_target
 	_keep_anchor_fixed(prev, _zoom)
@@ -6707,7 +6760,7 @@ func _level_badge(lv: int, is_city: bool) -> PanelContainer:
 ## otherwise a City card opens the City panel.
 ## Look and layout: scenes/ui/components/ListItem.tscn.
 func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetProgress,
-		_panel_content: VBoxContainer, _root: VBoxContainer, as_capital: bool = false) -> PanelContainer:
+		_panel_content: VBoxContainer, _root: VBoxContainer, as_capital: bool = false) -> Control:
 	var as_city := poi.is_city() and not as_capital
 	var lv: int = Leveling.city_level(pp, poi) if as_city else pp.district_levels.get(poi.label, 1)
 	var title := (poi.capital_shown_name() if as_capital else poi.shown_name()).to_upper()
@@ -6757,21 +6810,20 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	# production cycle (stock income only) / construction / levelling bar
 	var c_poi := poi
 	var p_seed := planet.seed
+	var cancel_btn: IconButton = null
 	if poi.constructing:
 		card.description = "Constructing..."
 		card.stats = PackedStringArray()
 		_poll_progress(card, func() -> float: return c_poi.construct_progress, UIStyle.color(&"neutral_stroke"), true)
-		# a visible way back (playtest 30.10): cancel it for a full refund
+		# a visible way back (playtest 30.10): cancel it for a full refund; ✖ sits beside the card
 		if Settlement.cancel_district_block(planet, poi) == "":
-			var cancel_btn := IconButton.create("", "cancel", IconButton.Variant.NEGATIVE)   # icon only; the tip says what it does
+			cancel_btn = IconButton.create("", "cancel", IconButton.Variant.NEGATIVE)   # icon only; the tip says what it does
+			cancel_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			cancel_btn.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Cancel construction", "Stops building it and gives everything back."))
 			cancel_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 			cancel_btn.pressed.connect(func() -> void:
 				TooltipManager.hide_tip()
 				_cancel_district(c_poi))
-			var bottom := card.get_node_or_null("Row/Body/Bottom")
-			if bottom != null:
-				bottom.add_child(cancel_btn)
 	elif as_city and pp.city_upgrading.has(poi.label):
 		card.description = "City levelling up…"
 		card.stats = PackedStringArray()
@@ -6812,7 +6864,7 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 			_rotate_to_lon(eq_lon)
 		else:
 			_select_district_on_planet(cap_poi.label)
-			_focus_on_site(cap_poi.lon_deg, cap_poi.lat_deg)
+		_frame_poi(cap_poi)
 		if cap_poi.constructing:
 			TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\nBuild time: %.0fs" % cap_poi.construct_duration)
 			return
@@ -6820,7 +6872,14 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 			_build_city_panel(cap_poi, cap_planet)
 		else:
 			_build_district_panel(cap_poi, cap_planet))
-	return card
+	if cancel_btn == null:
+		return card
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(card)
+	row.add_child(cancel_btn)
+	return row
 
 ## Icon for a city / district card from its kind (UIIcons names).
 func _district_icon(poi: POIData, as_city: bool, as_capital: bool) -> String:
@@ -7252,22 +7311,61 @@ func _city_of(poi: POIData) -> POIData:
 func _focus_city(city: POIData) -> void:
 	if city == null or current_data == null:
 		return
-	var sum := Vector3.ZERO
-	for p: POIData in current_data.custom_pois:
-		if p == city or (p.parent_city == city.label and not p.is_orbital()):
-			var lon := deg_to_rad(p.lon_deg)
-			var lat := deg_to_rad(p.lat_deg)
-			sum += Vector3(cos(lat) * cos(lon), sin(lat), cos(lat) * sin(lon))
-	if sum.length_squared() < 1e-6:
+	var n := _city_center(city)
+	if n == Vector3.ZERO:
 		return
-	var n := sum.normalized()
-	var lon_c := rad_to_deg(atan2(n.z, n.x))
-	var lat_c := rad_to_deg(asin(clampf(n.y, -1.0, 1.0)))
 	AudioManager.play("click")
-	_focus_on_site(lon_c, lat_c, 0.5)
+	_focus_on_site(rad_to_deg(atan2(n.z, n.x)), rad_to_deg(asin(clampf(n.y, -1.0, 1.0))), 0.5)
 	# Anchor on the globe's centre so the zoom doesn't fight the spin.
 	_set_zoom_target(maxf(_zoom_target, CITY_FOCUS_ZOOM),
 		planet_renderer.global_position + planet_renderer.size * 0.5)
+
+static func _lonlat_dir(lon_deg: float, lat_deg: float) -> Vector3:
+	var lon := deg_to_rad(lon_deg)
+	var lat := deg_to_rad(lat_deg)
+	return Vector3(cos(lat) * cos(lon), sin(lat), cos(lat) * sin(lon))
+
+## Unit vector to the middle of a City and its surface districts (ZERO if none).
+func _city_center(city: POIData) -> Vector3:
+	var sum := Vector3.ZERO
+	for p: POIData in current_data.custom_pois:
+		if p == city or (p.parent_city == city.label and not p.is_orbital()):
+			sum += _lonlat_dir(p.lon_deg, p.lat_deg)
+	return sum.normalized() if sum.length_squared() > 1e-6 else Vector3.ZERO
+
+## Left-panel picks: turn the camera to the picked thing and ease the zoom to
+## its size — a City with all its districts in view, one district (and its
+## buildings) closer, an orbital station / the whole planet out to the globe.
+const FRAME_VIEW_FRAC: float = 0.32   # a framed area fills this much of the view height
+
+func _frame_poi(poi: POIData) -> void:
+	if poi == null or current_data == null:
+		return
+	if poi.is_orbital():
+		_frame_zoom(ZOOM_MIN)
+		return
+	var spacing := TerrainSampler.min_spacing_deg(current_data)
+	var dir := _lonlat_dir(poi.lon_deg, poi.lat_deg)
+	var radius_deg := spacing * 1.8   # a district with its neighbours around it
+	if poi.is_city():
+		var c := _city_center(poi)
+		if c != Vector3.ZERO:
+			dir = c
+		var spread := 0.0
+		for p: POIData in current_data.custom_pois:
+			if p == poi or (p.parent_city == poi.label and not p.is_orbital()):
+				spread = maxf(spread, rad_to_deg(dir.angle_to(_lonlat_dir(p.lon_deg, p.lat_deg))))
+		radius_deg = spread + spacing * 0.75
+	_focus_on_site(rad_to_deg(atan2(dir.z, dir.x)), rad_to_deg(asin(clampf(dir.y, -1.0, 1.0))), 0.5)
+	# Planet radius on screen is view_h * _base_radius * zoom; pick the zoom that
+	# puts the area's edge FRAME_VIEW_FRAC/2 of the view height from the centre.
+	var z := FRAME_VIEW_FRAC * 0.5 / (_base_radius * maxf(sin(deg_to_rad(minf(radius_deg, 80.0))), 0.01))
+	# never so far out that districts hide, nor into the "city view" where markers fade
+	_frame_zoom(clampf(z, ZOOM_BORDER_FULL, _zoom_max() * 0.78))
+
+func _frame_zoom(z: float) -> void:
+	# anchored on the globe's centre so the zoom doesn't fight the spin
+	_set_zoom_target(z, planet_renderer.global_position + planet_renderer.size * 0.5)
 
 ## pm_key -> { "fill": Control, "prog": Array[float] }
 var _bar_meta: Dictionary = {}
@@ -8408,7 +8506,7 @@ func _build_construction_bar(def: BuildingDef, pm_key: String, entry: Dictionary
 	row.add_theme_constant_override("separation", 4)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(card)
-	var x_btn := IconButton.create("", "close", IconButton.Variant.NEGATIVE)
+	var x_btn := IconButton.create("", "cancel", IconButton.Variant.NEGATIVE)
 	x_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	x_btn.pressed.connect(_cancel_building.bind(entry))
 	var bb := {Economy.CREDITS: PlanetProgress.stack_paid(entry)}
@@ -10721,6 +10819,7 @@ func _build_orbit_card(data: PlanetData, pp: PlanetProgress) -> PanelContainer:
 	card.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 	card.pressed.connect(func() -> void:
 		AudioManager.play("click")
+		_frame_zoom(ZOOM_MIN)
 		_build_orbit_panel(data))
 	return card
 
@@ -11020,6 +11119,7 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 		back.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_city_panel_poi = null
+			_frame_zoom(ZOOM_MIN)
 			_build_planet_overview(planet))
 		root.add_child(back)
 
@@ -11225,6 +11325,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		oback.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		oback.pressed.connect(func() -> void:
 			AudioManager.play("click")
+			_frame_zoom(ZOOM_MIN)
 			_build_orbit_panel(planet))
 		top_row.add_child(oback)
 	if parent_city != null:
@@ -11235,7 +11336,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		back.pressed.connect(func() -> void:
 			AudioManager.play("click")
 			_select_district_on_planet(cap_parent.label)
-			_focus_on_site(cap_parent.lon_deg, cap_parent.lat_deg)
+			_frame_poi(cap_parent)
 			_build_city_panel(cap_parent, planet))
 		back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		top_row.add_child(back)
@@ -11292,6 +11393,8 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 
 	var slots_used  := pp.slots_used_in_district(poi.label)
 	var slots_total := pp.district_slots(poi)
+
+	root.add_child(HSeparator.new())   # details (minerals, totals, bonuses) set apart top and bottom
 
 	# Minerals at this district's site, as chips
 	var mins_txt := _minerals_text(poi.resource_tags)
@@ -11361,6 +11464,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	var bonus_row := _build_district_bonus_row(poi, planet)
 	if bonus_row != null:
 		root.add_child(bonus_row)
+	root.add_child(HSeparator.new())
 
 	# Connect production updates to refresh bar fills live
 	if not ProductionManager.building_progress_changed.is_connected(_on_production_update):

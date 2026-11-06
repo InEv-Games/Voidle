@@ -24,6 +24,10 @@ func _ready() -> void:
 	if not Engine.is_editor_hint():
 		($VBox/Header/Close as Button).pressed.connect(func() -> void: close_pressed.emit())
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and is_node_ready():
+		($VBox/Header/Icon as TextureRect).self_modulate = UIStyle.color(&"accent")
+
 func _sync() -> void:
 	if not is_node_ready():
 		return
@@ -32,6 +36,7 @@ func _sync() -> void:
 	ic.visible = icon_name != ""
 	if ic.visible:
 		ic.texture = UIIcons.get_icon(icon_name)
+		ic.self_modulate = UIStyle.color(&"accent")
 	var b := $VBox/Body as RichTextLabel
 	b.text = body
 	b.visible = body != ""

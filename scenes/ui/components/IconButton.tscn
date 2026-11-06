@@ -27,7 +27,7 @@ mouse_filter = 2
 theme_override_constants/separation = 6
 
 [node name="Icon" type="TextureRect" parent="Row"]
-self_modulate = Color(0.898, 0.831, 0.675, 1)
+self_modulate = Color(0.949, 0.8863, 0.7294, 1)
 custom_minimum_size = Vector2(16, 16)
 layout_mode = 2
 mouse_filter = 2

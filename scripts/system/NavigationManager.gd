@@ -161,12 +161,12 @@ func _crumb(txt: String, target: Dictionary, enabled: bool) -> void:
 	if _crumbs.get_child_count() > 0:
 		var gt := Label.new()
 		gt.text = "›"
-		_style_lbl(gt, Color(0.35, 0.40, 0.55))
+		_style_lbl(gt, UIStyle.color(&"text_muted"))
 		_crumbs.add_child(gt)
 	if target.is_empty() or not enabled:
 		var l := Label.new()
 		l.text = txt
-		_style_lbl(l, Color(0.85, 0.88, 1.0) if target.is_empty() else Color(0.40, 0.44, 0.58))
+		_style_lbl(l, UIStyle.color(&"text_bright") if target.is_empty() else UIStyle.color(&"text_muted"))
 		_crumbs.add_child(l)
 		return
 	var b := Button.new()

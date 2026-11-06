@@ -75,14 +75,14 @@ func _ready() -> void:
 		get_viewport().size_changed.connect(_place)
 
 	# the market's name on top, then BACK (to the panel's own content)
-	var title := _label("MARKET", 22, Color(0.65, 0.85, 1.0))
+	var title := _label("MARKET", 22, UIStyle.color(&"accent"))
 	v.add_child(title)
 	var back := IconButton.create_text("‹  BACK")
 	back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	back.pressed.connect(close)
 	v.add_child(back)
 	# one small line of colour under it (warnings show here for a moment)
-	_status = _label("", 9, Color(0.6, 0.68, 0.85))
+	_status = _label("", 9, UIStyle.color(&"text_subtle"))
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.custom_minimum_size = Vector2(10, 0)
 	v.add_child(_status)
@@ -183,12 +183,12 @@ func _show_trade_tip() -> void:
 		else (1 if Input.is_key_pressed(KEY_SHIFT) else 0)
 	var opts: Array[String] = []
 	for i in 3:
-		opts.append(("[color=#e8ecf6]%s[/color]" if i == mode else "%s") % ["one lot", "Shift ×10", "Ctrl/Cmd all"][i])
-	lines.append("[color=#8a93b0]%s[/color]" % " · ".join(opts))
+		opts.append(("[color=#%s]%s[/color]" % [UIStyle.hex(&"text_bright"), ["one lot", "Shift ×10", "Ctrl/Cmd all"][i]]) if i == mode else ["one lot", "Shift ×10", "Ctrl/Cmd all"][i])
+	lines.append("[color=#%s]%s[/color]" % [UIStyle.hex(&"text_muted"), " · ".join(opts)])
 	# then the deal on one line: what comes in, then what goes out
 	if qty <= 0.0:
-		lines.append("[color=#e36a6a]%s[/color]" % (
-			"Nothing to sell" if selling else ("Storage is full" if Trade.room(id) <= 0.0 else "Not enough Credits")))
+		lines.append("[color=#%s]%s[/color]" % [UIStyle.hex(&"bad"),
+			"Nothing to sell" if selling else ("Storage is full" if Trade.room(id) <= 0.0 else "Not enough Credits")])
 	elif selling:
 		lines.append(_amount_bb("+", Economy.CREDITS, credits, false) + "    " + _amount_bb("−", id, qty, true))
 	else:
@@ -198,7 +198,7 @@ func _show_trade_tip() -> void:
 ## "− [icon] 22K": an amount by its resource icon, red when it is paid,
 ## the resource's colour when it is gained (body size: the title stays larger).
 static func _amount_bb(sign: String, rid: String, amount: float, paid: bool) -> String:
-	var col := Color(0.89, 0.42, 0.42) if paid else Economy.color_of(rid)
+	var col := UIStyle.color(&"bad") if paid else Economy.color_of(rid)
 	return "[color=#%s]%s %s %s[/color]" % [col.to_html(false), sign,
 		UIIcons.bb(rid, 13, Economy.color_of(rid)), Economy.fmt(amount)]
 
@@ -229,7 +229,7 @@ func _column_head() -> Control:
 	fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	head.add_child(fill)
-	var auto := _label("AUTOMATION", 8, Color(0.55, 0.62, 0.80))
+	var auto := _label("AUTOMATION", 8, UIStyle.color(&"text_muted"))
 	auto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_fixed(auto, TARGET_W + GAP + ROW_H - 2.0, 12.0)
 	auto.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -287,11 +287,11 @@ func _product_row(id: String) -> Control:
 
 	# the product: an icon in an item box; its name in the tooltip
 	var box := PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.07, 0.14, 0.9)
-	sb.border_color = Color(Economy.color_of(id), 0.55)
-	sb.set_border_width_all(1)
-	sb.set_corner_radius_all(3)
+	var sb := UIStyle.item_box(Color(Economy.color_of(id), 0.55), 3)
+	sb.content_margin_left = 0
+	sb.content_margin_top = 0
+	sb.content_margin_right = 0
+	sb.content_margin_bottom = 0
 	box.add_theme_stylebox_override("panel", sb)
 	_fixed(box, ICON_BOX, ICON_BOX)
 	var icon := TextureRect.new()
@@ -310,13 +310,11 @@ func _product_row(id: String) -> Control:
 
 	# the unit price in credits, right by the icon, in a box like it
 	var pbox := PanelContainer.new()
-	var psb := StyleBoxFlat.new()
-	psb.bg_color = Color(0.04, 0.07, 0.14, 0.9)
-	psb.border_color = Color(Economy.color_of(Economy.CREDITS), 0.45)
-	psb.set_border_width_all(1)
-	psb.set_corner_radius_all(3)
+	var psb := UIStyle.item_box(Color(Economy.color_of(Economy.CREDITS), 0.45), 3)
 	psb.content_margin_left = 4
+	psb.content_margin_top = 0
 	psb.content_margin_right = 4
+	psb.content_margin_bottom = 0
 	pbox.add_theme_stylebox_override("panel", psb)
 	_fixed(pbox, PRICE_W, ICON_BOX)
 	var prow := HBoxContainer.new()
@@ -332,7 +330,7 @@ func _product_row(id: String) -> Control:
 	cr.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	prow.add_child(cr)
-	var price := _label("", 10, Color(0.80, 0.85, 1.0))
+	var price := _label("", 10, UIStyle.color(&"text_bright"))
 	price.clip_text = true
 	price.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	price.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -415,9 +413,8 @@ func _product_row(id: String) -> Control:
 		band.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		band.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		band.add_theme_font_size_override("font_size", 10)
-		band.add_theme_color_override("font_color", Color(1.0, 0.82, 0.55))
-		var bsb := StyleBoxFlat.new()
-		bsb.bg_color = Color(0.03, 0.05, 0.10, 0.55)
+		band.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
+		var bsb := UIStyle.panel_box(0.65)
 		bsb.set_corner_radius_all(3)
 		band.add_theme_stylebox_override("normal", bsb)
 		band.mouse_filter = Control.MOUSE_FILTER_STOP   # nothing under it reacts
@@ -454,7 +451,7 @@ func _open_mode_menu(anchor: Control, id: String, apply: Callable) -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		b.add_theme_font_size_override("font_size", 11)
 		if m == now:
-			b.add_theme_color_override("font_color", Color(1.0, 0.85, 0.40))
+			b.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
 		b.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
 		b.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		b.pressed.connect(func() -> void:
@@ -483,7 +480,7 @@ func _refresh() -> void:
 		if not is_instance_valid(e["price"]):
 			continue
 		var m := Trade.price_mult(id)
-		var tc := UP_COL if m > 1.01 else (DOWN_COL if m < 0.99 else FLAT_COL)
+		var tc := UIStyle.color(&"good") if m > 1.01 else (UIStyle.color(&"bad") if m < 0.99 else UIStyle.color(&"text_bright"))
 		(e["price"] as Label).text = _price(Trade.unit_price(id))
 		(e["price"] as Label).add_theme_color_override("font_color", tc)
 		(e["chart"] as Control).queue_redraw()
@@ -567,7 +564,7 @@ class _Sparkline extends Control:
 		var h := Trade.history(product)
 		var w := size.x
 		var hh := size.y
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.08, 0.16, 0.6))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(UIStyle.color(&"item_bg"), 0.85))
 		var pts: Array = h.duplicate()
 		pts.append(Trade.price_mult(product))   # the price now closes the line
 		# one scale for every product: at least ±CHART_SPAN around the reference,
@@ -581,7 +578,7 @@ class _Sparkline extends Control:
 		var ref_y: float = y_of.call(1.0)
 		var x := 0.0
 		while x < w:   # the reference, dotted
-			draw_line(Vector2(x, ref_y), Vector2(minf(x + 2.0, w), ref_y), Color(0.7, 0.75, 0.9, 0.45), 1.0)
+			draw_line(Vector2(x, ref_y), Vector2(minf(x + 2.0, w), ref_y), Color(UIStyle.color(&"text_muted"), 0.55), 1.0)
 			x += 5.0
 		if pts.size() < 2:
 			return
@@ -589,6 +586,6 @@ class _Sparkline extends Control:
 		for i in pts.size():
 			line.append(Vector2(float(i) / float(pts.size() - 1) * w, y_of.call(float(pts[i]))))
 		var last := float(pts[pts.size() - 1])
-		var col := TradePanel.UP_COL if last > 1.01 else (TradePanel.DOWN_COL if last < 0.99 else TradePanel.FLAT_COL)
+		var col := UIStyle.color(&"good") if last > 1.01 else (UIStyle.color(&"bad") if last < 0.99 else UIStyle.color(&"text_bright"))
 		draw_polyline(line, col, 1.5, true)
 		draw_circle(line[line.size() - 1], 2.0, col)

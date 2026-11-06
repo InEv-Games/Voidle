@@ -28,7 +28,7 @@ signal stepped(delta: int)
 	set(v): description = v; _sync()
 @export var icon_name: String = "city":
 	set(v): icon_name = v; _sync()
-@export var icon_color: Color = Color(0.898, 0.831, 0.675):
+@export var icon_color: Color = Color(0.949, 0.8863, 0.7294):
 	set(v): icon_color = v; _sync()
 ## Cycle length beside the badge ("20s"; empty hides it): stats are per cycle,
 ## so they read "+30" and the cycle stands once here (playtest 31.10).
@@ -46,7 +46,7 @@ signal stepped(delta: int)
 ## Cycle / construction progress 0..1; below 0 hides the fill.
 @export_range(-1.0, 1.0) var progress: float = -1.0:
 	set(v): progress = v; _sync()
-@export var progress_color: Color = Color(0.137, 0.725, 0.906):
+@export var progress_color: Color = Color(0.2196, 0.8157, 1.0):
 	set(v): progress_color = v; _sync()
 ## Construction look: crawling stripes over the fill.
 @export var progress_striped: bool = false:
@@ -64,6 +64,15 @@ var _cycle_box: HBoxContainer = null
 var _badge_box: HBoxContainer = null
 var _cycle_lbl: Label = null
 var _hovered := false
+var _applying_theme := false
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and is_node_ready() and not _applying_theme:
+		_applying_theme = true
+		if has_node("Row/Body/TitleRule"):
+			($Row/Body/TitleRule as CanvasItem).self_modulate = UIStyle.color(&"accent")
+		_apply_box()
+		_applying_theme = false
 
 static func create(t: String, icon_id: String, badge_text := "", stat_list: PackedStringArray = [], desc := "") -> ListItem:
 	var it := (load(SCENE_PATH) as PackedScene).instantiate() as ListItem
@@ -110,6 +119,8 @@ func _sync() -> void:
 		_cycle_box.visible = cycle != ""
 	_icon.texture = UIIcons.get_icon(icon_name)
 	_icon.self_modulate = icon_color
+	if has_node("Row/Body/TitleRule"):
+		($Row/Body/TitleRule as CanvasItem).self_modulate = UIStyle.color(&"accent")
 	for c in _stats.get_children():
 		_stats.remove_child(c)
 		c.queue_free()

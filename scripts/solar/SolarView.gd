@@ -31,6 +31,14 @@ var _orbit_tilt:      float     = 0.38
 var _solar_view_angle: float    = 0.0
 var _solar_orbit_tilt: float    = 0.38
 var _max_orbit_px:    float     = 200.0  # updated after build_planets
+# Where input put the view; _view_angle / _orbit_tilt ease toward these
+# (_tick_view), and a flung spin keeps turning a moment after release.
+var _view_angle_t:    float     = 0.0
+var _orbit_tilt_t:    float     = 0.38
+var _spin_vel:        float     = 0.0    # rad/s
+var _last_spin_usec:  int       = 0
+const VIEW_EASE      := 12.0   # 1/s
+const SPIN_FRICTION  := 4.0    # 1/s
 var _dragging:        bool      = false
 var _left_drag_from:  Vector2   = Vector2.ZERO
 var _right_dragging:  bool      = false
@@ -53,7 +61,8 @@ const STAR_PX: Dictionary = {
 	SolarData.StarType.BLUE_GIANT:      340,
 }
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_tick_view(delta)
 	_tick_rocket_fx()
 	if _dragging or _right_dragging:
 		CursorManager.set_state(CursorManager.State.GRAB)
@@ -62,6 +71,23 @@ func _process(_delta: float) -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
 		return
 	CursorManager.set_state(CursorManager.State.NORMAL)
+
+func _tick_view(delta: float) -> void:
+	if not _dragging and _spin_vel != 0.0:
+		_view_angle_t += _spin_vel * delta
+		_spin_vel *= exp(-delta * SPIN_FRICTION)
+		if absf(_spin_vel) < 0.002:
+			_spin_vel = 0.0
+	if is_equal_approx(_view_angle, _view_angle_t) and is_equal_approx(_orbit_tilt, _orbit_tilt_t):
+		return
+	var k := 1.0 - exp(-delta * VIEW_EASE)
+	_view_angle = lerpf(_view_angle, _view_angle_t, k)
+	_orbit_tilt = lerpf(_orbit_tilt, _orbit_tilt_t, k)
+	if absf(_view_angle - _view_angle_t) < 0.0002:
+		_view_angle = _view_angle_t
+	if absf(_orbit_tilt - _orbit_tilt_t) < 0.0002:
+		_orbit_tilt = _orbit_tilt_t
+	_apply_current_angles()
 
 # ── Final rocket (GDD §20.15–§20.18) ─────────────────────────────────────────
 # Before launch: a label at home and a dotted line to the target. In flight:
@@ -191,13 +217,16 @@ func _save_current_angles_to_game_state() -> void:
 	if not _is_ready:
 		return
 	if _current != null:
-		GameState.set_meta("solar_view_angle_%d" % _current.seed, _view_angle)
-		GameState.set_meta("solar_orbit_tilt_%d" % _current.seed, _orbit_tilt)
+		GameState.set_meta("solar_view_angle_%d" % _current.seed, _view_angle_t)
+		GameState.set_meta("solar_orbit_tilt_%d" % _current.seed, _orbit_tilt_t)
 
 func _load_current_angles_from_game_state() -> void:
 	if _current != null:
 		_view_angle = GameState.get_meta("solar_view_angle_%d" % _current.seed, 0.0)
 		_orbit_tilt = GameState.get_meta("solar_orbit_tilt_%d" % _current.seed, 0.38)
+		_view_angle_t = _view_angle
+		_orbit_tilt_t = _orbit_tilt
+		_spin_vel = 0.0
 
 func _go_to_galaxy() -> void:
 	if not GameState.can_view_galaxy():
@@ -705,7 +734,11 @@ func _input(event: InputEvent) -> void:
 			if mb.pressed and _space.get_global_rect().has_point(mb.global_position):
 				_dragging = true
 				_left_drag_from = mb.position
+				_spin_vel = 0.0
+				_last_spin_usec = Time.get_ticks_usec()
 			elif not mb.pressed:
+				if Time.get_ticks_usec() - _last_spin_usec > 100000:
+					_spin_vel = 0.0   # held still before letting go: no fling
 				_dragging = false
 				if mb.position.distance_to(_left_drag_from) < 5.0:
 					var target_pd: PlanetData = _hovered_planet
@@ -748,36 +781,21 @@ func _input(event: InputEvent) -> void:
 					_go_to_galaxy()
 	elif event is InputEventPanGesture:
 		# 2-finger trackpad swipe → rotate (horizontal) / tilt (vertical)
-		_view_angle += event.delta.x * 0.012
-		_orbit_tilt  = clamp(_orbit_tilt - event.delta.y * 0.006, 0.28, 0.50)
-		for node in _orbits:
-			node.set_view_angle(_view_angle)
-			node.set_tilt(_orbit_tilt)
-		for belt in _belts:
-			belt.set_view_angle(_view_angle)
-			belt.set_tilt(_orbit_tilt)
-		if _orbit_lines:
-			_orbit_lines.set_tilt(_orbit_tilt)
+		_view_angle_t += event.delta.x * 0.012
+		_orbit_tilt_t  = clamp(_orbit_tilt_t - event.delta.y * 0.006, 0.28, 0.50)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and (_dragging or _right_dragging):
 		var mm  := event as InputEventMouseMotion
-		if mm.relative.length() < 1.5:
-			return
 		if _right_dragging:
 			# vertical drag → subtle orbit tilt, clamped to a narrow range
-			_orbit_tilt = clamp(_orbit_tilt + mm.relative.y * 0.0008, 0.28, 0.50)
-			for node in _orbits:
-				node.set_tilt(_orbit_tilt)
-			for belt in _belts:
-				belt.set_tilt(_orbit_tilt)
-			if _orbit_lines:
-				_orbit_lines.set_tilt(_orbit_tilt)
+			_orbit_tilt_t = clamp(_orbit_tilt_t + mm.relative.y * 0.0008, 0.28, 0.50)
 		else:
-			_view_angle -= mm.relative.x * 0.0042
-		for node in _orbits:
-			node.set_view_angle(_view_angle)
-		for belt in _belts:
-			belt.set_view_angle(_view_angle)
+			var d := -mm.relative.x * 0.0042
+			_view_angle_t += d
+			var now := Time.get_ticks_usec()
+			var dt := clampf(float(now - _last_spin_usec) / 1e6, 0.004, 0.1)
+			_last_spin_usec = now
+			_spin_vel = lerpf(_spin_vel, d / dt, 0.5)
 		get_viewport().set_input_as_handled()
 
 

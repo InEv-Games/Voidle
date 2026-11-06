@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" uid="uid://dcaw5kheox1ap" path="res://scenes/ui/components/HeroHeader.tscn" id="4_hero"]
 [ext_resource type="PackedScene" uid="uid://bt2hdrmh1r6wk" path="res://scenes/ui/components/HeroTag.tscn" id="5_tag"]
 [ext_resource type="PackedScene" path="res://scenes/ui/components/LeftPanel.tscn" id="9_left"]
+[ext_resource type="PackedScene" uid="uid://cnewspanel01" path="res://scenes/ui/components/NewsPanel.tscn" id="10_news"]
 [ext_resource type="Script" uid="uid://b76xs20oqudpd" path="res://scripts/game/DebugGameState.gd" id="7_5jl86"]
 [ext_resource type="Script" uid="uid://cyy0t2bkegr6q" path="res://scripts/game/DebugResourceGen.gd" id="8_o0343"]
 
@@ -109,11 +110,13 @@ script = ExtResource("2_bbbb")
 [node name="POILayer" type="Node2D" parent="." unique_id=236819060]
 script = ExtResource("3_cccc")
 
+[node name="NewsPanel" parent="." unique_id=918273645 instance=ExtResource("10_news")]
+layout_mode = 1
+
 [node name="SidePanel" parent="." unique_id=744795451 instance=ExtResource("9_left")]
 z_index = 200
 z_as_relative = false
 layout_mode = 1
-theme_override_styles/panel = SubResource("StyleBoxFlat_b4p0g")
 
 [node name="Hero" parent="SidePanel/Layout/PanelContent" unique_id=808202502 instance=ExtResource("4_hero")]
 layout_mode = 2

@@ -14,8 +14,8 @@ extends VBoxContainer
 @export_multiline var msg_sending := "Sending…"
 @export_multiline var msg_thanks := "Thanks! You're on the list."
 @export_multiline var msg_failed := "Couldn't reach the server — please try again."
-@export var ok_color := Color(0.6, 1.0, 0.7)
-@export var error_color := Color(1.0, 0.6, 0.5)
+@export var ok_color := Color(0.2902, 0.902, 0.5412)
+@export var error_color := Color(1.0, 0.4196, 0.5059)
 
 const EMAIL_RE := "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
 
