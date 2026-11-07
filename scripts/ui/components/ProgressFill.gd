@@ -40,6 +40,22 @@ func _init() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	set_process(false)
 
+## A container host (a PanelContainer card) still lays internal children out
+## inside its content margins; take back the whole host each time it sorts,
+## so the fill runs edge to edge with no padding.
+func _enter_tree() -> void:
+	var host := get_parent() as Container
+	if host != null and not host.sort_children.is_connected(_cover_host):
+		host.sort_children.connect(_cover_host)
+	_cover_host.call_deferred()
+
+func _cover_host() -> void:
+	var host := get_parent() as Control
+	if host == null:
+		return
+	position = Vector2.ZERO
+	size = host.size
+
 func _process(_delta: float) -> void:
 	if source.is_valid():
 		var p := float(source.call())
