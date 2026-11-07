@@ -101,8 +101,7 @@ static func trait_picker_open() -> bool:
 	return is_instance_valid(_trait_layer)
 
 ## The world's first waiting pick, in icons more than words (the words are in
-## the tooltips): what it already has, three trait cards, the rarity odds of this
-## slot, a re-roll and "later" (the pick stays waiting).
+## the tooltips): three trait cards, a re-roll and "later" (the pick stays waiting).
 static func open_trait_picker(host: Node, planet_seed: int) -> void:
 	if PlanetTags.offers_of(planet_seed).is_empty():
 		return
@@ -112,13 +111,10 @@ static func open_trait_picker(host: Node, planet_seed: int) -> void:
 	var layer: CanvasLayer = o[0]
 	_trait_layer = layer
 	var col: VBoxContainer = o[1]
-	if pd != null:
-		col.add_child(_trait_slot_strip(pd))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 16)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(row)
-	col.add_child(_trait_odds_line(planet_seed))
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 12)
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -168,13 +164,6 @@ static func _fill_trait_cards(row: HBoxContainer, planet_seed: int, layer: Canva
 		_pop_in(card, 0.08 * i)
 		i += 1
 
-## "[star][star][star]": one more per rarity step.
-static func _stars_bb(rarity: int, px: int) -> String:
-	var out := ""
-	for i in rarity + 1:
-		out += UIIcons.bb("star", px, TraitDef.RARITY_COLORS[rarity])
-	return out
-
 ## One trait: its effect's icon large and faint, the name over the icon's foot,
 ## and under them a small card with the rarity, the effects as icons and
 ## amounts (words in their tooltips), one line of story and CHOOSE.
@@ -219,7 +208,7 @@ static func _trait_card(def: TraitDef, planet_seed: int, layer: CanvasLayer) -> 
 	card.add_child(v)
 	var rarity := _rich("[center][color=#%s]%s[/color][/center]" % [rc.to_html(false), def.rarity_name().to_upper()], 11, TRAIT_INNER_W)
 	rarity.mouse_filter = Control.MOUSE_FILTER_PASS
-	_tip_on(rarity, def.rarity_name(), "Rarity: later slots roll rarer traits.")
+	_tip_on(rarity, def.rarity_name(), _trait_odds_tip(planet_seed))
 	v.add_child(rarity)
 	for rid: String in def.effects:
 		var amount := float(def.effects[rid])
@@ -271,75 +260,20 @@ static func _trait_card_box(rc: Color, hover: bool) -> StyleBoxFlat:
 	sb.content_margin_bottom = 14.0
 	return sb
 
-## The world's three slots in a row: its traits as name and icons, a gold plus on
-## the one being picked, an empty box on the rest.
-static func _trait_slot_strip(pd: PlanetData) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	var have := PlanetTags.traits_of(pd.seed)
-	var gold := TraitDef.RARITY_COLORS[TraitDef.Rarity.LEGENDARY]
-	for i in PlanetTags.SLOTS:
-		var c := UIStyle.color(&"text_muted")
-		var bb := UIIcons.bb("empty", 13, c)
-		var tip_title := "Trait slot %d" % (i + 1)
-		var tip := "Empty."
-		match PlanetTags.slot_state(pd, i):
-			PlanetTags.Slot.FILLED:
-				var def := TraitDef.find(String(have[i]))
-				if def != null:
-					c = def.rarity_color()
-					var parts: Array[String] = []
-					for rid: String in def.effects:
-						parts.append(PlanetTags.effect_short_bb(rid, float(def.effects[rid]), 13))
-					bb = "[color=#%s]%s[/color]  %s" % [c.to_html(false), def.display_name, "  ".join(parts)]
-					tip_title = def.display_name
-					tip = "%s\n\n%s" % [def.description, PlanetTags.effect_bb(def.trait_id)]
-			PlanetTags.Slot.PICKING:
-				if i == have.size():
-					c = gold
-					tip = "You are picking this one now."
-				else:
-					tip = "A pick waits for this one."
-				bb = UIIcons.bb("positive", 13, c)
-		var chip := PanelContainer.new()
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(c, 0.08)
-		sb.border_color = Color(c, 0.6)
-		sb.set_border_width_all(1)
-		sb.set_corner_radius_all(3)
-		sb.content_margin_left = 8.0
-		sb.content_margin_right = 8.0
-		sb.content_margin_top = 3.0
-		sb.content_margin_bottom = 3.0
-		chip.add_theme_stylebox_override("panel", sb)
-		var l := _rich(bb, 11, 0.0)
-		l.autowrap_mode = TextServer.AUTOWRAP_OFF
-		chip.add_child(l)
-		_tip_on(chip, tip_title, tip)
-		row.add_child(chip)
-	return row
-
-## Each rarity's stars and its share in this slot; the tooltip says what it is.
-static func _trait_odds_line(planet_seed: int) -> RichTextLabel:
+## Each rarity and its share in this slot, for the rarity label's tooltip.
+static func _trait_odds_tip(planet_seed: int) -> String:
 	var odds := PlanetTags.rarity_odds(PlanetTags.traits_of(planet_seed).size())
 	var total := 0
 	for r: String in odds:
 		total += int(odds[r])
-	var parts: Array[String] = []
 	var words: Array[String] = []
 	for i in TraitDef.RARITY_NAMES.size():
 		var n := int(odds.get(TraitDef.RARITY_NAMES[i].to_lower(), 0))
 		if n > 0:
 			var share := "%d%%" % roundi(100.0 * n / total)
 			var hex := TraitDef.RARITY_COLORS[i].to_html(false)
-			parts.append("%s [color=#%s]%s[/color]" % [_stars_bb(i, 12), hex, share])
 			words.append("[color=#%s]%s[/color] %s" % [hex, TraitDef.RARITY_NAMES[i], share])
-	var l := _rich("[center]%s[/center]" % "     ".join(parts), 12, TRAIT_CARD_W * 2.0)
-	l.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	l.mouse_filter = Control.MOUSE_FILTER_STOP
-	_tip_on(l, "Rarity odds in this slot", "\n".join(words))
-	return l
+	return "\n".join(words)
 
 ## The button's price (free, or Science); under it what's missing, if anything.
 static func _sync_reroll(btn: IconButton, note: RichTextLabel, planet_seed: int) -> void:
