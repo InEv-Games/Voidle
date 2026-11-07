@@ -150,7 +150,6 @@ func _make_skill_button() -> Button:
 
 		
 	skill_btn.mouse_entered.connect(func() -> void:
-		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
 		TooltipManager.show_tip("Upgrade Tree", "Research new buildings and upgrades with Science."))
 	skill_btn.mouse_exited.connect(func() -> void:
@@ -198,7 +197,6 @@ func _make_trade_button() -> Button:
 		AudioManager.play("click")
 		toggle_trade_panel())
 	b.mouse_entered.connect(func() -> void:
-		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
 		TooltipManager.show_tip("Trade", "Buy and sell (prices move with your trades), keep reserves and set standing orders." \
 			if Trade.has_access() else "Research Trade Access to buy and sell."))
@@ -215,7 +213,6 @@ func _make_companions_button() -> Button:
 		TooltipManager.hide_tip()
 		CompanionGallery.open(self))
 	b.mouse_entered.connect(func() -> void:
-		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
 		TooltipManager.show_tip("Companions", "Joined: %d / %d. Each gives a bonus everywhere." % [Excavations.joined_count(), CompanionDef.all().size()]))
 	b.mouse_exited.connect(func() -> void:
@@ -262,7 +259,6 @@ func _make_explore_button() -> Button:
 		TooltipManager.hide_tip()
 		GameState.start_explore())
 	b.mouse_entered.connect(func() -> void:
-		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
 		TooltipManager.show_tip("Explore", "Look around the galaxy, other systems and other planets. Nothing there can be built; your world keeps running. ESC returns."))
 	b.mouse_exited.connect(func() -> void:
@@ -339,6 +335,9 @@ func _try_close_skill_tree() -> bool:
 				return true
 	return false
 
+## VAM snapshot (edit in the VAM tab) shared with planet placement.
+const PAUSE_SNAPSHOT := &"snapshots/lowpass"
+
 func show_pause_menu() -> void:
 	AudioManager.play("ui_click")
 	if get_tree().paused:
@@ -347,6 +346,10 @@ func show_pause_menu() -> void:
 	# ModalPopup (scenes/ui/components/ModalPopup.tscn); closing it resumes
 	var p := ModalPopup.open(self, "Paused", "settings", "", 250)
 	_pause_overlay = p.get_parent() as CanvasLayer
+	# Music muffles while the menu is open. Tied to the overlay's lifetime, so every
+	# way of closing it (Resume, a click outside, a second Esc, Main Menu) ends it.
+	VAM.start_snapshot(PAUSE_SNAPSHOT, &"pause")
+	_pause_overlay.tree_exiting.connect(func() -> void: VAM.stop_snapshot(PAUSE_SNAPSHOT, &"pause"))
 	p.card.get_node("VBox/Buttons").visible = false
 	p.closed.connect(func() -> void:
 		get_tree().paused = false
@@ -358,8 +361,7 @@ func show_pause_menu() -> void:
 			AudioManager.play("ui_click")
 			action.call())
 		b.mouse_entered.connect(func() -> void:
-			CursorManager.set_state(CursorManager.State.POINTER)
-			AudioManager.play("hover"))
+			CursorManager.set_state(CursorManager.State.POINTER))
 		b.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
 		p.add_content(b)
 		return b

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://byuj2hfutgtpm"]
+
+[ext_resource type="AudioStream" uid="uid://ca2nyhkg5lw8d" path="res://assets/sfx/LeftPanel-Open.wav" id="1_3ddqb"]
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="1_4sufm"]
+
+[resource]
+script = ExtResource("1_4sufm")
+clips = Array[AudioStream]([ExtResource("1_3ddqb")])
+bus = &"UI"
+volume_db = -8.0

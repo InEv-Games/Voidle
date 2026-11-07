@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="VAMBank" format=3 uid="uid://fdqkuw5nr4hp"]
+
+[ext_resource type="Script" uid="uid://br3x8uyfan1qg" path="res://addons/VAM/data/vam_event.gd" id="1_1opbw"]
+[ext_resource type="Resource" uid="uid://d2exndylnl72t" path="res://audio/events/music/main.tres" id="3_2jugo"]
+[ext_resource type="Resource" uid="uid://c6uujj8keek4n" path="res://audio/events/snapshots/lowpass.tres" id="3_d627u"]
+[ext_resource type="Resource" uid="uid://dwjuienbjtfva" path="res://audio/events/music/space_drone.tres" id="3_n627e"]
+[ext_resource type="Resource" uid="uid://dkfar8ik685ax" path="res://audio/events/ui/denied.tres" id="9_omt5h"]
+[ext_resource type="Resource" uid="uid://byuj2hfutgtpm" path="res://audio/events/ui/LeftPanel_Open.tres" id="15_2jugo"]
+[ext_resource type="Resource" uid="uid://b2gb4eanu736e" path="res://audio/events/ui/LeftPanel_Close.tres" id="15_n627e"]
+[ext_resource type="Resource" uid="uid://bllulhjoole10" path="res://audio/events/ui/blink.tres" id="16_m0efa"]
+[ext_resource type="Resource" uid="uid://bf0igdgw0c2gh" path="res://audio/events/ui/click.tres" id="17_456yr"]
+[ext_resource type="Resource" uid="uid://dsb3ct1e6hthh" path="res://audio/events/ui/hover.tres" id="21_evexq"]
+[ext_resource type="Script" uid="uid://bn8hvsytkx26y" path="res://addons/VAM/data/vam_bank.gd" id="29_40cf4"]
+
+[resource]
+script = ExtResource("29_40cf4")
+events = Dictionary[StringName, ExtResource("1_1opbw")]({
+&"music/main": ExtResource("3_2jugo"),
+&"music/space_drone": ExtResource("3_n627e"),
+&"snapshots/lowpass": ExtResource("3_d627u"),
+&"ui/LeftPanel_Close": ExtResource("15_n627e"),
+&"ui/LeftPanel_Open": ExtResource("15_2jugo"),
+&"ui/blink": ExtResource("16_m0efa"),
+&"ui/click": ExtResource("17_456yr"),
+&"ui/denied": ExtResource("9_omt5h"),
+&"ui/hover": ExtResource("21_evexq")
+})

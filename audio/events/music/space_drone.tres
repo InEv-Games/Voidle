@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://dwjuienbjtfva"]
+
+[ext_resource type="AudioStream" uid="uid://b1nyxu0wv6qdh" path="res://assets/soundtrack/VoidleOST-AMB.wav" id="1_6r8oc"]
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="2_ae6d7"]
+
+[resource]
+script = ExtResource("2_ae6d7")
+clips = Array[AudioStream]([ExtResource("1_6r8oc")])
+max_instances = 1
+steal_oldest = false
+loop = true
+bus = &"Music"
+volume_db = -12.0

@@ -623,6 +623,7 @@ func _process(delta: float) -> void:
 
 const SLOT_CARD_W := 210.0
 const MENU_REVEAL_SLOW := 1.5   # the menu's transitions run 1.5x slower than a tooltip's
+const MENU_BLINK_SOUND := &"ui/blink"   # VAM event on every row blink of the menu's transitions
 
 var _menu_root: VBoxContainer
 var _saves_root: VBoxContainer
@@ -649,7 +650,7 @@ func _open_saves() -> void:
 	for slot in GameState.SAVE_SLOTS:
 		cards.add_child(_slot_card(slot))
 	_saves_root.add_child(cards)
-	RowReveal.play(_saves_root, MENU_REVEAL_SLOW)
+	RowReveal.play(_saves_root, MENU_REVEAL_SLOW, false, MENU_BLINK_SOUND)
 
 func _close_saves() -> void:
 	AudioManager.play("click", 0.0)
@@ -657,7 +658,7 @@ func _close_saves() -> void:
 		_saves_root.queue_free()
 	_saves_root = null
 	_menu_root.visible = true
-	RowReveal.play(_menu_root, MENU_REVEAL_SLOW)
+	RowReveal.play(_menu_root, MENU_REVEAL_SLOW, false, MENU_BLINK_SOUND)
 
 func _input(event: InputEvent) -> void:
 	if Engine.is_editor_hint():
