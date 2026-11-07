@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3]
+
+[ext_resource type="AudioStream" uid="uid://bnllwroxqy3mo" path="res://assets/sfx/SFX-ScanBlips.wav" id="1_bcs0l"]
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="2_quf6i"]
+
+[resource]
+script = ExtResource("2_quf6i")
+clips = Array[AudioStream]([ExtResource("1_bcs0l")])
+max_instances = 1
+scale_notes = PackedInt32Array()
+volume_db = -4.0
+notes = "A scan starts: the planet's surface scan (PlanetaryView), an asteroid scan or a system survey (SolarView). Legacy key \"survey\"."

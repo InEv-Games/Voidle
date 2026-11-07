@@ -7,5 +7,5 @@
 script = ExtResource("1_gmm38")
 clips = Array[AudioStream]([ExtResource("1_rmkmw")])
 pitch_random_semitones = 1.0
+scale_notes = PackedInt32Array(60, 62, 63, 65, 67, 70)
 bus = &"UI"
-volume_db = -8.0

@@ -7,4 +7,5 @@
 script = ExtResource("1_5h6sw")
 clips = Array[AudioStream]([ExtResource("1_tor6u")])
 pitch_scale = 2.0
+bus = &"UI"
 volume_db = -8.0

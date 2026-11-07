@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://dl4k40bp8hwbg"]
+
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="1_djday"]
+[ext_resource type="AudioStream" uid="uid://by22erfs3hasl" path="res://assets/sfx/SFX-ProcessLoop.wav" id="1_fktyh"]
+
+[resource]
+script = ExtResource("1_djday")
+clips = Array[AudioStream]([ExtResource("1_fktyh")])
+loop = true
+scale_notes = PackedInt32Array()
+notes = "Loops while the open planet runs a level-up (planet, City, Orbit, district) or a surface scan, and nothing is under construction (PlanetaryView → AudioManager.set_activity)."

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://yq3l3kkjkhta"]
+
+[ext_resource type="AudioStream" uid="uid://dtpcip23o7x5n" path="res://assets/sfx/SFX-Income.wav" id="1_ulxae"]
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="2_8metk"]
+
+[resource]
+script = ExtResource("2_8metk")
+clips = Array[AudioStream]([ExtResource("1_ulxae")])
+cooldown = 0.5
+max_instances = 1
+scale_pitch = true
+root_note = 69
+scale_notes = PackedInt32Array(61, 62, 64, 65, 67, 69, 70, 72)
+bus = &"UI"
+volume_db = -8.0
+notes = "Credits came in: production, a sale, a refund (GameState.credits_earned → AudioManager). The cooldown keeps steady income from chiming nonstop."

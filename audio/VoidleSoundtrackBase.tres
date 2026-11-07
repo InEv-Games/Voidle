@@ -1,0 +1,26 @@
+[gd_resource type="AudioStreamInteractive" format=3 uid="uid://b8ok2usvvrmk3"]
+
+[ext_resource type="AudioStream" uid="uid://bubjifbrp0x1f" path="res://assets/soundtrack/VoidleOST-Intro.wav" id="1_bwhrj"]
+[ext_resource type="AudioStream" uid="uid://c3xf0ip2kkmec" path="res://assets/soundtrack/VoidleOST-Loop1.wav" id="2_drb4x"]
+[ext_resource type="AudioStream" uid="uid://cmfcc6ngot08o" path="res://assets/soundtrack/VoidleOST-Loop2.wav" id="3_xicms"]
+[ext_resource type="AudioStream" uid="uid://ck2uoos0a84vr" path="res://assets/soundtrack/VoidleOST-Loop3.wav" id="4_hgs8o"]
+[ext_resource type="AudioStream" uid="uid://c7vqbe8g77mph" path="res://assets/soundtrack/VoidleOST-Outro.wav" id="5_ichb4"]
+
+[resource]
+clip_count = 5
+clip_0/name = &"voidleost_intro"
+clip_0/stream = ExtResource("1_bwhrj")
+clip_0/auto_advance = 1
+clip_0/next_clip = 1
+clip_1/name = &"voidleost_loop1"
+clip_1/stream = ExtResource("2_drb4x")
+clip_1/auto_advance = 0
+clip_2/name = &"voidleost_loop2"
+clip_2/stream = ExtResource("3_xicms")
+clip_2/auto_advance = 0
+clip_3/name = &"voidleost_loop3"
+clip_3/stream = ExtResource("4_hgs8o")
+clip_3/auto_advance = 0
+clip_4/name = &"voidleost_outro"
+clip_4/stream = ExtResource("5_ichb4")
+clip_4/auto_advance = 0

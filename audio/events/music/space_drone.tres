@@ -6,8 +6,10 @@
 [resource]
 script = ExtResource("2_ae6d7")
 clips = Array[AudioStream]([ExtResource("1_6r8oc")])
+clip_volumes_db = PackedFloat32Array()
+clip_pitches_st = PackedFloat32Array()
 max_instances = 1
 steal_oldest = false
 loop = true
-bus = &"Music"
-volume_db = -12.0
+scale_notes = PackedInt32Array()
+volume_db = -4.0

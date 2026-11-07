@@ -18,6 +18,10 @@ boot_splash/bg_color=Color(0, 0, 0, 1)
 boot_splash/stretch_mode=0
 boot_splash/image="uid://bi50gslvhjorn"
 config/icon="uid://cklxjbcevnmf"
+
+[audio]
+
+buses/default_bus_layout="uid://bsklxqvalg8c0"
 boot_splash/minimum_display_time=1800
 
 [autoload]

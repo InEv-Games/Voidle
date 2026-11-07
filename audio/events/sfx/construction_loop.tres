@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://cxov4rjhxsv1n"]
+
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="1_hx2mb"]
+[ext_resource type="AudioStream" uid="uid://by22erfs3hasl" path="res://assets/sfx/SFX-ProcessLoop.wav" id="1_l6uti"]
+
+[resource]
+script = ExtResource("1_hx2mb")
+clips = Array[AudioStream]([ExtResource("1_l6uti")])
+loop = true
+scale_notes = PackedInt32Array()
+notes = "Loops while the open planet has a district or building under construction (PlanetaryView → AudioManager.set_activity). Wins over sfx/ProcessLoop, which shares its clip."

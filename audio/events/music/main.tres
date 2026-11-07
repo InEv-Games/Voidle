@@ -1,13 +1,43 @@
 [gd_resource type="Resource" script_class="VAMMusicEvent" format=3 uid="uid://d2exndylnl72t"]
 
-[ext_resource type="AudioStream" uid="uid://desryuu6cfbks" path="res://assets/soundtrack/voidle_music.tres" id="2_kkcih"]
+[ext_resource type="AudioStream" uid="uid://bubjifbrp0x1f" path="res://assets/soundtrack/VoidleOST-Intro.wav" id="1_lj3wp"]
+[ext_resource type="AudioStream" uid="uid://c3xf0ip2kkmec" path="res://assets/soundtrack/VoidleOST-Loop1.wav" id="2_txcie"]
 [ext_resource type="Script" uid="uid://dk7vt5ww4fdiy" path="res://addons/VAM/data/vam_music_event.gd" id="3_50u5u"]
+[ext_resource type="AudioStream" uid="uid://cmfcc6ngot08o" path="res://assets/soundtrack/VoidleOST-Loop2.wav" id="3_kkcih"]
+[ext_resource type="AudioStream" uid="uid://ck2uoos0a84vr" path="res://assets/soundtrack/VoidleOST-Loop3.wav" id="4_50u5u"]
+[ext_resource type="AudioStream" uid="uid://c7vqbe8g77mph" path="res://assets/soundtrack/VoidleOST-Outro.wav" id="5_0b0dm"]
+[ext_resource type="Script" uid="uid://dqgclrw16ugo1" path="res://addons/VAM/data/vam_music_parameter.gd" id="6_c77pg"]
+[ext_resource type="Script" uid="uid://cdxbi7rsxqp7p" path="res://addons/VAM/data/vam_music_rule.gd" id="7_1u1iy"]
+
+[sub_resource type="AudioStreamInteractive" id="AudioStreamInteractive_0b0dm"]
+clip_count = 5
+clip_0/name = &"voidleost_intro"
+clip_0/stream = ExtResource("1_lj3wp")
+clip_0/auto_advance = 1
+clip_0/next_clip = 1
+clip_1/name = &"voidleost_loop1"
+clip_1/stream = ExtResource("2_txcie")
+clip_1/auto_advance = 0
+clip_2/name = &"voidleost_loop2"
+clip_2/stream = ExtResource("3_kkcih")
+clip_2/auto_advance = 0
+clip_3/name = &"voidleost_loop3"
+clip_3/stream = ExtResource("4_50u5u")
+clip_3/auto_advance = 0
+clip_4/name = &"voidleost_outro"
+clip_4/stream = ExtResource("5_0b0dm")
+clip_4/auto_advance = 0
 
 [resource]
 script = ExtResource("3_50u5u")
-music = ExtResource("2_kkcih")
-random_loops = Array[StringName]([&"loop1", &"loop2", &"loop3", &"loop4"])
-outro_clip = &"outro"
-bed_volume_db = -22.0
+music = SubResource("AudioStreamInteractive_0b0dm")
+block_types = Dictionary[StringName, int]({
+&"voidleost_loop1": 1,
+&"voidleost_loop2": 1,
+&"voidleost_loop3": 1,
+&"voidleost_outro": 3
+})
+random_loops = Array[StringName]([&"voidleost_loop1", &"voidleost_loop2", &"voidleost_loop3"])
+outro_clip = &"voidleost_outro"
 bus = &"Music"
-volume_db = -12.0
+volume_db = -8.0

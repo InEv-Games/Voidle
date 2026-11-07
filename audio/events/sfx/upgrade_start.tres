@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3]
+
+[ext_resource type="AudioStream" uid="uid://c04f3ecqqq5le" path="res://assets/sfx/SFX-ShortRiser.wav" id="1_5awk6"]
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="2_5d77n"]
+
+[resource]
+script = ExtResource("2_5d77n")
+clips = Array[AudioStream]([ExtResource("1_5awk6")])
+scale_notes = PackedInt32Array()
+volume_db = -4.0
+notes = "A level-up was paid and starts: planet, City, Orbit or district (PlanetaryView). Then sfx/ProcessLoop runs, and sfx/processDone ends it. Legacy key \"level_up\"."

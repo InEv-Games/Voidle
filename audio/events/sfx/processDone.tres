@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://b66ir0jsm6nl7"]
+
+[ext_resource type="AudioStream" uid="uid://cgdjt7sjvns4" path="res://assets/sfx/SFX-ProcessDonePanel.wav" id="1_niqcp"]
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="1_sfuiu"]
+
+[resource]
+script = ExtResource("1_sfuiu")
+clips = Array[AudioStream]([ExtResource("1_niqcp")])
+scale_notes = PackedInt32Array()
+notes = "A level-up (planet, City, Orbit, district) or a surface scan on the open planet finished (ProductionManager.upgrade_finished / PlanetaryView → AudioManager.process_done, once a frame)."

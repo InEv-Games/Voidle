@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://lsxvmkuvxhcd"]
+
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="1_uw05a"]
+[ext_resource type="AudioStream" uid="uid://occq6tjfay8a" path="res://assets/sfx/SFX-ProcessDone.wav" id="1_y6kyk"]
+
+[resource]
+script = ExtResource("1_uw05a")
+clips = Array[AudioStream]([ExtResource("1_y6kyk")])
+clip_volumes_db = PackedFloat32Array()
+clip_pitches_st = PackedFloat32Array()
+scale_notes = PackedInt32Array()
+volume_db = -4.0
+notes = "A district or building on the open planet finished construction, Orbit districts included (PlanetaryView → AudioManager.construction_done, once a frame)."

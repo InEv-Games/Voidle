@@ -10,9 +10,9 @@
 script = ExtResource("2_qirac")
 clips = Array[AudioStream]([ExtResource("1_dwufc"), ExtResource("2_o8ube"), ExtResource("3_0dgi3"), ExtResource("4_shqc0")])
 volume_random_db = 4.0
-pitch_random_semitones = 3.0
+pitch_random_semitones = 3.5
 cooldown = 0.02
 max_instances = 4
+scale_notes = PackedInt32Array()
 bus = &"UI"
-volume_db = -8.0
 notes = "LeftPanel open/close: one per row blink (scripts/ui/components/LeftPanel.gd). Placeholder synthesized tape-dropout crackle."
