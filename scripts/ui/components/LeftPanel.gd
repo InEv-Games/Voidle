@@ -88,6 +88,7 @@ func _on_content_child(n: Node) -> void:
 		_hidden.append(weakref(n))
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	add_to_group(GROUP)
 	_hide_native_frame()   # the stroke is drawn by hand (see Left stroke)
 	item_rect_changed.connect(queue_redraw)   # the backdrop follows the slide
@@ -566,8 +567,15 @@ func _active_nav_root() -> Node:
 	if root_vp != null:
 		for i in range(root_vp.get_child_count() - 1, -1, -1):
 			var rch := root_vp.get_child(i)
-			if rch is CanvasLayer and rch.has_meta("left_panel_dropdown"):
+			if rch is ModalPopup:
 				return rch
+			if rch is CanvasLayer:
+				if rch.has_meta("left_panel_dropdown"):
+					return rch
+				for j in range(rch.get_child_count() - 1, -1, -1):
+					var cch := rch.get_child(j)
+					if cch is ModalPopup:
+						return cch
 	var scene := get_tree().current_scene
 	if scene != null:
 		for i in range(scene.get_child_count() - 1, -1, -1):
@@ -606,7 +614,7 @@ func _collect_focusables(n: Node, out: Array[Control]) -> void:
 			if li.clickable or li.show_stepper:
 				out.append(li)
 			continue
-		if c is LineEdit:
+		if c is LineEdit or c is HSlider:
 			out.append(c)
 			continue
 		if c is BaseButton:
@@ -826,6 +834,20 @@ func _handle_nav_dir(dir: Vector2) -> bool:
 				btn.pressed.emit()
 			return true
 
+	if absf(dir.x) > 0.5 and _nav_focus is HSlider:
+		var sl := _nav_focus as HSlider
+		var step := sl.step if sl.step > 0.0 else (sl.max_value - sl.min_value) * 0.05
+		sl.value = clampf(sl.value + (1.0 if dir.x > 0.0 else -1.0) * step, sl.min_value, sl.max_value)
+		AudioManager.play("hover")
+		return true
+
+	if absf(dir.x) > 0.5 and _nav_focus is OptionButton:
+		var opt := _nav_focus as OptionButton
+		if opt.item_count > 0:
+			opt.selected = posmod(opt.selected + (1 if dir.x > 0.0 else -1), opt.item_count)
+			opt.item_selected.emit(opt.selected)
+		return true
+
 	var cur_rect := _nav_focus.get_global_rect()
 	var cur_c := cur_rect.get_center()
 	var best: Control = null
@@ -937,6 +959,14 @@ func _activate_focused() -> bool:
 	if c is LineEdit:
 		(c as LineEdit).grab_focus()
 		return true
+	if c is OptionButton:
+		var opt := c as OptionButton
+		if opt.item_count > 0:
+			opt.selected = posmod(opt.selected + 1, opt.item_count)
+			opt.item_selected.emit(opt.selected)
+		return true
+	if c is HSlider:
+		return true
 	if c is BaseButton:
 		var btn := c as BaseButton
 		if btn.disabled:
@@ -980,10 +1010,23 @@ func _handle_nav_back() -> bool:
 	if root_vp != null:
 		for i in range(root_vp.get_child_count() - 1, -1, -1):
 			var rch := root_vp.get_child(i)
-			if rch is CanvasLayer and rch.has_meta("left_panel_dropdown"):
-				AudioManager.play("click")
-				rch.queue_free()
+			if rch is ModalPopup:
+				if (rch as ModalPopup).dismissable:
+					AudioManager.play("click")
+					(rch as ModalPopup).close()
 				return true
+			if rch is CanvasLayer:
+				if rch.has_meta("left_panel_dropdown"):
+					AudioManager.play("click")
+					rch.queue_free()
+					return true
+				for j in range(rch.get_child_count() - 1, -1, -1):
+					var cch := rch.get_child(j)
+					if cch is ModalPopup:
+						if (cch as ModalPopup).dismissable:
+							AudioManager.play("click")
+							(cch as ModalPopup).close()
+						return true
 	var scene := get_tree().current_scene
 	if scene != null:
 		for i in range(scene.get_child_count() - 1, -1, -1):
