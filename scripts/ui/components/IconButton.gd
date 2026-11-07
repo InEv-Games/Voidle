@@ -59,9 +59,21 @@ static func create_text(txt: String, v: Variant = Variant.DEFAULT, count := "") 
 	b.layout = Layout.TEXT_CENTER
 	return b
 
+## The rule after the icon runs this share of the row's height, centred
+## (as in ListItem).
+const SEP_HEIGHT_FRAC := 0.90
+
 func _ready() -> void:
 	focus_mode = Control.FOCUS_NONE
+	(_row as Container).sort_children.connect(_fit_sep)
 	_sync()
+
+## After the row lays out: the icon rule 10% shorter than the row, centred.
+func _fit_sep() -> void:
+	var row_h := _row.size.y
+	var h := roundf(row_h * SEP_HEIGHT_FRAC)
+	_sep.size.y = h
+	_sep.position.y = roundf((row_h - h) * 0.5)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_THEME_CHANGED:

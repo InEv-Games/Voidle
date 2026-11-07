@@ -83,8 +83,12 @@ static func create(t: String, icon_id: String, badge_text := "", stat_list: Pack
 	it.description = desc
 	return it
 
+## The rule after the icon runs this share of the row's height, centred.
+const SEP_HEIGHT_FRAC := 0.90
+
 func _ready() -> void:
 	_fill = ProgressFill.attach(self, progress_color)
+	($Row as Container).sort_children.connect(_fit_sep)
 	_build_cycle_box()
 	if not Engine.is_editor_hint():
 		# long titles and stat rows glide inside the row instead of widening
@@ -100,6 +104,14 @@ func _ready() -> void:
 	gui_input.connect(_on_gui_input)
 	($Row/Body/Bottom/Stepper/Minus as Button).pressed.connect(func() -> void: stepped.emit(-1))
 	($Row/Body/Bottom/Stepper/Plus as Button).pressed.connect(func() -> void: stepped.emit(1))
+
+## After the row lays out: the icon rule 10% shorter than the row, centred.
+func _fit_sep() -> void:
+	var sep := $Row/Sep as Control
+	var row_h := ($Row as Control).size.y
+	var h := roundf(row_h * SEP_HEIGHT_FRAC)
+	sep.size.y = h
+	sep.position.y = roundf((row_h - h) * 0.5)
 
 func _on_gui_input(e: InputEvent) -> void:
 	if clickable and e is InputEventMouseButton and e.pressed \
