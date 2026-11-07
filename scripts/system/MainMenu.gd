@@ -622,7 +622,7 @@ func _process(delta: float) -> void:
 # and can't be played. Rows come in with RowReveal; Esc or ‹ MENU goes back.
 
 const SLOT_CARD_W := 210.0
-const MENU_REVEAL_SLOW := 1.5   # the menu's transitions run 1.5x slower than a tooltip's
+const MENU_REVEAL_SLOW := 3.0   # the menu's transitions run 3x slower than a tooltip's
 const MENU_BLINK_SOUND := &"ui/blink"   # VAM event on every row blink of the menu's transitions
 
 var _menu_root: VBoxContainer
