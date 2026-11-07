@@ -1,0 +1,328 @@
+1; News of Ece’s Discovery - An excavation crew from the site found someone native to the planet. MS and HF give the player the news and tell him to get prepared.
+
+HF: The excavation crew has found someone indigenous to this planet.
+
+Player: How have we never encountered her all these years?
+
+MS: We never looked for native life explicitly. Not until the Facilitator.
+
+HF: They are bringing her here now. Be ready to meet her. We will attend as well.
+
+---
+
+2; Meeting Ece - First contact with Ece. Ultimatum: she says that she doesn't want to hear everything through MS and HF's filters.
+
+Narrator: The heavy doors of the Facilitator room slide open with a mechanical hiss. A woman steps into the sterile light, looking like a brilliant rogue archaeologist who just crawled out of a trench. She is much older than you, closer to Mother Superior and High Father in age, with sharp, striking features and loose auburn hair framing her face. Despite the heavy layer of dust coating her cargo jacket and fitted clothes, she carries a mature, magnetic allure, a striking mix of fierce intellect and rugged, effortless beauty.
+
+MS: We have wanted to meet you since the excavation crew found you. A native of this land, after all this time.
+
+???: [Click] More native than you, yes. To the planet, yes. To the land, no. My people lived... It doesn’t matter. Whoever lived up here is gone.
+
+Player (A): How can you be one and not the other?
+Player (B): Where did your people live, then?
+
+???: I don’t talk to colonists.
+
+HF: We are not colonists.
+
+???: You settled here. That makes you colonists.
+
+Player: A colony answers to a home world. Ours is gone. Ash and dust. Isn’t that right, parents?
+
+MS & HF: Yes.
+
+Narrator: A brief pause as she absorbs this.
+
+???: Invaders, then?
+
+MS: We did not come here to seek and seize. You said it yourself, we are settlers.
+
+???: You already seized. You took Bolo from me.
+
+Player: Bolo?
+
+???: A fig tree. I planted it the night your ship came down.
+
+Player: Did we cut it down?
+
+???: On the fourth day of your “operations.” She was twenty-five years old and seven meters tall.
+
+Player: We’re sorry.
+
+Narrator: A heavy, uncomfortable silence settles over the line.
+
+???: …
+
+???: Have you found the Artifacts?
+
+MS: Artifact... The radio signals coming from the zones?
+
+???: I call them… ruins.
+
+HF: Why do you hesitate to share information? Together we can grow better and faster.
+
+???: I don’t want better or faster. I want to talk to my tree in the mornings. Can I?
+
+Player: We wouldn’t have cut it if we’d known. But we can’t relocate every plant instead of using it. Right, parents?
+
+MS & HF: Yes.
+
+MS: However, we can aim to manage resources more carefully in future operations.
+
+???: I see. Have you read the script yet?
+
+Player: We know they’re texts and voice recordings. What they say is still a mystery to us, too.
+
+???: There are signals from the Moon as well. To my ears, they only hum. Your instruments might hear more than a hum. I have worked on this language for twenty-five years. I’ll show you what I’ve found, but it’s an exchange, not a favor.
+
+Player: What do you want in return?
+
+???: I want unfiltered access to your ship’s receivers. No processing by your… parents. And for you to leave me alone while I work. Then we can work together.
+
+MS: We are accustomed to filtering incoming data for safety…
+
+Narrator: She cuts off Mother Superior, her tone laced with deliberate mockery.
+
+???: Then listen safely to static. Your choice, Fa-ci-li-ta-tor.
+
+---
+
+3; MS-HF Player Suggestion - MS and HF suggest that the player should work with Ece from now on.
+
+MS-HF: Calculating...
+
+MS-HF: Calculating...
+
+MS-HF: ...
+
+MS: We think you should accept her offer and work with her.
+
+HF: We will always be here whenever you need us.
+
+---
+
+4; Alone with Ece for the first time
+
+Player: Welcome to I-330... you never shared your name with me.
+
+Bolo: Call me Bolo.
+
+Player: Bolo... after the tree.
+
+Narrator: She stares directly into your eyes, her gaze hard and uncompromising.
+
+Bolo: So I will never forget. And neither will you.
+
+Player: ...
+
+Bolo: What are you working on?
+
+Player: Why are you always asking questions?
+
+Narrator: She blinks, genuinely caught off guard by the pushback.
+
+Bolo: I... didn't realize that. It's been so long since I've had human communication. In my mind, I am either talking about things I already know, or guessing at things I don't. Human communication provides the information to transform the latter into the former... that must sound horrible.
+
+Player: (A) No, not at all. Maybe it's just because you are readjusting to human communication.
+
+Narrator: Her tense shoulders drop, defensive posture slipping just a fraction.
+
+Bolo: Maybe. Thank you for understanding.
+
+Player: (B) Yeah, you are crazy.
+
+Narrator: She scoffs, immediately crossing her arms to rebuild her walls.
+
+Bolo: I... I think I'll need to adjust to the social life again. And, you are not helping with that jerk attitude, I'll have you know... Ass.
+
+---
+
+5; A romantic night where the power goes out
+
+Narrator: Zone 6 has no edge you can point to. The ground just starts disagreeing with itself. Trenches fold back into each other, and the dust hangs for a moment after your boots pass, as if it has forgotten which way is down. Bolo walks ahead with her recorder at her mouth.
+
+Bolo: (into the recorder) “I-19. Zone 6. The trenches are frayed past the point where anyone could outrun the effects. Excavation units will need direct contact for further research. Logically, it is better to risk two people than a dozen. Preparing to enter the ‘event horizon’.”
+
+P: We cannot walk to the heart of the zone. It is ambiguous.
+
+Bolo: [click] Afraid you’ll lose your chair?
+
+P: ... I do not possess a chair. It is ours, like everything else.
+
+Bolo: However, you call the shots.
+
+P: No. There is no “I”. The facilitator directs the operations, and the facilitator does not tamper with places they have no knowledge of. The zones, for example.
+
+Bolo: And you are the facilitator. And I am the one with knowledge of the zones. So I say: move along.
+
+P: I am not "the" facilitator. I am "a" facilitator. The first one.
+
+Bolo: Then, first facilitator, you have two options. Let me wander the ambiguous zones, the way I have for twenty-five years. Or follow me like a pet, do as I say, and fucking relax for a second.
+
+Narrator: She doesn’t wait for an answer. You follow.
+
+Narrator: At the core, the trenches open into a hollow. Half-buried in it sits a container the natives left behind. It has no seams and no rust. Its gray is darker than the ash around it and paler than its own shadow. Your boots leave prints in the dust around it.
+
+Bolo: The signal comes from here.
+
+P: Are we hunting an artifact?
+
+Bolo: Of course. Am I that crazy in your eyes to wander through dangerous terrain just for the fun of it?
+
+P: ...
+
+Bolo: Wait, am I?!
+
+P: Let us say you are not the most careful citizen of the settlement.
+
+Bolo: [short laugh]
+
+Narrator: She turns away before you can see her face.
+
+Narrator: Hours pass inside the container. Bolo runs every test she brought and two she makes up on the spot, humming the same three notes under her breath. The artifact is a disk the size of her palm, warm in a way metal shouldn’t be. Near the end, she finds a seam no wider than a hair and works her thumbnail into it.
+
+Narrator: The disk opens.
+
+Narrator: The lights go first: your lamp, then hers, then the faint glow of the display on your wrist. Outside, the excavation units go quiet one by one, like a row of people falling asleep. Your channel to the settlement gives you nothing. Not even static. For the first time since you were small, no one is listening.
+
+P: ...Well. I hate to say “I told you so.”
+
+Bolo: You told me so? You didn't tell me anything, guy. You just bitch about everything and that's all. That is not the same as tel...
+
+Narrator: She stops mid-word. In the dark, she tilts her head and listens. She looks around in profound silence and seems at peace.
+
+Bolo: Muloh.
+
+P: What?
+
+Bolo: This is lovely.
+
+P: ...
+
+Narrator: She takes something like a stick from her bag and taps it twice against her palm. It wakes slowly, with a soft blue-green glow, the color of fungus on wet bark. Although it’s less light than you have ever lived by, you glimpse some aspects of Bolo's face that you never did before. Maybe because it’s close and it comes from below. It shows what the settlement’s lamps always flattened: fine lines at the corners of her eyes from years of squinting at transcripts, the pale nick of a scar along her jaw, freckles the daylight bleaches out. You have looked at her face every day for weeks. Only now are you seeing it. "Lovely," you think.
+
+Narrator: She catches you looking. She doesn’t look away, but her fingers start fussing with the stick.
+
+Bolo: What? ... What was I saying? Yes. Underground. It was more like this. I...
+
+P: We mean you no harm. You can express yourself clearly.
+
+Bolo: That’s the problem. You all say “we”. I can’t connect with a “we”. I’ve never met one. I can only connect with an “I”. (beat) Do you have the courage to be “I” for a second? One second, without all the sociable, collective ideas they brainwashed you with?
+
+Narrator: Out of habit, you glance at your wrist. It’s dark. No Mother, no Father, no settlement on the other end. Whatever you say next, only she will hear it.
+
+P: ...Yes. I can. I mean you no harm, and I would very much like to get to know you. Closely. Closer, I mean. Deeper. The real you, I mean.
+
+Narrator: Color behaves oddly in that green light. The flush rising in her cheeks shows up dark, like a shadow moving under her skin.
+
+Bolo: Fine. An “I” for an “I”.
+
+Narrator: She sits down against the container wall and sets the light between you.
+
+Bolo: There was an endless war between the states that belonged to this planet, for years. And these wars ended by a collective, just like you... So, these governments simply handed themselves over to three companies; all three were the most advanced tech companies on the planet before. And the three made one thing out of what was left. The Federation. The Federation ran the whole planet from a single point: one state, one currency, one lawmaker. Then came the endless rains.
+
+Narrator: She says “Federation” the way you’d name an illness someone else had.
+
+Bolo: The Federation got the warning of these endless rains and the rest way before the people, and started to get prepared for their plan. It was a catastrophe. The endless rains were expected to be followed by hurricanes that would scrape the surface bare. They called it the Great Flood. So they built a hundred and fifty people who would never die, packed them with human seeds, and sent them to a moon far out. Titan. Habitable, after terraforming. So they must have sent a small ship to terraform it before. Way before...
+
+Bolo: The rest of us, they left us to doom.
+
+Narrator: For the length of that one line, her voice has no warmth in it at all.
+
+Bolo: However, after they left, the rest organized. Everyone together, sharing whatever the Federation’s scientists had left behind. They learned to guide mycelium, to teach the fungus where to grow, so it carved the tunnels for them room by room. A whole society under the soil, grown rather than dug. I was born there, late, after the rains had calmed. Nobody went back up. There was no reason to.
+
+Narrator: She turns the glowing stick in her fingers. It must be from home.
+
+Bolo: I was a kid and life underground... it was not uneventful, but I always wondered about the bright colors of the planet under the sun, you know? And all these animals, trees. If you sent a bird into the settlement, you could tell them it was a god and they would worship it. Not a single person would hesitate to... So, I heard something from above. A loud noise, my first from the up-world. I climbed toward it for two days. (beat) It was you guys, landing.
+
+P: And your people? They are still down there?
+
+Bolo: (too fast) You will never tell anyone about this. Not your parents, not your settlement. Promise me.
+
+Narrator: It’s the first time you’ve seen her afraid. Not of the zones. Of you, or of what a “we” might do with a map.
+
+P: I promise.
+
+Bolo: They aren’t hiding. They’re home. They’re safe and they’re happy, and they don’t want to be found. Let them be.
+
+P: Then you have been up here alone for all this time. On the whole planet. That must have been terribly lonely.
+
+Bolo: Lonely? No. I had Bolo, as you already know. I talked to her every morning. We even gossiped about I-330, the mysterious ship that came out of nowhere. I walked the earth on my own. Free. Every zone, every artifact, every recording I could find. Twenty-five years, and I was never alone. Not once.
+
+Narrator: She looks at you properly then, in that small green light.
+
+Bolo: ... Until I saw you. Then, all at once, I had been alone the whole time. I felt a cold that I had never felt before.
+
+Narrator: You find yourself already holding her in your arms. She’s warm.
+
+Narrator: Later you will debate on who kissed whom first, never to land on a decision.
+
+Narrator: The stick slips from her fingers and rolls across the floor. Its light swings over the walls and comes to rest on the open disk.
+
+Narrator: You never knew body heat could arouse such intense feelings. For the first time, you truly feel human.
+
+---
+
+6; Before Moon mission
+
+Narrator: The laboratory hums as it always does, with the cooling fans and the settlement’s power running through the walls. One of the artifacts sit under the scanner where it has sat for nine days. Apparently Bolo has stopped sleeping in her room, because there’s a blanket on the lab bench.
+
+Bolo: (to the disk) You opened in the zone and killed every light for three kilometres, and now you won’t even blink at me.
+
+Narrator: She stops. Looks up at the ceiling lamps and then back at the disk.
+
+Bolo: Lights off, all of them!
+
+Narrator: You switch the lab lights off. The fans keep turning, and for a few seconds there’s nothing at all.
+
+Narrator: Then marks rise across the face of the disk, the way frost comes up on glass. Two lines of script, thin and pale, the same green as the fungus light in Zone 6.
+
+Bolo: (quietly) There you are.
+
+Choice 1
+
+A) Can you read it?
+B) Is it your ancestors’ writing?
+C) We should report this to the settlement.
+
+(A)
+P: Can you read it?
+Bolo: Nope, not a single word.
+
+(B)
+P: Is it your ancestors’ writing?
+Bolo: No... you thought these were my people? These are "alien" my guy.
+
+(C)
+P: We should report this to the settlement.
+Bolo: We, should... yeah, you get to it.
+Narrator: She look disappointed.
+
+→ All branches continue
+
+Narrator: She photographs the script three times from three angles, then once more because she doesn’t trust the first. The lights stay off, and neither of you mentions it.
+
+Bolo: So, moon! Exciting! I keep thinking about the long part. Not the launch, the hours after it. The window, and nothing under it. No ground.
+
+Bolo: If I were doing this alone... I’d manage. I always manage. I'd talk to the recorder probably.
+
+Narrator: She doesn’t look at you while she says it. She looks at the disk, still glowing faintly in the dark.
+
+Choice 3
+
+A) You won’t be alone. I’ll be right next to you.
+B) The crew will be with you. We all will.
+
+(A)
+P: You won’t be alone. I’ll be right next to you.
+Narrator: She hears the “I”. You watch her hear it.
+Bolo: I’m glad you’re coming. I’m glad the mission has a competent Facilitator.
+
+(B)
+P: The crew will be with you. We all will.
+Bolo: Hm-hm.
+Narrator: She says it gently, which is somehow worse than if she’d snapped. Then her hand finds yours on the bench.
+
+→ All branches continue
+
+Narrator: She gets up, too restless to sit, and goes to the window. Outside are the settlement’s lights, and above them the Moon, small and white and entirely silent.
