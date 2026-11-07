@@ -1139,7 +1139,18 @@ func _try_force_buy() -> bool:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
-		_using_right_stick = false
+		if (event as InputEventMouseMotion).relative.length_squared() > 4.0:
+			_using_right_stick = false
+			if _world_cursor_active:
+				_set_world_cursor(false)
+	# R3 (Right Stick Press) toggles the World Center Cursor for controller/keyboard planet selection
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+			and (event as InputEventJoypadButton).button_index == JOY_BUTTON_RIGHT_STICK \
+			and _key_spin_allowed() and not GameState.showcase_mode:
+		AudioManager.play("click")
+		_set_world_cursor(not _world_cursor_active)
+		get_viewport().set_input_as_handled()
+		return
 	if _lens_menu_input(event):
 		get_viewport().set_input_as_handled()
 		return
@@ -1175,7 +1186,7 @@ func _input(event: InputEvent) -> void:
 			var cke := event as InputEventKey
 			if cke.pressed and not cke.echo:
 				cancel = cke.keycode == KEY_ESCAPE or cke.keycode == KEY_BACKSPACE
-				confirm_center = _using_right_stick and (cke.keycode == KEY_ENTER \
+				confirm_center = (_using_right_stick or _world_cursor_active) and (cke.keycode == KEY_ENTER \
 					or cke.keycode == KEY_KP_ENTER or cke.keycode == KEY_SPACE)
 		elif event is InputEventMouseButton:
 			var cmb := event as InputEventMouseButton
@@ -1184,7 +1195,7 @@ func _input(event: InputEvent) -> void:
 			var cjb := event as InputEventJoypadButton
 			if cjb.pressed:
 				cancel = cjb.button_index == JOY_BUTTON_B
-				confirm_center = _using_right_stick and cjb.button_index == JOY_BUTTON_A
+				confirm_center = (_using_right_stick or _world_cursor_active) and cjb.button_index == JOY_BUTTON_A
 		if confirm_center and planet_renderer != null:
 			_try_place_district(planet_renderer.global_position + planet_renderer.size * 0.5)
 			get_viewport().set_input_as_handled()
@@ -1197,6 +1208,31 @@ func _input(event: InputEvent) -> void:
 			AudioManager.play("click")
 			get_viewport().set_input_as_handled()
 			return
+	# World Center Cursor actions when not in district placement mode and LeftPanel nav is inactive
+	if _world_cursor_active and _placing_def == null and not _naming_open and _key_spin_allowed() and planet_renderer != null:
+		var sp := get_node_or_null("SidePanel") as LeftPanel
+		var nav_on := sp != null and sp._nav_active
+		if not nav_on:
+			var wc_confirm := (event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+					and (event as InputEventJoypadButton).button_index == JOY_BUTTON_A) \
+				or (event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
+					and ((event as InputEventKey).keycode == KEY_ENTER or (event as InputEventKey).keycode == KEY_KP_ENTER \
+						or (event as InputEventKey).keycode == KEY_SPACE))
+			var wc_context := (event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+					and (event as InputEventJoypadButton).button_index == JOY_BUTTON_X) \
+				or (event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
+					and (event as InputEventKey).keycode == KEY_C)
+			if wc_confirm:
+				_activate_world_cursor()
+				get_viewport().set_input_as_handled()
+				return
+			if wc_context:
+				var center := planet_renderer.global_position + planet_renderer.size * 0.5
+				_on_right_click(center)
+				if ContextMenu._current != null and is_instance_valid(ContextMenu._current) and sp != null:
+					sp._nav_active = true
+				get_viewport().set_input_as_handled()
+				return
 	# ESC closes radial menu if open
 	if event is InputEventKey:
 		var ke := event as InputEventKey
@@ -1527,6 +1563,26 @@ const KEY_SPIN_SPEED := 1.6   # rad/s at the widest zoom
 const KEY_SPIN_EASE  := 5.0   # 1/s — how fast the turn reaches / leaves full speed
 var _key_spin_vel := Vector2.ZERO   # (spin, tilt) rad/s
 var _using_right_stick := false
+var _world_cursor_active := false
+
+func _set_world_cursor(on: bool) -> void:
+	_world_cursor_active = on
+	if on:
+		_using_right_stick = true
+		var sp := get_node_or_null("SidePanel") as LeftPanel
+		if sp != null and sp._nav_active:
+			sp._clear_nav_focus()
+	if poi_layer != null:
+		poi_layer.set_world_cursor_active(on)
+
+func _activate_world_cursor() -> void:
+	if planet_renderer == null:
+		return
+	var center := planet_renderer.global_position + planet_renderer.size * 0.5
+	if poi_layer != null and poi_layer.trigger_click_at(center):
+		return
+	_on_planet_clicked(center)
+
 func _tick_key_spin(delta: float) -> void:
 	if _switching_body:
 		_key_spin_vel = Vector2.ZERO
@@ -1541,6 +1597,10 @@ func _tick_key_spin(delta: float) -> void:
 		if absf(ry) > 0.15:
 			dir.y -= ry
 			_using_right_stick = true
+		if dir != Vector2.ZERO and _world_cursor_active:
+			var sp := get_node_or_null("SidePanel") as LeftPanel
+			if sp != null and sp._nav_active and sp._active_nav_root() == sp.get_node_or_null("Layout"):
+				sp._clear_nav_focus()
 		var lt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
 		var rt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
 		if (lt > 0.15 or rt > 0.15) and planet_renderer != null:
@@ -5442,19 +5502,20 @@ func _try_lens_hotkey(ke: InputEventKey) -> bool:
 ## "Production here  +30%" and the features behind it (on them full, near half).
 var _lens_tip_cell := ""
 func _tick_lens_tip() -> void:
-	var mouse := get_viewport().get_mouse_position()
+	var mouse := (planet_renderer.global_position + planet_renderer.size * 0.5) \
+		if (_world_cursor_active and planet_renderer != null) else get_viewport().get_mouse_position()
 	var hit := {"hit": false}
 	# nothing from another screen on top (the Upgrade Tree, an overlay) may let
 	# the lens talk through it (playtest 30.10)
 	var hov := get_viewport().gui_get_hovered_control()
-	var covered := hov != null and hov != self and not is_ancestor_of(hov)
+	var covered := not _world_cursor_active and hov != null and hov != self and not is_ancestor_of(hov)
 	# with no lens on, the same hover names the geography under the mouse
 	# (playtest 30.10: the plain map must tell Mountain, Plain, Rift … apart)
 	# the plain map names its geography only while Alt is held (playtest 31.10:
 	# a tip always under the mouse got in the way); a lens always explains
 	if _placing_def == null and current_data != null and _is_over_planet_area(mouse) \
 			and not covered and poi_layer._hovered_index < 0 and not TutorialManager.is_narrating() \
-			and GameState.is_scanned(current_data.seed) and (_role != "" or Input.is_key_pressed(KEY_ALT)):
+			and GameState.is_scanned(current_data.seed) and (_role != "" or _world_cursor_active or Input.is_key_pressed(KEY_ALT)):
 		hit = _screen_to_lonlat(mouse)
 	if not hit["hit"]:
 		if _lens_tip_cell != "":
@@ -5700,7 +5761,8 @@ func _is_over_planet_area(global_pos: Vector2) -> bool:
 	# pass-through HUD layers and the planet itself don't.
 	var hovered := get_viewport().gui_get_hovered_control()
 	return hovered == null or hovered == planet_renderer or hovered == cont \
-		or hovered.mouse_filter != Control.MOUSE_FILTER_STOP
+		or hovered.mouse_filter != Control.MOUSE_FILTER_STOP \
+		or not hovered.get_global_rect().has_point(global_pos)
 
 func _set_zoom_target(z: float, anchor: Vector2) -> void:
 	_zoom_target = clampf(z, ZOOM_SYSTEM if _system_zoom_ok() else ZOOM_MIN, _zoom_max())

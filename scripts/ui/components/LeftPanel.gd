@@ -767,9 +767,15 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 			return
 		match jb.button_index:
+			JOY_BUTTON_LEFT_STICK:
+				if _toggle_panel():
+					get_viewport().set_input_as_handled()
 			JOY_BUTTON_A:
 				if not _nav_active:
-					_handle_nav_dir(Vector2(0, 1))
+					var sc := get_tree().current_scene
+					if sc == null or not bool(sc.get("_world_cursor_active")):
+						if _handle_nav_dir(Vector2(0, 1)):
+							get_viewport().set_input_as_handled()
 				elif _activate_focused():
 					get_viewport().set_input_as_handled()
 			JOY_BUTTON_B:
