@@ -75,6 +75,13 @@ func _process(delta: float) -> void:
 	CursorManager.set_state(CursorManager.State.NORMAL)
 
 func _tick_view(delta: float) -> void:
+	if not SkillTreeView.is_open:
+		var rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+		var ry := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+		if absf(rx) > 0.15:
+			_view_angle_t -= rx * 1.5 * delta
+		if absf(ry) > 0.15:
+			_orbit_tilt_t = clampf(_orbit_tilt_t + ry * 0.25 * delta, 0.28, 0.50)
 	if not _dragging and _spin_vel != 0.0:
 		_view_angle_t += _spin_vel * delta
 		_spin_vel *= exp(-delta * SPIN_FRICTION)

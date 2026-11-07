@@ -223,7 +223,7 @@ func _apply_box() -> void:
 		return
 	if selected:
 		add_theme_stylebox_override("panel", get_theme_stylebox(&"panel_selected", &"ItemPanel"))
-	elif _hovered and clickable:
+	elif _hovered and (clickable or show_stepper):
 		add_theme_stylebox_override("panel", get_theme_stylebox(&"panel_hover", &"ItemPanel"))
 	else:
 		remove_theme_stylebox_override("panel")

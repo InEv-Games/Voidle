@@ -58,6 +58,25 @@ var road_vis: float = 1.0
 var _hover_port: Dictionary = {}
 ## View-space light direction (planet shader's light_direction) for road shading.
 var light_dir: Vector3 = Vector3(0, 0, 1)
+## R3 controller mode: a fixed reticle at the globe's centre that hovers and
+## selects whatever rotates under it.
+var world_cursor_active: bool = false
+
+func set_world_cursor_active(on: bool) -> void:
+	if world_cursor_active == on:
+		return
+	world_cursor_active = on
+	if on:
+		var p := _get_planet_params()
+		if not p.is_empty() and not placement_mode:
+			update_hover_at(p["center"], true)
+	else:
+		_hover_port = {}
+		_hover_site = {}
+		_hover_wonder = {}
+		hovered_capital = -1
+		_hovered_index = -1
+	queue_redraw()
 
 ## `lines`: Array of [text: String, color: Color] shown under the title.
 ## `neighbors`: indices into _pois this site would neighbour (preview arcs).
@@ -1079,6 +1098,8 @@ func _process(_delta: float) -> void:
 	var center: Vector2 = p["center"]
 	var r_px: float     = p["r_px"]
 	update_screen_positions()
+	if world_cursor_active and not placement_mode:
+		update_hover_at(center, true)
 
 	var keep_texts: Array[Dictionary] = []
 	for ft in _floating_texts:
@@ -1200,8 +1221,26 @@ func _draw() -> void:
 	_ghost_info_at = Vector2.INF
 	if placement_mode:
 		_draw_placement_overlay(font)
+	elif world_cursor_active:
+		_draw_world_cursor()
 	if _ghost_info_ctrl != null and is_instance_valid(_ghost_info_ctrl):
 		_ghost_info_ctrl.queue_redraw()   # its info box (top layer) follows / clears
+
+func _draw_world_cursor() -> void:
+	var p := _get_planet_params()
+	if p.is_empty():
+		return
+	var sp := _snap_local((p["center"] as Vector2) - global_position)
+	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
+	var has_target := _hovered_index >= 0 or hovered_capital >= 0 \
+		or not _hover_site.is_empty() or not _hover_wonder.is_empty() or not _hover_port.is_empty()
+	var col := Color(1.0, 0.90, 0.38, 0.95) if has_target else Color(0.75, 0.90, 1.0, 0.85)
+	var half := block * (5.5 if has_target else 6.5)
+	_draw_pixel_brackets(sp, half + block * 0.5, block, Color(0.0, 0.0, 0.0, 0.72))
+	_draw_pixel_brackets(sp, half, block, col)
+	var c := (sp / block).floor() * block
+	draw_rect(Rect2(c - Vector2(block, block), Vector2(block, block) * 3.0), Color(0.0, 0.0, 0.0, 0.75))
+	draw_rect(Rect2(c, Vector2(block, block)), col)
 
 func _draw_scene(font: Font) -> void:
 	if _pois.is_empty() and _floating_texts.is_empty():
@@ -1402,65 +1441,73 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventMouseMotion:
-		_hover_port = _port_at(event.global_position)
-		var prev_r: String = _hover_site.get("id", "")
-		_hover_site = _site_at(event.global_position)
-		if String(_hover_site.get("id", "")) != prev_r:
-			queue_redraw()
-			if not _hover_site.is_empty():
-				AudioManager.play("poi_ping")
-				CursorManager.set_state(CursorManager.State.POINTER)
-		var prev_w: String = _hover_wonder.get("name", "")
-		_hover_wonder = _wonder_at(event.global_position)
-		if String(_hover_wonder.get("name", "")) != prev_w:
-			queue_redraw()
-		var prev := _hovered_index
-		var prev_cap := hovered_capital
-		hovered_capital = _get_capital_at(event.global_position)
-		if hovered_capital != prev_cap:
-			queue_redraw()
-			if hovered_capital >= 0:
-				AudioManager.play("poi_ping")
-				CursorManager.set_state(CursorManager.State.POINTER)
-		var on_marker := _get_poi_at(event.global_position) if hovered_capital < 0 else -1
-		_hovered_index = on_marker
-		# Hovering a district's territory highlights it too (border glow in the shader).
-		if _hovered_index < 0 and territory_lookup.is_valid() \
-				and not (event as InputEventMouseMotion).button_mask:
-			_hovered_index = territory_lookup.call(event.global_position)
-		if _hovered_index != prev:
-			queue_redraw()
-			if _hovered_index >= 0:
-				if on_marker >= 0:
-					AudioManager.play("poi_ping")
-				CursorManager.set_state(CursorManager.State.POINTER)
-			elif hovered_capital < 0:
-				CursorManager.set_state(CursorManager.State.NORMAL)
-		elif prev_cap >= 0 and hovered_capital < 0 and _hovered_index < 0:
-			CursorManager.set_state(CursorManager.State.NORMAL)
+		update_hover_at(event.global_position, not (event as InputEventMouseMotion).button_mask)
 
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var rel := _site_at(event.global_position)
-		if not rel.is_empty():
-			AudioManager.play("poi_select")
-			excavation_clicked.emit(String(rel["id"]))
+		if trigger_click_at(event.global_position):
 			get_viewport().set_input_as_handled()
-			return
-		var cap := _get_capital_at(event.global_position)
-		if cap >= 0:
-			AudioManager.play("poi_select")
-			_selected_index = cap
-			queue_redraw()
-			capital_clicked.emit(cap)
-			get_viewport().set_input_as_handled()
-			return
-		var idx := _get_poi_at(event.global_position)
-		if idx >= 0:
-			AudioManager.play("poi_select")
-			_selected_index = idx
-			queue_redraw()
-			poi_clicked.emit(idx, _pois[idx]["data"])
-			get_viewport().set_input_as_handled()
+
+func update_hover_at(global_pos: Vector2, allow_territory: bool = true) -> void:
+	_hover_port = _port_at(global_pos)
+	var prev_r: String = _hover_site.get("id", "")
+	_hover_site = _site_at(global_pos)
+	if String(_hover_site.get("id", "")) != prev_r:
+		queue_redraw()
+		if not _hover_site.is_empty():
+			AudioManager.play("poi_ping")
+			if not world_cursor_active:
+				CursorManager.set_state(CursorManager.State.POINTER)
+	var prev_w: String = _hover_wonder.get("name", "")
+	_hover_wonder = _wonder_at(global_pos)
+	if String(_hover_wonder.get("name", "")) != prev_w:
+		queue_redraw()
+	var prev := _hovered_index
+	var prev_cap := hovered_capital
+	hovered_capital = _get_capital_at(global_pos)
+	if hovered_capital != prev_cap:
+		queue_redraw()
+		if hovered_capital >= 0:
+			AudioManager.play("poi_ping")
+			if not world_cursor_active:
+				CursorManager.set_state(CursorManager.State.POINTER)
+	var on_marker := _get_poi_at(global_pos) if hovered_capital < 0 else -1
+	_hovered_index = on_marker
+	# Hovering a district's territory highlights it too (border glow in the shader).
+	if _hovered_index < 0 and territory_lookup.is_valid() and allow_territory:
+		_hovered_index = territory_lookup.call(global_pos)
+	if _hovered_index != prev:
+		queue_redraw()
+		if _hovered_index >= 0:
+			if on_marker >= 0:
+				AudioManager.play("poi_ping")
+			if not world_cursor_active:
+				CursorManager.set_state(CursorManager.State.POINTER)
+		elif hovered_capital < 0 and not world_cursor_active:
+			CursorManager.set_state(CursorManager.State.NORMAL)
+	elif prev_cap >= 0 and hovered_capital < 0 and _hovered_index < 0 and not world_cursor_active:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+
+func trigger_click_at(global_pos: Vector2) -> bool:
+	var rel := _site_at(global_pos)
+	if not rel.is_empty():
+		AudioManager.play("poi_select")
+		excavation_clicked.emit(String(rel["id"]))
+		return true
+	var cap := _get_capital_at(global_pos)
+	if cap >= 0:
+		AudioManager.play("poi_select")
+		_selected_index = cap
+		queue_redraw()
+		capital_clicked.emit(cap)
+		return true
+	var idx := _get_poi_at(global_pos)
+	if idx >= 0:
+		AudioManager.play("poi_select")
+		_selected_index = idx
+		queue_redraw()
+		poi_clicked.emit(idx, _pois[idx]["data"])
+		return true
+	return false
 
 ## Returns the global screen position of the POI with the given label, or Vector2.ZERO.
 func get_poi_screen_pos(label: String) -> Vector2:

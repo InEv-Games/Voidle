@@ -346,37 +346,55 @@ func _open_context_menu(global_pos: Vector2) -> void:
 	if not _is_over_planet_area(global_pos):   # e.g. over the side panel
 		return
 	var poi := _poi_at_screen(global_pos)
-	var kind := ""
-	var target: Variant = null
-	var title := ""
-	var subtitle := ""
-	var pp := GameState.get_planet(current_data.seed)
 	if poi != null:
-		target = poi
-		title = poi.shown_name()
-		if poi.is_orbital():
-			kind = "station"
-			var odef := ProductionManager.district_def(poi)
-			subtitle = "Orbit City" if Leveling.is_orbit_city(current_data, poi) \
-				else (odef.display_name if odef != null else "Orbit district")
-		elif poi.is_city():
-			kind = "city"
-			subtitle = "City  //  Lv %d" % Leveling.city_level(pp, poi)
-		else:
-			kind = "district"
-			subtitle = "%s  //  Lv %d" % [poi.type_tag.capitalize(), int(pp.district_levels.get(poi.label, 1))]
-		if poi.constructing:
-			subtitle += "  //  under construction"
-	else:
-		kind = "surface"
-		target = {"pos": global_pos, "hit": _screen_to_lonlat(global_pos)}
-		title = current_data.planet_name
-		subtitle = "Surface" if bool(target["hit"]["hit"]) else "Space"
-	var cmds := CommandRegistry.commands_for(kind, target)
+		_open_context_menu_for_poi(poi, global_pos)
+		return
+	var target: Variant = {"pos": global_pos, "hit": _screen_to_lonlat(global_pos)}
+	var title := current_data.planet_name
+	var subtitle := "Surface" if bool(target["hit"]["hit"]) else "Space"
+	var cmds := CommandRegistry.commands_for("surface", target)
 	if cmds.is_empty():
 		return
 	AudioManager.play("click")
 	ContextMenu.open(self, title, subtitle, cmds, global_pos)
+
+## Opens the context menu for a specific POI by label (or active panel POI if label is empty).
+func open_poi_context_menu(poi_label: String, global_pos: Vector2) -> bool:
+	if current_data == null or _placing_def != null or _naming_open or GameState.showcase_mode:
+		return false
+	var poi := _find_poi(current_data, poi_label)
+	if poi == null:
+		poi = _active_district_poi if _active_district_poi != null else _city_panel_poi
+	if poi == null:
+		return false
+	return _open_context_menu_for_poi(poi, global_pos)
+
+func _open_context_menu_for_poi(poi: POIData, global_pos: Vector2) -> bool:
+	if current_data == null or poi == null:
+		return false
+	var kind := ""
+	var title := poi.shown_name()
+	var subtitle := ""
+	var pp := GameState.get_planet(current_data.seed)
+	if poi.is_orbital():
+		kind = "station"
+		var odef := ProductionManager.district_def(poi)
+		subtitle = "Orbit City" if Leveling.is_orbit_city(current_data, poi) \
+			else (odef.display_name if odef != null else "Orbit district")
+	elif poi.is_city():
+		kind = "city"
+		subtitle = "City  //  Lv %d" % Leveling.city_level(pp, poi)
+	else:
+		kind = "district"
+		subtitle = "%s  //  Lv %d" % [poi.type_tag.capitalize(), int(pp.district_levels.get(poi.label, 1))]
+	if poi.constructing:
+		subtitle += "  //  under construction"
+	var cmds := CommandRegistry.commands_for(kind, poi)
+	if cmds.is_empty():
+		return false
+	AudioManager.play("click")
+	ContextMenu.open(self, title, subtitle, cmds, global_pos)
+	return true
 
 ## Why `poi` can't level up now ("" when it can). Shared by the panel button and the menu.
 func _district_level_up_block(poi: POIData, planet: PlanetData) -> String:
@@ -473,7 +491,7 @@ func _city_commands(city: POIData) -> Array:
 		GameCommand.make("open_city", "Open City", _open_poi_panel.bind(city), Callable(),
 			{"icon": "▤", "color": CMD_OPEN_COL}),
 		GameCommand.make("open_capital", "Open Capital District", _open_capital.bind(city),
-			_under_construction_block.bind(city), {"icon": "◆", "color": CMD_OPEN_COL}),
+			_under_construction_block.bind(city), {"icon": "■", "color": CMD_OPEN_COL}),
 		GameCommand.make("focus_city", "Focus City", _focus_city.bind(city), Callable(),
 			{"icon": "◎", "color": CMD_OPEN_COL}),
 		GameCommand.make("city_level_up", "Level up City  (Lv %d → %d)" % [lv, lv + 1],
@@ -1120,13 +1138,34 @@ func _try_force_buy() -> bool:
 	return true
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		if (event as InputEventMouseMotion).relative.length_squared() > 4.0:
+			_using_right_stick = false
+			if _world_cursor_active:
+				_set_world_cursor(false)
+	# R3 (Right Stick Press) toggles the World Center Cursor for controller/keyboard planet selection
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+			and (event as InputEventJoypadButton).button_index == JOY_BUTTON_RIGHT_STICK \
+			and _key_spin_allowed() and not GameState.showcase_mode:
+		AudioManager.play("click")
+		_set_world_cursor(not _world_cursor_active)
+		get_viewport().set_input_as_handled()
+		return
 	if _lens_menu_input(event):
 		get_viewport().set_input_as_handled()
 		return
-	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
-			and (event as InputEventKey).keycode == KEY_F and _try_force_buy():
+	var force_pressed := (event is InputEventKey and (event as InputEventKey).pressed \
+			and not (event as InputEventKey).echo and (event as InputEventKey).keycode == KEY_F) \
+		or (event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+			and (event as InputEventJoypadButton).button_index == JOY_BUTTON_Y)
+	if force_pressed and _try_force_buy():
 		get_viewport().set_input_as_handled()
 		return
+	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
+			and _key_spin_allowed() and not GameState.showcase_mode:
+		if _try_lens_hotkey(event as InputEventKey):
+			get_viewport().set_input_as_handled()
+			return
 	# the Upgrade Tree owns the input; the docked Trade panel only where it is
 	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()):
 		if not _rmb.is_empty() and _rmb["drag"]:
@@ -1138,15 +1177,29 @@ func _input(event: InputEvent) -> void:
 		if _try_follow_lander((event as InputEventMouseButton).global_position):
 			get_viewport().set_input_as_handled()
 			return
-	# Right-click / ESC cancels district placement
-	if _placing_def != null:
+	# Right-click / ESC / Backspace / Joy B cancels district placement;
+	# Enter / Space / Joy A confirms placement at globe center when using controller/keyboard.
+	if _placing_def != null and not _naming_open:
 		var cancel := false
+		var confirm_center := false
 		if event is InputEventKey:
 			var cke := event as InputEventKey
-			cancel = cke.pressed and cke.keycode == KEY_ESCAPE
+			if cke.pressed and not cke.echo:
+				cancel = cke.keycode == KEY_ESCAPE or cke.keycode == KEY_BACKSPACE
+				confirm_center = (_using_right_stick or _world_cursor_active) and (cke.keycode == KEY_ENTER \
+					or cke.keycode == KEY_KP_ENTER or cke.keycode == KEY_SPACE)
 		elif event is InputEventMouseButton:
 			var cmb := event as InputEventMouseButton
 			cancel = cmb.pressed and cmb.button_index == MOUSE_BUTTON_RIGHT
+		elif event is InputEventJoypadButton:
+			var cjb := event as InputEventJoypadButton
+			if cjb.pressed:
+				cancel = cjb.button_index == JOY_BUTTON_B
+				confirm_center = (_using_right_stick or _world_cursor_active) and cjb.button_index == JOY_BUTTON_A
+		if confirm_center and planet_renderer != null:
+			_try_place_district(planet_renderer.global_position + planet_renderer.size * 0.5)
+			get_viewport().set_input_as_handled()
+			return
 		if cancel and _mandatory_city:
 			get_viewport().set_input_as_handled()   # the first City must be founded
 			return
@@ -1155,6 +1208,31 @@ func _input(event: InputEvent) -> void:
 			AudioManager.play("click")
 			get_viewport().set_input_as_handled()
 			return
+	# World Center Cursor actions when not in district placement mode and LeftPanel nav is inactive
+	if _world_cursor_active and _placing_def == null and not _naming_open and _key_spin_allowed() and planet_renderer != null:
+		var sp := get_node_or_null("SidePanel") as LeftPanel
+		var nav_on := sp != null and sp._nav_active
+		if not nav_on:
+			var wc_confirm := (event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+					and (event as InputEventJoypadButton).button_index == JOY_BUTTON_A) \
+				or (event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
+					and ((event as InputEventKey).keycode == KEY_ENTER or (event as InputEventKey).keycode == KEY_KP_ENTER \
+						or (event as InputEventKey).keycode == KEY_SPACE))
+			var wc_context := (event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+					and (event as InputEventJoypadButton).button_index == JOY_BUTTON_X) \
+				or (event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
+					and (event as InputEventKey).keycode == KEY_C)
+			if wc_confirm:
+				_activate_world_cursor()
+				get_viewport().set_input_as_handled()
+				return
+			if wc_context:
+				var center := planet_renderer.global_position + planet_renderer.size * 0.5
+				_on_right_click(center)
+				if ContextMenu._current != null and is_instance_valid(ContextMenu._current) and sp != null:
+					sp._nav_active = true
+				get_viewport().set_input_as_handled()
+				return
 	# ESC closes radial menu if open
 	if event is InputEventKey:
 		var ke := event as InputEventKey
@@ -1479,26 +1557,57 @@ func _orbit_pt(ship: ShipData, a: float, b: Dictionary, radius := -1.0) -> Vecto
 static func _hidden_by(v: Vector3, b: Dictionary) -> bool:
 	return v.z > 0.0 and Vector2(v.x, v.y).distance_to(b["c"]) < float(b["r"])
 
-## WASD / arrow keys turn the globe (A/D spin, W/S tilt) — not while typing,
-## in the console, or with the Upgrade Tree open. Slower when zoomed in. The
-## turn speeds up and settles smoothly instead of starting / stopping dead.
+## Controller right stick turns the globe (X spin, Y tilt) and LT/RT zoom —
+## WASD / arrow keys are reserved for LeftPanel UI navigation.
 const KEY_SPIN_SPEED := 1.6   # rad/s at the widest zoom
 const KEY_SPIN_EASE  := 5.0   # 1/s — how fast the turn reaches / leaves full speed
 var _key_spin_vel := Vector2.ZERO   # (spin, tilt) rad/s
+var _using_right_stick := false
+var _world_cursor_active := false
+
+func _set_world_cursor(on: bool) -> void:
+	_world_cursor_active = on
+	if on:
+		_using_right_stick = true
+		var sp := get_node_or_null("SidePanel") as LeftPanel
+		if sp != null and sp._nav_active:
+			sp._clear_nav_focus()
+	if poi_layer != null:
+		poi_layer.set_world_cursor_active(on)
+
+func _activate_world_cursor() -> void:
+	if planet_renderer == null:
+		return
+	var center := planet_renderer.global_position + planet_renderer.size * 0.5
+	if poi_layer != null and poi_layer.trigger_click_at(center):
+		return
+	_on_planet_clicked(center)
+
 func _tick_key_spin(delta: float) -> void:
 	if _switching_body:
 		_key_spin_vel = Vector2.ZERO
 		return
 	var dir := Vector2.ZERO
 	if _key_spin_allowed():
-		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
-			dir.x -= 1.0
-		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
-			dir.x += 1.0
-		if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
-			dir.y += 1.0
-		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
-			dir.y -= 1.0
+		var rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+		var ry := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+		if absf(rx) > 0.15:
+			dir.x += rx
+			_using_right_stick = true
+		if absf(ry) > 0.15:
+			dir.y -= ry
+			_using_right_stick = true
+		if dir != Vector2.ZERO and _world_cursor_active:
+			var sp := get_node_or_null("SidePanel") as LeftPanel
+			if sp != null and sp._nav_active and sp._active_nav_root() == sp.get_node_or_null("Layout"):
+				sp._clear_nav_focus()
+		var lt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
+		var rt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
+		if (lt > 0.15 or rt > 0.15) and planet_renderer != null:
+			var zoom_dir := (rt if rt > 0.15 else 0.0) - (lt if lt > 0.15 else 0.0)
+			if absf(zoom_dir) > 0.01:
+				var center := planet_renderer.global_position + planet_renderer.size * 0.5
+				_set_zoom_target(_zoom_target * pow(1.8, zoom_dir * delta), center)
 	var target := dir * KEY_SPIN_SPEED / maxf(_zoom, 0.5) * Vector2(1.0, 0.6)
 	_key_spin_vel = _key_spin_vel.lerp(target, 1.0 - exp(-delta * KEY_SPIN_EASE))
 	if dir == Vector2.ZERO and _key_spin_vel.length_squared() < 1e-4:
@@ -2075,7 +2184,7 @@ func _add_found_settlement_button(page: Control) -> void:
 	hub_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
 	row.add_child(hub_lbl)
 	var name_lbl := Label.new()
-	name_lbl.text = "◆  Colony Lander"
+	name_lbl.text = "Colony Lander"
 	_apply_orbitron(name_lbl, 10)
 	name_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
 	row.add_child(name_lbl)
@@ -5350,23 +5459,63 @@ func _lens_menu_input(event: InputEvent) -> bool:
 			_set_lens_menu(false)   # the click still goes through
 	return false
 
+## Number keys 1..5 toggle the 5 surface lenses (Energy, Population, Production,
+## Science, Commercial); 0 or ` returns to Normal.
+func _try_lens_hotkey(ke: InputEventKey) -> bool:
+	if current_data == null or not FeatureMap.has_map(current_data.seed):
+		return false
+	var k := ke.keycode if ke.keycode != KEY_NONE else ke.physical_keycode
+	var pk := ke.physical_keycode if ke.physical_keycode != KEY_NONE else ke.keycode
+	if k == KEY_0 or k == KEY_KP_0 or pk == KEY_0 or pk == KEY_QUOTELEFT:
+		if _role != "":
+			AudioManager.play("click")
+			_set_role("")
+			_set_lens_menu(false)
+		return true
+	var idx := -1
+	if k == KEY_1 or k == KEY_KP_1 or pk == KEY_1:
+		idx = 0
+	elif k == KEY_2 or k == KEY_KP_2 or pk == KEY_2:
+		idx = 1
+	elif k == KEY_3 or k == KEY_KP_3 or pk == KEY_3:
+		idx = 2
+	elif k == KEY_4 or k == KEY_KP_4 or pk == KEY_4:
+		idx = 3
+	elif k == KEY_5 or k == KEY_KP_5 or pk == KEY_5:
+		idx = 4
+	if idx < 0:
+		return false
+	var roles := FeatureMap.ROLES.keys()
+	if idx >= roles.size():
+		return false
+	if not GameState.is_scanned(current_data.seed):
+		AudioManager.play("error")
+		_show_unlock_toast("Not scanned yet", "Scan this world's surface from orbit to use its lenses.")
+		return true
+	var target_role := String(roles[idx])
+	AudioManager.play("click")
+	_set_role("" if _role == target_role else target_role)
+	_set_lens_menu(false)
+	return true
+
 ## With a lens on, hovering the globe tells what that spot gives the role:
 ## "Production here  +30%" and the features behind it (on them full, near half).
 var _lens_tip_cell := ""
 func _tick_lens_tip() -> void:
-	var mouse := get_viewport().get_mouse_position()
+	var mouse := (planet_renderer.global_position + planet_renderer.size * 0.5) \
+		if (_world_cursor_active and planet_renderer != null) else get_viewport().get_mouse_position()
 	var hit := {"hit": false}
 	# nothing from another screen on top (the Upgrade Tree, an overlay) may let
 	# the lens talk through it (playtest 30.10)
 	var hov := get_viewport().gui_get_hovered_control()
-	var covered := hov != null and hov != self and not is_ancestor_of(hov)
+	var covered := not _world_cursor_active and hov != null and hov != self and not is_ancestor_of(hov)
 	# with no lens on, the same hover names the geography under the mouse
 	# (playtest 30.10: the plain map must tell Mountain, Plain, Rift … apart)
 	# the plain map names its geography only while Alt is held (playtest 31.10:
 	# a tip always under the mouse got in the way); a lens always explains
 	if _placing_def == null and current_data != null and _is_over_planet_area(mouse) \
 			and not covered and poi_layer._hovered_index < 0 and not TutorialManager.is_narrating() \
-			and GameState.is_scanned(current_data.seed) and (_role != "" or Input.is_key_pressed(KEY_ALT)):
+			and GameState.is_scanned(current_data.seed) and (_role != "" or _world_cursor_active or Input.is_key_pressed(KEY_ALT)):
 		hit = _screen_to_lonlat(mouse)
 	if not hit["hit"]:
 		if _lens_tip_cell != "":
@@ -5612,7 +5761,8 @@ func _is_over_planet_area(global_pos: Vector2) -> bool:
 	# pass-through HUD layers and the planet itself don't.
 	var hovered := get_viewport().gui_get_hovered_control()
 	return hovered == null or hovered == planet_renderer or hovered == cont \
-		or hovered.mouse_filter != Control.MOUSE_FILTER_STOP
+		or hovered.mouse_filter != Control.MOUSE_FILTER_STOP \
+		or not hovered.get_global_rect().has_point(global_pos)
 
 func _set_zoom_target(z: float, anchor: Vector2) -> void:
 	_zoom_target = clampf(z, ZOOM_SYSTEM if _system_zoom_ok() else ZOOM_MIN, _zoom_max())
@@ -5699,6 +5849,9 @@ func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void
 	if _panel_open:
 		_reopen_panel_after_place = true
 		_set_panel_open(false)
+	var sp := get_node_or_null("SidePanel")
+	if sp != null and bool(sp.get("_nav_active")):
+		_using_right_stick = true
 	_placing_def = def
 	_placing_parent = parent
 	VAM.start_snapshot(PLACE_SNAPSHOT, &"placement")
@@ -5804,7 +5957,8 @@ func _update_ghost_roads(lon: float, lat: float, neighbors: Array) -> void:
 func _update_placement_hover() -> void:
 	if _placing_def == null or current_data == null:
 		return
-	var mouse := get_viewport().get_mouse_position()
+	var mouse := (planet_renderer.global_position + planet_renderer.size * 0.5) \
+		if (_using_right_stick and planet_renderer != null) else get_viewport().get_mouse_position()
 	var hit := _screen_to_lonlat(mouse)
 	# a tutorial card covers the planet: no site tooltip through it
 	if not hit["hit"] or not _is_over_planet_area(mouse) or TutorialManager.is_narrating():
@@ -7213,6 +7367,7 @@ func _build_add_district_card(data: PlanetData, enabled: bool, orbital_only: boo
 				return
 			var layer := CanvasLayer.new()
 			layer.layer = 205
+			layer.set_meta("left_panel_dropdown", true)
 			add_child(layer)
 			var shade := Control.new()
 			shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -8872,11 +9027,11 @@ func _change_row(icon: String, before: float, after: float) -> String:
 		_bb("[b]%s[/b]" % f.call(after), col),
 		("   " + _bb("+" + String(f.call(d)), BB_GOOD)) if d > 0.0005 else ""]
 
-## How many a click buys: Shift ×5, Ctrl/Cmd as many as possible, else one.
+## How many a click buys: Shift/LB ×5, Ctrl/Cmd/RB as many as possible, else one.
 static func _bulk_count() -> int:
-	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META):
+	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META) or TradePanel._joy_shoulder(true):
 		return 999
-	if Input.is_key_pressed(KEY_SHIFT):
+	if Input.is_key_pressed(KEY_SHIFT) or TradePanel._joy_shoulder(false):
 		return 5
 	return 1
 

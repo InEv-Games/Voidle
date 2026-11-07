@@ -166,6 +166,12 @@ func _tick_backdrop(delta: float) -> void:
 	# the editor's mouse isn't the player's: there the shot only drifts
 	var m := vp * 0.5 if Engine.is_editor_hint() else get_viewport().get_mouse_position()
 	var target := Vector2(clampf(m.x / vp.x, 0.0, 1.0) - 0.5, clampf(m.y / vp.y, 0.0, 1.0) - 0.5)
+	if not Engine.is_editor_hint():
+		var rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+		var ry := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+		if absf(rx) > 0.15 or absf(ry) > 0.15:
+			target.x = clampf(target.x + rx * 0.5, -0.5, 0.5)
+			target.y = clampf(target.y + ry * 0.5, -0.5, 0.5)
 	# a slow camera drift under the mouse, so the shot never stands still
 	target += Vector2(sin(_time * DRIFT_SPEED.x) * DRIFT_AMOUNT.x,
 		sin(_time * DRIFT_SPEED.y + 1.3) * DRIFT_AMOUNT.y)
@@ -605,6 +611,8 @@ func _update_light(mat: ShaderMaterial) -> void:
 
 func _process(delta: float) -> void:
 	_tick_backdrop(delta)
+	if not Engine.is_editor_hint():
+		_tick_nav(delta)
 	if _planet_rect == null or _planet_rect.material == null:
 		return
 	_rotation_off = fposmod(_rotation_off + ROTATE_SPEED * delta, TAU)
@@ -663,10 +671,393 @@ func _close_saves() -> void:
 func _input(event: InputEvent) -> void:
 	if Engine.is_editor_hint():
 		return
-	if is_instance_valid(_saves_root) and event is InputEventKey and (event as InputEventKey).pressed \
-			and (event as InputEventKey).keycode == KEY_ESCAPE:
+	if event is InputEventMouseMotion:
+		if _nav_active and (event as InputEventMouseMotion).relative.length_squared() > 4.0:
+			_clear_nav_focus()
+		return
+	var dc := get_node_or_null("/root/DevConsole")
+	if dc != null and bool(dc.get("_open")):
+		return
+	if event is InputEventKey:
+		var ke := event as InputEventKey
+		if not ke.pressed:
+			return
+		var k := ke.keycode if ke.keycode != KEY_NONE else ke.physical_keycode
+		var pk := ke.physical_keycode if ke.physical_keycode != KEY_NONE else ke.keycode
+		var dir := Vector2.ZERO
+		if k == KEY_UP or pk == KEY_W:
+			dir = Vector2(0, -1)
+		elif k == KEY_DOWN or pk == KEY_S:
+			dir = Vector2(0, 1)
+		elif k == KEY_LEFT or pk == KEY_A:
+			dir = Vector2(-1, 0)
+		elif k == KEY_RIGHT or pk == KEY_D:
+			dir = Vector2(1, 0)
+		if dir != Vector2.ZERO:
+			if _handle_nav_dir(dir):
+				get_viewport().set_input_as_handled()
+			return
+		if not ke.echo and (k == KEY_ENTER or k == KEY_KP_ENTER or k == KEY_SPACE):
+			if not _nav_active:
+				var intro := _find_intro_card()
+				if intro != null:
+					var begin_btn := intro.get_node_or_null("%BeginButton") as BaseButton
+					if begin_btn != null:
+						begin_btn.pressed.emit()
+						get_viewport().set_input_as_handled()
+						return
+				if _handle_nav_dir(Vector2(0, 1)):
+					get_viewport().set_input_as_handled()
+			elif _activate_focused():
+				get_viewport().set_input_as_handled()
+			return
+		if not ke.echo and (k == KEY_BACKSPACE or k == KEY_ESCAPE):
+			if _handle_nav_back():
+				get_viewport().set_input_as_handled()
+			return
+	elif event is InputEventJoypadButton:
+		var jb := event as InputEventJoypadButton
+		if not jb.pressed:
+			return
+		var jdir := Vector2.ZERO
+		match jb.button_index:
+			JOY_BUTTON_DPAD_UP:    jdir = Vector2(0, -1)
+			JOY_BUTTON_DPAD_DOWN:  jdir = Vector2(0, 1)
+			JOY_BUTTON_DPAD_LEFT:  jdir = Vector2(-1, 0)
+			JOY_BUTTON_DPAD_RIGHT: jdir = Vector2(1, 0)
+		if jdir != Vector2.ZERO:
+			if _handle_nav_dir(jdir):
+				get_viewport().set_input_as_handled()
+			return
+		match jb.button_index:
+			JOY_BUTTON_A:
+				if not _nav_active:
+					var intro := _find_intro_card()
+					if intro != null:
+						var begin_btn := intro.get_node_or_null("%BeginButton") as BaseButton
+						if begin_btn != null:
+							begin_btn.pressed.emit()
+							get_viewport().set_input_as_handled()
+							return
+					if _handle_nav_dir(Vector2(0, 1)):
+						get_viewport().set_input_as_handled()
+				elif _activate_focused():
+					get_viewport().set_input_as_handled()
+			JOY_BUTTON_B:
+				if _handle_nav_back():
+					get_viewport().set_input_as_handled()
+
+# ── Keyboard & Controller Navigation (Hover State) ──────────────────────────
+
+var _nav_active := false
+var _nav_focus: Control = null
+var _nav_last_root_id: int = 0
+var _saved_focus_by_root: Dictionary = {}
+var _stick_dir := Vector2i.ZERO
+var _stick_timer := 0.0
+const STICK_DEADZONE := 0.45
+const STICK_INITIAL_DELAY := 0.26
+const STICK_REPEAT_DELAY := 0.11
+
+func _find_top_modal() -> ModalPopup:
+	var root_vp := get_tree().root
+	if root_vp != null:
+		for i in range(root_vp.get_child_count() - 1, -1, -1):
+			var rch := root_vp.get_child(i)
+			if rch is ModalPopup:
+				return rch as ModalPopup
+			if rch is CanvasLayer:
+				for j in range(rch.get_child_count() - 1, -1, -1):
+					var cch := rch.get_child(j)
+					if cch is ModalPopup:
+						return cch as ModalPopup
+	for i in range(get_child_count() - 1, -1, -1):
+		var ch := get_child(i)
+		if ch is ModalPopup:
+			return ch as ModalPopup
+	return null
+
+func _find_intro_card() -> Control:
+	for i in range(get_child_count() - 1, -1, -1):
+		var ch := get_child(i)
+		if ch is CanvasLayer:
+			for j in range(ch.get_child_count() - 1, -1, -1):
+				var cch := ch.get_child(j)
+				if cch is Control and cch.get_node_or_null("%BeginButton") != null:
+					return cch as Control
+	return null
+
+func _active_nav_root() -> Node:
+	var modal := _find_top_modal()
+	if modal != null:
+		return modal
+	var intro := _find_intro_card()
+	if intro != null:
+		return intro
+	if is_instance_valid(_saves_root) and _saves_root.visible:
+		return _saves_root
+	if is_instance_valid(_menu_root) and _menu_root.visible:
+		return _menu_root
+	return null
+
+func _collect_focusables(n: Node, out: Array[Control]) -> void:
+	if n == null or not is_instance_valid(n):
+		return
+	for ch in n.get_children():
+		if ch is CanvasLayer:
+			_collect_focusables(ch, out)
+			continue
+		if not (ch is Control):
+			continue
+		var c := ch as Control
+		if not c.visible or not c.is_visible_in_tree():
+			continue
+		if c is ListItem:
+			var li := c as ListItem
+			if li.clickable or li.show_stepper:
+				out.append(li)
+			continue
+		if c is LineEdit or c is HSlider:
+			out.append(c)
+			continue
+		if c is BaseButton:
+			var vp := _vp()
+			if c.size.x > vp.x * 0.6 and c.size.y > vp.y * 0.6:
+				continue
+			out.append(c)
+			continue
+		_collect_focusables(c, out)
+
+func _default_focus_for(root: Node, items: Array[Control]) -> Control:
+	if items.is_empty():
+		return null
+	if root == _saves_root and items.size() > 1:
+		return items[1]
+	return items[0]
+
+func _tick_nav(delta: float) -> void:
+	var dc := get_node_or_null("/root/DevConsole")
+	if dc != null and bool(dc.get("_open")):
+		if _nav_active:
+			_clear_nav_focus()
+		return
+	var lx := Input.get_joy_axis(0, JOY_AXIS_LEFT_X)
+	var ly := Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)
+	var new_dir := Vector2i.ZERO
+	if absf(ly) >= STICK_DEADZONE or absf(lx) >= STICK_DEADZONE:
+		if absf(ly) >= absf(lx):
+			new_dir = Vector2i(0, 1 if ly > 0.0 else -1)
+		else:
+			new_dir = Vector2i(1 if lx > 0.0 else -1, 0)
+	if new_dir != Vector2i.ZERO:
+		if new_dir != _stick_dir:
+			_stick_dir = new_dir
+			_stick_timer = STICK_INITIAL_DELAY
+			_handle_nav_dir(Vector2(_stick_dir.x, _stick_dir.y))
+		else:
+			_stick_timer -= delta
+			if _stick_timer <= 0.0:
+				_stick_timer = STICK_REPEAT_DELAY
+				_handle_nav_dir(Vector2(_stick_dir.x, _stick_dir.y))
+	else:
+		_stick_dir = Vector2i.ZERO
+		_stick_timer = 0.0
+
+	if not _nav_active:
+		return
+	var root := _active_nav_root()
+	if root == null:
+		_clear_nav_focus()
+		return
+	var rid := root.get_instance_id()
+	var focus_valid := _nav_focus != null and is_instance_valid(_nav_focus) \
+		and _nav_focus.is_visible_in_tree() and root.is_ancestor_of(_nav_focus)
+	if rid != _nav_last_root_id or not focus_valid:
+		_nav_last_root_id = rid
+		var items: Array[Control] = []
+		_collect_focusables(root, items)
+		var restored: Control = null
+		if _saved_focus_by_root.has(rid):
+			var w: WeakRef = _saved_focus_by_root[rid]
+			var cand = w.get_ref() if w != null else null
+			if cand != null and is_instance_valid(cand) and items.has(cand as Control):
+				restored = cand as Control
+		if restored != null:
+			_set_nav_focus(restored, false)
+		elif not items.is_empty():
+			_set_nav_focus(_default_focus_for(root, items), false)
+		else:
+			_set_nav_focus(null, false)
+
+func _handle_nav_dir(dir: Vector2) -> bool:
+	var root := _active_nav_root()
+	if root == null:
+		return false
+	var items: Array[Control] = []
+	_collect_focusables(root, items)
+	if items.is_empty():
+		return false
+	_nav_active = true
+	_nav_last_root_id = root.get_instance_id()
+	if _nav_focus == null or not is_instance_valid(_nav_focus) or not items.has(_nav_focus):
+		var saved: Control = null
+		if _saved_focus_by_root.has(_nav_last_root_id):
+			var w: WeakRef = _saved_focus_by_root[_nav_last_root_id]
+			var cand = w.get_ref() if w != null else null
+			if cand != null and is_instance_valid(cand) and items.has(cand as Control):
+				saved = cand as Control
+		_set_nav_focus(saved if saved != null else _default_focus_for(root, items), true)
+		return true
+
+	if absf(dir.x) > 0.5 and _nav_focus is HSlider:
+		var sl := _nav_focus as HSlider
+		var step := sl.step if sl.step > 0.0 else (sl.max_value - sl.min_value) * 0.05
+		sl.value = clampf(sl.value + (1.0 if dir.x > 0.0 else -1.0) * step, sl.min_value, sl.max_value)
+		AudioManager.play("hover")
+		return true
+
+	if absf(dir.x) > 0.5 and _nav_focus is OptionButton:
+		var opt := _nav_focus as OptionButton
+		if opt.item_count > 0:
+			opt.selected = posmod(opt.selected + (1 if dir.x > 0.0 else -1), opt.item_count)
+			opt.item_selected.emit(opt.selected)
+		return true
+
+	var cur_rect := _nav_focus.get_global_rect()
+	var cur_c := cur_rect.get_center()
+	var best: Control = null
+	var best_score := INF
+
+	if absf(dir.x) > 0.5:
+		for c in items:
+			if c == _nav_focus:
+				continue
+			var r := c.get_global_rect()
+			var cc := r.get_center()
+			var dx := (cc.x - cur_c.x) * dir.x
+			var dy := absf(cc.y - cur_c.y)
+			if dx <= 4.0 or dy > maxf(cur_rect.size.y, r.size.y) * 1.2:
+				continue
+			var score := dx + dy * 2.0
+			if score < best_score:
+				best_score = score
+				best = c
+	else:
+		for c in items:
+			if c == _nav_focus:
+				continue
+			var r := c.get_global_rect()
+			var cc := r.get_center()
+			var dy := (cc.y - cur_c.y) * dir.y
+			if dy <= 4.0:
+				continue
+			var dx := absf(cc.x - cur_c.x)
+			var score := dy + dx * 0.25
+			if score < best_score:
+				best_score = score
+				best = c
+		if best == null:
+			var idx := items.find(_nav_focus)
+			var next_idx := clampi(idx + (1 if dir.y > 0.0 else -1), 0, items.size() - 1)
+			if next_idx != idx:
+				best = items[next_idx]
+
+	if best != null and best != _nav_focus:
+		_set_nav_focus(best, true)
+	return true
+
+func _set_nav_focus(c: Control, play_sound: bool) -> void:
+	if _nav_focus != null and is_instance_valid(_nav_focus) and _nav_focus != c:
+		_apply_hover_visual(_nav_focus, false)
+	_nav_focus = c
+	if _nav_focus != null and is_instance_valid(_nav_focus):
+		var root := _active_nav_root()
+		if root != null:
+			_saved_focus_by_root[root.get_instance_id()] = weakref(_nav_focus)
+		TooltipManager.set_focus_anchor(_nav_focus)
+		_apply_hover_visual(_nav_focus, true)
+		if play_sound:
+			AudioManager.play("hover")
+	else:
+		TooltipManager.set_focus_anchor(null)
+		TooltipManager.hide_tip()
+
+func _clear_nav_focus() -> void:
+	if _nav_focus != null and is_instance_valid(_nav_focus):
+		_apply_hover_visual(_nav_focus, false)
+	_nav_focus = null
+	_nav_active = false
+	TooltipManager.set_focus_anchor(null)
+	TooltipManager.hide_tip()
+
+func _apply_hover_visual(c: Control, hovered: bool) -> void:
+	if hovered:
+		if c is Button:
+			var hsb := c.get_theme_stylebox(&"hover")
+			if hsb != null:
+				c.add_theme_stylebox_override(&"disabled", hsb)
+				c.set_meta("_nav_disabled_hover", true)
+		c.notification(Control.NOTIFICATION_MOUSE_ENTER)
+		c.mouse_entered.emit()
+	else:
+		if c is Button and c.has_meta("_nav_disabled_hover"):
+			c.remove_theme_stylebox_override(&"disabled")
+			c.remove_meta("_nav_disabled_hover")
+		c.notification(Control.NOTIFICATION_MOUSE_EXIT)
+		c.mouse_exited.emit()
+
+func _activate_focused() -> bool:
+	if _nav_focus == null or not is_instance_valid(_nav_focus) or not _nav_focus.is_visible_in_tree():
+		return false
+	var c := _nav_focus
+	if c is ListItem:
+		var li := c as ListItem
+		if li.clickable:
+			li.pressed.emit()
+			return true
+		if li.show_stepper:
+			li.stepped.emit(1)
+			return true
+		return false
+	if c is OptionButton:
+		var opt := c as OptionButton
+		if opt.item_count > 0:
+			opt.selected = posmod(opt.selected + 1, opt.item_count)
+			opt.item_selected.emit(opt.selected)
+		return true
+	if c is HSlider:
+		return true
+	if c is BaseButton:
+		var btn := c as BaseButton
+		if btn.disabled:
+			AudioManager.play("denied")
+			return true
+		if btn.toggle_mode:
+			btn.button_pressed = not btn.button_pressed
+		btn.pressed.emit()
+		return true
+	return false
+
+func _handle_nav_back() -> bool:
+	var modal := _find_top_modal()
+	if modal != null:
+		if modal.dismissable:
+			AudioManager.play("click")
+			modal.close()
+		return true
+	var intro := _find_intro_card()
+	if intro != null:
+		AudioManager.play("click")
+		if intro.has_method("_close"):
+			intro.call("_close")
+		return true
+	if is_instance_valid(_saves_root) and _saves_root.visible:
 		_close_saves()
-		get_viewport().set_input_as_handled()
+		return true
+	if _nav_active:
+		_clear_nav_focus()
+		return true
+	return false
 
 ## One slot: SLOT n (+ LAST PLAYED), its save in a few lines, PLAY / NEW GAME
 ## and the bin.
