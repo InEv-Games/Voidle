@@ -7,7 +7,7 @@
 shader_type canvas_item;
 
 uniform bool overlay = false;
-uniform float aspect = 1.7778;                          // width / height of the rect
+uniform vec2 scale = vec2(1.7778, 1.0);                 // the rect's size in glow units (stage heights)
 uniform vec4 base_top : source_color = vec4(0.008, 0.010, 0.030, 1.0);
 uniform vec4 base_bottom : source_color = vec4(0.012, 0.030, 0.062, 1.0);
 uniform vec2 glow_pos = vec2(0.80, 0.98);               // behind the planet (UV)
@@ -26,9 +26,9 @@ void fragment() {
 		COLOR = vec4(0.0, 0.0, 0.0, k * vignette);
 	} else {
 		vec3 c = mix(base_top.rgb, base_bottom.rgb, UV.y);
-		vec2 d = (UV - glow_pos) * vec2(aspect, 1.0);
+		vec2 d = (UV - glow_pos) * scale;
 		c += glow_col.rgb * glow_strength * exp(-dot(d, d) / (glow_radius * glow_radius));
-		vec2 w = (UV - warm_pos) * vec2(aspect, 1.0);
+		vec2 w = (UV - warm_pos) * scale;
 		c += warm_col.rgb * warm_strength * exp(-dot(w, w) / 0.45);
 		COLOR = vec4(c, 1.0);
 	}

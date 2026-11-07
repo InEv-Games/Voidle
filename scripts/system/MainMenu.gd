@@ -11,6 +11,8 @@ const GLITCH_STEPS     := 16
 const GLITCH_STEP_DUR  := 0.06
 
 var _planet_rect:   ColorRect
+var _bg:            Control
+var _vignette:      ColorRect
 var _rotation_off:  float = 0.0
 var _font:          Font
 var _version_lbl:   Label
@@ -20,25 +22,62 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	anchor_right  = 1.0
 	anchor_bottom = 1.0
+	_build_backdrop()
 	if Engine.is_editor_hint():
-		_build_bg()
-		_build_stars()
-		_build_system(false)
-		_build_planet()
-		_build_system(true)
-		_build_vignette()
 		return
 	HUDManager.set_game_hud(false)
 	_font = load(ORBITRON) as Font
 
+	_build_menu()
+	_build_version()
+	get_viewport().size_changed.connect(_on_viewport_resized)
+	if _intro_played:
+		_glitch_to(BuildInfo.label())
+	else:
+		_intro_played = true
+		_play_intro()
+
+## The whole backdrop (sun, stars, planets, orbits, vignette) in one holder
+## under the menu, rebuilt from scratch whenever the screen changes shape.
+func _build_backdrop() -> void:
+	for old: Control in [_bg, _vignette]:
+		if is_instance_valid(old):
+			remove_child(old)
+			old.queue_free()
+	_layers.clear()
+	_star_layers.clear()
+	_stars.clear()
+	_bodies.clear()
+	_planet_rect = null
+	_bg = Control.new()
+	_bg.name = "Backdrop"
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_bg)
+	move_child(_bg, 0)
 	_build_bg()
 	_build_stars()
 	_build_system(false)
 	_build_planet()
 	_build_system(true)
 	_build_vignette()
-	_build_menu()
-	_build_version()
+
+var _resize_pending := false
+
+func _on_viewport_resized() -> void:
+	if _resize_pending:
+		return
+	_resize_pending = true
+	_apply_resize.call_deferred()
+
+func _apply_resize() -> void:
+	_resize_pending = false
+	_build_backdrop()
+	if is_instance_valid(_menu_root):
+		_menu_root.position = _menu_pos()
+		_menu_root.custom_minimum_size.x = _vp().x * 0.38
+	if is_instance_valid(_saves_root):
+		_saves_root.position = _menu_pos()
 
 # ── Background ─────────────────────────────────────────────────────────────
 # A planet-rise shot: a big world rises out of the bottom-right corner, lit
@@ -85,27 +124,57 @@ func _vp() -> Vector2:
 			float(ProjectSettings.get_setting("display/window/size/viewport_height")))
 	return get_viewport().get_visible_rect().size
 
+# ── Layout at any aspect ───────────────────────────────────────────────────
+# The shot is composed for 16:9. On another shape it lives on a 16:9 "stage"
+# (the biggest that fits the screen): every size is in stage heights, and each
+# element keeps its offset from the screen point it is anchored to (the sun to
+# the top-left corner, the focus world to the bottom-right…), so on a wide
+# screen they spread apart and on a tall one they hug their own edge, never
+# growing past the screen. At 16:9 stage == screen and nothing moves.
+
+const STAGE_ASPECT := 16.0 / 9.0
+
+## The stage's height (px): the unit every size in the shot is measured in.
+func _unit() -> float:
+	var vp := _vp()
+	return minf(vp.y, vp.x / STAGE_ASPECT)
+
+func _stage() -> Vector2:
+	var u := _unit()
+	return Vector2(u * STAGE_ASPECT, u)
+
+## `frac` (screen shares as composed at 16:9) on this screen, held at its
+## offset from `anchor` (screen shares).
+func _place(frac: Vector2, anchor: Vector2) -> Vector2:
+	return anchor * _vp() + (frac - anchor) * _stage()
+
+func _planet_px() -> Vector2:
+	return _place(PLANET_CENTER, Vector2.ONE)
+
+func _menu_pos() -> Vector2:
+	var vp := _vp()
+	return Vector2(vp.x * 0.07, vp.y * 0.22)
+
 func _add_layer(c: Control, depth: float) -> void:
 	_layers.append([c, c.position, depth])
 
 func _build_bg() -> void:
 	var vp := _vp()
+	var off := Vector2.ONE * PARALLAX_MARGIN
 	var bg := ColorRect.new()
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bg.position = Vector2(-PARALLAX_MARGIN, -PARALLAX_MARGIN)
-	bg.size = vp + Vector2.ONE * PARALLAX_MARGIN * 2.0
+	bg.position = -off
+	bg.size = vp + off * 2.0
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/menu_backdrop.gdshader")
-	mat.set_shader_parameter("aspect", bg.size.x / bg.size.y)
-	mat.set_shader_parameter("glow_pos", Vector2(
-		(vp.x * PLANET_CENTER.x + PARALLAX_MARGIN) / bg.size.x,
-		(vp.y * PLANET_CENTER.y * 0.94 + PARALLAX_MARGIN) / bg.size.y))
-	mat.set_shader_parameter("warm_pos", Vector2(
-		(vp.x * SUN_CENTER.x + PARALLAX_MARGIN) / bg.size.x,
-		(vp.y * SUN_CENTER.y + PARALLAX_MARGIN) / bg.size.y))
+	# glows are measured in stage heights (plus the overhang), not the rect's
+	mat.set_shader_parameter("scale", bg.size / (_unit() + PARALLAX_MARGIN * 2.0))
+	mat.set_shader_parameter("glow_pos",
+		(_place(Vector2(PLANET_CENTER.x, PLANET_CENTER.y * 0.94), Vector2.ONE) + off) / bg.size)
+	mat.set_shader_parameter("warm_pos", (_sun_px() + off) / bg.size)
 	mat.set_shader_parameter("warm_strength", 0.16)
 	bg.material = mat
-	add_child(bg)
+	_bg.add_child(bg)
 	_add_layer(bg, PARALLAX_BACKDROP)
 
 # ── Stars (still, twinkling a little) ──────────────────────────────────────
@@ -113,12 +182,15 @@ func _build_bg() -> void:
 func _build_stars() -> void:
 	var vp := _vp()
 	var area := vp + Vector2.ONE * PARALLAX_MARGIN * 2.0
+	# the counts are for a 16:9 stage: keep the same density on any shape
+	var ref := _stage() + Vector2.ONE * PARALLAX_MARGIN * 2.0
+	var density := (area.x * area.y) / (ref.x * ref.y)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7331
 	for li in STAR_LAYERS.size():
 		var spec: Array = STAR_LAYERS[li]
 		var list := []
-		for i in int(spec[0]):
+		for i in roundi(float(spec[0]) * density):
 			var sz_range: Vector2 = spec[1]
 			var a_range: Vector2 = spec[2]
 			list.append([Vector2(rng.randf() * area.x, rng.randf() * area.y),
@@ -132,7 +204,7 @@ func _build_stars() -> void:
 		layer.size = area
 		var cap := li
 		layer.draw.connect(func() -> void: _draw_stars(layer, cap))
-		add_child(layer)
+		_bg.add_child(layer)
 		_star_layers.append(layer)
 		_add_layer(layer, float(PARALLAX_STARS[li]))
 
@@ -145,6 +217,7 @@ func _draw_stars(layer: Control, li: int) -> void:
 ## A vignette over the whole shot (planet included), under the menu.
 func _build_vignette() -> void:
 	var v := ColorRect.new()
+	_vignette = v
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var mat := ShaderMaterial.new()
@@ -152,6 +225,7 @@ func _build_vignette() -> void:
 	mat.set_shader_parameter("overlay", true)
 	v.material = mat
 	add_child(v)
+	move_child(v, _bg.get_index() + 1)
 
 ## The globe's radius on screen (px): the shader's planet_radius share of the rect.
 func _planet_radius_px() -> float:
@@ -219,12 +293,13 @@ const ORBIT_ALPHA := Vector2(0.05, 0.20)   # line alpha: far from / at its body
 ## The slow camera drift, in mouse shares (amount) and rad/s (speed).
 const DRIFT_AMOUNT := Vector2(0.16, 0.10)
 const DRIFT_SPEED := Vector2(0.085, 0.061)
-## Bodies: type, seed, centre (screen shares), globe diameter (screen-height
-## share), depth (planet radii behind the focus world's centre; < 0 in front),
-## spin rad/s, ringed, in front of the focus world.
+## Bodies: type, seed, centre (screen shares at 16:9), globe diameter
+## (stage-height share), depth (planet radii behind the focus world's centre;
+## < 0 in front), spin rad/s, ringed, in front of the focus world, and the
+## screen point it is held to on other shapes (see _place).
 const BODIES := [
-	[PlanetData.Type.GAS_GIANT, 8803, Vector2(0.600, 0.200), 0.190, 3.0,  0.008, true,  false],
-	[PlanetData.Type.MOON,      5519, Vector2(0.505, 0.615), 0.085, -0.9, 0.015, false, true],
+	[PlanetData.Type.GAS_GIANT, 8803, Vector2(0.600, 0.200), 0.190, 3.0,  0.008, true,  false, Vector2(0.5, 0.0)],
+	[PlanetData.Type.MOON,      5519, Vector2(0.505, 0.615), 0.085, -0.9, 0.015, false, true,  Vector2(1.0, 1.0)],
 ]
 const GLOBE_FILL := 0.42   # planet_radius: the globe's share of its rect
 ## Every planet and moon (rings too) is drawn at this brightness; the sun isn't.
@@ -275,27 +350,24 @@ func _add_ao(parent: Node, centre: Vector2, r: float, light: Vector2, px: float,
 var _bodies: Array = []    # [ShaderMaterial, spin rad/s, rotation]
 
 func _sun_px() -> Vector2:
-	var vp := _vp()
-	return Vector2(vp.x * SUN_CENTER.x, vp.y * SUN_CENTER.y)
+	return _place(SUN_CENTER, Vector2.ZERO)
 
 ## The far half (sun, orbits, far bodies) or the near half (bodies in front).
 func _build_system(front: bool) -> void:
-	var vp := _vp()
 	if not front:
-		_build_sun(vp)
+		_build_sun()
 		# the focus world's own orbit, fixed with it
-		_build_orbit(Vector2(vp.x * PLANET_CENTER.x, vp.y * PLANET_CENTER.y), 0.0)
+		_build_orbit(_planet_px(), 0.0)
 	for spec: Array in BODIES:
 		if bool(spec[7]) != front:
 			continue
-		var c: Vector2 = spec[2]
-		var centre := Vector2(vp.x * c.x, vp.y * c.y)
+		var centre := _place(spec[2], spec[8])
 		if not front:
 			_build_orbit(centre, float(spec[4]))
-		_build_body(spec, centre, vp)
+		_build_body(spec, centre)
 
-func _build_sun(vp: Vector2) -> void:
-	var side := vp.y * SUN_H_FRAC
+func _build_sun() -> void:
+	var side := _unit() * SUN_H_FRAC
 	var sun := ColorRect.new()
 	sun.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	sun.size = Vector2(side, side)
@@ -308,7 +380,7 @@ func _build_sun(vp: Vector2) -> void:
 	mat.set_shader_parameter("flicker_speed", 0.25)
 	mat.set_shader_parameter("seed", 911)
 	sun.material = mat
-	add_child(sun)
+	_bg.add_child(sun)
 	_add_layer(sun, SUN_DEPTH)
 
 ## A faint ellipse about the sun through `through`, on that body's depth.
@@ -335,26 +407,26 @@ func _build_orbit(through: Vector2, depth: float) -> void:
 		cols.append(Color(line, a))
 	layer.draw.connect(func() -> void: layer.draw_polyline_colors(pts, cols, 1.0))
 	layer.modulate = _depth_tint(depth * 0.5)
-	add_child(layer)
+	_bg.add_child(layer)
 	_add_layer(layer, depth)
 
 ## One body: a holder at its depth with the ring's far half, the globe, and
 ## the ring's near half.
-func _build_body(spec: Array, centre: Vector2, vp: Vector2) -> void:
+func _build_body(spec: Array, centre: Vector2) -> void:
 	var type: PlanetData.Type = spec[0]
 	var data: PlanetData
 	match type:
 		PlanetData.Type.GAS_GIANT: data = PlanetData.make_gas_giant(int(spec[1]))
 		PlanetData.Type.MOON:      data = PlanetData.make_moon(int(spec[1]))
 		_:                         data = PlanetData.from_seed_as_type(int(spec[1]), type)
-	var disc := vp.y * float(spec[3])
+	var disc := _unit() * float(spec[3])
 	var side := disc / (GLOBE_FILL * 2.0)
 
 	var holder := Control.new()
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.position = centre
 	holder.modulate = _depth_tint(float(spec[4])) * Color(PLANET_BRIGHTNESS, PLANET_BRIGHTNESS, PLANET_BRIGHTNESS)
-	add_child(holder)
+	_bg.add_child(holder)
 	_add_layer(holder, float(spec[4]))
 
 	var ringed := bool(spec[6])
@@ -437,16 +509,15 @@ func _body_material(data: PlanetData, side: float, light: Vector3) -> ShaderMate
 # ── Planet ─────────────────────────────────────────────────────────────────
 
 func _build_planet() -> void:
-	var vp := _vp()
-	var side := vp.y * PLANET_H_FRAC
+	var side := _unit() * PLANET_H_FRAC
 
 	_planet_rect = ColorRect.new()
 	_planet_rect.custom_minimum_size = Vector2(side, side)
 	_planet_rect.size                = Vector2(side, side)
 	# rising out of the bottom-right corner (centre below the screen's edge)
-	_planet_rect.position = Vector2(vp.x * PLANET_CENTER.x, vp.y * PLANET_CENTER.y) - Vector2(side, side) * 0.5
+	_planet_rect.position = _planet_px() - Vector2(side, side) * 0.5
 	_planet_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_planet_rect)
+	_bg.add_child(_planet_rect)
 
 	var data := PlanetData.from_seed_no_minor(7331)
 	# Force a nice terran planet for the main menu
@@ -492,36 +563,32 @@ func _build_planet() -> void:
 
 	_update_light(mat)
 	_planet_rect.material = mat
-	_add_ao(self, _planet_rect.position + _planet_rect.size * 0.5, base_radius * side,
+	_add_ao(_bg, _planet_rect.position + _planet_rect.size * 0.5, base_radius * side,
 		Vector2(LIGHT_DIR.x, LIGHT_DIR.y).normalized(), side / pcount)
 
 # ── Menu UI ────────────────────────────────────────────────────────────────
+
+const MENU_CAPTION := "Project Type VI"
+const MENU_TITLE_SIZE := 64   # VOIDLE, well over the theme's HeaderHero (36)
+const MENU_BUTTON_W := 260.0
 
 func _build_menu() -> void:
 	var vp := _vp()
 
 	var root := VBoxContainer.new()
-	root.position               = Vector2(vp.x * 0.07, vp.y * 0.22)
+	root.position               = _menu_pos()
 	root.custom_minimum_size    = Vector2(vp.x * 0.38, 0.0)
 	root.add_theme_constant_override("separation", 10)
 	add_child(root)
 	_menu_root = root
 
-	# Title
-	var title := Label.new()
-	title.text = "VOIDLE"
-	if _font: title.add_theme_font_override("font", _font)
-	title.add_theme_font_size_override("font_size", 54)
-	title.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
-	root.add_child(title)
-
-	# Subtitle
-	var sub := Label.new()
-	sub.text = "An idle space empire"
-	if _font: sub.add_theme_font_override("font", _font)
-	sub.add_theme_font_size_override("font_size", 12)
-	sub.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
-	root.add_child(sub)
+	# Title: the hero header ("Project Type VI" over a big VOIDLE and its rule),
+	# at least as wide as the buttons under it
+	var hero := HeroHeader.create(MENU_CAPTION, "VOIDLE", MENU_TITLE_SIZE)
+	hero.custom_minimum_size.x = MENU_BUTTON_W
+	hero.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	(hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF   # one line; the rule takes its width
+	root.add_child(hero)
 
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(0, 28)
@@ -556,7 +623,7 @@ const MENU_ICONS := {"PLAY": "new", "PLAY DEMO": "new", "SETTINGS": "settings", 
 func _add_button(parent: Control, label: String, cb: Callable) -> Button:
 	var btn := IconButton.create(label, MENU_ICONS.get(label, "unknown"))
 	btn.font_size = 12
-	btn.min_size = Vector2(260, 36)
+	btn.min_size = Vector2(MENU_BUTTON_W, 36)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	btn.pressed.connect(cb)
 	parent.add_child(btn)
@@ -580,7 +647,6 @@ func _build_version() -> void:
 	_version_lbl.offset_bottom = -14.0
 	_version_lbl.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	add_child(_version_lbl)
-	_glitch_to(BuildInfo.label())
 
 func _glitch_to(target: String) -> void:
 	var rng   := RandomNumberGenerator.new()
@@ -604,6 +670,127 @@ func _glitch_to(target: String) -> void:
 	if is_instance_valid(_version_lbl):
 		_version_lbl.text = target
 
+# ── Opening credits ────────────────────────────────────────────────────────
+# Only on the game's first open (not when coming back from a game): the menu's
+# shot comes up dimmed with the studio logos side by side in the middle and no
+# menu. Then, over INTRO_REVEAL seconds, the logos fade, the dim lifts and the
+# menu rows blink in. Any key, click or pad button skips straight to that
+# reveal.
+
+## Logos left to right: texture, its content (px, cropped to), drawn on black.
+const CREDIT_LOGOS := [
+	["res://resources/InEvCreativeLogotype-Beyaz.png", Rect2(72, 78, 1436, 623), false],
+	["res://resources/iBright Games Logo.png", Rect2(73, 281, 833, 380), true],
+]
+const LOGO_H := 0.14          # a logo's height, as a share of the stage height
+const LOGO_GAP := 0.06        # between the logos (stage heights), a hairline in it
+const INTRO_DIM := 0.35       # black over the shot while the logos show
+const INTRO_LEAD := 0.5       # s before the logos come in (the scene's own fade-in)
+const LOGO_FADE_IN := 0.8
+const LOGO_HOLD := 2.2
+const INTRO_REVEAL := 3.0     # the logos-to-menu transition
+const LOGO_FADE_OUT := 0.9    # at the reveal's start
+const INTRO_MENU_AT := 1.8    # s into the reveal the menu rows start
+
+static var _intro_played := false
+var _intro: Control
+var _intro_logos: Control
+var _intro_tween: Tween
+var _intro_active := false
+var _intro_revealing := false
+
+func _play_intro() -> void:
+	_intro_active = true
+	_menu_root.modulate.a = 0.0
+	_intro = Control.new()
+	_intro.name = "Credits"
+	_intro.mouse_filter = Control.MOUSE_FILTER_STOP
+	_intro.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_intro)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, INTRO_DIM)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_intro.add_child(dim)
+
+	var u := _unit()
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", roundi(u * LOGO_GAP * 0.5))
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_intro.add_child(row)
+	_intro_logos = row
+	for i in CREDIT_LOGOS.size():
+		var spec: Array = CREDIT_LOGOS[i]
+		if i > 0:
+			var line := ColorRect.new()
+			line.color = Color(UIStyle.color(&"text_muted"), 0.5)
+			line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			line.custom_minimum_size = Vector2(1, u * LOGO_H * 0.8)
+			line.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			row.add_child(line)
+		var tex := AtlasTexture.new()
+		tex.atlas = load(spec[0]) as Texture2D
+		tex.region = spec[1]
+		var logo := TextureRect.new()
+		logo.texture = tex
+		logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		logo.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		var h := u * LOGO_H
+		logo.custom_minimum_size = Vector2(h * tex.region.size.x / tex.region.size.y, h)
+		logo.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		if bool(spec[2]):
+			var mat := ShaderMaterial.new()
+			mat.shader = preload("res://shaders/black_to_alpha.gdshader")
+			logo.material = mat
+		row.add_child(logo)
+	row.modulate.a = 0.0
+
+	_intro_tween = create_tween()
+	_intro_tween.tween_interval(INTRO_LEAD)
+	_intro_tween.tween_property(row, "modulate:a", 1.0, LOGO_FADE_IN) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_intro_tween.tween_interval(LOGO_HOLD)
+	_intro_tween.tween_callback(_reveal_menu)
+
+func _is_skip_press(event: InputEvent) -> bool:
+	if event is InputEventKey:
+		return (event as InputEventKey).pressed and not (event as InputEventKey).echo
+	if event is InputEventMouseButton:
+		return (event as InputEventMouseButton).pressed
+	if event is InputEventJoypadButton:
+		return (event as InputEventJoypadButton).pressed
+	return false
+
+## The logos-to-menu transition (INTRO_REVEAL s).
+func _reveal_menu() -> void:
+	if _intro_revealing:
+		return
+	_intro_revealing = true
+	if _intro_tween != null and _intro_tween.is_valid():
+		_intro_tween.kill()
+	var tw := create_tween().set_parallel()
+	tw.tween_property(_intro_logos, "modulate:a", 0.0, LOGO_FADE_OUT * _intro_logos.modulate.a) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.tween_property(_intro, "modulate:a", 0.0, INTRO_REVEAL) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_callback(_reveal_menu_rows).set_delay(INTRO_MENU_AT)
+	tw.chain().tween_callback(_end_intro)
+
+func _reveal_menu_rows() -> void:
+	_menu_root.modulate.a = 1.0
+	RowReveal.play(_menu_root, MENU_REVEAL_SLOW, false, MENU_BLINK_SOUND)
+	_glitch_to(BuildInfo.label())
+
+func _end_intro() -> void:
+	_intro_active = false
+	if is_instance_valid(_intro):
+		_intro.queue_free()
+	_intro = null
+
 # ── Planet animation ───────────────────────────────────────────────────────
 
 func _update_light(mat: ShaderMaterial) -> void:
@@ -611,7 +798,7 @@ func _update_light(mat: ShaderMaterial) -> void:
 
 func _process(delta: float) -> void:
 	_tick_backdrop(delta)
-	if not Engine.is_editor_hint():
+	if not Engine.is_editor_hint() and not _intro_active:
 		_tick_nav(delta)
 	if _planet_rect == null or _planet_rect.material == null:
 		return
@@ -670,6 +857,12 @@ func _close_saves() -> void:
 
 func _input(event: InputEvent) -> void:
 	if Engine.is_editor_hint():
+		return
+	if _intro_active:
+		if not _intro_revealing and _is_skip_press(event):
+			_reveal_menu()
+		if not (event is InputEventMouseMotion):
+			get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseMotion:
 		if _nav_active and (event as InputEventMouseMotion).relative.length_squared() > 4.0:
