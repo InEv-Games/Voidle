@@ -722,84 +722,12 @@ func _update_shortcut_fallback() -> void:
 		return
 	science_panel.visible = get_tree().get_nodes_in_group(LeftPanel.GROUP).is_empty()
 
+## An achievement is told in the news bar (an event, its description on
+## hover) — no popup panel of its own.
 func _on_achievement_unlocked(def) -> void:
 	AudioManager.play("achievement", 2.0)
-	# Build a gold-bordered achievement popup anchored bottom-right
-	var overlay := CanvasLayer.new()
-	overlay.layer = 240
-	get_tree().root.add_child(overlay)
-
-	var panel := PanelContainer.new()
-	panel.theme_type_variation = &"TooltipPanel"
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 10)
-	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(hbox)
-
-	var icon_lbl := Label.new()
-	icon_lbl.text = def.icon if def.icon != "" else "★"
-	if _orbitron: icon_lbl.add_theme_font_override("font", _orbitron)
-	icon_lbl.add_theme_font_size_override("font_size", 24)
-	icon_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
-	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(icon_lbl)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hbox.add_child(vbox)
-
-	var header := Label.new()
-	header.text = "Achievement Unlocked"
-	if _orbitron: header.add_theme_font_override("font", _orbitron)
-	header.add_theme_font_size_override("font_size", 9)
-	header.add_theme_color_override("font_color", Color(UIStyle.color(&"neutral_stroke"), 0.75))
-	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(header)
-
-	var title_lbl := Label.new()
-	title_lbl.text = def.title
-	if _orbitron: title_lbl.add_theme_font_override("font", _orbitron)
-	title_lbl.add_theme_font_size_override("font_size", 13)
-	title_lbl.add_theme_color_override("font_color", UIStyle.color(&"neutral_stroke"))
-	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(title_lbl)
-
-	if def.description != "":
-		var desc_lbl := Label.new()
-		desc_lbl.text = def.description
-		if _orbitron: desc_lbl.add_theme_font_override("font", _orbitron)
-		desc_lbl.add_theme_font_size_override("font_size", 9)
-		desc_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text_subtle"), 0.85))
-		desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		vbox.add_child(desc_lbl)
-
-	panel.anchor_right  = 1.0
-	panel.anchor_bottom = 1.0
-	panel.anchor_left   = 1.0
-	panel.anchor_top    = 1.0
-	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	panel.grow_vertical   = Control.GROW_DIRECTION_BEGIN
-	var above := 12.0   # bottom-right corner (the shortcut row is on the left)
-	panel.offset_right  = -12.0
-	panel.offset_bottom = -above
-	overlay.add_child(panel)
-
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var h := panel.size.y
-	panel.offset_bottom = -above
-	panel.offset_top    = panel.offset_bottom - h
-
-	# Slide in, hold, fade out
-	panel.modulate = Color(1, 1, 1, 0)
-	var tw := panel.create_tween()
-	tw.tween_property(panel, "modulate", Color(1, 1, 1, 1), 0.35).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(3.5)
-	tw.tween_property(panel, "modulate", Color(1, 1, 1, 0), 0.6).set_ease(Tween.EASE_IN)
-	tw.tween_callback(func() -> void: overlay.queue_free())
+	NewsFeed.post("Achievement unlocked: %s." % def.title, NewsFeed.Kind.EVENT,
+		def.description, "Achievement  //  %s" % def.title)
 
 ## The Upgrade Tree button the player can see (the LeftPanel's, else the HUD's).
 func _visible_skill_btn() -> Button:
