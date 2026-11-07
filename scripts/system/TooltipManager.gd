@@ -34,6 +34,14 @@ var _lock_at := Vector2.ZERO
 ## The last show_tip was refused (a locked tip under the mouse); its follow-up
 ## calls (set_title_icon …) are refused too.
 var _ignored := false
+## Optional keyboard / controller focus anchor: when set, the tooltip is placed
+## beside this control instead of following the mouse cursor.
+var _focus_anchor: Control = null
+
+func set_focus_anchor(c: Control) -> void:
+	_focus_anchor = c
+	if c != null:
+		_unlock()
 
 ## Where a locked tip stays open: the tip itself, a small area where the mouse
 ## rested when it locked, and the corridor between them.
@@ -259,19 +267,23 @@ func _process(delta: float) -> void:
 		if not _lock_zone().has_point(get_viewport().get_mouse_position()) and _since_lock > LOCK_GRACE:
 			_hide_timer = 0.12
 		return
+	var use_anchor := _focus_anchor != null and is_instance_valid(_focus_anchor) and _focus_anchor.is_visible_in_tree()
 	# only a resting mouse charges the lock (tips that follow a moving mouse —
 	# the lens, the news — never lock under it)
 	var m := get_viewport().get_mouse_position()
-	if m.distance_to(_last_mouse) > 3.0:
+	if use_anchor:
 		_charge = 0.0
-	_last_mouse = m
-	_charge += delta
-	if _charge >= LOCK_DELAY + LOCK_SEC:
-		_locked = true
-		_since_lock = 0.0
-		_lock_at = m
-		_hbox.mouse_filter = Control.MOUSE_FILTER_STOP   # the mouse may rest on it
-		_panel.set_terms_active(true)   # its underlined terms open nested tips now
+	else:
+		if m.distance_to(_last_mouse) > 3.0:
+			_charge = 0.0
+		_last_mouse = m
+		_charge += delta
+		if _charge >= LOCK_DELAY + LOCK_SEC:
+			_locked = true
+			_since_lock = 0.0
+			_lock_at = m
+			_hbox.mouse_filter = Control.MOUSE_FILTER_STOP   # the mouse may rest on it
+			_panel.set_terms_active(true)   # its underlined terms open nested tips now
 	_ring.queue_redraw()
 	# get_combined_minimum_size() is synchronous — no frame delay needed
 	var root_node := _panel.get_parent() as Control
@@ -283,15 +295,25 @@ func _process(delta: float) -> void:
 	var ph: float = sz.y
 	if pw <= 1.0 or ph <= 1.0:
 		return
-	var mouse := get_viewport().get_mouse_position()
 	var vp    := get_viewport().get_visible_rect().size
-	var pos := mouse + Vector2(10, -ph - 8.0)
-	var should_flip := pos.x + pw > vp.x
-	if should_flip:
-		# Flip to the left of the mouse so it doesn't block clicks!
-		pos.x = mouse.x - pw - 10.0
-	if pos.x < 4.0:       pos.x = 4.0
-	if pos.y < 4.0:       pos.y = mouse.y + 14.0
+	var pos := Vector2.ZERO
+	var should_flip := false
+	if use_anchor:
+		var ar := _focus_anchor.get_global_rect()
+		pos = Vector2(ar.end.x + 12.0, ar.position.y)
+		should_flip = pos.x + pw > vp.x - 4.0
+		if should_flip:
+			pos.x = maxf(4.0, ar.position.x - pw - 12.0)
+		pos.y = clampf(pos.y, 4.0, maxf(4.0, vp.y - ph - 4.0))
+	else:
+		var mouse := get_viewport().get_mouse_position()
+		pos = mouse + Vector2(10, -ph - 8.0)
+		should_flip = pos.x + pw > vp.x
+		if should_flip:
+			# Flip to the left of the mouse so it doesn't block clicks!
+			pos.x = mouse.x - pw - 10.0
+		if pos.x < 4.0:       pos.x = 4.0
+		if pos.y < 4.0:       pos.y = mouse.y + 14.0
 	root_node.position = pos
 	root_node.visible  = true
 	_ring.visible = _locked or _charge > LOCK_DELAY   # nothing before the charge starts

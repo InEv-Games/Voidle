@@ -30,7 +30,7 @@ const PRICE_W := 56.0
 const TARGET_W := 42.0
 const BTN_W := 40.0
 const GAP := 4
-const MODE_GLYPH := {"off": "–", "sell": "▼", "buy": "▲", "keep": "◆"}
+const MODE_GLYPH := {"off": "–", "sell": "▼", "buy": "▲", "keep": "■"}
 ## The small line under BACK: a bit of the market's life, one picked per opening.
 const MARKET_LINES := [
 	"Haulers dock and undock all day; every crate you trade moves the board.",
@@ -178,8 +178,9 @@ func _show_trade_tip() -> void:
 	var pname := Economy.display_name(id)
 	var lines: Array[String] = []
 	# the three click sizes on top, the one in force lit
-	var mode := 2 if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META) \
-		else (1 if Input.is_key_pressed(KEY_SHIFT) else 0)
+	var is_all := Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META) or _joy_shoulder(true)
+	var is_x10 := Input.is_key_pressed(KEY_SHIFT) or _joy_shoulder(false)
+	var mode := 2 if is_all else (1 if is_x10 else 0)
 	var opts: Array[String] = []
 	for i in 3:
 		opts.append(("[color=#%s]%s[/color]" % [UIStyle.hex(&"text_bright"), ["one lot", "Shift ×10", "Ctrl/Cmd all"][i]]) if i == mode else ["one lot", "Shift ×10", "Ctrl/Cmd all"][i])
@@ -261,11 +262,18 @@ static func _nice(v: float) -> float:
 	var f := v / mag
 	return (5.0 if f >= 5.0 else (2.0 if f >= 2.0 else 1.0)) * mag
 
-## Units a click trades: one lot, ×10 with Shift, everything with Ctrl / Cmd.
+static func _joy_shoulder(right: bool) -> bool:
+	var btn := JOY_BUTTON_RIGHT_SHOULDER if right else JOY_BUTTON_LEFT_SHOULDER
+	for d in Input.get_connected_joypads():
+		if Input.is_joy_button_pressed(d, btn):
+			return true
+	return false
+
+## Units a click trades: one lot, ×10 with Shift/LB, everything with Ctrl/Cmd/RB.
 static func _click_qty(id: String, selling: bool) -> float:
-	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META):
+	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META) or _joy_shoulder(true):
 		return Trade.sellable(id) if selling else Trade.max_buy(id)
-	return lot(id) * (10.0 if Input.is_key_pressed(KEY_SHIFT) else 1.0)
+	return lot(id) * (10.0 if (Input.is_key_pressed(KEY_SHIFT) or _joy_shoulder(false)) else 1.0)
 
 ## A fixed-size control: never grows with its content.
 static func _fixed(c: Control, w: float, h: float = ROW_H) -> Control:
@@ -427,6 +435,7 @@ func _product_row(id: String) -> Control:
 func _open_mode_menu(anchor: Control, id: String, apply: Callable) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 490
+	layer.set_meta("left_panel_dropdown", true)
 	get_tree().root.add_child(layer)
 	var shade := Control.new()
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
