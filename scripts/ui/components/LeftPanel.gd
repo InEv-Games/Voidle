@@ -95,7 +95,6 @@ func _ready() -> void:
 	var hud := get_node_or_null("/root/HUDManager")
 	if hud != null:
 		hud.fill_shortcuts(_shortcuts)
-	_setup_nav_overlay()
 	_place()
 	reveal()   # the view's first menu
 
@@ -542,34 +541,11 @@ var _nav_active := false
 var _nav_focus: Control = null
 var _nav_last_root_id: int = 0
 var _saved_focus_by_root: Dictionary = {}   # root instance_id -> WeakRef(Control)
-var _focus_layer: CanvasLayer = null
-var _focus_overlay: Control = null
 var _stick_dir := Vector2i.ZERO
 var _stick_timer := 0.0
 const STICK_DEADZONE := 0.45
 const STICK_INITIAL_DELAY := 0.26
 const STICK_REPEAT_DELAY := 0.11
-
-func _setup_nav_overlay() -> void:
-	_focus_layer = CanvasLayer.new()
-	_focus_layer.layer = 495
-	add_child(_focus_layer)
-	_focus_overlay = Control.new()
-	_focus_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_focus_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_focus_overlay.draw.connect(_draw_nav_focus)
-	_focus_layer.add_child(_focus_overlay)
-
-func _draw_nav_focus() -> void:
-	if not _nav_active or _nav_focus == null or not is_instance_valid(_nav_focus):
-		return
-	if not _nav_focus.is_visible_in_tree():
-		return
-	var r := _nav_focus.get_global_rect().grow(2.0)
-	var pulse := 0.78 + 0.22 * sin(Time.get_ticks_msec() * 0.008)
-	var col := Color(0.35, 0.92, 1.0, pulse)
-	_focus_overlay.draw_rect(r.grow(1.0), Color(col.r, col.g, col.b, 0.18 * pulse), false, 2.0)
-	_focus_overlay.draw_rect(r, col, false, 1.5)
 
 func _nav_blocked() -> bool:
 	if not is_visible_in_tree() or GameState.showcase_mode:
@@ -698,8 +674,6 @@ func _tick_nav(delta: float) -> void:
 			_set_nav_focus(items[0], false)
 		else:
 			_set_nav_focus(null, false)
-	if _focus_overlay != null:
-		_focus_overlay.queue_redraw()
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -897,7 +871,7 @@ func _handle_nav_dir(dir: Vector2) -> bool:
 
 func _set_nav_focus(c: Control, play_sound: bool) -> void:
 	if _nav_focus != null and is_instance_valid(_nav_focus) and _nav_focus != c:
-		_nav_focus.mouse_exited.emit()
+		_apply_hover_visual(_nav_focus, false)
 	_nav_focus = c
 	if _nav_focus != null and is_instance_valid(_nav_focus):
 		var root := _active_nav_root()
@@ -905,24 +879,36 @@ func _set_nav_focus(c: Control, play_sound: bool) -> void:
 			_saved_focus_by_root[root.get_instance_id()] = weakref(_nav_focus)
 		_scroll_into_view(_nav_focus)
 		TooltipManager.set_focus_anchor(_nav_focus)
-		_nav_focus.mouse_entered.emit()
+		_apply_hover_visual(_nav_focus, true)
 		if play_sound:
 			AudioManager.play("hover")
 	else:
 		TooltipManager.set_focus_anchor(null)
 		TooltipManager.hide_tip()
-	if _focus_overlay != null:
-		_focus_overlay.queue_redraw()
 
 func _clear_nav_focus() -> void:
 	if _nav_focus != null and is_instance_valid(_nav_focus):
-		_nav_focus.mouse_exited.emit()
+		_apply_hover_visual(_nav_focus, false)
 	_nav_focus = null
 	_nav_active = false
 	TooltipManager.set_focus_anchor(null)
 	TooltipManager.hide_tip()
-	if _focus_overlay != null:
-		_focus_overlay.queue_redraw()
+
+func _apply_hover_visual(c: Control, hovered: bool) -> void:
+	if hovered:
+		if c is Button:
+			var hsb := c.get_theme_stylebox(&"hover")
+			if hsb != null:
+				c.add_theme_stylebox_override(&"disabled", hsb)
+				c.set_meta("_nav_disabled_hover", true)
+		c.notification(Control.NOTIFICATION_MOUSE_ENTER)
+		c.mouse_entered.emit()
+	else:
+		if c is Button and c.has_meta("_nav_disabled_hover"):
+			c.remove_theme_stylebox_override(&"disabled")
+			c.remove_meta("_nav_disabled_hover")
+		c.notification(Control.NOTIFICATION_MOUSE_EXIT)
+		c.mouse_exited.emit()
 
 func _scroll_into_view(c: Control) -> void:
 	var p := c.get_parent()
