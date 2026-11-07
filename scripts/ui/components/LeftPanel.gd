@@ -726,6 +726,10 @@ func _input(event: InputEvent) -> void:
 				_handle_nav_back()
 				get_viewport().set_input_as_handled()
 			return
+		if not ke.echo and (k == KEY_TAB or pk == KEY_TAB):
+			if _toggle_panel():
+				get_viewport().set_input_as_handled()
+			return
 		var dir := Vector2.ZERO
 		if k == KEY_UP or pk == KEY_W:
 			dir = Vector2(0, -1)
@@ -792,6 +796,27 @@ func _input(event: InputEvent) -> void:
 			JOY_BUTTON_X:
 				if _nav_active and _context_focused():
 					get_viewport().set_input_as_handled()
+
+var _self_slide_tw: Tween = null
+
+func _toggle_panel() -> bool:
+	var scene := get_tree().current_scene
+	if scene != null and scene.has_method("_set_panel_open"):
+		var now_open := not bool(scene.get("_panel_open"))
+		AudioManager.play("click")
+		if not now_open:
+			_clear_nav_focus()
+		scene.call("_set_panel_open", now_open)
+		return true
+	var now_open := slide_t < 0.5
+	AudioManager.play("click")
+	if not now_open:
+		_clear_nav_focus()
+	if _self_slide_tw != null and _self_slide_tw.is_valid():
+		_self_slide_tw.kill()
+	_self_slide_tw = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_self_slide_tw.tween_method(set_slide, slide_t, 1.0 if now_open else 0.0, 0.9)
+	return true
 
 func _handle_nav_dir(dir: Vector2) -> bool:
 	var scene := get_tree().current_scene

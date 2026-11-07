@@ -1150,6 +1150,11 @@ func _input(event: InputEvent) -> void:
 	if force_pressed and _try_force_buy():
 		get_viewport().set_input_as_handled()
 		return
+	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
+			and _key_spin_allowed() and not GameState.showcase_mode:
+		if _try_lens_hotkey(event as InputEventKey):
+			get_viewport().set_input_as_handled()
+			return
 	# the Upgrade Tree owns the input; the docked Trade panel only where it is
 	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()):
 		if not _rmb.is_empty() and _rmb["drag"]:
@@ -5393,6 +5398,45 @@ func _lens_menu_input(event: InputEvent) -> bool:
 		if not on_menu and not on_btn:
 			_set_lens_menu(false)   # the click still goes through
 	return false
+
+## Number keys 1..5 toggle the 5 surface lenses (Energy, Population, Production,
+## Science, Commercial); 0 or ` returns to Normal.
+func _try_lens_hotkey(ke: InputEventKey) -> bool:
+	if current_data == null or not FeatureMap.has_map(current_data.seed):
+		return false
+	var k := ke.keycode if ke.keycode != KEY_NONE else ke.physical_keycode
+	var pk := ke.physical_keycode if ke.physical_keycode != KEY_NONE else ke.keycode
+	if k == KEY_0 or k == KEY_KP_0 or pk == KEY_0 or pk == KEY_QUOTELEFT:
+		if _role != "":
+			AudioManager.play("click")
+			_set_role("")
+			_set_lens_menu(false)
+		return true
+	var idx := -1
+	if k == KEY_1 or k == KEY_KP_1 or pk == KEY_1:
+		idx = 0
+	elif k == KEY_2 or k == KEY_KP_2 or pk == KEY_2:
+		idx = 1
+	elif k == KEY_3 or k == KEY_KP_3 or pk == KEY_3:
+		idx = 2
+	elif k == KEY_4 or k == KEY_KP_4 or pk == KEY_4:
+		idx = 3
+	elif k == KEY_5 or k == KEY_KP_5 or pk == KEY_5:
+		idx = 4
+	if idx < 0:
+		return false
+	var roles := FeatureMap.ROLES.keys()
+	if idx >= roles.size():
+		return false
+	if not GameState.is_scanned(current_data.seed):
+		AudioManager.play("error")
+		_show_unlock_toast("Not scanned yet", "Scan this world's surface from orbit to use its lenses.")
+		return true
+	var target_role := String(roles[idx])
+	AudioManager.play("click")
+	_set_role("" if _role == target_role else target_role)
+	_set_lens_menu(false)
+	return true
 
 ## With a lens on, hovering the globe tells what that spot gives the role:
 ## "Production here  +30%" and the features behind it (on them full, near half).
