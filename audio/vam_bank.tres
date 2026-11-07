@@ -17,6 +17,7 @@
 [ext_resource type="Resource" uid="uid://b2gb4eanu736e" path="res://audio/events/ui/LeftPanel_Close.tres" id="15_n627e"]
 [ext_resource type="Resource" uid="uid://bllulhjoole10" path="res://audio/events/ui/blink.tres" id="16_m0efa"]
 [ext_resource type="Resource" uid="uid://bf0igdgw0c2gh" path="res://audio/events/ui/click.tres" id="17_456yr"]
+[ext_resource type="Resource" uid="uid://j2whw31cmnus" path="res://audio/events/ui/popup.tres" id="19_1nyl2"]
 [ext_resource type="Resource" uid="uid://dsb3ct1e6hthh" path="res://audio/events/ui/hover.tres" id="21_evexq"]
 [ext_resource type="Script" uid="uid://bn8hvsytkx26y" path="res://addons/VAM/data/vam_bank.gd" id="29_40cf4"]
 [ext_resource type="Resource" uid="uid://djy42nnhfls3o" path="res://audio/events/ui/skill_buy.tres" id="30_skillbuy"]
@@ -41,5 +42,6 @@ events = Dictionary[StringName, ExtResource("1_1opbw")]({
 &"ui/click": ExtResource("17_456yr"),
 &"ui/denied": ExtResource("9_omt5h"),
 &"ui/hover": ExtResource("21_evexq"),
+&"ui/popup": ExtResource("19_1nyl2"),
 &"ui/skill_buy": ExtResource("30_skillbuy")
 })

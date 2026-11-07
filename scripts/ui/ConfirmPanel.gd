@@ -1,7 +1,7 @@
 ## ConfirmPanel — a small modal "are you sure?" box for actions that can't be
 ## undone (demolish, reset …). Shows a preview text and runs `on_confirm` only
 ## when the player confirms; Esc or a click outside cancels. Without a callback
-## it is an info box with one button.
+## it is an info box with one button, and plays AudioManager.POPUP.
 ##   ConfirmPanel.ask(self, "Demolish Alpha?", preview_text, "DEMOLISH", func() -> void: …)
 ## Look and layout: ModalPopup / PopupCard scenes.
 class_name ConfirmPanel
@@ -19,4 +19,6 @@ static func ask(host: Node, title: String, body: String, confirm_label: String, 
 		p.close()
 		if on_confirm.is_valid():
 			on_confirm.call())
+	if not on_confirm.is_valid():
+		VAM.play(AudioManager.POPUP)
 	return p

@@ -35,6 +35,9 @@ const MUSIC := &"music/main"
 const INCOME := &"sfx/income"
 ## An expedition finished preparing (GameState.expedition_ready).
 const READY := &"sfx/ready"
+## An info box the game raises on its own (Welcome back…): ConfirmPanel.ask
+## without a callback. Confirm dialogs the player opened only get the click.
+const POPUP := &"ui/popup"
 ## Every button hover in the game, and every interactive item in the left
 ## panel, plays this one event. Scripts don't call it themselves; see _process.
 const HOVER := &"ui/hover"
