@@ -114,6 +114,9 @@ func is_user_paused(key: String) -> bool:
 
 ## A City finished levelling up (`unlocked_planet_view`: that opened the planet view).
 signal city_leveled(planet_seed: int, city_label: String, level: int, unlocked_planet_view: bool)
+## A timed upgrade on `planet_seed` ran out: the planet, a City, the Orbit or a
+## district reached its next level (city_leveled also fires for a City).
+signal upgrade_finished(planet_seed: int)
 
 ## Returns 0.0–1.0: global energy coverage ratio. < 1.0 = energy crisis.
 func get_energy_ratio(_planet_seed: int = 0) -> float:
@@ -165,6 +168,7 @@ func _tick_all(delta: float) -> void:
 					PlanetTags.on_planet_level(GameState.get_planet_data(planet_seed), pp.level)
 					NewsFeed.post_planet_level(planet_seed, pp.level)
 					GameState.planet_progress_changed.emit(planet_seed)
+					upgrade_finished.emit(planet_seed)
 
 			# City level-ups
 			for clabel in pp.city_upgrading.keys():
@@ -178,6 +182,7 @@ func _tick_all(delta: float) -> void:
 						GameState.planet_view_unlocked = true
 					GameState.planet_progress_changed.emit(planet_seed)
 					city_leveled.emit(planet_seed, clabel, c_next, opened)
+					upgrade_finished.emit(planet_seed)
 					break  # dict modified — next frame handles the rest
 
 			# Orbit level-up (as long as a City's)
@@ -188,6 +193,7 @@ func _tick_all(delta: float) -> void:
 					pp.orbit_level += 1
 					pp.recalculate_limits()
 					GameState.planet_progress_changed.emit(planet_seed)
+					upgrade_finished.emit(planet_seed)
 
 			# District upgrades (independent of planet upgrade state)
 			for dlabel in pp.district_upgrading.keys():
@@ -198,6 +204,7 @@ func _tick_all(delta: float) -> void:
 					pp.district_upgrading.erase(dlabel)
 					pp.district_levels[dlabel] = target_lv
 					GameState.planet_progress_changed.emit(planet_seed)
+					upgrade_finished.emit(planet_seed)
 					break  # dict modified — next frame handles remaining
 
 			var build_speed := district_build_speed()

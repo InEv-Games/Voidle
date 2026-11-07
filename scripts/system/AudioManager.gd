@@ -6,34 +6,51 @@ extends Node
 ## Old key → VAM event id. Unknown keys are passed through as ids, so VAM
 ## warns about them in the Output instead of failing silently.
 const LEGACY := {
-	"hover": &"ui/hover", "click": &"ui/click", "error": &"ui/error",
-	"skill_buy": &"ui/skill_buy", "level_up": &"ui/level_up", "survey": &"ui/survey",
+	"hover": &"ui/hover", "click": &"ui/click", "error": &"ui/denied",   # one "no" sound
+	"skill_buy": &"ui/skill_buy", "level_up": &"sfx/upgrade_start", "survey": &"sfx/scan",
 	"clink": &"ui/clink", "poi_hover": &"ui/poi_hover", "district_hover": &"ui/district_hover",
-	"poi_ping": &"ui/poi_ping", "poi_select": &"ui/poi_select", "cash": &"ui/cash",
+	"poi_ping": &"ui/poi_ping", "poi_select": &"ui/poi_select", "cash": &"sfx/income",
 	"achievement": &"ui/achievement", "tick": &"ui/tick",
 	"ui_click": &"ui/click",   # was silent before: no sound had this key
+	"denied": &"ui/denied",
 	"construct": &"sfx/construct", "rocket": &"sfx/rocket", "building_done": &"sfx/building_done",
 	"terrain_earth": &"sfx/terrain_earth", "terrain_water": &"sfx/terrain_water",
 	"terrain_sand": &"sfx/terrain_sand", "terrain_ice": &"sfx/terrain_ice",
 	"terrain_fire": &"sfx/terrain_fire", "terrain_dust": &"sfx/terrain_dust",
 	"terrain_gas": &"sfx/terrain_gas",
 }
-const CONSTRUCT_LOOP := &"sfx/construct_loop"
+## While the open planet has a district or building under construction.
+const CONSTRUCTION_LOOP := &"sfx/construction_loop"
+## A district or building on the open planet finished construction.
+const CONSTRUCTION_DONE := &"sfx/construction_done"
+## While the open planet runs another timed process: a level-up (planet, City,
+## Orbit, district) or a surface scan. Shares its clip with CONSTRUCTION_LOOP,
+## so only one of the two plays; construction wins.
+const PROCESS_LOOP := &"sfx/ProcessLoop"
+## One of those processes finished.
+const PROCESS_DONE := &"sfx/processDone"
 const AMBIENCE := &"music/space_drone"
 const MUSIC := &"music/main"
-const CASH := &"ui/cash"   # throttled by the event's cooldown
+## Credits came in; the event's cooldown keeps steady income from chiming nonstop.
+const INCOME := &"sfx/income"
+## An expedition finished preparing (GameState.expedition_ready).
+const READY := &"sfx/ready"
 ## Every button hover in the game, and every interactive item in the left
 ## panel, plays this one event. Scripts don't call it themselves; see _process.
 const HOVER := &"ui/hover"
-## Every button press in the game plays this one event, unless the button's own
-## code plays a sound for that press (an error, a purchase…). See _on_button_pressed.
+## Every button press in the game plays this one event — BaseButtons and
+## controls with their own `pressed` signal (ListItem cards) — unless the button
+## opted out with no_click(). Sounds a handler plays for the press (an error, a
+## purchase…) come on top of it. See _on_button_pressed.
 const CLICK := &"ui/click"
+## Meta on a button that must stay silent when pressed (no_click()).
+const NO_CLICK_META := &"no_click"
 ## Clicking a disabled button plays this instead (disabled buttons emit no pressed).
 const DENIED := &"ui/denied"
 
-var _construct_active := false
-var _click_pending := false
-var _sound_since_press := false
+var _loop: StringName = &""   # CONSTRUCTION_LOOP, PROCESS_LOOP or none
+var _done_frames := {}         # done event id → last frame it played
+var _click_frame := -1
 var _hover_target: Control = null
 var _hover_moved := false
 var _hover_frame := -1
@@ -43,19 +60,49 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	VAM.play(AMBIENCE)
 	VAM.play_music(MUSIC)
-	GameState.credits_changed.connect(func(_v: float) -> void: VAM.play(CASH))
+	GameState.credits_earned.connect(func(_amount: float) -> void: _play_game_event(INCOME))
+	GameState.expedition_ready.connect(func(_kind: String) -> void: _play_game_event(READY))
 	get_tree().node_added.connect(_watch_button)
 	_watch_tree.call_deferred(get_tree().root)   # buttons other autoloads built before us
 
 
-func set_construction_active(active: bool) -> void:
-	if active == _construct_active:
+## The loaded save keeps simulating behind the main menu (ProductionManager is
+## an autoload), so its income and expeditions stay silent until the game is open.
+func _play_game_event(id: StringName) -> void:
+	var scene := get_tree().current_scene
+	if scene == null or scene.scene_file_path.ends_with("MainMenu.tscn"):
 		return
-	_construct_active = active
-	if active:
-		VAM.play(CONSTRUCT_LOOP)
-	else:
-		VAM.stop(CONSTRUCT_LOOP)
+	VAM.play(id)
+
+
+## What the open planet is busy with; picks the one loop that should play.
+## Call with (false, false) when the planet view goes away.
+func set_activity(constructing: bool, processing: bool) -> void:
+	var want: StringName = CONSTRUCTION_LOOP if constructing else (PROCESS_LOOP if processing else &"")
+	if want == _loop:
+		return
+	if _loop != &"":
+		VAM.stop(_loop)
+	_loop = want
+	if want != &"":
+		VAM.play(want)
+
+
+func construction_done() -> void:
+	_play_done(CONSTRUCTION_DONE)
+
+
+func process_done() -> void:
+	_play_done(PROCESS_DONE)
+
+
+## At most once a frame: a prefab's buildings finish together.
+func _play_done(id: StringName) -> void:
+	var frame := Engine.get_process_frames()
+	if _done_frames.get(id, -1) == frame:
+		return
+	_done_frames[id] = frame
+	VAM.play(id)
 
 
 func play(sound: String, vol_db: float = 0.0) -> void:
@@ -63,7 +110,9 @@ func play(sound: String, vol_db: float = 0.0) -> void:
 	if id == HOVER:
 		_play_hover()
 		return
-	_sound_since_press = true   # a button handler chose its own sound: no generic click
+	if id == CLICK:
+		_play_click(vol_db)
+		return
 	VAM.play(id, vol_db)
 
 
@@ -76,26 +125,31 @@ func _watch_tree(n: Node) -> void:
 
 
 func _watch_button(n: Node) -> void:
-	if n is BaseButton and not (n as BaseButton).pressed.is_connected(_on_button_pressed):
-		# Connected as the button enters the tree, so before the game's own handlers
-		# (they connect in _ready): the click waits until those have run.
-		(n as BaseButton).pressed.connect(_on_button_pressed)
+	if n.has_meta(&"_click_watched"):
+		return
+	if n is BaseButton or (n is Control and n.has_signal(&"pressed")):
+		n.set_meta(&"_click_watched", true)
+		n.connect(&"pressed", _on_button_pressed.bind(n))
 
 
-func _on_button_pressed() -> void:
-	_sound_since_press = false
-	if not _click_pending:
-		_click_pending = true
-		_flush_click.call_deferred()
+## Keeps `button` silent when pressed: the one way out of the click.
+static func no_click(button: Control) -> void:
+	button.set_meta(NO_CLICK_META, true)
 
 
-## Runs after every handler of the press: plays CLICK unless one of them already
-## played a sound (play("error"), play("click"), play("skill_buy")…).
-func _flush_click() -> void:
-	_click_pending = false
-	if not _sound_since_press:
-		VAM.play(CLICK)
-	_sound_since_press = false
+func _on_button_pressed(button: Control) -> void:
+	if not button.has_meta(NO_CLICK_META):
+		_play_click()
+
+
+## CLICK, at most once a frame: a handler that still calls play("click") for
+## the same press doesn't double it.
+func _play_click(vol_db: float = 0.0) -> void:
+	var frame := Engine.get_process_frames()
+	if frame == _click_frame:
+		return
+	_click_frame = frame
+	VAM.play(CLICK, vol_db)
 
 
 # ── hover ──────────────────────────────────────────────────────────────

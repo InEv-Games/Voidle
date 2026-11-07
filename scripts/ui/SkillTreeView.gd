@@ -371,7 +371,7 @@ func _build_tree_graph() -> void:
 				if st.call("buyout", 0):
 					AudioManager.play("skill_buy")
 				else:
-					AudioManager.play("error"))
+					AudioManager.play("denied"))
 			wrapper.add_child(bo)
 
 		# Position absolute coordinate
@@ -496,6 +496,7 @@ func _build_tree_graph() -> void:
 		card.gui_input.connect(func(e: InputEvent) -> void:
 			if e is InputEventMouseButton and (e as InputEventMouseButton).pressed and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 				card.accept_event() # Stop propagation to canvas drag
+				AudioManager.play("click")   # nodes aren't buttons: click like one
 				# fractal doors: the next tree's root, or this tree's centre (the tree before)
 				if (e as InputEventMouseButton).double_click:
 					if cap_id == "civilization_1_root":
@@ -510,7 +511,7 @@ func _build_tree_graph() -> void:
 				var tm := get_node_or_null("/root/TutorialManager")
 				if tm != null and tm._active and not tm._tutorial_done \
 						and tm.get_action_step_type() == "skill" and cap_id != "start_production":
-					AudioManager.play("error")
+					AudioManager.play("denied")
 					return
 				var cmd: GameCommand = st.call("research_command", cap_id)
 				if cmd.can_execute() == "":
@@ -518,7 +519,7 @@ func _build_tree_graph() -> void:
 					AudioManager.play("skill_buy")
 					cmd.execute()
 				else:
-					AudioManager.play("error"))
+					AudioManager.play("denied"))
 
 	_apply_tutorial_skill_overlay()
 

@@ -198,6 +198,10 @@ func _ready() -> void:
 	_setup_lowres_planet()
 	ShipManager.ship_arrived.connect(_on_ship_arrived_here)
 	ProductionManager.city_leveled.connect(_on_city_leveled)
+	ProductionManager.building_constructed.connect(_on_building_constructed_sfx)
+	ProductionManager.building_progress_changed.connect(_on_district_progress_sfx)
+	ProductionManager.upgrade_finished.connect(_on_upgrade_finished_sfx)
+	tree_exiting.connect(func() -> void: AudioManager.set_activity(false, false))
 	_build_panel_toggle()
 	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - _panel_edge_frac(1.0)))
 	tree_exiting.connect(func() -> void: NewsFeed.clear_message(PLACE_MSG))   # placement ends with the view
@@ -418,7 +422,7 @@ func _district_level_up(poi: POIData, planet: PlanetData) -> bool:
 			or not GameState.spend_credits(Leveling.district_level_credits(lv)):
 		AudioManager.play("error")
 		return false
-	AudioManager.play("construct")
+	AudioManager.play("level_up")
 	pp.level_paid[poi.label] = float(pp.level_paid.get(poi.label, 0.0)) + Leveling.district_level_credits(lv)
 	pp.upgrade_district(poi.label)
 	GameState.planet_progress_changed.emit(planet.seed)
@@ -439,7 +443,7 @@ func _city_level_up(city: POIData, planet: PlanetData) -> bool:
 	if _city_level_up_block(city, planet) != "" or not GameState.spend_credits(price):
 		AudioManager.play("error")
 		return false
-	AudioManager.play("construct")
+	AudioManager.play("level_up")
 	var ck := "city:" + city.label
 	pp.level_paid[ck] = float(pp.level_paid.get(ck, 0.0)) + price
 	pp.city_upgrading[city.label] = 0.0   # ProductionManager finishes it (city_leveled)
@@ -1078,10 +1082,47 @@ func _update_tutorial_highlight() -> void:
 func _go_back() -> void:
 	if not GameState.can_view_solar():
 		return
-	AudioManager.set_construction_active(false)
+	AudioManager.set_activity(false, false)
 	_save_light_angle()
 	var sd := _system_solar if _system_solar != null else GameState.get_home_solar()
 	SceneTransition.go("res://scenes/solar/SolarView.tscn", sd)
+
+## A district or building of `data` is under construction.
+func _is_constructing(data: PlanetData) -> bool:
+	for p: POIData in data.custom_pois:
+		if p.constructing:
+			return true
+	var pp := GameState.find_planet(data.seed)
+	if pp != null:
+		for b: Dictionary in pp.buildings:
+			if b.get("constructing", false):
+				return true
+	return false
+
+## `data` runs another timed process: a level-up or a surface scan.
+func _is_processing(data: PlanetData) -> bool:
+	if not _scan_fx.is_empty():
+		return true
+	var pp := GameState.find_planet(data.seed)
+	return pp != null and (pp.is_upgrading or not pp.city_upgrading.is_empty() \
+		or pp.orbit_upgrading >= 0.0 or not pp.district_upgrading.is_empty())
+
+## Connected for the view's lifetime, unlike _on_building_constructed (which
+## connects once a district panel opens), so every finished building sounds.
+func _on_building_constructed_sfx(planet_seed: int, _key: String, _building_id: String) -> void:
+	if current_data != null and current_data.seed == planet_seed:
+		AudioManager.construction_done()
+
+## A district reports its construction progress under its label (buildings use
+## "seed:label:uid" keys); 1.0 means it was just built.
+func _on_district_progress_sfx(planet_seed: int, key: String, progress: float) -> void:
+	if progress >= 1.0 and not key.contains(":") \
+			and current_data != null and current_data.seed == planet_seed:
+		AudioManager.construction_done()
+
+func _on_upgrade_finished_sfx(planet_seed: int) -> void:
+	if current_data != null and current_data.seed == planet_seed:
+		AudioManager.process_done()
 
 func _on_unlock_changed(_key: String, _val: bool) -> void:
 	_refresh_solar_btn()
@@ -3785,9 +3826,11 @@ func _spawn_district(data: PlanetData, lbl: String, def: DistrictDef, site: Vect
 		# taken while the rocket flies keeps them
 		GameState.get_planet(data.seed).place_prefab(poi, def)
 		_play_rocket_animation(data.seed, launch_poi, func() -> void:
+			# ProductionManager may have finished it first (and played the sound)
+			if poi.constructing and current_data != null and current_data.seed == data.seed:
+				AudioManager.construction_done()
 			poi.constructing = false
 			poi.construct_progress = 1.0
-			AudioManager.play("building_done")
 			GameState.planet_progress_changed.emit(data.seed),
 			"", "Pioneer", "station", {}, "", "", "", 0, false, [], poi)
 		load_planet(data)
@@ -5018,14 +5061,9 @@ func _process(delta: float) -> void:
 	if _roads_dirty:
 		_rebuild_roads()
 
-	# Construction loop audio — active whenever any POI is constructing
+	# Loop audio: construction (districts, buildings) or another timed process
 	if current_data != null:
-		var any_constructing := false
-		for p: POIData in current_data.custom_pois:
-			if p.constructing:
-				any_constructing = true
-				break
-		AudioManager.set_construction_active(any_constructing)
+		AudioManager.set_activity(_is_constructing(current_data), _is_processing(current_data))
 
 	if _ring_back != null or _ring_front != null:
 		_ring_angle = planet_renderer.get_rotation_offset()
@@ -5324,7 +5362,7 @@ const SCAN_SEC := 2.8
 func _start_surface_scan(data: PlanetData) -> void:
 	if data == null or GameState.is_scanned(data.seed) or not _scan_fx.is_empty():
 		return
-	AudioManager.play("click")
+	AudioManager.play("survey")
 	_set_zoom_target(ZOOM_MIN, Vector2.INF)
 	_scan_fx = {"t": 0.0, "seed": data.seed}
 	if _scan_canvas == null or not is_instance_valid(_scan_canvas):
@@ -5352,7 +5390,7 @@ func _tick_surface_scan(delta: float) -> void:
 			GameOverlays.open_trait_picker(self, seed_val)
 		_refresh_excavation_sites()
 		GameState.save()
-		AudioManager.play("building_done")
+		AudioManager.process_done()
 		_show_unlock_toast("Surface scanned", "Pick a lens at the bottom (Energy, Production …) and hover the surface to see what each spot gives.")
 		_rebuild_lens_bar()
 		_refresh_active_panel()
@@ -7981,7 +8019,6 @@ func _refresh_bar_label_status(key: String) -> void:
 func _on_building_constructed(planet_seed: int, key: String, _building_id: String = "") -> void:
 	if current_data == null or current_data.seed != planet_seed:
 		return
-	AudioManager.play("building_done")
 
 	# Parse key format: "{seed}:{poi_label}:{idx}"
 	var last_col  := key.rfind(":")
@@ -8004,7 +8041,7 @@ func _on_building_constructed(planet_seed: int, key: String, _building_id: Strin
 					building_name = def.display_name
 
 	# the news bar tells it ("Ribbon cut …") — never auto-select / reopen the district
-	AudioManager.play("building_done", 2.0)
+	# (its sound: _on_building_constructed_sfx)
 
 	# If a spaceport just finished construction, mark planet and refresh ships
 	var pp_check := GameState.get_planet(planet_seed)
@@ -11301,7 +11338,7 @@ func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
 		if Leveling.orbit_level_block(planet, pp) != "" or not GameState.spend_credits(credits):
 			AudioManager.play("error")
 			return
-		AudioManager.play("construct")
+		AudioManager.play("level_up")
 		pp.orbit_upgrading = 0.0   # ProductionManager finishes it
 		GameState.planet_progress_changed.emit(planet.seed)
 		_build_orbit_panel(planet))
@@ -11496,7 +11533,7 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 func _on_city_leveled(planet_seed: int, _city_label: String, _level: int, unlocked_planet_view: bool) -> void:
 	if current_data == null or current_data.seed != planet_seed:
 		return
-	AudioManager.play("building_done")
+	# its sound: _on_upgrade_finished_sfx
 	if unlocked_planet_view:
 		_notify("Planet view unlocked on %s: found more Cities and level up the planet." % current_data.planet_name)
 	_refresh_active_panel()

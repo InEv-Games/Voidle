@@ -3,6 +3,8 @@
 extends Node
 
 signal credits_changed(new_val: float)
+## Credits came in (earn_credits: production, sales, refunds), not a save load.
+signal credits_earned(amount: float)
 signal save_deleted
 signal science_changed(new_val: float)
 signal world_ready
@@ -516,6 +518,10 @@ func get_planet(seed_val: int) -> PlanetProgress:
 		_planet_progress[seed_val] = PlanetProgress.make(seed_val)
 	return _planet_progress[seed_val]
 
+## Like get_planet, but null instead of creating the entry: for per-frame reads.
+func find_planet(seed_val: int) -> PlanetProgress:
+	return _planet_progress.get(seed_val, null)
+
 ## Returns cached PlanetData for a given seed (set by PlanetaryView when visiting).
 var _planet_data_cache: Dictionary = {}   # seed -> PlanetData
 func cache_planet_data(pd: PlanetData) -> void:
@@ -618,6 +624,8 @@ func spend_credits(amount: float) -> bool:
 
 func earn_credits(amount: float) -> void:
 	credits += amount
+	if amount > 0.0:
+		credits_earned.emit(amount)
 
 func add_science(amount: float) -> void:
 	science_points += amount
@@ -659,6 +667,9 @@ const ROCKET_FLIGHT_SEC := 180.0   # a real trip, watched in the star system vie
 
 signal act1_completed
 signal expedition_changed(kind: String)
+## An expedition finished preparing at the Spaceport: the lander lifts off, the
+## rocket is ready. Once per expedition, unlike expedition_changed.
+signal expedition_ready(kind: String)
 ## Emitted once when the final rocket arrives (civ = the civilization reached).
 signal civilization_reached(civ: int)
 ## Founding the first City on the Moon: the lander's landing module, paid
@@ -952,6 +963,7 @@ func tick_expeditions(delta: float) -> void:
 				lander["state"] = "launching"
 				lander["launch_age"] = 0.0
 				lander["animating"] = false
+				expedition_ready.emit("lander")
 				expedition_changed.emit("lander")   # PlanetaryView plays the lift-off if it shows home
 		"launching":   # lifting off; without a lift-off on screen it appears in orbit
 			lander["launch_age"] = float(lander.get("launch_age", 0.0)) + delta
@@ -977,6 +989,7 @@ func tick_expeditions(delta: float) -> void:
 			rocket["prep_left"] = float(rocket["prep_left"]) - delta
 			if float(rocket["prep_left"]) <= 0.0:
 				rocket["state"] = "ready"
+				expedition_ready.emit("rocket")
 				expedition_changed.emit("rocket")
 				save()
 		"ready":

@@ -116,6 +116,5 @@ func _check_float_triggers() -> void:
 
 func _grant(def: AchievementDef) -> void:
 	_unlocked.append(def.achievement_id)
-	achievement_unlocked.emit(def)
-	AudioManager.play("survey", -2.0)
+	achievement_unlocked.emit(def)   # HUDManager plays its sound and tells it
 	# Future: SteamAPI.set_achievement(def.steam_id)
