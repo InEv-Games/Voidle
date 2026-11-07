@@ -1010,6 +1010,15 @@ func _activate_focused() -> bool:
 	if _nav_focus == null or not is_instance_valid(_nav_focus) or not _nav_focus.is_visible_in_tree():
 		return false
 	var c := _nav_focus
+	if c is ListItem:
+		var li := c as ListItem
+		if li.clickable:
+			li.pressed.emit()
+			return true
+		if li.show_stepper:
+			li.stepped.emit(1)
+			return true
+		return false
 	if c is OptionButton:
 		var opt := c as OptionButton
 		if opt.item_count > 0:

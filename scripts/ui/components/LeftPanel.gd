@@ -826,13 +826,16 @@ func _handle_nav_dir(dir: Vector2) -> bool:
 	# Stepper ListItem (e.g. filled building slot card): Left = Minus (−), Right = Plus (+)
 	if absf(dir.x) > 0.5 and _nav_focus is ListItem and (_nav_focus as ListItem).show_stepper:
 		var li := _nav_focus as ListItem
-		var btn: BaseButton = li._plus_btn if dir.x > 0.0 else li._minus_btn
+		var btn_path := "Row/Body/Bottom/Stepper/Plus" if dir.x > 0.0 else "Row/Body/Bottom/Stepper/Minus"
+		var btn := li.get_node_or_null(btn_path) as BaseButton
 		if btn != null and btn.visible:
 			if btn.disabled:
 				AudioManager.play("denied")
 			else:
 				btn.pressed.emit()
 			return true
+		li.stepped.emit(1 if dir.x > 0.0 else -1)
+		return true
 
 	if absf(dir.x) > 0.5 and _nav_focus is HSlider:
 		var sl := _nav_focus as HSlider
@@ -946,14 +949,18 @@ func _activate_focused() -> bool:
 	var c := _nav_focus
 	if c is ListItem:
 		var li := c as ListItem
-		if li.show_stepper and li._plus_btn != null and li._plus_btn.visible:
-			if li._plus_btn.disabled:
-				AudioManager.play("denied")
-			else:
-				li._plus_btn.pressed.emit()
-			return true
 		if li.clickable:
-			li.clicked.emit()
+			li.pressed.emit()
+			return true
+		if li.show_stepper:
+			var plus_btn := li.get_node_or_null("Row/Body/Bottom/Stepper/Plus") as BaseButton
+			if plus_btn != null and plus_btn.visible:
+				if plus_btn.disabled:
+					AudioManager.play("denied")
+				else:
+					plus_btn.pressed.emit()
+				return true
+			li.stepped.emit(1)
 			return true
 		return false
 	if c is LineEdit:
