@@ -364,7 +364,7 @@ func open_poi_context_menu(poi_label: String, global_pos: Vector2) -> bool:
 		return false
 	var poi := _find_poi(current_data, poi_label)
 	if poi == null:
-		poi = _active_district_poi if _active_district_poi != null else _active_city_poi
+		poi = _active_district_poi if _active_district_poi != null else _city_panel_poi
 	if poi == null:
 		return false
 	return _open_context_menu_for_poi(poi, global_pos)
@@ -5743,7 +5743,8 @@ func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void
 	if _panel_open:
 		_reopen_panel_after_place = true
 		_set_panel_open(false)
-	if left_panel != null and bool(left_panel.get("_nav_active")):
+	var sp := get_node_or_null("SidePanel")
+	if sp != null and bool(sp.get("_nav_active")):
 		_using_right_stick = true
 	_placing_def = def
 	_placing_parent = parent

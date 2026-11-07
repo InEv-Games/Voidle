@@ -714,35 +714,40 @@ func _input(event: InputEvent) -> void:
 		var ke := event as InputEventKey
 		if not ke.pressed:
 			return
+		var k := ke.keycode if ke.keycode != KEY_NONE else ke.physical_keycode
+		var pk := ke.physical_keycode if ke.physical_keycode != KEY_NONE else ke.keycode
 		if typing:
-			if ke.keycode == KEY_UP or ke.keycode == KEY_DOWN:
+			if k == KEY_UP or k == KEY_DOWN:
 				gui_focus.release_focus()
-				_handle_nav_dir(Vector2(0, -1 if ke.keycode == KEY_UP else 1))
+				_handle_nav_dir(Vector2(0, -1 if k == KEY_UP else 1))
 				get_viewport().set_input_as_handled()
-			elif ke.keycode == KEY_ESCAPE:
+			elif k == KEY_ESCAPE:
 				gui_focus.release_focus()
 				_handle_nav_back()
 				get_viewport().set_input_as_handled()
 			return
 		var dir := Vector2.ZERO
-		match ke.keycode:
-			KEY_W, KEY_UP:    dir = Vector2(0, -1)
-			KEY_S, KEY_DOWN:  dir = Vector2(0, 1)
-			KEY_A, KEY_LEFT:  dir = Vector2(-1, 0)
-			KEY_D, KEY_RIGHT: dir = Vector2(1, 0)
+		if k == KEY_UP or pk == KEY_W:
+			dir = Vector2(0, -1)
+		elif k == KEY_DOWN or pk == KEY_S:
+			dir = Vector2(0, 1)
+		elif k == KEY_LEFT or pk == KEY_A:
+			dir = Vector2(-1, 0)
+		elif k == KEY_RIGHT or pk == KEY_D:
+			dir = Vector2(1, 0)
 		if dir != Vector2.ZERO:
 			if _handle_nav_dir(dir):
 				get_viewport().set_input_as_handled()
 			return
-		if not ke.echo and (ke.keycode == KEY_ENTER or ke.keycode == KEY_KP_ENTER or ke.keycode == KEY_SPACE):
+		if not ke.echo and (k == KEY_ENTER or k == KEY_KP_ENTER or k == KEY_SPACE):
 			if _nav_active and _activate_focused():
 				get_viewport().set_input_as_handled()
 			return
-		if not ke.echo and (ke.keycode == KEY_BACKSPACE or ke.keycode == KEY_ESCAPE):
+		if not ke.echo and (k == KEY_BACKSPACE or k == KEY_ESCAPE):
 			if _handle_nav_back():
 				get_viewport().set_input_as_handled()
 			return
-		if not ke.echo and ke.keycode == KEY_C:
+		if not ke.echo and (k == KEY_C or pk == KEY_C):
 			if _nav_active and _context_focused():
 				get_viewport().set_input_as_handled()
 			return
