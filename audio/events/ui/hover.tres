@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://dsb3ct1e6hthh"]
+
+[ext_resource type="AudioStream" uid="uid://bseik0l77g4jw" path="res://assets/sfx/UI-Hover.wav" id="2_4xwfs"]
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="2_t8b8a"]
+
+[resource]
+script = ExtResource("2_t8b8a")
+clips = Array[AudioStream]([ExtResource("2_4xwfs")])
+pitch_scale = 2.0
+pitch_random_semitones = 3.0
+bus = &"UI"
+volume_db = -12.0

@@ -14,6 +14,7 @@ config/name="Voidle"
 config/version="0.1"
 run/main_scene="res://scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
+boot_splash/bg_color=Color(0, 0, 0, 1)
 boot_splash/stretch_mode=0
 boot_splash/image="uid://bi50gslvhjorn"
 config/icon="uid://cklxjbcevnmf"
@@ -32,6 +33,7 @@ DevConsole="*res://scripts/system/DevConsole.gd"
 SkillTree="*res://scripts/game/SkillTree.gd"
 ShipManager="*res://scripts/game/ShipManager.gd"
 ShipCommandRegistry="*res://scripts/ships/ShipCommandRegistry.gd"
+VAM="*res://addons/VAM/runtime/vam_runtime.gd"
 AudioManager="*res://scripts/system/AudioManager.gd"
 AchievementManager="*res://scripts/game/AchievementManager.gd"
 TutorialManager="*res://scripts/system/TutorialManager.gd"
@@ -44,12 +46,13 @@ ScreenFX="*res://scripts/system/ScreenFX.gd"
 
 [display]
 
+window/size/mode=3
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/VSM/plugin.cfg", "res://addons/build_info/plugin.cfg")
+enabled=PackedStringArray("res://addons/VAM/plugin.cfg", "res://addons/VSM/plugin.cfg", "res://addons/build_info/plugin.cfg")
 
 [gui]
 

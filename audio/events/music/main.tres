@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="VAMMusicEvent" format=3 uid="uid://d2exndylnl72t"]
+
+[ext_resource type="AudioStream" uid="uid://desryuu6cfbks" path="res://assets/soundtrack/voidle_music.tres" id="2_kkcih"]
+[ext_resource type="Script" uid="uid://dk7vt5ww4fdiy" path="res://addons/VAM/data/vam_music_event.gd" id="3_50u5u"]
+
+[resource]
+script = ExtResource("3_50u5u")
+music = ExtResource("2_kkcih")
+random_loops = Array[StringName]([&"loop1", &"loop2", &"loop3", &"loop4"])
+outro_clip = &"outro"
+bed_volume_db = -22.0
+bus = &"Music"
+volume_db = -12.0

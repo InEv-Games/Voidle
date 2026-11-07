@@ -325,6 +325,7 @@ func _apply_fade(t: float) -> void:
 	var closing_start := t < from and (from >= 1.0 or _opening)
 	if opening_start or closing_start:
 		_opening = opening_start
+		VAM.play(&"ui/LeftPanel_Open" if opening_start else &"ui/LeftPanel_Close")
 		_collect_rows(layout, 0)
 		_reroll()
 		if opening_start:
@@ -365,7 +366,8 @@ func _collect_rows(n: Node, row: int) -> void:
 				_rows[rid] = {"node": c, "orig": _base_modulate(c as Control),
 					"last": (c as Control).modulate, "p": start, "cap": 1.0,
 					"s": _fade_rng.randf_range(0.0, 1.0 - ROW_FADE), "seed": _fade_rng.randi(),
-					"labels": [], "items": _collect_items(c as Control), "tween": null}
+					"labels": [], "items": _collect_items(c as Control), "tween": null,
+					"blink_b": -1}
 				if _opening:
 					_start_row_tween(rid)
 		if c is Label and not _fade.has(c.get_instance_id()):
@@ -429,7 +431,13 @@ func _set_row(id: int, p: float, blink_bucket: int, glyph_bucket: int) -> void:
 	if is_instance_valid(r["node"]):
 		var node := r["node"] as Control
 		if node.modulate == r["last"]:   # else someone else drives it: leave it be
-			var a := p * (_blink(blink_bucket, r["seed"]) if p > 0.0 and p < 1.0 else 1.0)
+			var blink := _blink(blink_bucket, r["seed"]) if p > 0.0 and p < 1.0 else 1.0
+			# One sound per dip: _set_row runs every frame with the same bucket,
+			# so play only the first time a row dips in a given BLINK_SEC step.
+			if blink < 1.0 and r.get("blink_b", -1) != blink_bucket:
+				r["blink_b"] = blink_bucket
+				VAM.play(&"ui/blink")
+			var a := p * blink
 			var orig: Color = r["orig"]
 			var m := Color(orig.r, orig.g, orig.b, orig.a * a)
 			node.modulate = m

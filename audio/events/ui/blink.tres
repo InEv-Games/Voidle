@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://bllulhjoole10"]
+
+[ext_resource type="AudioStream" uid="uid://cdfvjck6wwvwu" path="res://assets/sfx/LeftPanel-Blink1.wav" id="1_dwufc"]
+[ext_resource type="AudioStream" uid="uid://nvbkhxs2fk7a" path="res://assets/sfx/LeftPanel-Blink2.wav" id="2_o8ube"]
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="2_qirac"]
+[ext_resource type="AudioStream" uid="uid://cab8uq4iethh8" path="res://assets/sfx/LeftPanel-Blink3.wav" id="3_0dgi3"]
+[ext_resource type="AudioStream" uid="uid://db7e0uc84riy6" path="res://assets/sfx/LeftPanel-Blink4.wav" id="4_shqc0"]
+
+[resource]
+script = ExtResource("2_qirac")
+clips = Array[AudioStream]([ExtResource("1_dwufc"), ExtResource("2_o8ube"), ExtResource("3_0dgi3"), ExtResource("4_shqc0")])
+volume_random_db = 4.0
+pitch_random_semitones = 3.0
+cooldown = 0.02
+max_instances = 4
+bus = &"UI"
+volume_db = -8.0
+notes = "LeftPanel open/close: one per row blink (scripts/ui/components/LeftPanel.gd). Placeholder synthesized tape-dropout crackle."

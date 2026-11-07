@@ -7,6 +7,7 @@
 ##   RowReveal.play(root)        # restarts if one is already running on root
 ##   RowReveal.play(root, 1.5)   # the same, 1.5x slower (every timing scaled)
 ##   RowReveal.play(root, 1.0, true)   # rows one by one, top to bottom (lists)
+##   RowReveal.play(root, 1.5, false, &"ui/blink")   # + a VAM sound on every blink
 ## A script that changes a label's text or an item's modulate meanwhile wins:
 ## that one stops animating and is left as the script set it.
 class_name RowReveal
@@ -27,10 +28,11 @@ var _root: Control
 var _t := 0.0
 var _slow := 1.0   # time scale: 1.5 runs every timing 1.5x slower
 var _in_order := false   # rows start one after another, in tree order
+var _blink_sound: StringName = &""   # VAM event played once per row dip ("" = silent)
 var _rows: Array = []   # {node, orig, last, start, seed, items, labels, texts}
 var _rng := RandomNumberGenerator.new()
 
-static func play(root: Control, slow: float = 1.0, in_order: bool = false) -> void:
+static func play(root: Control, slow: float = 1.0, in_order: bool = false, blink_sound: StringName = &"") -> void:
 	if root == null or not root.is_inside_tree():
 		return
 	for c in root.get_children(true):
@@ -40,6 +42,7 @@ static func play(root: Control, slow: float = 1.0, in_order: bool = false) -> vo
 	r._root = root
 	r._slow = maxf(slow, 0.01)
 	r._in_order = in_order
+	r._blink_sound = blink_sound
 	root.add_child(r, false, Node.INTERNAL_MODE_BACK)   # unseen by get_children()
 
 func _ready() -> void:
@@ -120,7 +123,12 @@ func _set_row(r: Dictionary, p: float, bb: int, gb: int) -> void:
 	var node = r["node"]
 	if is_instance_valid(node) and (node as Control).modulate == r["last"]:
 		var o: Color = r["orig"]
-		var a := p * (_blink(bb, r["seed"]) if p > 0.0 and p < 1.0 else 1.0)
+		var blink := _blink(bb, r["seed"]) if p > 0.0 and p < 1.0 else 1.0
+		# One sound per dip: _set_row runs every frame with the same bucket.
+		if _blink_sound != &"" and blink < 1.0 and r.get("blink_b", -1) != bb:
+			r["blink_b"] = bb
+			VAM.play(_blink_sound)
+		var a := p * blink
 		var m := Color(o.r, o.g, o.b, o.a * a)
 		(node as Control).modulate = m
 		r["last"] = m

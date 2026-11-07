@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://dkfar8ik685ax"]
+
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="1_5h6sw"]
+[ext_resource type="AudioStream" uid="uid://ck70cyvoviskw" path="res://assets/sfx/UI-Denied.wav" id="1_tor6u"]
+
+[resource]
+script = ExtResource("1_5h6sw")
+clips = Array[AudioStream]([ExtResource("1_tor6u")])
+pitch_scale = 2.0
+volume_db = -8.0

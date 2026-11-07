@@ -109,7 +109,6 @@ func _row(c: GameCommand) -> Control:
 	if blocked != "":
 		tip = (tip + "\n\n" if tip != "" else "") + "[color=#%s]➡ %s[/color]" % [UIStyle.hex(&"bad"), blocked]
 	btn.mouse_entered.connect(func() -> void:
-		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER if blocked == "" else CursorManager.State.NORMAL)
 		if tip != "":
 			TooltipManager.show_tip(c.label, tip))

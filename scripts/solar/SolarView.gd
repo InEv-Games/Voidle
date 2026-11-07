@@ -622,7 +622,6 @@ func _update_panel() -> void:
 
 
 	_survey_btn.mouse_entered.connect(func() -> void:
-		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER))
 	_survey_btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL))
@@ -685,7 +684,6 @@ func _build_scan_asteroid_section() -> void:
 	_scan_wrap.add_child(cost_lbl)
 	_scan_wrap.add_child(scan_btn)
 
-	scan_btn.mouse_entered.connect(func() -> void: AudioManager.play("hover"))
 	scan_btn.pressed.connect(func() -> void:
 		if not GameState.spend_science(SCAN_SCIENCE):
 			AudioManager.play("error")

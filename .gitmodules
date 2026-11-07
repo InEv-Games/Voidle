@@ -1,3 +1,6 @@
 [submodule "addons/VSM"]
 	path = addons/VSM
 	url = https://github.com/InEv-Games/VSM.git
+[submodule "addons/VAM"]
+	path = addons/VAM
+	url = https://github.com/InEv-Games/VAM.git

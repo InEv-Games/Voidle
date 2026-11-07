@@ -167,6 +167,9 @@ var _placing_parent: POIData   = null   # City the new district is built under (
 var _moving_poi: POIData       = null   # settlement being moved (placement mode commits a move)
 ## The placement hint's message id in the objectives card (NewsFeed.show_message).
 const PLACE_MSG := "planet_place"
+## VAM snapshot that muffles the music while a site is being picked (edit it in the VAM tab).
+## The Esc menu holds the same snapshot; each side holds it under its own name.
+const PLACE_SNAPSHOT := &"snapshots/lowpass"
 
 func _make_system(root: PlanetData) -> Array[PlanetData]:
 	var arr: Array[PlanetData] = [root]
@@ -193,6 +196,7 @@ func _ready() -> void:
 	_build_panel_toggle()
 	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - _panel_edge_frac(1.0)))
 	tree_exiting.connect(func() -> void: NewsFeed.clear_message(PLACE_MSG))   # placement ends with the view
+	tree_exiting.connect(func() -> void: VAM.stop_snapshot(PLACE_SNAPSHOT, &"placement"))
 	poi_layer.territory_lookup = _territory_at_screen
 	SettingsManager.night_shadow_changed.connect(func(v: float) -> void:
 		if planet_renderer.material:
@@ -3869,7 +3873,7 @@ func _mineral_grid_card(rd: ResourceData, stored: float, show_count: bool, sub_l
 
 	# Hover juice: scale up + yellow border highlight, z_index brings to front
 	card.mouse_entered.connect(func() -> void:
-		AudioManager.play("poi_hover")
+		AudioManager.play("hover")
 		card.z_index = 10
 		card.pivot_offset = card.size * 0.5
 		var tw := card.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -5661,6 +5665,7 @@ func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void
 		_set_panel_open(false)
 	_placing_def = def
 	_placing_parent = parent
+	VAM.start_snapshot(PLACE_SNAPSHOT, &"placement")
 	poi_layer.placement_mode = true
 	poi_layer.spacing_deg = TerrainSampler.min_spacing_deg(current_data)
 	poi_layer.placement_rings = _placement_rings(def, parent)
@@ -5696,6 +5701,8 @@ func _end_district_placement() -> void:
 	_ghost_road_key = ""
 	if poi_layer:
 		poi_layer.ghost_roads = []
+	if _placing_def != null:
+		VAM.stop_snapshot(PLACE_SNAPSHOT, &"placement")
 	_placing_def = null
 	_placing_parent = null
 	_moving_poi = null
@@ -6757,7 +6764,6 @@ func _build_planet_overview(data: PlanetData) -> void:
 				up_items.append("%s:%s" % [Economy.RAW if ks.begins_with("ANY_T") else ks, Economy.fmt(float(up_cost[k]))])
 		up_btn.counter_items = up_items
 		up_btn.mouse_entered.connect(func():
-			AudioManager.play("hover")
 			_show_planet_level_tip(data, pp))
 		up_btn.mouse_exited.connect(func(): TooltipManager.hide_tip())
 		up_btn.pressed.connect(func(): AudioManager.play("click"); _show_level_up_popup(pp))
@@ -6997,7 +7003,7 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	var cap_poi    := poi
 	var cap_planet := planet
 	card.mouse_entered.connect(func() -> void:
-		AudioManager.play("district_hover")
+		AudioManager.play("hover")
 		if cap_poi.constructing:
 			TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\nBuild time: %.0fs" % cap_poi.construct_duration)
 		CursorManager.set_state(CursorManager.State.POINTER))
@@ -7145,7 +7151,6 @@ func _build_add_district_card(data: PlanetData, enabled: bool, orbital_only: boo
 		card.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	if enabled:
 		card.mouse_entered.connect(func() -> void:
-			AudioManager.play("hover")
 			CursorManager.set_state(CursorManager.State.POINTER))
 		card.mouse_exited.connect(func() -> void:
 			CursorManager.set_state(CursorManager.State.NORMAL))
@@ -7292,7 +7297,6 @@ func _build_district_type_row(data: PlanetData, def: DistrictDef,
 		return Economy.can_pay(DistrictDef.placement_full_cost(def, data, parent_label)) and not cap_limit)
 
 	btn.mouse_entered.connect(func() -> void:
-		AudioManager.play("district_hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
 		var t_title = def.display_name
 		var t_desc = def.description
@@ -9184,7 +9188,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		if def.pop_use() > 0 else ""
 
 	card.mouse_entered.connect(func() -> void:
-		AudioManager.play("poi_hover")
+		AudioManager.play("hover")
 		TooltipManager.show_tip(def.display_name, tip_str)
 		if foot_l != "" or foot_r != "":
 			TooltipManager.set_footer(foot_l, foot_r))
@@ -10550,7 +10554,7 @@ func _build_slot_card(poi: POIData, planet: PlanetData, pp: PlanetProgress,
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.modulate.a = 0.55
 	card.mouse_entered.connect(func() -> void:
-		AudioManager.play("poi_hover")
+		AudioManager.play("hover")
 		CursorManager.set_state(CursorManager.State.POINTER)
 		card.modulate.a = 1.0)
 	card.mouse_exited.connect(func() -> void:
@@ -10708,7 +10712,7 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 			"reason": reason, "enabled": enabled, "force": can_force, "entry": preview_entry, "pop": pop_need,
 			"row": row_panel}
 		row_panel.mouse_entered.connect(func() -> void:
-			AudioManager.play("poi_hover")
+			AudioManager.play("hover")
 			if enabled and not _is_at_edge():
 				CursorManager.set_state(CursorManager.State.POINTER)
 			if can_force:
@@ -10955,7 +10959,6 @@ func _build_orbit_type_row(data: PlanetData, dropdown_ref: Array[Node]) -> Contr
 	var tip := "The world's Central Orbit — one per planet, it takes no City slot. Its Orbit City is the hub of your trade network and makes a Capital's base. It holds Orbit level + 1 support districts (Residential, Commercial, Science, Energy, Production), each +10% to the whole planet; level the Orbit for more.\n\nCost  " \
 		+ _cost_bb(cost, 0, data, pp) + ("" if block == "" else "\n\n" + _bb("➡ " + block, BB_BAD))
 	btn.mouse_entered.connect(func() -> void:
-		AudioManager.play("district_hover")
 		TooltipManager.show_tip("Orbit", tip))
 	btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	btn.pressed.connect(func() -> void:
