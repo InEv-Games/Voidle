@@ -92,6 +92,12 @@ var _build_where: Dictionary = {}   # "seed|building_id" -> district label (the 
 var _batch_left := 0.0
 var _rng := RandomNumberGenerator.new()
 
+## The bar fades in over this many seconds the next time it shows (0 = at once).
+var _fade_in_sec := 0.0
+
+func fade_in(sec: float) -> void:
+	_fade_in_sec = sec
+
 func _ready() -> void:
 	layer = 229   # under the HUD's top layer (230), above the views
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -334,9 +340,19 @@ func _process(delta: float) -> void:
 	if not on:
 		if _bar != null and is_instance_valid(_bar):
 			_bar.visible = false
+		# a view's own NewsPanel shows by default until it is adopted (first
+		# scene after the main menu, HUD still off): keep it hidden too
+		for n in get_tree().get_nodes_in_group(GROUP):
+			if n is CanvasItem:
+				(n as CanvasItem).visible = false
 		return
 	_ensure_bar()
 	_bar.visible = true
+	if _fade_in_sec > 0.0:
+		_bar.modulate.a = 0.0
+		_bar.create_tween().tween_property(_bar, "modulate:a", 1.0, _fade_in_sec) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		_fade_in_sec = 0.0
 	_tick_ticker(delta)
 	_layout_objectives_btn()
 	var width := _clip.size.x

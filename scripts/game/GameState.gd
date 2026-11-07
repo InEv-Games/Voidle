@@ -288,7 +288,7 @@ func exit_showcase() -> void:
 	var was := showcase_mode
 	showcase_mode = false
 	if was:
-		HUDManager.set_game_hud(true)   # the planet view doesn't re-show it itself
+		HUDManager.set_game_hud(true)   # back on at once, before the next view opens
 	if _explore_layer != null and is_instance_valid(_explore_layer):
 		_explore_layer.queue_free()
 	_explore_layer = null

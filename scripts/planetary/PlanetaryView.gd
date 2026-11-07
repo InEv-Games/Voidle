@@ -179,6 +179,11 @@ func _make_system(root: PlanetData) -> Array[PlanetData]:
 
 
 func _ready() -> void:
+	# a new game opens here straight from the main menu (which hid the HUD),
+	# not through the galaxy view — so this view turns them on itself
+	HUDManager.set_game_hud(not GameState.showcase_mode)
+	if not GameState.showcase_mode:
+		TutorialManager.start()   # no-op once running
 	CursorManager.set_state(CursorManager.State.NORMAL)
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	if has_node("Background"):
@@ -274,6 +279,8 @@ func _ready() -> void:
 	GameState.light_last_unix = now
 
 	load_planet(planet_to_load)
+	if _awaiting_capital(current_data):
+		_hold_ui()   # before the first frame: the fade-in shows the planet alone
 	if GameState.showcase_mode:
 		_enter_showcase_layout()
 	# back/forward may have asked for a specific panel of this planet
@@ -2579,20 +2586,12 @@ func _land_lander(nm: String, def: DistrictDef, site: Vector2) -> void:
 			poi_layer.spawn_floating_text(rad_to_deg(site.x), rad_to_deg(site.y), "Touchdown!", Color(0.65, 1.0, 0.7), 14))
 
 func _maybe_require_first_city() -> void:
-	if GameState.showcase_mode:
-		return
+	if _ui_held and not _awaiting_capital(current_data):
+		_release_ui()   # the Capital stands: the interface comes in
 	if current_data == null or _placing_def != null or _naming_open:
 		return
-	var pp := GameState.get_planet(current_data.seed)
-	if pp == null or not pp.is_colonized:
+	if not _awaiting_capital(current_data):
 		return
-	if PlanetData.get_shader_type(current_data.planet_type) == PlanetData.ShaderType.GAS:
-		return
-	for p: POIData in current_data.custom_pois:
-		if p.is_city() and not p.is_orbital():
-			return
-	if current_data.seed != GameState.home_planet_seed:
-		return   # other worlds: the lander waits for "Found First Settlement"
 	var city_def := DistrictDef.find(DistrictDef.Type.CITY)
 	if city_def == null:
 		return
@@ -2605,6 +2604,43 @@ func _maybe_require_first_city() -> void:
 	_apply_panel_t(0.0)
 	_begin_district_placement(city_def)
 	_reopen_panel_after_place = was_open
+
+## A new game's home before its Capital: colonised, solid, no City on the
+## ground yet. (Other worlds wait for "Found First Settlement" instead.)
+func _awaiting_capital(data: PlanetData) -> bool:
+	if data == null or GameState.showcase_mode or data.seed != GameState.home_planet_seed:
+		return false
+	var pp := GameState.get_planet(data.seed)
+	if pp == null or not pp.is_colonized:
+		return false
+	if PlanetData.get_shader_type(data.planet_type) == PlanetData.ShaderType.GAS:
+		return false
+	for p: POIData in data.custom_pois:
+		if p.is_city() and not p.is_orbital():
+			return false
+	return true
+
+## A new game opens on the bare planet: the HUD, the news bar and the panel
+## arrow stay away while the Capital's site is picked, then fade in once it is
+## founded. Tutorial lines and the placement hint still show.
+var _ui_held := false
+const UI_REVEAL_SEC := 0.8
+
+func _hold_ui() -> void:
+	_ui_held = true
+	HUDManager.set_game_hud(false)
+	if _panel_toggle_btn != null:
+		_panel_toggle_btn.visible = false
+
+func _release_ui() -> void:
+	_ui_held = false
+	HUDManager.fade_in_game_hud(UI_REVEAL_SEC)
+	NewsFeed.fade_in(UI_REVEAL_SEC)
+	if _panel_toggle_btn != null and not GameState.showcase_mode:
+		_panel_toggle_btn.visible = true
+		_panel_toggle_btn.modulate.a = 0.0
+		create_tween().tween_property(_panel_toggle_btn, "modulate:a", 1.0, UI_REVEAL_SEC) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 ## Bakes the exact GPU terrain for CPU lookups, then re-reads everything that was
 ## sampled from the (inexact) GDScript noise fallback in the meantime.

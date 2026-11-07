@@ -752,7 +752,18 @@ func _play_slot(slot: int) -> void:
 	# the game already loaded at boot just goes on; another slot is opened first
 	if slot != GameState.save_slot or not GameState.has_save():
 		GameState.open_slot(slot)
-	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
+	_enter_game()
+
+## Opens the run's first scene. While the solar and galaxy maps are still
+## locked (a new game) that is the home planet, straight away: going through
+## the galaxy first showed its side panel and the HUD over a black screen for
+## a moment before it passed the player on to the planet.
+func _enter_game() -> void:
+	var home := GameState.get_home_planet()
+	if home != null and not GameState.can_view_solar() and not GameState.can_view_galaxy():
+		SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", home)
+	else:
+		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
 
 func _delete_slot(slot: int) -> void:
 	var info := GameState.slot_info(slot)
@@ -770,7 +781,7 @@ func _on_new_game() -> void:
 	_show_intro(func() -> void: GameState.delete_save())
 
 ## The short goal card before the first scene (scenes/ui/IntroCard.tscn);
-## `start` runs on BEGIN, before the galaxy opens.
+## `start` runs on BEGIN, before the first scene opens.
 func _show_intro(start: Callable) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 235
@@ -778,7 +789,7 @@ func _show_intro(start: Callable) -> void:
 	var card: Control = (load("res://scenes/ui/IntroCard.tscn") as PackedScene).instantiate()
 	card.connect("begun", func() -> void:
 		start.call()
-		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn"))
+		_enter_game())
 	layer.add_child(card)
 
 ## "Civ 0 // 1h 12m played // 28.10 14:05", "Empty", or why it can't load.

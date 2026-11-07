@@ -19,6 +19,22 @@ func set_game_hud(visible_state: bool) -> void:
 	visible = visible_state
 	if is_instance_valid(_top_layer):
 		_top_layer.visible = visible_state
+
+## Shows the HUD with its pieces fading in over `sec` — a new game's interface
+## arriving once the Capital is founded (PlanetaryView._release_ui).
+func fade_in_game_hud(sec: float) -> void:
+	set_game_hud(true)
+	for layer_node in [self, _top_layer]:
+		if not is_instance_valid(layer_node):
+			continue
+		for c in (layer_node as Node).get_children():
+			var ci := c as CanvasItem
+			if ci == null or not ci.visible:
+				continue
+			var a := ci.modulate.a
+			ci.modulate.a = 0.0
+			ci.create_tween().tween_property(ci, "modulate:a", a, sec) \
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 ## A credit amount, "21.6k" — no "cr": the credits icon stands beside it
 ## (playtest 31.10: "cr" is never written).
 static func fmt_credits(val: float) -> String:
