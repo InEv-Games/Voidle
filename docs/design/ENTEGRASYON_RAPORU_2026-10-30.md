@@ -149,7 +149,7 @@ Hepsi veri tabanlı. Sayılar ve metinler dosyanın başındaki tablolardan değ
 
 ### News (`scripts/system/NewsFeed.gd`, yeni autoload `NewsFeed`)
 - Ekranın altında, sol panel ile sağ kenar arasında kayan bir haber şeridi var.
-- **Olay haberleri** (altın, "◆"): district kuruldu, bina açıldı (6 sn içindekiler tek haberde toplanıyor), araştırma bitti, City seviye atladı, gezegen seviyesi, mineral keşfi, trait seçildi, relic bulundu, lander ve final roket.
+- **Olay haberleri** (altın renkli): district kuruldu, bina açıldı (6 sn içindekiler tek haberde toplanıyor), araştırma bitti, City seviye atladı, gezegen seviyesi, mineral keşfi, trait seçildi, relic bulundu, lander ve final roket.
 - **Flavour haberleri** (gri): oyuncunun kendi City ve district adlarıyla 20 şablon, ayrıca 4 genel satır. Bekleyen olay yoksa 6 sn arayla geliyor. Örnek: "Three workers lost their lives in an accident at {district}…"
 - Herhangi bir koddan haber eklenebilir: `NewsFeed.post("…")`.
 - Lens çubuğu, şeridin üstünde kalsın diye 30 px yukarı alındı.

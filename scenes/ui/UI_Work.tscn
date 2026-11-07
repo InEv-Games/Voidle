@@ -5410,7 +5410,7 @@ theme_override_fonts/font = ExtResource("1_orb")
 theme_override_font_sizes/font_size = 11
 theme_override_styles/normal = SubResource("sb_37")
 theme_override_styles/hover = SubResource("sb_38")
-text = "◆  The lander reached the Moon's orbit  —  click to go there"
+text = "The lander reached the Moon's orbit  —  click to go there"
 
 [node name="ReturnToWorld" type="Button" parent="Scroll/Content/S12_Banner/Current" unique_id=1096248905]
 layout_mode = 2

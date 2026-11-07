@@ -47,7 +47,7 @@
   * **82 Bina Modeli:** 5 uzmanlık ailesine (*Energy, Production, Science, Residential, Commercial*) ve coğrafi koşullara (*kıyı, dağ, nehir, çöl, krater*) duyarlı yapılar.
   * **13 District Türü:** *Capital District*, 5 Yüzey Uzmanlık District'i, *Spaceport*, *Orbit City* ve 5 *Orbital Destek District'i*.
   * **12 Ham Mineral & 3 İşlenmiş Ürün:** Nadirlik matrisine (R1–R12) göre *Ferrite, Moonstone, Cinderite, Cryolite, Dune Quartz, Helion, Astralite, Aurorium, Xenite, Nyxium, Quantium, Singularite* + *Consumer Goods, Fuel Rods, Rare Elements*.
-  * **Canlı Arz-Talep Borsası ([`Trade.gd`](file:///Users/uluckaymak/.gemini/antigravity/worktrees/Voidle/steam_page_generator/scripts/game/Trade.gd) & [`TradePanel.gd`](file:///Users/uluckaymak/.gemini/antigravity/worktrees/Voidle/steam_page_generator/scripts/ui/TradePanel.gd)):** Her alım fiyatı yükseltir, her satış düşürür; otomatik rezerv ve emir modları (`▲ Buy until`, `▼ Sell until`, `◆ Keep at`).
+  * **Canlı Arz-Talep Borsası ([`Trade.gd`](file:///Users/uluckaymak/.gemini/antigravity/worktrees/Voidle/steam_page_generator/scripts/game/Trade.gd) & [`TradePanel.gd`](file:///Users/uluckaymak/.gemini/antigravity/worktrees/Voidle/steam_page_generator/scripts/ui/TradePanel.gd)):** Her alım fiyatı yükseltir, her satış düşürür; otomatik rezerv ve emir modları (`▲ Buy until`, `▼ Sell until`, `■ Keep at`).
   * **9 İnteraktif Arkeolojik Kazı Hikayesi & 2 Yoldaş (Companions):** Ana dünya ve Ay üzerindeki kalıntılarda seçim odaklı kazılar ([`StoryDialog.gd`](file:///Users/uluckaymak/.gemini/antigravity/worktrees/Voidle/steam_page_generator/scripts/ui/excavation/StoryDialog.gd)), ekibe katılan uzmanlar (*Sera Vale*, *Dorian Hale*) ve kalıcı yadigârlar (*Relics*).
   * **16 Gezegen Özelliği ([`PlanetTags.gd`](file:///Users/uluckaymak/.gemini/antigravity/worktrees/Voidle/steam_page_generator/scripts/game/PlanetTags.gd)):** Gezegen seviye atladıkça açılan 3 karttan 1'ini seçme (*Roguelite/4X draft* mekaniği).
   * **117 Başarım ([`AchievementManager.gd`](file:///Users/uluckaymak/.gemini/antigravity/worktrees/Voidle/steam_page_generator/scripts/game/AchievementManager.gd)).**
@@ -109,13 +109,13 @@ Every planet is procedurally generated with real elevation, coastlines, river ba
 [/list]
 
 [h2]2. EXTRACT, REFINE & MANIPULATE A LIVE MARKET[/h2]
-[i][🎥 GIF/WEBM #2 — 5 sec loop: Left Panel flips with a cyber-scramble animation into the Market screen. Green and red sparkline charts (▁▃▅) pulse as the player dumps a x10 lot of Ferrite, dropping its price, then sets a standing "◆ Keep at 150" automation order on Moonstone.][/i]
+[i][🎥 GIF/WEBM #2 — 5 sec loop: Left Panel flips with a cyber-scramble animation into the Market screen. Green and red sparkline charts (▁▃▅) pulse as the player dumps a x10 lot of Ferrite, dropping its price, then sets a standing "■ Keep at 150" automation order on Moonstone.][/i]
 
 Forget tedious cargo-ship micro. All extracted resources feed into a unified global stock, letting you focus on industrial synergy and financial warfare:
 [list]
 [*] [b]82 Buildings & Fixed Industrial Recipes:[/b] Survey planetary crusts to unlock [b]12 distinct raw minerals[/b] (from common [i]Ferrite[/i] and lunar [i]Moonstone[/i] to exotic [i]Cryolite[/i] and [i]Singularite[/i]) and refine them into [b]Consumer Goods, Fuel Rods, and Rare Elements[/b].
 [*] [b]Dynamic Supply-and-Demand Exchange:[/b] Every crate you buy drives market prices up; every surplus you dump drives them down. Read the live sparkline charts and time your trades between 0.4× and 3.0× price waves.
-[*] [b]Standing Market Automation:[/b] Research [i]Trade Automation[/i] to set autonomous reserve thresholds ([b]▲ Buy Until, ▼ Sell Until, ◆ Keep At[/b]) so your economy self-balances while you expand.
+[*] [b]Standing Market Automation:[/b] Research [i]Trade Automation[/i] to set autonomous reserve thresholds ([b]▲ Buy Until, ▼ Sell Until, ■ Keep At[/b]) so your economy self-balances while you expand.
 [/list]
 
 [h2]3. CONQUER THE FRACTAL TECH TREE[/h2]
@@ -202,13 +202,13 @@ Her gezegen gerçek yükselti, kıyı şeridi, nehir havzası, rüzgâr koridoru
 [/list]
 
 [h2]2. ÇIKAR, İŞLE VE CANLI BORSAYI MANİPÜLE ET[/h2]
-[i][🎥 GIF/WEBM #2 — 5 sn döngü: Sol panel siber-kod animasyonuyla Piyasa (Market) ekranına döner. Yeşil ve kırmızı fiyat grafikleri (▁▃▅) dalgalanırken oyuncu 10'luk Ferrite partisi satarak fiyatı düşürür, ardından Moonstone için "◆ 150'de Tut" otomatik emrini aktif eder.][/i]
+[i][🎥 GIF/WEBM #2 — 5 sn döngü: Sol panel siber-kod animasyonuyla Piyasa (Market) ekranına döner. Yeşil ve kırmızı fiyat grafikleri (▁▃▅) dalgalanırken oyuncu 10'luk Ferrite partisi satarak fiyatı düşürür, ardından Moonstone için "■ 150'de Tut" otomatik emrini aktif eder.][/i]
 
 Yorucu kargo gemisi mikro-yönetimini unut. Çıkarılan tüm kaynaklar ortak küresel stoğa akar; böylece tamamen endüstriyel sinerjiye ve finansal stratejiye odaklanırsın:
 [list]
 [*] [b]82 Bina Modeli & Sabit Üretim Tarifleri:[/b] Gezegen kabuğunu kazarak [b]12 farklı ham minerali[/b] ([i]Ferrite[/i] ve [i]Moonstone[/i]'dan nadir [i]Cryolite[/i] ve [i]Singularite[/i]'e kadar) keşfet; bunları [b]Consumer Goods, Fuel Rods ve Rare Elements[/b] ürünlerine işle.
 [*] [b]Dinamik Arz-Talep Borsası:[/b] Satın aldığın her sandık piyasa fiyatını yükseltir, sattığın her stok fazlası fiyatı düşürür. Canlı grafikleri oku ve işlemlerini 0,4× ile 3,0× arasındaki fiyat dalgalarına göre zamanla.
-[*] [b]Otonom Ticaret Emirleri:[/b] [i]Trade Automation[/i] araştırmasını açarak rezerv hedefleri ([b]▲ Şuna Kadar Al, ▼ Şuna Kadar Sat, ◆ Bu Seviyede Tut[/b]) belirle; sen yeni dünyalara açılırken ekonomin kendi kendini dengelesin.
+[*] [b]Otonom Ticaret Emirleri:[/b] [i]Trade Automation[/i] araştırmasını açarak rezerv hedefleri ([b]▲ Şuna Kadar Al, ▼ Şuna Kadar Sat, ■ Bu Seviyede Tut[/b]) belirle; sen yeni dünyalara açılırken ekonomin kendi kendini dengelesin.
 [/list]
 
 [h2]3. FRAKTAL TEKNOLOJİ AĞACINA HÜKMET[/h2]

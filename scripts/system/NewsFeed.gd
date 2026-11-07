@@ -113,7 +113,7 @@ func post(text: String, kind: Kind = Kind.EVENT, detail: String = "", title: Str
 		return
 	if kind == Kind.FLAVOUR and not _queue.is_empty():
 		return
-	_queue.append({"text": ("◆  " if kind == Kind.EVENT else "") + text, "kind": kind,
+	_queue.append({"text": text, "kind": kind,
 		"title": title, "detail": detail, "loc": loc})
 	while _queue.size() > MAX_QUEUE:
 		_queue.remove_at(0)
@@ -388,7 +388,7 @@ func _process(delta: float) -> void:
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		l.add_theme_font_size_override("font_size", 12)
 		l.add_theme_color_override("font_color",
-			Color(1.0, 0.86, 0.50) if text.begins_with("◆") else Color(0.78, 0.84, 0.95))
+			Color(1.0, 0.86, 0.50) if int(item["kind"]) == Kind.EVENT else Color(0.78, 0.84, 0.95))
 		l.text = text + SEPARATOR
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_clip.add_child(l)
