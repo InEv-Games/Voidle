@@ -191,14 +191,19 @@ func _open_skill_tree() -> void:
 	st_view.modulate.a = 0.0
 	st_layer.add_child(st_view)
 	get_tree().root.add_child(st_layer)
+	# a weak ref, not the view: it can be freed while the tree is open, and a
+	# lambda that holds a freed node errors when called
+	var wview: WeakRef = weakref(view) if view != null else null
 	st_view.tree_exiting.connect(func() -> void:
-		if is_instance_valid(view) and view.has_method("overlay_end"):
-			view.call("overlay_end"))
+		var v: Object = wview.get_ref() if wview != null else null
+		if v != null and v.has_method("overlay_end"):
+			v.call("overlay_end"))
 	var tw := st_view.create_tween()
 	tw.tween_interval(wait)
 	tw.tween_callback(func() -> void:
-		if is_instance_valid(view) and view.has_method("overlay_zoom_out"):
-			view.call("overlay_zoom_out", TREE_FADE_SEC))
+		var v: Object = wview.get_ref() if wview != null else null
+		if v != null and v.has_method("overlay_zoom_out"):
+			v.call("overlay_zoom_out", TREE_FADE_SEC))
 	tw.tween_property(st_view, "modulate:a", 1.0, TREE_FADE_SEC) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
@@ -387,7 +392,7 @@ func show_pause_menu() -> void:
 		add.call("SAVE GAME", "save", IconButton.Variant.DEFAULT, func() -> void:
 			GameState.save()
 			p.card.title = "GAME SAVED"
-			var tw := create_tween()
+			var tw := p.create_tween()   # dies with the popup: closing it within 1.5 s is fine
 			tw.tween_interval(1.5)
 			tw.tween_callback(func() -> void:
 				if is_instance_valid(p):

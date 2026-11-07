@@ -5421,9 +5421,11 @@ func _set_lens_menu(open: bool) -> void:
 			var c := items[i] as Control
 			var delay := 0.06 + i * LENS_ITEM_STEP
 			_lens_menu_tw.tween_property(c, "modulate:a", 1.0, LENS_MENU_IN_SEC).set_delay(delay)
+			var wc: WeakRef = weakref(c)   # the item may be freed mid-tween
 			_lens_menu_tw.tween_method(func(k: float) -> void:
-				if is_instance_valid(c):
-					c.offset_transform_position = Vector2(0.0, -(1.0 - k) * LENS_ITEM_RISE),
+				var item := wc.get_ref() as Control
+				if item != null:
+					item.offset_transform_position = Vector2(0.0, -(1.0 - k) * LENS_ITEM_RISE),
 				0.0, 1.0, LENS_MENU_IN_SEC).set_delay(delay)
 	else:
 		_lens_menu_tw = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
@@ -7831,8 +7833,12 @@ func _hover_tip(c: Control, title: String, text: String) -> void:
 	c.mouse_filter = Control.MOUSE_FILTER_STOP
 	c.mouse_entered.connect(func() -> void:
 		c.set_meta("tip_hover", true)
+		# a weak ref, not the chip: a panel rebuild can free it before the timer
+		# fires, and a lambda that holds a freed node errors when called
+		var wc: WeakRef = weakref(c)
 		get_tree().create_timer(CHIP_TIP_DELAY).timeout.connect(func() -> void:
-			if is_instance_valid(c) and c.get_meta("tip_hover", false):
+			var chip := wc.get_ref() as Control
+			if chip != null and chip.get_meta("tip_hover", false):
 				TooltipManager.show_tip(title, text)))
 	c.mouse_exited.connect(func() -> void:
 		c.set_meta("tip_hover", false)
