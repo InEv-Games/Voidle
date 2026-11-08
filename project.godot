@@ -22,6 +22,7 @@ config/icon="uid://cklxjbcevnmf"
 [audio]
 
 buses/default_bus_layout="uid://bsklxqvalg8c0"
+general/text_to_speech=true
 
 [autoload]
 
@@ -57,7 +58,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/VAM/plugin.cfg", "res://addons/VSM/plugin.cfg", "res://addons/build_info/plugin.cfg")
+enabled=PackedStringArray("res://addons/VAM/plugin.cfg", "res://addons/VSM/plugin.cfg", "res://addons/build_info/plugin.cfg", "res://addons/voice-generator/plugin.cfg")
 
 [gui]
 

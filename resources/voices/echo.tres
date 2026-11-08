@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="VoiceProfile" format=3]
+
+[ext_resource type="Script" path="res://addons/voice-generator/voice_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+sample_dir = "res://addons/voice-generator/sound/alphabet/high"
+base_pitch = 1.27
+syllables_per_second = 12.0
+syllable_sample = 1
+comma_pause = 0.35
+sentence_pause = 0.95
+stress_last_syllable = true
+declination = 0.05
+question_rise = 0.35
+exclamation_lift = 0.16
+drift_amount = 0.155
+drift_speed = 0.31
+tts_voice_id = "com.apple.eloquence.en-US.Flo"
+tts_pitch = 1.33
+tts_rate = 3.0

@@ -1,0 +1,94 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_node"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_link"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="3_mod"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="4_entry"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="5_dlg"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="6_exit"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_talker_modifier.gd" id="7_talker"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="8_data"]
+
+[sub_resource type="Resource" id="Link_1_2"]
+script = ExtResource("2_link")
+target_id = 2
+
+[sub_resource type="Resource" id="Node_1"]
+script = ExtResource("4_entry")
+exits = Array[ExtResource("2_link")]([SubResource("Link_1_2")])
+id = 1
+graph_position = Vector2(80, 200)
+
+[sub_resource type="Resource" id="Link_2_3"]
+script = ExtResource("2_link")
+target_id = 3
+
+[sub_resource type="Resource" id="Node_2"]
+script = ExtResource("5_dlg")
+text = "The signal returns at dawn. It is faint, but it carries words now, slow and patient."
+exits = Array[ExtResource("2_link")]([SubResource("Link_2_3")])
+id = 2
+graph_position = Vector2(400, 200)
+
+[sub_resource type="Resource" id="Talker_Echo_3"]
+script = ExtResource("7_talker")
+talker = "Echo"
+
+[sub_resource type="Resource" id="Link_3_4"]
+script = ExtResource("2_link")
+target_id = 4
+label = "Who are you?"
+
+[sub_resource type="Resource" id="Link_3_5"]
+script = ExtResource("2_link")
+target_id = 5
+label = "Stay silent."
+
+[sub_resource type="Resource" id="Node_3"]
+script = ExtResource("5_dlg")
+text = "Can you hear me? I have been waiting a long time for someone to answer."
+exits = Array[ExtResource("2_link")]([SubResource("Link_3_4"), SubResource("Link_3_5")])
+id = 3
+graph_position = Vector2(720, 200)
+modifiers = Array[ExtResource("3_mod")]([SubResource("Talker_Echo_3")])
+
+[sub_resource type="Resource" id="Talker_Echo_4"]
+script = ExtResource("7_talker")
+talker = "Echo"
+
+[sub_resource type="Resource" id="Link_4_6"]
+script = ExtResource("2_link")
+target_id = 6
+
+[sub_resource type="Resource" id="Node_4"]
+script = ExtResource("5_dlg")
+text = "A keeper, nothing more. Come closer, and I will show you what was buried here!"
+exits = Array[ExtResource("2_link")]([SubResource("Link_4_6")])
+id = 4
+graph_position = Vector2(1040, 80)
+modifiers = Array[ExtResource("3_mod")]([SubResource("Talker_Echo_4")])
+
+[sub_resource type="Resource" id="Link_5_6"]
+script = ExtResource("2_link")
+target_id = 6
+
+[sub_resource type="Resource" id="Node_5"]
+script = ExtResource("5_dlg")
+text = "You say nothing. The voice sighs, then fades back into static."
+exits = Array[ExtResource("2_link")]([SubResource("Link_5_6")])
+id = 5
+graph_position = Vector2(1040, 340)
+
+[sub_resource type="Resource" id="Node_6"]
+script = ExtResource("6_exit")
+id = 6
+graph_position = Vector2(1360, 200)
+
+[resource]
+script = ExtResource("8_data")
+graph_name = "test_voice_narrative"
+next_free_id = 7
+nodes = Array[ExtResource("1_node")]([SubResource("Node_1"), SubResource("Node_2"), SubResource("Node_3"), SubResource("Node_4"), SubResource("Node_5"), SubResource("Node_6")])
+occurrences = Array[String](["start"])
+endings = Array[String](["end"])
+talkers = Array[String](["Echo"])
