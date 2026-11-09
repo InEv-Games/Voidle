@@ -1,0 +1,9 @@
+id,weight,target_pool,effect_id,title_en,report_en
+ridge_slide,3,unowned_land,terrain_overlay,Fresh slip face,"A slope gave way at {place}. The survey marked the exposed rock above the debris."
+coastal_collapse,2,unowned_coast,terrain_overlay,Coastal shelf collapse,"Part of the shelf at {place} fell into the water. The revised survey shows where the shoreline runs now."
+crater_exposure,2,unowned_crater,survey_marker,Crater exposure,"Falling rock opened a shelf inside {place}. The crew left a marker where the new rock begins."
+buried_ridge,3,unowned_land,survey_marker,Buried ridge exposed,"Wind stripped the loose soil at {place}. The ridge on the new survey was buried when you left."
+ruin_collapse,2,unowned_ruin,collapse_ruin,Unoccupied ruin collapsed,"The roof at {place} came down. The rubble is still inside the footprint."
+flood_channel,2,unowned_coast,terrain_overlay,Flood channel,"Runoff cut a new channel at {place}. The survey team walked both banks before posting the update."
+drive_damage,2,aux_producer,repair_required,Production drive damaged,"A drive bearing failed at {place}. The crew isolated the unit. It is waiting for repair."
+feed_hopper_damage,2,aux_producer,repair_required,Feed assembly damaged,"The feed assembly at {place} buckled. The crew cleared the jam and left the unit shut down for repair."
