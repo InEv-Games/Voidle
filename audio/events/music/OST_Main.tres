@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="VAMMusicEvent" format=3 uid="uid://d2exndylnl72t"]
 
 [ext_resource type="AudioStream" uid="uid://dc6uxyrb0e1il" path="res://assets/soundtrack/VoidleOST-Main-Intro.wav" id="1_1u1iy"]
+[ext_resource type="Script" uid="uid://dy88o7iiddhen" path="res://addons/VAM/data/vam_music_group.gd" id="1_d15s5"]
 [ext_resource type="AudioStream" uid="uid://bp7d2bcj5q73n" path="res://assets/soundtrack/VoidleOST-Main-Loop1.wav" id="2_c77pg"]
 [ext_resource type="Script" uid="uid://dk7vt5ww4fdiy" path="res://addons/VAM/data/vam_music_event.gd" id="3_50u5u"]
 [ext_resource type="AudioStream" uid="uid://coxyjhc4b1gev" path="res://assets/soundtrack/VoidleOST-Main-Loop2.wav" id="3_d15s5"]
@@ -9,6 +10,12 @@
 [ext_resource type="Script" uid="uid://dqgclrw16ugo1" path="res://addons/VAM/data/vam_music_parameter.gd" id="6_c77pg"]
 [ext_resource type="AudioStream" uid="uid://p440wcvavg4i" path="res://assets/soundtrack/VoidleOST-Main-Outro.wav" id="6_fn1nu"]
 [ext_resource type="Script" uid="uid://cdxbi7rsxqp7p" path="res://addons/VAM/data/vam_music_rule.gd" id="7_1u1iy"]
+[ext_resource type="Script" uid="uid://x6sb6wcv53np" path="res://addons/VAM/data/vam_music_transition.gd" id="11_3rime"]
+
+[sub_resource type="Resource" id="Resource_3rime"]
+script = ExtResource("1_d15s5")
+name = &"Loops"
+members = Array[StringName]([&"voidleost_loop1", &"voidleost_loop3", &"voidleost_loop2", &"voidleost_loop4"])
 
 [sub_resource type="AudioStreamInteractive" id="AudioStreamInteractive_0b0dm"]
 clip_count = 6
@@ -42,7 +49,20 @@ block_types = Dictionary[StringName, int]({
 &"voidleost_loop4": 1,
 &"voidleost_outro": 3
 })
-random_loops = Array[StringName]([&"voidleost_loop1", &"voidleost_loop3", &"voidleost_loop2", &"voidleost_loop4"])
+groups = Array[ExtResource("1_d15s5")]([SubResource("Resource_3rime")])
 outro_clip = &"voidleost_outro"
+bpm = 90.0
+graph_layout = Dictionary[StringName, Vector2]({
+&"@any": Vector2(0, 240),
+&"@end": Vector2(0, 440),
+&"@group:Loops": Vector2(640, -70),
+&"@start": Vector2(0, 40),
+&"voidleost_intro": Vector2(200, 40),
+&"voidleost_loop1": Vector2(640, 40),
+&"voidleost_loop2": Vector2(640, 240),
+&"voidleost_loop3": Vector2(640, 440),
+&"voidleost_loop4": Vector2(640, 640),
+&"voidleost_outro": Vector2(200, 440)
+})
 bus = &"Music"
 volume_db = -3.0

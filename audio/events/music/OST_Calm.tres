@@ -1,0 +1,62 @@
+[gd_resource type="Resource" script_class="VAMMusicEvent" format=3 uid="uid://dikoery24goxl"]
+
+[ext_resource type="Script" uid="uid://dy88o7iiddhen" path="res://addons/VAM/data/vam_music_group.gd" id="1_62nbr"]
+[ext_resource type="Script" uid="uid://dqgclrw16ugo1" path="res://addons/VAM/data/vam_music_parameter.gd" id="2_kdv16"]
+[ext_resource type="AudioStream" uid="uid://chk2j8fdo60v2" path="res://assets/soundtrack/VoidleOST-Alt1-Intro.wav" id="2_ual55"]
+[ext_resource type="AudioStream" uid="uid://c3pfychxv5u7o" path="res://assets/soundtrack/VoidleOST-Alt1-Loop1.wav" id="3_eyew3"]
+[ext_resource type="Script" uid="uid://cdxbi7rsxqp7p" path="res://addons/VAM/data/vam_music_rule.gd" id="3_v4t4n"]
+[ext_resource type="AudioStream" uid="uid://dxk0gi3sq8c0n" path="res://assets/soundtrack/VoidleOST-Alt1-Loop2.wav" id="4_mtbg6"]
+[ext_resource type="Script" uid="uid://dk7vt5ww4fdiy" path="res://addons/VAM/data/vam_music_event.gd" id="4_yw5m1"]
+[ext_resource type="AudioStream" uid="uid://br0iokc2afiwi" path="res://assets/soundtrack/VoidleOST-Alt1-Loop3.wav" id="5_4gpim"]
+[ext_resource type="Script" uid="uid://x6sb6wcv53np" path="res://addons/VAM/data/vam_music_transition.gd" id="5_pfrot"]
+[ext_resource type="AudioStream" uid="uid://bkwoer78bcfox" path="res://assets/soundtrack/VoidleOST-Alt1-Loop4.wav" id="6_w4gkw"]
+[ext_resource type="AudioStream" uid="uid://bo7ynr18hr03e" path="res://assets/soundtrack/VoidleOST-Alt1-Outro.wav" id="7_uolnp"]
+
+[sub_resource type="Resource" id="Resource_ual55"]
+script = ExtResource("1_62nbr")
+name = &"Loops"
+members = Array[StringName]([&"voidleost_alt1_intro", &"voidleost_alt1_loop1", &"voidleost_alt1_loop2", &"voidleost_alt1_loop3", &"voidleost_alt1_loop4"])
+
+[sub_resource type="AudioStreamInteractive" id="AudioStreamInteractive_8rtb0"]
+clip_count = 6
+clip_0/name = &"voidleost_alt1_intro"
+clip_0/stream = ExtResource("2_ual55")
+clip_0/auto_advance = 0
+clip_1/name = &"voidleost_alt1_loop1"
+clip_1/stream = ExtResource("3_eyew3")
+clip_1/auto_advance = 0
+clip_2/name = &"voidleost_alt1_loop2"
+clip_2/stream = ExtResource("4_mtbg6")
+clip_2/auto_advance = 0
+clip_3/name = &"voidleost_alt1_loop3"
+clip_3/stream = ExtResource("5_4gpim")
+clip_3/auto_advance = 0
+clip_4/name = &"voidleost_alt1_loop4"
+clip_4/stream = ExtResource("6_w4gkw")
+clip_4/auto_advance = 0
+clip_5/name = &"voidleost_alt1_outro"
+clip_5/stream = ExtResource("7_uolnp")
+clip_5/auto_advance = 0
+
+[resource]
+script = ExtResource("4_yw5m1")
+music = SubResource("AudioStreamInteractive_8rtb0")
+block_types = Dictionary[StringName, int]({
+&"voidleost_alt1_intro": 0,
+&"voidleost_alt1_loop1": 1,
+&"voidleost_alt1_loop2": 1,
+&"voidleost_alt1_loop3": 1,
+&"voidleost_alt1_loop4": 1,
+&"voidleost_alt1_outro": 3
+})
+groups = Array[ExtResource("1_62nbr")]([SubResource("Resource_ual55")])
+outro_clip = &"voidleost_alt1_outro"
+bpm = 90.0
+graph_layout = Dictionary[StringName, Vector2]({
+&"@any": Vector2(0, 240),
+&"@end": Vector2(0, 440),
+&"@group:Loops": Vector2(640, -70),
+&"@start": Vector2(0, 40)
+})
+bus = &"Music"
+volume_db = -3.0
