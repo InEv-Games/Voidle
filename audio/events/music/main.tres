@@ -45,4 +45,4 @@ block_types = Dictionary[StringName, int]({
 random_loops = Array[StringName]([&"voidleost_loop1", &"voidleost_loop3", &"voidleost_loop2", &"voidleost_loop4"])
 outro_clip = &"voidleost_outro"
 bus = &"Music"
-volume_db = -8.0
+volume_db = -3.0
