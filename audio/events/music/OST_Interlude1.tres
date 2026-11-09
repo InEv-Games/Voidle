@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="VAMInterludeEvent" format=3 uid="uid://2iprj5bfc4s7"]
+
+[ext_resource type="AudioStream" uid="uid://dj1i018qbhy14" path="res://assets/soundtrack/VoidleInterlude-1_1.wav" id="1_2f21s"]
+[ext_resource type="AudioStream" uid="uid://d4i80xgxujlif" path="res://assets/soundtrack/VoidleInterlude-1_2.wav" id="2_ex325"]
+[ext_resource type="AudioStream" uid="uid://ir63mc2ihq1c" path="res://assets/soundtrack/VoidleInterlude-1_3.wav" id="3_0uh20"]
+[ext_resource type="Script" uid="uid://48wme56qcy7k" path="res://addons/VAM/data/vam_interlude_event.gd" id="3_ex325"]
+
+[resource]
+script = ExtResource("3_ex325")
+clips = Array[AudioStream]([ExtResource("1_2f21s"), ExtResource("2_ex325"), ExtResource("3_0uh20")])
+gap_min = 20.0
+bus = &"Music"
+notes = "Ara müzik: soundtrack çalmıyorken ara ara gelen parçalar. Dosyaların sonundaki ~20 s sessizlik bilerek bırakıldı. Oyun koduna henüz bağlı değil: VAM.play(&\"music/OST_Interlude\") / VAM.stop(...)."

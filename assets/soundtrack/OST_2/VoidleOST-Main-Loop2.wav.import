@@ -3,12 +3,12 @@
 importer="wav"
 type="AudioStreamWAV"
 uid="uid://coxyjhc4b1gev"
-path="res://.godot/imported/VoidleOST-Main-Loop2.wav-ede6eff5ce64e419c09aed40911f8b70.sample"
+path="res://.godot/imported/VoidleOST-Main-Loop2.wav-659e8ba853d3db8c1e4db76224c8d17e.sample"
 
 [deps]
 
-source_file="res://assets/soundtrack/VoidleOST-Main-Loop2.wav"
-dest_files=["res://.godot/imported/VoidleOST-Main-Loop2.wav-ede6eff5ce64e419c09aed40911f8b70.sample"]
+source_file="res://assets/soundtrack/OST_2/VoidleOST-Main-Loop2.wav"
+dest_files=["res://.godot/imported/VoidleOST-Main-Loop2.wav-659e8ba853d3db8c1e4db76224c8d17e.sample"]
 
 [params]
 

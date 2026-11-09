@@ -30,7 +30,7 @@ const PROCESS_LOOP := &"sfx/ProcessLoop"
 ## One of those processes finished.
 const PROCESS_DONE := &"sfx/processDone"
 const AMBIENCE := &"music/space_drone"
-const MUSIC := &"music/main"
+const MUSIC := &"music/OST_Main"
 ## Credits came in; the event's cooldown keeps steady income from chiming nonstop.
 const INCOME := &"sfx/income"
 ## An expedition finished preparing (GameState.expedition_ready).

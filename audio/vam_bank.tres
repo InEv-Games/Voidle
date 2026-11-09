@@ -1,8 +1,10 @@
-[gd_resource type="Resource" script_class="VAMBank" format=3 uid="uid://fdqkuw5nr4hp"]
+[gd_resource type="Resource" script_class="VAMBank" format=3 uid="uid://13uj6fwsf524"]
 
 [ext_resource type="Script" uid="uid://br3x8uyfan1qg" path="res://addons/VAM/data/vam_event.gd" id="1_1opbw"]
 [ext_resource type="Resource" uid="uid://dikoery24goxl" path="res://audio/events/music/OST_Calm.tres" id="2_x0qfo"]
+[ext_resource type="Resource" uid="uid://x1kckcysbvh3" path="res://audio/events/music/OST_Interlude2.tres" id="3_b42l6"]
 [ext_resource type="Resource" uid="uid://c6uujj8keek4n" path="res://audio/events/snapshots/lowpass.tres" id="3_d627u"]
+[ext_resource type="Resource" uid="uid://2iprj5bfc4s7" path="res://audio/events/music/OST_Interlude1.tres" id="3_grwrk"]
 [ext_resource type="Resource" uid="uid://dwjuienbjtfva" path="res://audio/events/music/space_drone.tres" id="3_n627e"]
 [ext_resource type="Resource" uid="uid://d2exndylnl72t" path="res://audio/events/music/OST_Main.tres" id="3_x0qfo"]
 [ext_resource type="Resource" uid="uid://b66ir0jsm6nl7" path="res://audio/events/sfx/processDone.tres" id="4_c30df"]
@@ -27,6 +29,8 @@
 script = ExtResource("29_40cf4")
 events = Dictionary[StringName, ExtResource("1_1opbw")]({
 &"music/OST_Calm": ExtResource("2_x0qfo"),
+&"music/OST_Interlude1": ExtResource("3_grwrk"),
+&"music/OST_Interlude2": ExtResource("3_b42l6"),
 &"music/OST_Main": ExtResource("3_x0qfo"),
 &"music/space_drone": ExtResource("3_n627e"),
 &"sfx/ProcessLoop": ExtResource("4_r8n55"),
