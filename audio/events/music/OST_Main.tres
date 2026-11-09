@@ -1,46 +1,46 @@
 [gd_resource type="Resource" script_class="VAMMusicEvent" format=3 uid="uid://d2exndylnl72t"]
 
-[ext_resource type="AudioStream" uid="uid://dc6uxyrb0e1il" path="res://assets/soundtrack/VoidleOST-Main-Intro.wav" id="1_1u1iy"]
-[ext_resource type="Script" uid="uid://dy88o7iiddhen" path="res://addons/VAM/data/vam_music_group.gd" id="1_d15s5"]
-[ext_resource type="AudioStream" uid="uid://bp7d2bcj5q73n" path="res://assets/soundtrack/VoidleOST-Main-Loop1.wav" id="2_c77pg"]
-[ext_resource type="Script" uid="uid://dk7vt5ww4fdiy" path="res://addons/VAM/data/vam_music_event.gd" id="3_50u5u"]
-[ext_resource type="AudioStream" uid="uid://coxyjhc4b1gev" path="res://assets/soundtrack/VoidleOST-Main-Loop2.wav" id="3_d15s5"]
-[ext_resource type="AudioStream" uid="uid://dlifirdws8kov" path="res://assets/soundtrack/VoidleOST-Main-Loop3.wav" id="4_3rime"]
-[ext_resource type="AudioStream" uid="uid://bb5f7y2xojbjs" path="res://assets/soundtrack/VoidleOST-Main-Loop4.wav" id="5_g71tu"]
-[ext_resource type="Script" uid="uid://dqgclrw16ugo1" path="res://addons/VAM/data/vam_music_parameter.gd" id="6_c77pg"]
-[ext_resource type="AudioStream" uid="uid://p440wcvavg4i" path="res://assets/soundtrack/VoidleOST-Main-Outro.wav" id="6_fn1nu"]
-[ext_resource type="Script" uid="uid://cdxbi7rsxqp7p" path="res://addons/VAM/data/vam_music_rule.gd" id="7_1u1iy"]
-[ext_resource type="Script" uid="uid://x6sb6wcv53np" path="res://addons/VAM/data/vam_music_transition.gd" id="11_3rime"]
+[ext_resource type="Script" uid="uid://dy88o7iiddhen" path="res://addons/VAM/data/vam_music_group.gd" id="1_1g6ij"]
+[ext_resource type="AudioStream" uid="uid://dc6uxyrb0e1il" path="res://assets/soundtrack/VoidleOST-Main-Intro.wav" id="2_blhtg"]
+[ext_resource type="AudioStream" uid="uid://bp7d2bcj5q73n" path="res://assets/soundtrack/VoidleOST-Main-Loop1.wav" id="3_u71vq"]
+[ext_resource type="AudioStream" uid="uid://coxyjhc4b1gev" path="res://assets/soundtrack/VoidleOST-Main-Loop2.wav" id="4_fx7tm"]
+[ext_resource type="AudioStream" uid="uid://dlifirdws8kov" path="res://assets/soundtrack/VoidleOST-Main-Loop3.wav" id="5_og53d"]
+[ext_resource type="AudioStream" uid="uid://bb5f7y2xojbjs" path="res://assets/soundtrack/VoidleOST-Main-Loop4.wav" id="6_ntivu"]
+[ext_resource type="AudioStream" uid="uid://p440wcvavg4i" path="res://assets/soundtrack/VoidleOST-Main-Outro.wav" id="7_fnbbr"]
+[ext_resource type="Script" uid="uid://dqgclrw16ugo1" path="res://addons/VAM/data/vam_music_parameter.gd" id="8_clskj"]
+[ext_resource type="Script" uid="uid://cdxbi7rsxqp7p" path="res://addons/VAM/data/vam_music_rule.gd" id="9_61rf1"]
+[ext_resource type="Script" uid="uid://dk7vt5ww4fdiy" path="res://addons/VAM/data/vam_music_event.gd" id="10_3ubuc"]
+[ext_resource type="Script" uid="uid://x6sb6wcv53np" path="res://addons/VAM/data/vam_music_transition.gd" id="11_mf2xn"]
 
 [sub_resource type="Resource" id="Resource_3rime"]
-script = ExtResource("1_d15s5")
+script = ExtResource("1_1g6ij")
 name = &"Loops"
 members = Array[StringName]([&"voidleost_loop1", &"voidleost_loop3", &"voidleost_loop2", &"voidleost_loop4"])
 
 [sub_resource type="AudioStreamInteractive" id="AudioStreamInteractive_0b0dm"]
 clip_count = 6
 clip_0/name = &"voidleost_intro"
-clip_0/stream = ExtResource("1_1u1iy")
+clip_0/stream = ExtResource("2_blhtg")
 clip_0/auto_advance = 1
 clip_0/next_clip = 1
 clip_1/name = &"voidleost_loop1"
-clip_1/stream = ExtResource("2_c77pg")
+clip_1/stream = ExtResource("3_u71vq")
 clip_1/auto_advance = 0
 clip_2/name = &"voidleost_loop2"
-clip_2/stream = ExtResource("3_d15s5")
+clip_2/stream = ExtResource("4_fx7tm")
 clip_2/auto_advance = 0
 clip_3/name = &"voidleost_loop3"
-clip_3/stream = ExtResource("4_3rime")
+clip_3/stream = ExtResource("5_og53d")
 clip_3/auto_advance = 0
 clip_4/name = &"voidleost_loop4"
-clip_4/stream = ExtResource("5_g71tu")
+clip_4/stream = ExtResource("6_ntivu")
 clip_4/auto_advance = 0
 clip_5/name = &"voidleost_outro"
-clip_5/stream = ExtResource("6_fn1nu")
+clip_5/stream = ExtResource("7_fnbbr")
 clip_5/auto_advance = 0
 
 [resource]
-script = ExtResource("3_50u5u")
+script = ExtResource("10_3ubuc")
 music = SubResource("AudioStreamInteractive_0b0dm")
 block_types = Dictionary[StringName, int]({
 &"voidleost_loop1": 1,
@@ -49,15 +49,15 @@ block_types = Dictionary[StringName, int]({
 &"voidleost_loop4": 1,
 &"voidleost_outro": 3
 })
-groups = Array[ExtResource("1_d15s5")]([SubResource("Resource_3rime")])
+groups = Array[ExtResource("1_1g6ij")]([SubResource("Resource_3rime")])
 outro_clip = &"voidleost_outro"
 bpm = 90.0
 graph_layout = Dictionary[StringName, Vector2]({
-&"@any": Vector2(0, 240),
+&"@any": Vector2(0, 320),
 &"@end": Vector2(0, 440),
 &"@group:Loops": Vector2(640, -70),
-&"@start": Vector2(0, 40),
-&"voidleost_intro": Vector2(200, 40),
+&"@start": Vector2(0, -20),
+&"voidleost_intro": Vector2(200, -20),
 &"voidleost_loop1": Vector2(640, 40),
 &"voidleost_loop2": Vector2(640, 240),
 &"voidleost_loop3": Vector2(640, 440),

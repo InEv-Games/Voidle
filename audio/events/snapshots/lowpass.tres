@@ -5,10 +5,11 @@
 
 [sub_resource type="Resource" id="Resource_asf8a"]
 script = ExtResource("1_o2lc4")
+lowpass_hz = 450.0
 
 [resource]
 script = ExtResource("2_ug80w")
-fade_in = 0.15
-fade_out = 0.15
+fade_in = 0.2
+fade_out = 0.2
 buses = Array[ExtResource("1_o2lc4")]([SubResource("Resource_asf8a")])
 notes = "Muffles the music (Music bus low-pass) while: placing something on a planet (PlanetaryView, holder \"placement\") and while the Esc / pause menu is open (HUDManager, holder \"pause\")."
