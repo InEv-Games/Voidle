@@ -2,15 +2,20 @@
 ## proximity contributions and the distance bonus. Roads, intersections and
 ## what lies in between play no part — only physical distance.
 ##
-## A district's location multiplier = 1 + proximity + centres + distance bonus.
-## Research: Cluster Planning scales proximity and centres, Independent Centres
-## adds to a distance bonus, Mixed Networks lets linked families count at half.
+## A district's location multiplier = 1 + proximity + distance bonus.
+## Research: Cluster Planning scales proximity, Independent Centres adds to a
+## distance bonus, Mixed Networks lets linked families count at half.
 ## It applies once to the district's base income and to every building in it.
 ##   proximity  every other finished district of the same family:
 ##              very near +proximity_very_near, near +proximity_near (no
 ##              diminishing, no source cap — Balance.cfg.proximity_cap is a total cap, 0 = none)
-##   centres    every City (its Capital District) in reach supports all families
-##   distance   by the nearest other finished district: 0 / 12.5 / 25 / 37.5 / 50 %
+##   distance   by the district's distance from its own City: 0 / 12.5 / 25 /
+##              37.5 / 50 % — the farther out, the more (playtest 07.11: it was
+##              the nearest other district, so every new district cut its
+##              neighbours' bonus; now placing never lowers anyone's)
+## A City (its Capital District) takes no location bonus: it is the centre,
+## and has the Capital supports. (The City-centre part is gone: it pulled the
+## other way from the distance bonus.)
 ## Bands are fractions of the district's City reach (reach_km), not fixed km,
 ## so every band can be reached at every City level and on small bodies.
 ## Numbers come from Balance.cfg. Results are cached per planet until a
@@ -85,12 +90,16 @@ static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 	if pd == null or poi == null:
 		return {"mult": 1.0, "proximity": 0.0, "centre": 0.0, "distance": 0.0,
 			"nearest_km": INF, "band": Band.VERY_FAR, "reach_km": 0.0, "sources": []}
+	# cached per district; the entry must be this very POI: a placement probe
+	# keeps POIData's default label "Site", and one cached probe answered for
+	# every spot hovered after it (10.11: "very far" right by the Capital)
 	if poi.label != "":
 		var cached := _cached(pd, poi.label)
-		if not cached.is_empty():
+		if not cached.is_empty() and int(cached.get("poi_id", 0)) == poi.get_instance_id():
 			return cached
 	var out := _compute(pd, poi, null)
 	if poi.label != "":
+		out["poi_id"] = poi.get_instance_id()
 		_store(pd, poi.label, out)
 	return out
 
@@ -99,15 +108,33 @@ static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 static func breakdown_with(pd: PlanetData, poi: POIData, extra: POIData) -> Dictionary:
 	return _compute(pd, poi, extra)
 
+## The City a district belongs to (its own POI for a City); for a placement
+## probe without one, the nearest City on the world. Null if there is none.
+static func home_city(pd: PlanetData, poi: POIData) -> POIData:
+	var label := poi.label if poi.is_city() else poi.parent_city
+	var best: POIData = null
+	var best_km := INF
+	for p: POIData in pd.custom_pois:
+		if not p.is_city() or p.is_orbital():
+			continue
+		if label != "" and p.label == label:
+			return p
+		var km := distance_km(pd, poi, p)
+		if label == "" and km < best_km:
+			best_km = km
+			best = p
+	return best
+
 static func _compute(pd: PlanetData, poi: POIData, extra: POIData) -> Dictionary:
 	var c: BalanceConfig = Balance.cfg
+	var reach := reach_km(pd, poi)
+	if poi.is_city():   # the centre itself: no location bonus
+		return {"mult": 1.0, "proximity": 0.0, "centre": 0.0, "distance": 0.0, "nearest_km": INF,
+			"band": Band.VERY_NEAR, "reach_km": reach, "sources": [], "city": null}
 	var cluster: float = SkillTree.get_proximity_mult()
 	var linked: Array = SkillTree.cross_families(output_family(poi))
 	var prox := 0.0
-	var centre := 0.0
-	var nearest := INF
 	var sources: Array = []
-	var reach := reach_km(pd, poi)
 	var others: Array = pd.custom_pois
 	if extra != null:
 		others = pd.custom_pois.duplicate()
@@ -115,18 +142,13 @@ static func _compute(pd: PlanetData, poi: POIData, extra: POIData) -> Dictionary
 	for p: POIData in others:
 		if p == poi or (poi.label != "" and p.label == poi.label) or (p != extra and not _counts(p)):
 			continue
+		if p.is_city():
+			continue
 		var km := distance_km(pd, poi, p)
-		nearest = minf(nearest, km)
 		var b := band(km, reach)
 		if b != Band.VERY_NEAR and b != Band.NEAR:
 			continue
-		if p.is_city():   # a centre supports every family in reach
-			var cs := (c.centre_very_near if b == Band.VERY_NEAR else c.centre_near) * cluster
-			centre += cs
-			sources.append({"poi": p, "km": km, "share": cs, "kind": "centre"})
-		elif poi.is_city():
-			continue
-		elif family(p) == family(poi):
+		if family(p) == family(poi):
 			var ps := (c.proximity_very_near if b == Band.VERY_NEAR else c.proximity_near) * cluster
 			prox += ps
 			sources.append({"poi": p, "km": km, "share": ps, "kind": "family"})
@@ -136,12 +158,15 @@ static func _compute(pd: PlanetData, poi: POIData, extra: POIData) -> Dictionary
 			sources.append({"poi": p, "km": km, "share": xs, "kind": "cross"})
 	if c.proximity_cap > 0.0:
 		prox = minf(prox, c.proximity_cap)
-	var nb := band(nearest, reach) if nearest != INF else Band.VERY_FAR
+	# distance from its own City: placing other districts never changes it
+	var city := home_city(pd, poi)
+	var city_km := distance_km(pd, poi, city) if city != null else INF
+	var nb := band(city_km, reach) if city_km != INF else Band.VERY_NEAR
 	var dist := band_bonus(nb)
 	if dist > 0.0:   # Independent Centres never turns near into far
 		dist += SkillTree.get_distance_bonus_add()
-	return {"mult": 1.0 + prox + centre + dist, "proximity": prox, "centre": centre,
-		"distance": dist, "nearest_km": nearest, "band": nb, "reach_km": reach, "sources": sources}
+	return {"mult": 1.0 + prox + dist, "proximity": prox, "centre": 0.0,
+		"distance": dist, "nearest_km": city_km, "band": nb, "reach_km": reach, "sources": sources, "city": city}
 
 ## The district's location multiplier (1 = no bonus).
 static func mult(pd: PlanetData, poi: POIData) -> float:

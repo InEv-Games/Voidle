@@ -171,15 +171,18 @@ static func has_automation() -> bool:
 	return SkillTree.is_unlocked("trade_automation")
 
 ## Products shown on the trade panel, in a fixed order (only reachable ones).
+## The Market's rows, in order (playtest 07.11): Science, the raw minerals,
+## then what is made from them (Goods, Fuel, Rare). Minerals of the current
+## civilization show even before they are found (a locked, unnamed row that
+## says how to find them), like Fuel and Rare before their research.
 static func products() -> Array[String]:
-	var out: Array[String] = [Economy.SCIENCE, Economy.GOODS, Economy.FUEL, Economy.RARE]
+	var out: Array[String] = [Economy.SCIENCE]
 	for r: Dictionary in Economy.RAW_TABLE:
-		out.append(String(r["id"]))
-	var shown: Array[String] = []
-	for id: String in out:
-		if _known(id):
-			shown.append(id)
-	return shown
+		var rid := String(r["id"])
+		if _known(rid) or Economy.mineral_civ(r) <= GameState.playable_content_type:
+			out.append(rid)
+	out.append_array([Economy.GOODS, Economy.FUEL, Economy.RARE])
+	return out
 
 ## A product the player knows about (its name may show).
 static func _known(id: String) -> bool:
@@ -194,8 +197,15 @@ static func product_block(id: String) -> String:
 	if reference_price(id) <= 0.0:
 		return "Not tradeable"
 	if Economy.is_raw(id):
-		return "" if Economy.is_mineral_discovered(id) else "Not discovered yet"
+		if Economy.is_mineral_discovered(id):
+			return ""
+		# how to find it, never its name (playtest 07.11: every locked row says what opens it)
+		var bodies: Array = Economy.raw_info(id).get("bodies", [])
+		return "Found by a Production district on the Moon" if bodies == [6] \
+			else "Found by a Production district"
 	match id:
+		Economy.GOODS:
+			return "" if SkillTree.is_unlocked("processing_basics") else "Research Basic Processing"
 		Economy.FUEL:
 			return "" if SkillTree.is_unlocked("fuel_processing") else "Research Fuel Processing"
 		Economy.RARE:

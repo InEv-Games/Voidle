@@ -50,6 +50,14 @@ func _ready() -> void:
 	
 	# Blueprint Grid Effect (moves with the camera and scales with zoom)
 	_bg.draw.connect(func() -> void:
+		# depth behind the tree (playtest 07.11 K): a soft glow round the centre
+		# and faint orbit rings at the distances its nodes stand at
+		var c0: Vector2 = self._center_ctrl.position
+		var glow := UIStyle.color(&"accent")
+		for k in 10:
+			_bg.draw_circle(c0, (900.0 - k * 80.0) * self._zoom, Color(glow, 0.012))
+		for r: float in self._ring_radii:
+			_bg.draw_arc(c0, r * self._zoom, 0.0, TAU, 96, Color(UIStyle.color(&"accent_dim"), 0.16), 1.0, true)
 		var dot_color := Color(UIStyle.color(&"accent_dim"), 0.35)
 		var grid_size: int = maxi(10, int(40.0 * self._zoom))
 		var dot_size: float = maxf(1.0, 2.0 * self._zoom)
@@ -104,6 +112,7 @@ func _ready() -> void:
 	if SkillTreeView._view_civ < 0:
 		SkillTreeView._view_civ = GameState.civilization_type
 	_build_tree_graph()
+	_update_ring_radii()
 
 	# (no title: playtest — the tree speaks for itself)
 
@@ -176,8 +185,12 @@ func _show_civ(civ: int) -> void:
 	if _title != null:
 		_title.text = _title_text()
 	_build_tree_graph()
+	_update_ring_radii()
+	_bg.queue_redraw()
 	_connections_draw.queue_redraw()
 	_bg.queue_redraw()
+	if _kb_id != "":   # the keys go on from the other tree's centre
+		(func() -> void: _kb_light(_kb_start())).call_deferred()
 
 ## Nodes of the tree on screen. Later trees show whole (as previews).
 func _in_view(st: Node, id: String) -> bool:
@@ -188,10 +201,15 @@ func _in_view(st: Node, id: String) -> bool:
 		return true
 	return st.call("is_visible", id)
 
+## Node names show from this zoom up (smaller, they are unreadable specks).
+const NAME_MIN_ZOOM := 0.6
+var _name_labels: Array[Label] = []
+
 func _build_tree_graph() -> void:
 	for c in _nodes_container.get_children():
 		c.queue_free()
 	_ui_nodes.clear()
+	_name_labels.clear()
 
 	var st: Node = get_node("/root/SkillTree")
 	for id in st.get("nodes").keys():
@@ -224,15 +242,20 @@ func _build_tree_graph() -> void:
 		var shadow_color := Color(0.0, 0.0, 0.0, 0.0)
 		var border_width := 1.0
 		
+		# owned nodes wear their line's colour (playtest 07.11 K: every owned node
+		# was the same green, so the tree read flat)
+		var fam: Color = LINE_COLORS.get(String(node.line) if "line" in node else "", Color(0.75, 0.70, 1.0))
+		if id == "root":
+			fam = Color(0.95, 0.82, 0.40)
 		if is_max_level:
-			bg_color = Color(UIStyle.color(&"positive_bg"), 0.95)
-			border_color = UIStyle.color(&"good")
-			shadow_color = Color(UIStyle.color(&"good"), 0.3)
-			border_width = 2.0
+			bg_color = Color(UIStyle.color(&"item_bg").lerp(fam, 0.38), 0.97)
+			border_color = fam.lightened(0.3)
+			shadow_color = Color(fam, 0.5)
+			border_width = 2.5
 		elif cur_lv > 0:
-			bg_color = Color(UIStyle.color(&"neutral_bg"), 0.95)
-			border_color = UIStyle.color(&"neutral_stroke")
-			shadow_color = Color(UIStyle.color(&"neutral_stroke"), 0.25)
+			bg_color = Color(UIStyle.color(&"item_bg").lerp(fam, 0.24), 0.96)
+			border_color = fam
+			shadow_color = Color(fam, 0.32)
 			border_width = 2.0
 		elif purchasable:
 			bg_color = Color(UIStyle.color(&"item_bg_hover"), 0.95)
@@ -337,6 +360,45 @@ func _build_tree_graph() -> void:
 		texture_rect.texture = TechIcon.make(icon_tier, icon_col)
 		center.add_child(texture_rect)
 
+		# can be bought now: a soft ring breathes out of it
+		if purchasable and not unlocked:
+			var ring := Control.new()
+			ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			ring.pivot_offset = Vector2(card_size, card_size) * 0.5
+			var ring_col := UIStyle.color(&"accent")
+			ring.draw.connect(func() -> void:
+				ring.draw_arc(Vector2(card_size, card_size) * 0.5, card_size * 0.46, 0.0, TAU, 32, ring_col, 1.5, true))
+			wrapper.add_child(ring)
+			var tw := ring.create_tween().set_loops()
+			tw.tween_property(ring, "scale", Vector2(1.45, 1.45), 1.4).from(Vector2.ONE) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(ring, "modulate:a", 0.0, 1.4).from(0.8)
+
+		# its name under it, so the tree reads without hovering every node
+		var name_l := Label.new()
+		name_l.text = String(node.name)
+		if _font: name_l.add_theme_font_override("font", _font)
+		name_l.add_theme_font_size_override("font_size", 9 if shape_type != 2 else 11)
+		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_l.custom_minimum_size = Vector2(110, 0)
+		name_l.size = Vector2(110, 0)
+		name_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var name_col := UIStyle.color(&"text_muted")
+		if unlocked:
+			name_col = fam.lightened(0.25)
+		elif purchasable:
+			name_col = UIStyle.color(&"text_bright")
+		name_l.add_theme_color_override("font_color", Color(name_col, 0.9 if (unlocked or purchasable) else 0.55))
+		name_l.add_theme_color_override("font_outline_color", Color(UIStyle.color(&"panel_bg"), 0.9))
+		name_l.add_theme_constant_override("outline_size", 4)
+		name_l.position = node.pos + Vector2(-55, card_size * 0.5 + 2.0)
+		name_l.visible = _zoom >= NAME_MIN_ZOOM
+		if id != "civilization_0_tree":   # its BUYOUT button sits there
+			_nodes_container.add_child(name_l)
+			_name_labels.append(name_l)
+
 		# Display level badge at the bottom-center of the wrapper
 		if max_lv > 1 and cur_lv > 0:
 			var lv_badge := Label.new()
@@ -386,7 +448,6 @@ func _build_tree_graph() -> void:
 		# Show title. If it is leveled, we will put the level info at the top right inside body
 		var tip_title: String = node.name
 		var tip_body: Array = []
-		var sub_body: Array = []
 		var tip_cost := ""
 		
 		# Root is a dummy central core - format clean
@@ -411,18 +472,6 @@ func _build_tree_graph() -> void:
 				var def: BuildingDef = BuildingDef.find(bid)
 				if def:
 					effect_text = effect_text.replace(def.display_name, "[color=#fce205]" + def.display_name + "[/color]")
-					var cycle := " / %ds" % def.tick_duration
-					sub_body.append("[color=#fce205]" + def.display_name + " Blueprint[/color]\n\n")
-					
-					if def.description != "":
-						sub_body.append("[color=#c0c0c0]" + def.description + "[/color]\n\n")
-					
-					if def.output_label() != "":
-						sub_body.append("[color=#99aab5]Produces %s%s[/color]\n" % [def.output_label(),
-							"" if def.planet_bonus.size() > 0 and def.outputs.is_empty() else cycle])
-					if def.input_label() != "":
-						sub_body.append("[color=#99aab5]Consumes %s%s[/color]\n" % [def.input_label(), cycle])
-
 			if max_lv > 1:
 				# Leveled Upgrades
 				if cur_lv > 0:
@@ -468,7 +517,6 @@ func _build_tree_graph() -> void:
 		card.pivot_offset = Vector2(24, 24)
 
 		var cap_cost := tip_cost
-		var cap_sub := sub_body.duplicate()
 		card.mouse_entered.connect(func() -> void:
 			AudioManager.play("hover")
 			if unlocked or purchasable:
@@ -480,7 +528,8 @@ func _build_tree_graph() -> void:
 			var tween := create_tween()
 			tween.tween_property(card, "scale", Vector2(1.15, 1.15), 0.15).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
-			TooltipManager.show_tip(tip_title, tip_body, cap_cost, cap_sub))
+			# 10.11: no side panel (the old "Blueprint" box); the Effect line links the building
+			TooltipManager.show_tip(tip_title, tip_body, cap_cost))
 			
 		card.mouse_exited.connect(func() -> void:
 			CursorManager.set_state(CursorManager.State.NORMAL)
@@ -496,32 +545,176 @@ func _build_tree_graph() -> void:
 		card.gui_input.connect(func(e: InputEvent) -> void:
 			if e is InputEventMouseButton and (e as InputEventMouseButton).pressed and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 				card.accept_event() # Stop propagation to canvas drag
-				AudioManager.play("click")   # nodes aren't buttons: click like one
-				# fractal doors: the next tree's root, or this tree's centre (the tree before)
-				if (e as InputEventMouseButton).double_click:
-					if cap_id == "civilization_1_root":
-						_show_civ(1)
-						return
-					if cap_id == "civilization_0_tree":
-						_show_civ(0)
-						return
-				if cap_id == "civilization_0_tree" or cap_id == "civilization_1_root":
-					return   # single click on a door does nothing; buyout has its own button
-				# During tutorial skill step, only unlock_mining is allowed
-				var tm := get_node_or_null("/root/TutorialManager")
-				if tm != null and tm._active and not tm._tutorial_done \
-						and tm.get_action_step_type() == "skill" and cap_id != "start_production":
-					AudioManager.play("denied")
-					return
-				var cmd: GameCommand = st.call("research_command", cap_id)
-				if cmd.can_execute() == "":
-					TooltipManager.hide_tip()
-					AudioManager.play("skill_buy")
-					cmd.execute()
-				else:
-					AudioManager.play("denied"))
+				_click_node(cap_id, (e as InputEventMouseButton).double_click))
 
 	_apply_tutorial_skill_overlay()
+
+## A click on node `id` (Enter on the lit one): research it; `double` on a
+## door (a tree's centre / the next tree's root) moves between civilizations.
+func _click_node(id: String, double: bool) -> void:
+	var st: Node = get_node("/root/SkillTree")
+	AudioManager.play("click")   # nodes aren't buttons: click like one
+	# fractal doors: the next tree's root, or this tree's centre (the tree before)
+	if double:
+		if id == "civilization_1_root":
+			_show_civ(1)
+			return
+		if id == "civilization_0_tree":
+			_show_civ(0)
+			return
+	if id == "civilization_0_tree" or id == "civilization_1_root":
+		return   # single click on a door does nothing; buyout has its own button
+	# During tutorial skill step, only unlock_mining is allowed
+	var tm := get_node_or_null("/root/TutorialManager")
+	if tm != null and tm._active and not tm._tutorial_done \
+			and tm.get_action_step_type() == "skill" and id != "start_production":
+		AudioManager.play("denied")
+		return
+	var cmd: GameCommand = st.call("research_command", id)
+	if cmd.can_execute() == "":
+		TooltipManager.hide_tip()
+		AudioManager.play("skill_buy")
+		cmd.execute()
+	else:
+		AudioManager.play("denied")
+
+# ── Keys (10.11: keyboard-only play) ─────────────────────────────────────────
+## Arrows / WASD light the nearest node that way (as if the mouse were on it:
+## it grows, its tip shows), the camera keeps it on screen; Enter / Space
+## researches it (on a centre node: to the other civilization); Q / E zoom.
+## The mouse moving hands back to it.
+var _kb_id := ""
+
+func _kb_card() -> Control:
+	return _ui_nodes.get(_kb_id, null) as Control if _kb_id != "" else null
+
+func _kb_light(id: String) -> void:
+	var old := _kb_card()
+	if old != null and is_instance_valid(old):
+		old.mouse_exited.emit()
+	_kb_id = id
+	var c := _kb_card()
+	if c == null or not is_instance_valid(c):
+		_kb_id = ""
+		TooltipManager.set_focus_anchor(null)
+		return
+	TooltipManager.set_focus_anchor(c)
+	c.mouse_entered.emit()
+	# keep it on screen: a node near the edge brings the camera round to it
+	var at := c.get_global_rect().get_center()
+	var vp := get_viewport_rect()
+	if not vp.grow(-140.0).has_point(at):
+		_pos_t += vp.get_center() - at
+		_pan_vel = Vector2.ZERO
+
+func _kb_clear() -> void:
+	var c := _kb_card()
+	if c != null and is_instance_valid(c):
+		c.mouse_exited.emit()
+	_kb_id = ""
+	TooltipManager.set_focus_anchor(null)
+
+## The node nearest the screen centre (where the keys start).
+func _kb_start() -> String:
+	var mid := get_viewport_rect().get_center()
+	var best := ""
+	var best_d := INF
+	for id: String in _ui_nodes:
+		var c := _ui_nodes[id] as Control
+		if c == null or not is_instance_valid(c) or not c.is_visible_in_tree():
+			continue
+		var d := c.get_global_rect().get_center().distance_squared_to(mid)
+		if d < best_d:
+			best_d = d
+			best = id
+	return best
+
+## The nearest node from the lit one in `dir` (a cone either side of it).
+func _kb_step(dir: Vector2) -> String:
+	var cur := _kb_card()
+	if cur == null:
+		return _kb_start()
+	var from := cur.get_global_rect().get_center()
+	var best := ""
+	var best_score := INF
+	for id: String in _ui_nodes:
+		if id == _kb_id:
+			continue
+		var c := _ui_nodes[id] as Control
+		if c == null or not is_instance_valid(c) or not c.is_visible_in_tree():
+			continue
+		var d := c.get_global_rect().get_center() - from
+		var along := d.dot(dir)
+		if along <= 4.0:
+			continue
+		var side := absf(d.cross(dir))
+		if side > along * 1.6:   # beyond ~58° off the way pressed
+			continue
+		var score := along + side * 2.0
+		if score < best_score:
+			best_score = score
+			best = id
+	return best
+
+func _exit_tree() -> void:
+	if _kb_id != "":   # a key-lit node's tip goes with the tree (no mouse_exited comes)
+		TooltipManager.hide_tip()
+	TooltipManager.set_focus_anchor(null)
+
+## The mouse moving takes over (motion never reaches _unhandled_input: the GUI eats it).
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and _kb_id != "" \
+			and (event as InputEventMouseMotion).relative.length_squared() > 4.0:
+		_kb_clear()
+
+func _unhandled_input(event: InputEvent) -> void:
+	var jb := event as InputEventJoypadButton   # the pad: D-pad moves, A researches, B closes
+	if jb != null and jb.pressed:
+		var jk := KEY_NONE
+		match jb.button_index:
+			JOY_BUTTON_DPAD_UP: jk = KEY_UP
+			JOY_BUTTON_DPAD_DOWN: jk = KEY_DOWN
+			JOY_BUTTON_DPAD_LEFT: jk = KEY_LEFT
+			JOY_BUTTON_DPAD_RIGHT: jk = KEY_RIGHT
+			JOY_BUTTON_A: jk = KEY_ENTER
+			JOY_BUTTON_LEFT_SHOULDER: jk = KEY_Q
+			JOY_BUTTON_RIGHT_SHOULDER: jk = KEY_E
+			JOY_BUTTON_B:
+				get_viewport().set_input_as_handled()
+				_close_btn.pressed.emit()
+				return
+		if jk == KEY_NONE:
+			return
+		var fake := InputEventKey.new()
+		fake.keycode = jk
+		fake.physical_keycode = jk
+		fake.pressed = true
+		event = fake
+	var k := event as InputEventKey
+	if k == null or not k.pressed or k.ctrl_pressed or k.meta_pressed:
+		return
+	var key := k.physical_keycode if k.physical_keycode != KEY_NONE else k.keycode
+	var dir := Vector2.ZERO
+	match key:
+		KEY_LEFT, KEY_A: dir = Vector2.LEFT
+		KEY_RIGHT, KEY_D: dir = Vector2.RIGHT
+		KEY_UP, KEY_W: dir = Vector2.UP
+		KEY_DOWN, KEY_S: dir = Vector2.DOWN
+	if dir != Vector2.ZERO:
+		get_viewport().set_input_as_handled()
+		var next := _kb_start() if _kb_card() == null else _kb_step(dir)
+		if next != "" and next != _kb_id:
+			_kb_light(next)
+		return
+	if key == KEY_Q or key == KEY_E:
+		get_viewport().set_input_as_handled()
+		var at := _kb_card().get_global_rect().get_center() if _kb_card() != null else get_viewport_rect().get_center()
+		_zoom_at(at, 1.0 / 1.15 if key == KEY_Q else 1.15)
+		return
+	if not k.echo and key in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and _kb_id != "":
+		get_viewport().set_input_as_handled()
+		var id := _kb_id
+		_click_node(id, id == "civilization_0_tree" or id == "civilization_1_root")
 
 func _apply_tutorial_skill_overlay() -> void:
 	var tm := get_node_or_null("/root/TutorialManager")
@@ -538,10 +731,33 @@ func _apply_tutorial_skill_overlay() -> void:
 		elif nid != "root":
 			card.modulate = Color(0.35, 0.35, 0.35, 0.6)
 
+## Distances (node space) the background's orbit rings are drawn at: one per
+## band of the visible nodes' distances from the centre.
+var _ring_radii: Array[float] = []
+
+func _update_ring_radii() -> void:
+	var st: Node = get_node("/root/SkillTree")
+	var seen := {}
+	for id in st.get("nodes").keys():
+		if not _in_view(st, id):
+			continue
+		var d: float = (st.get("nodes")[id].pos as Vector2).length()
+		if d < 40.0:
+			continue
+		seen[int(round(d / 120.0))] = true
+	_ring_radii.clear()
+	for b: int in seen:
+		_ring_radii.append(float(b) * 120.0)
+
+## Light that runs out along owned links: how fast (link lengths per second).
+const PULSE_SPEED := 0.35
+
 func _draw_connections() -> void:
 	# Draw all connection lines between parent/child nodes
 	var st: Node = get_node("/root/SkillTree")
 	var draw_offset := Vector2(10000, 10000)
+	var now := float(Time.get_ticks_msec()) / 1000.0
+	_draw_family_labels(st, draw_offset)
 	
 	for id in st.get("nodes").keys():
 		var node = st.get("nodes")[id]
@@ -592,9 +808,42 @@ func _draw_connections() -> void:
 			var pts := PackedVector2Array([start_pos, end_pos])
 			if is_bridge:
 				pts = _ring_arc(start_pos - draw_offset, end_pos - draw_offset, draw_offset)
+			if is_active:   # a soft glow under owned links
+				_connections_draw.draw_polyline(pts, Color(fam, 0.16), line_width * 2.8, true)
 			_connections_draw.draw_polyline(pts, line_col, line_width, true)
+			# a pulse of light runs outward along owned links
+			if is_active and not is_bridge:
+				var t := fposmod(now * PULSE_SPEED + float(hash(id) % 1000) / 1000.0, 1.0)
+				_connections_draw.draw_circle(start_pos.lerp(end_pos, t), line_width * 0.55,
+					Color(fam.lightened(0.5), 0.85 * sin(t * PI)))
 
 var _zoom: float = 1.0
+
+## Each line's name, large and faint, past the end of its farthest visible node:
+## the tree's arms read as families (playtest 07.11 K).
+func _draw_family_labels(st: Node, draw_offset: Vector2) -> void:
+	if _font == null:
+		return
+	var far := {}   # line -> farthest distance along its direction
+	for id in st.get("nodes").keys():
+		if not _in_view(st, id):
+			continue
+		var line: String = String(st.get("nodes")[id].line)
+		if not SkillTree.LINE_DIRS.has(line):
+			continue
+		var d: float = (st.get("nodes")[id].pos as Vector2).dot(SkillTree.LINE_DIRS[line])
+		far[line] = maxf(float(far.get(line, 0.0)), d)
+	for line: String in far:
+		var dir: Vector2 = SkillTree.LINE_DIRS[line]
+		var col: Color = LINE_COLORS.get(line, Color(0.75, 0.70, 1.0))
+		var text := line.to_upper()
+		var sz := 20
+		var w := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x
+		# clear of the last node: past it by its half-size, plus half the word
+		# along the arm's sideways part (a long word on a side arm needs more room)
+		var at: Vector2 = dir * (float(far[line]) + 50.0 + absf(dir.x) * w * 0.5 + absf(dir.y) * sz) + draw_offset
+		_connections_draw.draw_string(_font, at + Vector2(-w * 0.5, sz * 0.35), text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, sz, Color(col, 0.32))
 
 ## Points of an arc from `a` to `b` around the tree's centre (node space),
 ## blending radius and angle — how bridge links run along the outer ring.
@@ -627,9 +876,19 @@ const LINE_COLORS := {
 func _on_skill_unlocked(_id: String) -> void:
 	# Rebuild tree to show newly unlocked nodes & connections
 	_build_tree_graph()
+	if _kb_id != "":   # the keys stay on the node just researched
+		(func() -> void: _kb_light(_kb_id)).call_deferred()
+	_update_ring_radii()
 	_connections_draw.queue_redraw()
+	_bg.queue_redraw()
 
 func _process(delta: float) -> void:
+	_connections_draw.queue_redraw()   # the pulses along owned links move every frame
+	var names_on := _zoom >= NAME_MIN_ZOOM
+	if not _name_labels.is_empty() and _name_labels[0].visible != names_on:
+		for l in _name_labels:
+			if is_instance_valid(l):
+				l.visible = names_on
 	if not _is_dragging and _pan_vel != Vector2.ZERO:
 		_pos_t += _pan_vel * delta
 		_pan_vel *= exp(-delta * PAN_FRICTION)

@@ -142,7 +142,9 @@ static func _derive(data: PlanetData, img0: Image, img1: Image, img2: Image, inf
 		for x in WIDTH:
 			var i := y * WIDTH + x
 			var lat := _cell_lonlat(x, y).y
+			@warning_ignore("integer_division")
 			var c0 := img0.get_pixel(x * img0.get_width() / WIDTH, y * img0.get_height() / HEIGHT)
+			@warning_ignore("integer_division")
 			var c1 := img1.get_pixel(x * img1.get_width() / WIDTH, y * img1.get_height() / HEIGHT) \
 				if img1 != null else Color.BLACK
 			var storm := img2.get_pixel(x, y).r if img2 != null else 0.5
@@ -202,6 +204,7 @@ static func _distance_field(land: PackedByteArray, target: int) -> PackedInt32Ar
 	while head < queue.size():
 		var i := queue[head]; head += 1
 		var x := i % WIDTH
+		@warning_ignore("integer_division")
 		var y := i / WIDTH
 		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			var ny := y + d.y
@@ -300,8 +303,8 @@ static func lens_texture(planet_seed: int, lens: Lens, mineral_id: String = "") 
 					var sea_dim := 1.0 if (m["land"] as PackedByteArray)[i] == 1 else 0.35
 					col.a = smoothstep(0.05, 0.6, best) * 0.9 * sea_dim
 			else:
-				var field: PackedFloat32Array = m[ENERGY_KEYS[lens - Lens.GEOTHERMAL]]
-				var v := field[i]
+				var fld: PackedFloat32Array = m[ENERGY_KEYS[lens - Lens.GEOTHERMAL]]
+				var v := fld[i]
 				var fade: Vector3 = LENS_FADE[lens]   # (from, to, max alpha)
 				col = _ramp(lens, v)
 				col.a = smoothstep(fade.x, fade.y, v) * fade.z

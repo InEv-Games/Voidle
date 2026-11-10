@@ -12,10 +12,13 @@ signal unlock_changed(key: String, value: bool)
 signal planet_progress_changed(seed_val: int)
 signal asteroid_discovered(slot: int, count: int)
 signal global_resources_changed
+@warning_ignore("unused_signal")
 signal district_placed(planet_seed: int, district_type_id: int)
 ## Planet traits (PlanetTags): a pick was queued or taken.
+@warning_ignore("unused_signal")
 signal tag_offers_changed
 ## An excavation ended or a companion joined (Excavations).
+@warning_ignore("unused_signal")
 signal excavations_changed
 
 ## Planet traits: { "seed": [trait id, …] } and picks waiting { "seed": [[id ×3], …] }.
@@ -31,6 +34,116 @@ var excavations_digging: Dictionary = {}
 var excavation_sites: Dictionary = {}
 var story_flags: Dictionary = {}
 var companions_joined: Dictionary = {}
+## Narrative (docs/design/narrative): every line and answer the player was shown,
+## oldest first ([{ "s": scene id, "k": "line"/"choice", "n": speaker, "t": text }]),
+## and { scene id: true } for the one-time scenes that played to their end.
+var narrative_log: Array = []
+var completed_scenes: Dictionary = {}
+## The opening (docs/design/narrative/IMPLEMENTATION.md): "" not started,
+## "choose" the intro was read and the advisor is being chosen, "handover" the
+## chosen AI is handing over, "done" the first City may be founded.
+var onboarding_stage: String = ""
+## The handover is over: the first City may be placed (the tutorial and the
+## colony calendar start here).
+@warning_ignore("unused_signal")
+signal onboarding_finished
+## The one active advisor (CompanionDef id: mother_superior, high_father, bolo,
+## burkai; "" none yet) and the ones the player may appoint.
+var active_advisor: String = ""
+var unlocked_advisors: Array = []
+## The tutorial the chosen AI runs (Guide): "" not begun, a step id, "done".
+var tutorial_step: String = ""
+## The colony calendar (docs/design/narrative/IMPLEMENTATION.md "Koloni
+## takvimi"): seconds of live play since the handover. Every MONTH_SEC is a
+## colony month, every 12 a year, from January of CALENDAR_START_YEAR.
+## Paused play adds nothing.
+var calendar_seconds: float = 0.0
+## The calendar second from which the active advisor may be replaced (their
+## five-year term: ADVISOR_TERM_SEC after the appointment).
+var advisor_ready_at: float = 0.0
+signal advisor_changed(advisor_id: String)
+## How the player met Bolo: "" not yet, "excavation" (The Toppled Stones) or
+## "spaceport" (before the first Moon lander). Either way the Moon's signal is known.
+var bolo_intro_route: String = ""
+## Bolo's people came up to the surface (bolo_surface_invitation accepted):
+## the home world houses BOLO_PEOPLE more.
+var bolo_people_joined: bool = false
+const BOLO_PEOPLE := 17490
+
+## Puts a companion on the roster (they can be appointed later); tells the
+## player once, with a way to their profile.
+func unlock_advisor(advisor_id: String) -> void:
+	if unlocked_advisors.has(advisor_id):
+		return
+	unlocked_advisors.append(advisor_id)
+	var c := CompanionDef.find(advisor_id)
+	if c == null or not has_node("/root/NewsFeed"):
+		return
+	var nf := get_node("/root/NewsFeed")
+	nf.post("%s joins your Companions." % c.display_name, nf.Kind.EVENT, c.bio, c.display_name)
+	nf.show_message("advisor_joined_" + advisor_id, "Companions", "%s JOINS YOU" % c.display_name.to_upper(),
+		"You can appoint them as your advisor in Companions once the current term is over.",
+		{"sec": 15.0, "action": "COMPANIONS", "action_icon": "population",
+		"on_action": func() -> void:
+			var host := get_tree().current_scene
+			if host != null:
+				CompanionGallery.open(host)})
+
+const MONTH_SEC := 20.0
+const CALENDAR_START_YEAR := 2465
+const ADVISOR_TERM_SEC := 1200.0   # 60 months = five colony years
+
+func calendar_year() -> int:
+	return CALENDAR_START_YEAR + int(calendar_seconds / (MONTH_SEC * 12.0))
+
+## 1..12
+func calendar_month() -> int:
+	return int(fmod(calendar_seconds / MONTH_SEC, 12.0)) + 1
+
+## "3 years 2 months" / "5 months" / "less than a month", for a span of calendar seconds.
+static func calendar_span_text(sec: float) -> String:
+	var months := int(ceil(maxf(sec, 0.0) / MONTH_SEC))
+	if months <= 0:
+		return "less than a month"
+	@warning_ignore("integer_division")
+	var y := months / 12
+	var m := months % 12
+	var parts: Array[String] = []
+	if y > 0:
+		parts.append("%d year%s" % [y, "" if y == 1 else "s"])
+	if m > 0:
+		parts.append("%d month%s" % [m, "" if m == 1 else "s"])
+	return " ".join(parts)
+
+## Why `advisor_id` can't be appointed now ("" when they can).
+func advisor_block(advisor_id: String) -> String:
+	if advisor_id == active_advisor:
+		return "Already your advisor"
+	if not unlocked_advisors.has(advisor_id):
+		return "Not met yet"
+	if onboarding_stage == "done" and tutorial_step != "done":
+		return "After the tutorial"
+	if calendar_seconds < advisor_ready_at:
+		return "%s's term ends in %s" % [_advisor_name(active_advisor), calendar_span_text(advisor_ready_at - calendar_seconds)]
+	if has_node("/root/Narrative") and get_node("/root/Narrative").is_main_scene():
+		return "After the scene"
+	return ""
+
+static func _advisor_name(id: String) -> String:
+	var c := CompanionDef.find(id)
+	return c.display_name if c != null else "The advisor"
+
+## Makes `advisor_id` the one active advisor: their bonus applies from now, and
+## they serve at least five colony years.
+func appoint_advisor(advisor_id: String) -> void:
+	active_advisor = advisor_id
+	if not unlocked_advisors.has(advisor_id):
+		unlocked_advisors.append(advisor_id)
+	advisor_ready_at = calendar_seconds + ADVISOR_TERM_SEC
+	Economy.invalidate_bonus_cache()
+	if has_node("/root/ProductionManager"):
+		get_node("/root/ProductionManager").call("_invalidate_income")
+	advisor_changed.emit(advisor_id)
 
 # ── Starting Config (edit these to change new-game defaults) ─────────────────
 ## Starting credits / Science for a new game come from the balance profile
@@ -59,6 +172,7 @@ var surveyed_bodies: Dictionary = {}
 ## doesn't hide a mineral again.
 var discovered_minerals: Dictionary = {}
 signal minerals_discovered(body_seed: int, mineral_ids: Array)
+@warning_ignore("unused_signal")
 signal trade_changed
 
 ## Trade (see Trade.gd): player reserves {id: amount}, automation orders
@@ -179,6 +293,19 @@ var play_seconds: float = 0.0
 ## The "first step on the Moon" banner was shown (once per world).
 var moon_city_celebrated: bool = false
 
+## The first City is on the map (placed, even while it is still being built).
+## Before that the game writes no save: quitting during the opening leaves the
+## slot empty.
+func has_founded_city() -> bool:
+	for sd in _planet_progress:
+		var pd := get_planet_data(int(sd))
+		if pd == null:
+			continue
+		for p: POIData in pd.custom_pois:
+			if p.is_city():
+				return true
+	return false
+
 ## Numbers for the demo's end screen: minutes played, worlds settled, cities,
 ## research bought.
 func demo_stats() -> Dictionary:
@@ -273,7 +400,7 @@ func _show_explore_bar() -> void:
 	UIStyle.style_button(back, UIStyle.DEFAULT)
 	_explore_layer.add_child(back)
 	var lbl := Label.new()
-	lbl.text = "EXPLORING  //  look around freely — nothing here can be built  //  ESC return  //  H hide navigation"
+	lbl.text = "EXPLORING  //  look around freely  //  nothing here can be built  //  ESC return  //  H hide navigation"
 	if font:
 		lbl.add_theme_font_override("font", font)
 	lbl.add_theme_font_size_override("font_size", 10)
@@ -339,6 +466,8 @@ func _process(delta: float) -> void:
 	if not get_tree().paused:
 		play_seconds += delta
 		Excavations.tick()
+		if onboarding_stage == "done":
+			calendar_seconds += delta   # the colony's months, from the handover on
 	_autosave_timer += delta
 	if _autosave_timer >= AUTOSAVE_INTERVAL:
 		_autosave_timer = 0.0
@@ -433,7 +562,7 @@ func _apply_pending_pois() -> void:
 	_pending_poi_restore.clear()
 
 func _seed_starting_resources() -> void:
-	var home_pp := get_planet(home_planet_seed)
+	get_planet(home_planet_seed)   # make sure home's progress exists
 	var home_pd := get_home_planet()
 
 	# Home starts with a single raw resource (its body type's, e.g. Ferrite);
@@ -935,7 +1064,7 @@ func rocket_target_block(target_seed: int) -> String:
 		return "Your home world isn't a new destination"
 	var moon := home_moon()
 	if moon != null and target_seed == moon.seed:
-		return "The Moon is already yours — pick a new world"
+		return "The Moon is already yours. Pick a new world"
 	if _home_solar == null:
 		return "Unknown system"
 	for pd: PlanetData in _home_solar.planets:
@@ -1095,7 +1224,7 @@ func finish_colonization(planet_seed: int) -> void:
 				break
 		if not has_poi:
 			var poi := POIData.new()
-			poi.placement = 0 # LocationFinder.Placement.LAND
+			poi.placement = LocationFinder.Placement.LAND
 			if pd.planet_type == PlanetData.Type.MOON:
 				poi.label = "Lunar Outpost"
 				poi.display_name = "Lunar Outpost"
@@ -1114,7 +1243,8 @@ func finish_colonization(planet_seed: int) -> void:
 # ── Save / Load ───────────────────────────────────────────────────────────────
 ## Save slots (the main menu's LOAD / NEW GAME pick one). Slot 0 is the old
 ## single save's file, so an existing game shows up as slot 1.
-const SAVE_SLOTS := 3
+## How many saves there can be; the menu shows the used ones and one empty.
+const SAVE_SLOTS := 8
 const SLOT_FILE := "user://voidle_slot.cfg"   # which slot CONTINUE opens
 ## The slot this game saves to.
 static var save_slot: int = 0
@@ -1146,7 +1276,7 @@ static func slot_info(slot: int) -> Dictionary:
 	var d: Dictionary = raw
 	var v := int(d.get("save_version", 1))
 	var ok := v >= MIN_SAVE_VERSION and v <= SAVE_VERSION
-	return {"ok": ok, "why": "" if ok else "Save v%d — this build reads v%d" % [v, SAVE_VERSION],
+	return {"ok": ok, "why": "" if ok else "Save v%d: this build reads v%d" % [v, SAVE_VERSION],
 		"saved_at": float(d.get("saved_at", 0.0)), "play_seconds": float(d.get("play_seconds", 0.0)),
 		"civilization_type": int(d.get("civilization_type", 0)), "credits": float(d.get("credits", 0.0))}
 
@@ -1209,6 +1339,8 @@ func save() -> void:
 		return
 	if _save_suspended:   # its slot was just deleted: don't write it back
 		return
+	if not has_founded_city():   # 10.11: no save file until the first City is placed
+		return
 	var data := {
 		"save_version":         SAVE_VERSION,
 		"saved_at":             Time.get_unix_time_from_system(),
@@ -1225,6 +1357,16 @@ func save() -> void:
 		"excavation_sites":     excavation_sites,
 		"story_flags":          story_flags,
 		"companions_joined":    companions_joined,
+		"narrative_log":        narrative_log,
+		"completed_scenes":     completed_scenes,
+		"onboarding_stage":     onboarding_stage,
+		"active_advisor":       active_advisor,
+		"unlocked_advisors":    unlocked_advisors,
+		"tutorial_step":        tutorial_step,
+		"calendar_seconds":     calendar_seconds,
+		"advisor_ready_at":     advisor_ready_at,
+		"bolo_intro_route":     bolo_intro_route,
+		"bolo_people_joined":   bolo_people_joined,
 		"balance_profile":      Balance.profile_name,
 		"credits":              credits,
 		"science_points":       science_points,
@@ -1371,6 +1513,16 @@ func load_save() -> bool:
 	excavation_sites = data.get("excavation_sites", {})
 	story_flags = data.get("story_flags", {})
 	companions_joined = data.get("companions_joined", {})
+	narrative_log = data.get("narrative_log", [])
+	completed_scenes = data.get("completed_scenes", {})
+	onboarding_stage = String(data.get("onboarding_stage", ""))
+	active_advisor = String(data.get("active_advisor", ""))
+	unlocked_advisors = data.get("unlocked_advisors", [])
+	tutorial_step = String(data.get("tutorial_step", ""))
+	calendar_seconds = float(data.get("calendar_seconds", 0.0))
+	advisor_ready_at = float(data.get("advisor_ready_at", 0.0))
+	bolo_intro_route = String(data.get("bolo_intro_route", ""))
+	bolo_people_joined = bool(data.get("bolo_people_joined", false))
 	Excavations.migrate_relics(data.get("relics_found", {}))
 	# time away (KARARLAR §4): only measured and shown — no offline economy yet.
 	# A clock that went backwards counts as no time away (GDD §19.27).
@@ -1543,6 +1695,18 @@ func delete_save(remove_file := true, rebuild := true) -> void:
 	excavation_sites.clear()
 	story_flags.clear()
 	companions_joined.clear()
+	narrative_log.clear()
+	completed_scenes.clear()
+	onboarding_stage = ""
+	active_advisor = ""
+	unlocked_advisors.clear()
+	tutorial_step = ""
+	calendar_seconds = 0.0
+	advisor_ready_at = 0.0
+	bolo_intro_route = ""
+	bolo_people_joined = false
+	if has_node("/root/Narrative"):
+		get_node("/root/Narrative").reset()   # nothing of the old game stays queued or on screen
 	planet_view_unlocked = false
 	global_resources.clear()
 	_planet_progress.clear()

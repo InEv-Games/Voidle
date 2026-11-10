@@ -28,14 +28,14 @@ var _name_labels: Array[Label]    = []
 
 var _orbitron: Font
 
-func setup(rx: float, seed: int, count: int = 3) -> void:
+func setup(rx: float, belt_seed: int, count: int = 3) -> void:
 	orbit_radius_x = rx
 	z_as_relative  = false
 	z_index        = 10
 	_orbitron      = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 
 	var rng := RandomNumberGenerator.new()
-	rng.seed = seed ^ 0xA5BE
+	rng.seed = belt_seed ^ 0xA5BE
 
 	for _i in DUST_COUNT:
 		_dust_angles.append(rng.randf_range(0.0, TAU))
@@ -245,7 +245,7 @@ func _draw_spinning_ring(center: Vector2, r: float, alp: float) -> void:
 	# center dot
 	draw_circle(center, 2.0, Color(1.0, 0.92, 0.40, alp * 0.8))
 
-func _draw_popup_line_and_box(center: Vector2, alp: float, idx: int) -> void:
+func _draw_popup_line_and_box(center: Vector2, alp: float, _idx: int) -> void:
 	var side   := 1.0 if center.x >= 0.0 else -1.0
 	var origin := _popup_box_origin(center)   # top-left of border box
 	var bw     := float(PREVIEW_SIZE + int(BOX_PAD) * 2)

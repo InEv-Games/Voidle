@@ -205,6 +205,10 @@ static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: floa
 		result.ok = false
 		result.reason = "%s must be built on %s" % [def.display_name, placement_label(def.placement)]
 		return result
+	if def.placement != LocationFinder.Placement.SEA and FeatureMap.is_lake(data.seed, lon, lat):
+		result.ok = false
+		result.reason = "Can't build on a lake"   # playtest 07.11: lakes are water
+		return result
 	var min_d := deg_to_rad(min_spacing_deg(data))
 	var city_d := deg_to_rad(city_spacing_deg(data))
 	for p: POIData in data.custom_pois:
@@ -218,6 +222,6 @@ static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: floa
 		# a city claims a wide area no other city may be founded in
 		if def.is_system_anchor() and p.is_city() and d < city_d:
 			result.ok = false
-			result.reason = "Too close to %s — cities need room to grow" % p.shown_name()
+			result.reason = "Too close to %s: cities need room to grow" % p.shown_name()
 			return result
 	return result

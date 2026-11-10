@@ -7,6 +7,7 @@ signal building_progress_changed(planet_seed: int, key: String, progress: float)
 signal resource_produced(planet_seed: int, poi_label: String, text: String, color: Color, icon: Texture2D)
 signal building_constructed(planet_seed: int, key: String, building_id: String)
 signal building_toggled(key: String, paused: bool)
+@warning_ignore("unused_signal")
 signal building_queued(planet_seed: int, building_id: String)
 
 ## { pm_key -> float 0.0-1.0 }
@@ -366,6 +367,7 @@ func district_cycle_sec(ddef: DistrictDef) -> float:
 ## the cycle stands once beside them): "20s", "7.5s", "1m 05s".
 static func cycle_text(sec: float) -> String:
 	if sec >= 60.0:
+		@warning_ignore("integer_division")
 		return "%dm %02ds" % [int(sec) / 60, int(round(sec)) % 60]
 	if sec < 10.0 and absf(sec - roundf(sec)) > 0.05:
 		return "%.1fs" % sec
@@ -830,7 +832,7 @@ func output_per_cycle(pp: PlanetProgress, entry: Dictionary, def: BuildingDef, i
 	return _skill_mods(pp, id, v, def.output_tag)
 
 ## Skill / planet-modifier multipliers shared by buildings and district base income.
-func _skill_mods(pp: PlanetProgress, id: String, v: float, output_tag: String) -> float:
+func _skill_mods(_pp: PlanetProgress, id: String, v: float, output_tag: String) -> float:
 	var st := get_node("/root/SkillTree")
 	match id:
 		Economy.CREDITS:

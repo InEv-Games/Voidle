@@ -5,6 +5,7 @@ enum StarType { YELLOW_DWARF, RED_DWARF, BLUE_GIANT, ORANGE_SUBGIANT, WHITE_DWAR
 
 @export var system_name:  String = "Unknown System"
 @export var star_type:    StarType = StarType.YELLOW_DWARF
+@warning_ignore("shadowed_global_identifier")
 @export var seed:         int = 0
 @export var is_home:      bool = false   # true for the starting system
 @export var planets:          Array[PlanetData] = []

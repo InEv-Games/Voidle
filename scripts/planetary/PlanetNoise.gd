@@ -3,35 +3,35 @@ extends RefCounted
 
 # 3D gradient noise — mirrors planet_rocky.gdshader exactly, no seam.
 
-static func hash3(p: Vector3, seed: int) -> Vector3:
-	var s := seed * 0.001
+static func hash3(p: Vector3, nseed: int) -> Vector3:
+	var s := nseed * 0.001
 	return Vector3(
 		-1.0 + 2.0 * fposmod(sin(p.dot(Vector3(127.1+s, 311.7,  74.7))) * 43758.5453123, 1.0),
 		-1.0 + 2.0 * fposmod(sin(p.dot(Vector3(269.5+s, 183.3, 246.1))) * 43758.5453123, 1.0),
 		-1.0 + 2.0 * fposmod(sin(p.dot(Vector3(113.5,   271.9, 124.6))) * 43758.5453123, 1.0)
 	)
 
-static func noise3(p: Vector3, seed: int) -> float:
+static func noise3(p: Vector3, nseed: int) -> float:
 	var i := Vector3(floor(p.x), floor(p.y), floor(p.z))
 	var f := Vector3(fposmod(p.x,1.0), fposmod(p.y,1.0), fposmod(p.z,1.0))
 	var u := f * f * (Vector3(3,3,3) - 2.0*f)
 
-	var v000 := hash3(i,               seed).dot(f)
-	var v100 := hash3(i+Vector3(1,0,0),seed).dot(f-Vector3(1,0,0))
-	var v010 := hash3(i+Vector3(0,1,0),seed).dot(f-Vector3(0,1,0))
-	var v110 := hash3(i+Vector3(1,1,0),seed).dot(f-Vector3(1,1,0))
-	var v001 := hash3(i+Vector3(0,0,1),seed).dot(f-Vector3(0,0,1))
-	var v101 := hash3(i+Vector3(1,0,1),seed).dot(f-Vector3(1,0,1))
-	var v011 := hash3(i+Vector3(0,1,1),seed).dot(f-Vector3(0,1,1))
-	var v111 := hash3(i+Vector3(1,1,1),seed).dot(f-Vector3(1,1,1))
+	var v000 := hash3(i,               nseed).dot(f)
+	var v100 := hash3(i+Vector3(1,0,0),nseed).dot(f-Vector3(1,0,0))
+	var v010 := hash3(i+Vector3(0,1,0),nseed).dot(f-Vector3(0,1,0))
+	var v110 := hash3(i+Vector3(1,1,0),nseed).dot(f-Vector3(1,1,0))
+	var v001 := hash3(i+Vector3(0,0,1),nseed).dot(f-Vector3(0,0,1))
+	var v101 := hash3(i+Vector3(1,0,1),nseed).dot(f-Vector3(1,0,1))
+	var v011 := hash3(i+Vector3(0,1,1),nseed).dot(f-Vector3(0,1,1))
+	var v111 := hash3(i+Vector3(1,1,1),nseed).dot(f-Vector3(1,1,1))
 
 	return lerp(lerp(lerp(v000,v100,u.x), lerp(v010,v110,u.x), u.y),
 				lerp(lerp(v001,v101,u.x), lerp(v011,v111,u.x), u.y), u.z)
 
-static func fbm3(p: Vector3, octaves: int, seed: int) -> float:
+static func fbm3(p: Vector3, octaves: int, nseed: int) -> float:
 	var v := 0.0; var amp := 0.5; var freq := 1.0
 	for _i in octaves:
-		v    += amp * noise3(p * freq, seed)
+		v    += amp * noise3(p * freq, nseed)
 		freq *= 2.0; amp *= 0.5
 	return v
 
@@ -39,47 +39,47 @@ static func rot_y(p: Vector3, angle: float) -> Vector3:
 	var c := cos(angle); var s := sin(angle)
 	return Vector3(p.x*c + p.z*s, p.y, -p.x*s + p.z*c)
 
-static func terrain_height(lon_rad: float, lat_rad: float, seed: int,
+static func terrain_height(lon_rad: float, lat_rad: float, nseed: int,
 		roughness: float = 1.0, continent_scale: float = 1.0) -> float:
 	# Prefer the GPU-baked map: this GDScript noise is 64-bit and does NOT
 	# reproduce the shader's 32-bit sin-hash (see TerrainMap.gd).
-	if TerrainMap.has_map(seed, TerrainMap.Mode.ROCKY):
-		return TerrainMap.value(seed, lon_rad, lat_rad)
+	if TerrainMap.has_map(nseed, TerrainMap.Mode.ROCKY):
+		return TerrainMap.value(nseed, lon_rad, lat_rad)
 	var nx: float = sin(lon_rad) * cos(lat_rad)
 	var ny: float = -sin(lat_rad)
 	var nz: float = cos(lon_rad) * cos(lat_rad)
-	return fbm3(Vector3(nx, ny, nz) * 3.2 * roughness * continent_scale, 7, seed)
+	return fbm3(Vector3(nx, ny, nz) * 3.2 * roughness * continent_scale, 7, nseed)
 
-static func height_class(lon_rad: float, lat_rad: float, seed: int,
+static func height_class(lon_rad: float, lat_rad: float, nseed: int,
 		sea_level: float, roughness: float, continent_scale: float) -> float:
-	return terrain_height(lon_rad, lat_rad, seed, roughness, continent_scale) - sea_level
+	return terrain_height(lon_rad, lat_rad, nseed, roughness, continent_scale) - sea_level
 
-static func find_land_lon(base_lon: float, lat_rad: float, seed: int,
+static func find_land_lon(base_lon: float, lat_rad: float, nseed: int,
 		sea_level: float = 0.0, roughness: float = 1.0,
 		continent_scale: float = 1.0, tries: int = 48) -> float:
 	for i in tries:
 		var lon: float = fposmod(base_lon + (i / float(tries)) * TAU, TAU)
-		if height_class(lon, lat_rad, seed, sea_level, roughness, continent_scale) > 0.12:
+		if height_class(lon, lat_rad, nseed, sea_level, roughness, continent_scale) > 0.12:
 			return lon
 	return base_lon
 
-static func find_sea_lon(base_lon: float, lat_rad: float, seed: int,
+static func find_sea_lon(base_lon: float, lat_rad: float, nseed: int,
 		sea_level: float = 0.0, roughness: float = 1.0,
 		continent_scale: float = 1.0, tries: int = 48) -> float:
 	for i in tries:
 		var lon: float = fposmod(base_lon + (i / float(tries)) * TAU, TAU)
-		if height_class(lon, lat_rad, seed, sea_level, roughness, continent_scale) < -0.10:
+		if height_class(lon, lat_rad, nseed, sea_level, roughness, continent_scale) < -0.10:
 			return lon
 	return base_lon
 
-static func find_coast_lon(base_lon: float, lat_rad: float, seed: int,
+static func find_coast_lon(base_lon: float, lat_rad: float, nseed: int,
 		sea_level: float = 0.0, roughness: float = 1.0,
 		continent_scale: float = 1.0, tries: int = 72) -> float:
 	var best_lon:  float = base_lon
 	var best_dist: float = INF
 	for i in tries:
 		var lon: float = fposmod(base_lon + (i / float(tries)) * TAU, TAU)
-		var rel: float = height_class(lon, lat_rad, seed, sea_level, roughness, continent_scale)
+		var rel: float = height_class(lon, lat_rad, nseed, sea_level, roughness, continent_scale)
 		# coast = transition zone: slightly above sea level (beach/cliff)
 		if rel > -0.06 and rel < 0.16:
 			var dist: float = abs(rel - 0.04)  # prefer slightly above water

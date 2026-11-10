@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CompanionDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/CompanionDef.gd" id="1_cdef"]
+[ext_resource type="Texture2D" path="res://resources/companions/portraits/bolo.png" id="2_port"]
+
+[resource]
+script = ExtResource("1_cdef")
+companion_id = "bolo"
+display_name = "Bolo"
+role = "Signal hunter"
+bio = "Grew up underground, among the people who went below when the floods came. She came up the night I-330 landed and has been listening to the Moon ever since."
+hint = "Someone has been working under the fallen stones."
+pitch = ""
+order = 2
+portrait = ExtResource("2_port")
+bonus_resource = "science"
+bonus_value = 0.1

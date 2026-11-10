@@ -17,6 +17,8 @@ const FALLBACK_PORTRAIT := "res://resources/companions/portraits/silhouette.svg"
 @export_multiline var bio: String = ""
 ## In the gallery before they join: where to look.
 @export_multiline var hint: String = ""
+## What they say they can do for you, on the advisor's card (the opening choice).
+@export_multiline var pitch: String = ""
 ## Their place in the gallery.
 @export var order: int = 0
 ## Empty: the silhouette, until the art is in.
@@ -28,6 +30,9 @@ const FALLBACK_PORTRAIT := "res://resources/companions/portraits/silhouette.svg"
 @export var bonus_value: float = 0.05
 ## The relic an older save found instead of this companion.
 @export var legacy_relic_id: String = ""
+## Off the roster (the old pair, Sera and Dorian, before the narrative's four):
+## never listed, found or joined; stories that still name them do nothing.
+@export var retired: bool = false
 
 func portrait_texture() -> Texture2D:
 	return portrait if portrait != null else load(FALLBACK_PORTRAIT) as Texture2D
@@ -55,7 +60,7 @@ static func all() -> Array[CompanionDef]:
 			var path := file_name.trim_suffix(".remap")
 			if not dir.current_is_dir() and path.ends_with(".tres"):
 				var res := ResourceLoader.load("res://resources/companions/" + path) as CompanionDef
-				if res:
+				if res and not res.retired:
 					_cache.append(res)
 			file_name = dir.get_next()
 	_cache.sort_custom(func(a: CompanionDef, b: CompanionDef) -> bool: return a.order < b.order)

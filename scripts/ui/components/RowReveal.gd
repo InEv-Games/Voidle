@@ -115,8 +115,8 @@ func _process(delta: float) -> void:
 	if not busy:
 		_finish()
 
-func _blink(bucket: int, seed: int) -> float:
-	var x := float(hash(Vector2i(bucket, seed)) & 0xffff) / 65535.0
+func _blink(bucket: int, bseed: int) -> float:
+	var x := float(hash(Vector2i(bucket, bseed)) & 0xffff) / 65535.0
 	return lerpf(BLINK_DIP.x, BLINK_DIP.y, x / BLINK_CHANCE) if x < BLINK_CHANCE else 1.0
 
 func _set_row(r: Dictionary, p: float, bb: int, gb: int) -> void:

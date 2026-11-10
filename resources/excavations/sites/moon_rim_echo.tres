@@ -10,13 +10,11 @@ ruin_id = "moon_echo_crater"
 display_name = "The Rim Echo"
 teaser = "A pulse repeats from inside a crater."
 cost = {
-"credits": 1000.0,
-"science": 300.0
+"credits": 1000.0
 }
 duration_sec = 600.0
 reward = {
-"credits": 1500.0,
-"science": 450.0
+"science": 565.0
 }
 terrain = 1
 story = ExtResource("2_fk5es")

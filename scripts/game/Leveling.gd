@@ -27,7 +27,7 @@ static func district_level_credits(lv: int) -> float:
 	return Balance.geometric(Balance.cfg.level_credit_base, Balance.cfg.level_credit_growth, lv - 1)
 
 ## Why `poi` can't go up a level right now ("" when it can).
-static func district_level_block(pd: PlanetData, pp: PlanetProgress, poi: POIData) -> String:
+static func district_level_block(_pd: PlanetData, pp: PlanetProgress, poi: POIData) -> String:
 	var lv: int = pp.district_levels.get(poi.label, 1)
 	if pp.is_district_upgrading(poi.label):
 		return "Already upgrading"
@@ -162,7 +162,7 @@ static func orbit_level_block(pd: PlanetData, pp: PlanetProgress) -> String:
 	return ""
 
 ## Cities plus the Orbit — what counts against max_cities.
-static func cities_used(pd: PlanetData, pp: PlanetProgress) -> int:
+static func cities_used(pd: PlanetData, _pp: PlanetProgress) -> int:
 	var n := 0
 	for p: POIData in pd.custom_pois:
 		if p.is_city() and not p.is_orbital():

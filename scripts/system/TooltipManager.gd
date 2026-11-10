@@ -235,6 +235,53 @@ func _unlock() -> void:
 
 const HIDE_FADE_SEC := 0.1
 
+# ── Live tips ────────────────────────────────────────────────────────────────
+## A tip that rebuilds itself while it stays on screen (playtest 07.11, the 4th
+## time: costs and "Need …" lines kept their old state). `build` shows the tip
+## (show_tip, set_footer …); it runs now and every LIVE_SEC while the same tip
+## is up and the control under the mouse is still the one it was opened on.
+const LIVE_SEC := 0.25
+var _live := Callable()
+var _live_title := ""
+var _live_owner: Control = null
+var _live_t := 0.0
+var _live_running := false
+var _live_mods := 0
+var _last_body := ""
+var _last_cost := ""
+var _last_sub := ""
+
+func live(build: Callable) -> void:
+	_live = Callable()
+	build.call()
+	if _ignored or not _visible:
+		return
+	_live = build
+	_live_title = _panel.title
+	_live_owner = get_viewport().gui_get_hovered_control()
+	_live_t = 0.0
+
+func _tick_live(delta: float) -> void:
+	if not _live.is_valid():
+		return
+	if _panel.title != _live_title or (_live_owner != null \
+			and (not is_instance_valid(_live_owner) or not _live_owner.is_visible_in_tree())):
+		_live = Callable()
+		return
+	_live_t += delta
+	# Shift / Ctrl change a tip's click size: refresh at once, not on the beat
+	var mods := int(Input.is_key_pressed(KEY_SHIFT)) | int(Input.is_key_pressed(KEY_CTRL)) << 1 \
+		| int(Input.is_key_pressed(KEY_META)) << 2
+	if mods != _live_mods:
+		_live_mods = mods
+		_live_t = LIVE_SEC
+	if _live_t < LIVE_SEC:
+		return
+	_live_t = 0.0
+	_live_running = true
+	_live.call()
+	_live_running = false
+
 func _process(delta: float) -> void:
 	if _hide_timer > 0.0:
 		_hide_timer -= delta
@@ -247,10 +294,12 @@ func _process(delta: float) -> void:
 			_sub_panel.visible = false
 			_visible       = false
 			_ring.visible  = false
+			_live = Callable()
 			_unlock()
 		return
 	if not _visible:
 		return
+	_tick_live(delta)
 	var root_now := _panel.get_parent() as Control
 	if _locked:
 		# stays put while the mouse is on it, still where it locked (on the
@@ -345,8 +394,21 @@ func show_tip(title: String, body = "", cost = "", sub_body = "") -> void:
 	var is_new := not _visible or title.to_upper() != _panel.title
 	if title.to_upper() != _panel.title:
 		_unlock()
+		if not _live_running:
+			_live = Callable()   # another tip took over
+	# a live refresh with nothing new leaves the card alone (no flicker, and
+	# a nested term tip under the mouse stays open)
+	var same := _live_running and _visible and str(body) == _last_body and str(cost) == _last_cost \
+		and str(sub_body) == _last_sub
+	_last_body = str(body)
+	_last_cost = str(cost)
+	_last_sub = str(sub_body)
+	if same:
+		_hide_timer = 0.0
+		return
 	_panel.title = title.to_upper()
-	_panel.icon_name = ""
+	if not _live_running:
+		_panel.icon_name = ""
 	if body is Array:
 		_panel.set_body_parts(body as Array)
 	else:
@@ -360,9 +422,10 @@ func show_tip(title: String, body = "", cost = "", sub_body = "") -> void:
 			if item is String and (item as String) != "":
 				cost_lines.append(item as String)
 	_panel.cost = "\n".join(cost_lines)
-	_panel.set_footer("", "")
-	_panel.set_corner("")
-	_panel.set_detail("")
+	if not _live_running:   # a refresh's builder sets these again itself
+		_panel.set_footer("", "")
+		_panel.set_corner("")
+		_panel.set_detail("")
 
 	_panel.visible = true
 	# hide only for the first frame of a new tip (it is sized then shown);

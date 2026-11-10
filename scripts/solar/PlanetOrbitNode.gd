@@ -1,6 +1,7 @@
 class_name PlanetOrbitNode
 extends Node2D
 
+@warning_ignore("unused_signal")
 signal clicked(planet_data: PlanetData)
 signal hover_start(planet_data: PlanetData)
 signal hover_end

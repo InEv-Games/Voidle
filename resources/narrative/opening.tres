@@ -1,0 +1,173 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_0uhct"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_omghf"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_kvl4i"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_0ylnw"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_nftit"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="6_3ovue"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_talker_modifier.gd" id="7_wa4va"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="8_os48v"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="9_vpd7a"]
+
+[sub_resource type="Resource" id="Resource_ltvgv"]
+script = ExtResource("2_omghf")
+target_id = 2
+
+[sub_resource type="Resource" id="Resource_qhupq"]
+script = ExtResource("5_nftit")
+entry_name = "intro"
+exits = Array[ExtResource("2_omghf")]([SubResource("Resource_ltvgv")])
+id = 1
+
+[sub_resource type="Resource" id="Resource_gxad5"]
+script = ExtResource("2_omghf")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_o4ad5"]
+script = ExtResource("6_3ovue")
+text = "In 2440, I-330 landed on a world that looked like its destination. Its charts did not match the sky."
+exits = Array[ExtResource("2_omghf")]([SubResource("Resource_gxad5")])
+id = 2
+graph_position = Vector2(340, 0)
+
+[sub_resource type="Resource" id="Resource_7qojc"]
+script = ExtResource("2_omghf")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_fapc3"]
+script = ExtResource("6_3ovue")
+text = "The ship carried the embryos of a colony. The caretakers raised the first generation aboard. Today, they are ready to build a city of their own."
+exits = Array[ExtResource("2_omghf")]([SubResource("Resource_7qojc")])
+id = 3
+graph_position = Vector2(680, 0)
+
+[sub_resource type="Resource" id="Resource_dm6dp"]
+script = ExtResource("2_omghf")
+target_id = 5
+
+[sub_resource type="Resource" id="Resource_qo1mn"]
+script = ExtResource("7_wa4va")
+talker = "High Father"
+
+[sub_resource type="Resource" id="Resource_tmmn6"]
+script = ExtResource("6_3ovue")
+text = "Seventeen thousand four hundred and ninety people are ready to settle. We have enough hands to build, and enough work for all of them."
+exits = Array[ExtResource("2_omghf")]([SubResource("Resource_dm6dp")])
+id = 4
+graph_position = Vector2(1020, 0)
+modifiers = Array[ExtResource("4_0ylnw")]([SubResource("Resource_qo1mn")])
+
+[sub_resource type="Resource" id="Resource_oshuy"]
+script = ExtResource("2_omghf")
+target_id = 6
+
+[sub_resource type="Resource" id="Resource_kqvuq"]
+script = ExtResource("7_wa4va")
+talker = "Mother Superior"
+
+[sub_resource type="Resource" id="Resource_mklpk"]
+script = ExtResource("6_3ovue")
+text = "Until today, everyone you grew up with has lived under the same roof. You can see the world they chose you to settle. Look at it for a moment."
+exits = Array[ExtResource("2_omghf")]([SubResource("Resource_oshuy")])
+id = 5
+graph_position = Vector2(1360, 0)
+modifiers = Array[ExtResource("4_0ylnw")]([SubResource("Resource_kqvuq")])
+
+[sub_resource type="Resource" id="Resource_mf5uk"]
+script = ExtResource("2_omghf")
+target_id = 7
+
+[sub_resource type="Resource" id="Resource_jgr48"]
+script = ExtResource("7_wa4va")
+talker = "High Father"
+
+[sub_resource type="Resource" id="Resource_cyi3b"]
+script = ExtResource("6_3ovue")
+text = "The colony has chosen you as its first Facilitator. You may appoint either of us as your advisor."
+exits = Array[ExtResource("2_omghf")]([SubResource("Resource_mf5uk")])
+id = 6
+graph_position = Vector2(1700, 0)
+modifiers = Array[ExtResource("4_0ylnw")]([SubResource("Resource_jgr48")])
+
+[sub_resource type="Resource" id="Resource_4w1e6"]
+script = ExtResource("8_os48v")
+exit_name = "choose_advisor"
+id = 7
+graph_position = Vector2(2040, 0)
+
+[sub_resource type="Resource" id="Resource_aomcs"]
+script = ExtResource("2_omghf")
+target_id = 9
+
+[sub_resource type="Resource" id="Resource_hty1v"]
+script = ExtResource("5_nftit")
+entry_name = "handover_mother_superior"
+exits = Array[ExtResource("2_omghf")]([SubResource("Resource_aomcs")])
+id = 8
+graph_position = Vector2(0, 260)
+
+[sub_resource type="Resource" id="Resource_scor2"]
+script = ExtResource("2_omghf")
+target_id = 10
+
+[sub_resource type="Resource" id="Resource_2mvf3"]
+script = ExtResource("7_wa4va")
+talker = "Mother Superior"
+
+[sub_resource type="Resource" id="Resource_ir455"]
+script = ExtResource("6_3ovue")
+text = "You have our authority, Facilitator. We will carry out your orders. I will serve with you for at least five years. Choose where we will build our first home."
+exits = Array[ExtResource("2_omghf")]([SubResource("Resource_scor2")])
+id = 9
+graph_position = Vector2(340, 260)
+modifiers = Array[ExtResource("4_0ylnw")]([SubResource("Resource_2mvf3")])
+
+[sub_resource type="Resource" id="Resource_me0ui"]
+script = ExtResource("8_os48v")
+exit_name = "done"
+id = 10
+graph_position = Vector2(680, 260)
+
+[sub_resource type="Resource" id="Resource_rwfah"]
+script = ExtResource("2_omghf")
+target_id = 12
+
+[sub_resource type="Resource" id="Resource_taqwc"]
+script = ExtResource("5_nftit")
+entry_name = "handover_high_father"
+exits = Array[ExtResource("2_omghf")]([SubResource("Resource_rwfah")])
+id = 11
+graph_position = Vector2(0, 520)
+
+[sub_resource type="Resource" id="Resource_fbn77"]
+script = ExtResource("2_omghf")
+target_id = 13
+
+[sub_resource type="Resource" id="Resource_atara"]
+script = ExtResource("7_wa4va")
+talker = "High Father"
+
+[sub_resource type="Resource" id="Resource_xylas"]
+script = ExtResource("6_3ovue")
+text = "Authority transferred. We will carry out your orders. My term is five years at minimum. Select a site for the first City."
+exits = Array[ExtResource("2_omghf")]([SubResource("Resource_fbn77")])
+id = 12
+graph_position = Vector2(340, 520)
+modifiers = Array[ExtResource("4_0ylnw")]([SubResource("Resource_atara")])
+
+[sub_resource type="Resource" id="Resource_32dxl"]
+script = ExtResource("8_os48v")
+exit_name = "done"
+id = 13
+graph_position = Vector2(680, 520)
+
+[resource]
+script = ExtResource("9_vpd7a")
+graph_name = "opening"
+next_free_id = 14
+nodes = Array[ExtResource("1_0uhct")]([SubResource("Resource_qhupq"), SubResource("Resource_o4ad5"), SubResource("Resource_fapc3"), SubResource("Resource_tmmn6"), SubResource("Resource_mklpk"), SubResource("Resource_cyi3b"), SubResource("Resource_4w1e6"), SubResource("Resource_hty1v"), SubResource("Resource_ir455"), SubResource("Resource_me0ui"), SubResource("Resource_taqwc"), SubResource("Resource_xylas"), SubResource("Resource_32dxl")])
+default_occurrence = "intro"
+occurrences = Array[String](["intro", "handover_mother_superior", "handover_high_father"])
+endings = Array[String](["choose_advisor", "done"])
+talkers = Array[String](["High Father", "Mother Superior"])

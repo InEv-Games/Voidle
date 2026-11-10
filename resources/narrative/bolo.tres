@@ -1,0 +1,496 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_vqtmo"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_3yrdr"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_8ntik"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_rupuy"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_2ksbr"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="6_lha2g"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_talker_modifier.gd" id="7_thx62"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="8_2s215"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="9_h2aeu"]
+
+[sub_resource type="Resource" id="Resource_aw2o8"]
+script = ExtResource("2_3yrdr")
+target_id = 2
+
+[sub_resource type="Resource" id="Resource_pfq23"]
+script = ExtResource("5_2ksbr")
+entry_name = "meet_bolo"
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_aw2o8")])
+id = 1
+
+[sub_resource type="Resource" id="Resource_mfgfi"]
+script = ExtResource("2_3yrdr")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_b64xt"]
+script = ExtResource("6_lha2g")
+text = "There is a lamp at the foot of the stairs. A woman sits beside it, sorting fragments into a row. She moves one aside to make room for your boots."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_mfgfi")])
+id = 2
+graph_position = Vector2(340, 0)
+
+[sub_resource type="Resource" id="Resource_8wsl0"]
+script = ExtResource("2_3yrdr")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_1ktjg"]
+script = ExtResource("7_thx62")
+talker = "Unknown Woman"
+
+[sub_resource type="Resource" id="Resource_5mrbl"]
+script = ExtResource("6_lha2g")
+text = "Careful. That bit with the scratch goes next to the hinge. I've been looking for it since before your surveyors arrived."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_8wsl0")])
+id = 3
+graph_position = Vector2(680, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_1ktjg")])
+
+[sub_resource type="Resource" id="Resource_0a8ko"]
+script = ExtResource("2_3yrdr")
+target_id = 5
+
+[sub_resource type="Resource" id="Resource_nbghq"]
+script = ExtResource("7_thx62")
+talker = "Unknown Woman"
+
+[sub_resource type="Resource" id="Resource_a1qbc"]
+script = ExtResource("6_lha2g")
+text = "You're the Facilitator. Your survey crews cut down my fig tree. I planted it the night your ship came down."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_0a8ko")])
+id = 4
+graph_position = Vector2(1020, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_nbghq")])
+
+[sub_resource type="Resource" id="Resource_nnvif"]
+script = ExtResource("2_3yrdr")
+target_id = 6
+
+[sub_resource type="Resource" id="Resource_ms0ta"]
+script = ExtResource("7_thx62")
+talker = "Unknown Woman"
+
+[sub_resource type="Resource" id="Resource_nc2l8"]
+script = ExtResource("6_lha2g")
+text = "I called the tree Bolo. You can call me that."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_nnvif")])
+id = 5
+graph_position = Vector2(1360, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_ms0ta")])
+
+[sub_resource type="Resource" id="Resource_pavhv"]
+script = ExtResource("2_3yrdr")
+target_id = 7
+
+[sub_resource type="Resource" id="Resource_6xrva"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_jmr4i"]
+script = ExtResource("6_lha2g")
+text = "I grew up underground. When the floods came, my people taught a fungus to cut rooms through rock. My family lived in one of those rooms. People still live there."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_pavhv")])
+id = 6
+graph_position = Vector2(1700, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_6xrva")])
+
+[sub_resource type="Resource" id="Resource_52er6"]
+script = ExtResource("2_3yrdr")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_qwjdk"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_kgdx5"]
+script = ExtResource("6_lha2g")
+text = "I came up when your ship landed. I learned your words from the broadcasts. I wanted to ask what your ship had heard on its way down."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_52er6")])
+id = 7
+graph_position = Vector2(2040, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_qwjdk")])
+
+[sub_resource type="Resource" id="Resource_rcjbi"]
+script = ExtResource("2_3yrdr")
+target_id = 9
+
+[sub_resource type="Resource" id="Resource_53od6"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_6t0nn"]
+script = ExtResource("6_lha2g")
+text = "There is a record in here. I can read parts of it. The pauses are the same as a signal I have been hearing from the Moon."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_rcjbi")])
+id = 8
+graph_position = Vector2(2380, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_53od6")])
+
+[sub_resource type="Resource" id="Resource_etcmx"]
+script = ExtResource("2_3yrdr")
+target_id = 10
+label = "What do you hear?"
+
+[sub_resource type="Resource" id="Resource_ekl0y"]
+script = ExtResource("2_3yrdr")
+target_id = 11
+label = "Tell me about your tree."
+
+[sub_resource type="Resource" id="Resource_gjm0s"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_ht1dh"]
+script = ExtResource("6_lha2g")
+text = "I used my own blood to try the equipment down here. I ran the test again years later. My readings should have changed by then. They match right down to the last decimal."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_etcmx"), SubResource("Resource_ekl0y")])
+id = 9
+graph_position = Vector2(2720, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_gjm0s")])
+
+[sub_resource type="Resource" id="Resource_ffn84"]
+script = ExtResource("2_3yrdr")
+target_id = 12
+
+[sub_resource type="Resource" id="Resource_hxn4g"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_g11mt"]
+script = ExtResource("6_lha2g")
+text = "A hum with a gap in it. Always the same gap. That is usually where somebody has left room for an answer."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_ffn84")])
+id = 10
+graph_position = Vector2(3060, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_hxn4g")])
+
+[sub_resource type="Resource" id="Resource_1g183"]
+script = ExtResource("2_3yrdr")
+target_id = 12
+
+[sub_resource type="Resource" id="Resource_1conf"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_3ou3y"]
+script = ExtResource("6_lha2g")
+text = "It shaded the entrance in the afternoon. I used to set my recorder there. The soil is still bare where the roots were."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_1g183")])
+id = 11
+graph_position = Vector2(3060, 140)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_1conf")])
+
+[sub_resource type="Resource" id="Resource_hkgn1"]
+script = ExtResource("2_3yrdr")
+target_id = 13
+
+[sub_resource type="Resource" id="Resource_fjvpw"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_b4rm0"]
+script = ExtResource("6_lha2g")
+text = "I can give you my recordings. In return, I want to see what I-330's receivers pick up before your caretakers clean it. Some of those gaps might have data in them."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_hkgn1")])
+id = 12
+graph_position = Vector2(3400, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_fjvpw")])
+
+[sub_resource type="Resource" id="Resource_w0lmi"]
+script = ExtResource("2_3yrdr")
+target_id = 14
+
+[sub_resource type="Resource" id="Resource_827b6"]
+script = ExtResource("7_thx62")
+talker = "Player"
+
+[sub_resource type="Resource" id="Resource_4i1lt"]
+script = ExtResource("6_lha2g")
+text = "You'll have access to the signal. Let me know what you find."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_w0lmi")])
+id = 13
+graph_position = Vector2(3740, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_827b6")])
+
+[sub_resource type="Resource" id="Resource_wce7i"]
+script = ExtResource("2_3yrdr")
+target_id = 15
+
+[sub_resource type="Resource" id="Resource_a6od5"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_1rto4"]
+script = ExtResource("6_lha2g")
+text = "Then we can work together. I will start with the Moon."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_wce7i")])
+id = 14
+graph_position = Vector2(4080, 0)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_a6od5")])
+
+[sub_resource type="Resource" id="Resource_pad00"]
+script = ExtResource("8_2s215")
+exit_name = "joined"
+id = 15
+graph_position = Vector2(4420, 0)
+
+[sub_resource type="Resource" id="Resource_uebcn"]
+script = ExtResource("2_3yrdr")
+target_id = 17
+
+[sub_resource type="Resource" id="Resource_xmipc"]
+script = ExtResource("5_2ksbr")
+entry_name = "bolo_before_moon"
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_uebcn")])
+id = 16
+graph_position = Vector2(0, 260)
+
+[sub_resource type="Resource" id="Resource_87m7w"]
+script = ExtResource("2_3yrdr")
+target_id = 18
+
+[sub_resource type="Resource" id="Resource_7jpli"]
+script = ExtResource("6_lha2g")
+text = "A woman waits by the Spaceport cargo ramp with a recorder wrapped in a cloth. She keeps one hand on it when the ground crew passes."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_87m7w")])
+id = 17
+graph_position = Vector2(340, 260)
+
+[sub_resource type="Resource" id="Resource_bm3ew"]
+script = ExtResource("2_3yrdr")
+target_id = 19
+
+[sub_resource type="Resource" id="Resource_vd533"]
+script = ExtResource("7_thx62")
+talker = "Unknown Woman"
+
+[sub_resource type="Resource" id="Resource_wek0n"]
+script = ExtResource("6_lha2g")
+text = "Call me Bolo. It's the name of a fig tree I planted the night your ship came down."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_bm3ew")])
+id = 18
+graph_position = Vector2(680, 260)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_vd533")])
+
+[sub_resource type="Resource" id="Resource_cpeqg"]
+script = ExtResource("2_3yrdr")
+target_id = 20
+
+[sub_resource type="Resource" id="Resource_wejcp"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_fseta"]
+script = ExtResource("6_lha2g")
+text = "My people moved underground when the floods came. I grew up in rooms they carved with fungus. They're still down there. I came up to see what had landed."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_cpeqg")])
+id = 19
+graph_position = Vector2(1020, 260)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_wejcp")])
+
+[sub_resource type="Resource" id="Resource_ptx8b"]
+script = ExtResource("2_3yrdr")
+target_id = 21
+
+[sub_resource type="Resource" id="Resource_3pywb"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_lkpf3"]
+script = ExtResource("6_lha2g")
+text = "I picked up a pulse from a crater on the Moon. The pause matches a recording I've been working on under the fallen stones."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_ptx8b")])
+id = 20
+graph_position = Vector2(1360, 260)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_3pywb")])
+
+[sub_resource type="Resource" id="Resource_3pftp"]
+script = ExtResource("2_3yrdr")
+target_id = 22
+
+[sub_resource type="Resource" id="Resource_7sa6g"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_r7wgn"]
+script = ExtResource("6_lha2g")
+text = "I used my blood to test an instrument in that room. Years later I got the same reading, down to the last decimal. I'd like to try the instrument at the other end."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_3pftp")])
+id = 21
+graph_position = Vector2(1700, 260)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_7sa6g")])
+
+[sub_resource type="Resource" id="Resource_xam0f"]
+script = ExtResource("2_3yrdr")
+target_id = 23
+
+[sub_resource type="Resource" id="Resource_j5yic"]
+script = ExtResource("7_thx62")
+talker = "Player"
+
+[sub_resource type="Resource" id="Resource_rx3xp"]
+script = ExtResource("6_lha2g")
+text = "Come with us. I'll give you access to the ship's raw receiver logs."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_xam0f")])
+id = 22
+graph_position = Vector2(2040, 260)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_j5yic")])
+
+[sub_resource type="Resource" id="Resource_i6ndq"]
+script = ExtResource("2_3yrdr")
+target_id = 24
+
+[sub_resource type="Resource" id="Resource_yndjd"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_6rumg"]
+script = ExtResource("6_lha2g")
+text = "Good. I'll carry the recorder on board myself. Where can I strap it down?"
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_i6ndq")])
+id = 23
+graph_position = Vector2(2380, 260)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_yndjd")])
+
+[sub_resource type="Resource" id="Resource_anic7"]
+script = ExtResource("8_2s215")
+exit_name = "joined"
+id = 24
+graph_position = Vector2(2720, 260)
+
+[sub_resource type="Resource" id="Resource_peody"]
+script = ExtResource("2_3yrdr")
+target_id = 26
+
+[sub_resource type="Resource" id="Resource_6ey1t"]
+script = ExtResource("5_2ksbr")
+entry_name = "bolo_at_toppled_stones"
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_peody")])
+id = 25
+graph_position = Vector2(0, 520)
+
+[sub_resource type="Resource" id="Resource_vbc56"]
+script = ExtResource("2_3yrdr")
+target_id = 27
+
+[sub_resource type="Resource" id="Resource_s87qu"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_ro1kr"]
+script = ExtResource("6_lha2g")
+text = "This is the room I told you about at the port. I copied the marks on the plate next to the hinge. Watch where you put your lamp."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_vbc56")])
+id = 26
+graph_position = Vector2(340, 520)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_s87qu")])
+
+[sub_resource type="Resource" id="Resource_d6q0m"]
+script = ExtResource("8_2s215")
+exit_name = "done"
+id = 27
+graph_position = Vector2(680, 520)
+
+[sub_resource type="Resource" id="Resource_7bmft"]
+script = ExtResource("2_3yrdr")
+target_id = 29
+
+[sub_resource type="Resource" id="Resource_fbrhq"]
+script = ExtResource("5_2ksbr")
+entry_name = "bolo_surface_invitation"
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_7bmft")])
+id = 28
+graph_position = Vector2(0, 780)
+
+[sub_resource type="Resource" id="Resource_lr8mf"]
+script = ExtResource("2_3yrdr")
+target_id = 30
+
+[sub_resource type="Resource" id="Resource_3ctfc"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_j8ta5"]
+script = ExtResource("6_lha2g")
+text = "I took all five surveys home. We put them beside the maps we've kept since the floods. Your crews found a road we thought we'd lost. A cart can take it all the way to the surface."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_lr8mf")])
+id = 29
+graph_position = Vector2(340, 780)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_3ctfc")])
+
+[sub_resource type="Resource" id="Resource_hadj1"]
+script = ExtResource("2_3yrdr")
+target_id = 31
+label = "Tell them they are welcome."
+
+[sub_resource type="Resource" id="Resource_068gq"]
+script = ExtResource("2_3yrdr")
+target_id = 32
+label = "Let's make room first."
+
+[sub_resource type="Resource" id="Resource_88jqe"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_r2bq6"]
+script = ExtResource("6_lha2g")
+text = "Every household sent someone to the meeting. By morning, everyone had agreed to move up. They asked me to find out if you'll make room for us."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_hadj1"), SubResource("Resource_068gq")])
+id = 30
+graph_position = Vector2(680, 780)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_88jqe")])
+
+[sub_resource type="Resource" id="Resource_pum7c"]
+script = ExtResource("2_3yrdr")
+target_id = 33
+
+[sub_resource type="Resource" id="Resource_qkssn"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_3xlnw"]
+script = ExtResource("6_lha2g")
+text = "I'll send word. Tell your crews to meet us at the road by the survey camp. The first carts will come up there."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_pum7c")])
+id = 31
+graph_position = Vector2(1020, 780)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_qkssn")])
+
+[sub_resource type="Resource" id="Resource_l4bur"]
+script = ExtResource("2_3yrdr")
+target_id = 34
+
+[sub_resource type="Resource" id="Resource_wh4tl"]
+script = ExtResource("7_thx62")
+talker = "Bolo"
+
+[sub_resource type="Resource" id="Resource_beluj"]
+script = ExtResource("6_lha2g")
+text = "I'll tell them to keep the carts below. Come find me when you're ready."
+exits = Array[ExtResource("2_3yrdr")]([SubResource("Resource_l4bur")])
+id = 32
+graph_position = Vector2(1020, 920)
+modifiers = Array[ExtResource("4_rupuy")]([SubResource("Resource_wh4tl")])
+
+[sub_resource type="Resource" id="Resource_4phbx"]
+script = ExtResource("8_2s215")
+exit_name = "accepted"
+id = 33
+graph_position = Vector2(1360, 780)
+
+[sub_resource type="Resource" id="Resource_8o8v7"]
+script = ExtResource("8_2s215")
+exit_name = "later"
+id = 34
+graph_position = Vector2(1360, 920)
+
+[resource]
+script = ExtResource("9_h2aeu")
+graph_name = "bolo"
+next_free_id = 35
+nodes = Array[ExtResource("1_vqtmo")]([SubResource("Resource_pfq23"), SubResource("Resource_b64xt"), SubResource("Resource_5mrbl"), SubResource("Resource_a1qbc"), SubResource("Resource_nc2l8"), SubResource("Resource_jmr4i"), SubResource("Resource_kgdx5"), SubResource("Resource_6t0nn"), SubResource("Resource_ht1dh"), SubResource("Resource_g11mt"), SubResource("Resource_3ou3y"), SubResource("Resource_b4rm0"), SubResource("Resource_4i1lt"), SubResource("Resource_1rto4"), SubResource("Resource_pad00"), SubResource("Resource_xmipc"), SubResource("Resource_7jpli"), SubResource("Resource_wek0n"), SubResource("Resource_fseta"), SubResource("Resource_lkpf3"), SubResource("Resource_r7wgn"), SubResource("Resource_rx3xp"), SubResource("Resource_6rumg"), SubResource("Resource_anic7"), SubResource("Resource_6ey1t"), SubResource("Resource_ro1kr"), SubResource("Resource_d6q0m"), SubResource("Resource_fbrhq"), SubResource("Resource_j8ta5"), SubResource("Resource_r2bq6"), SubResource("Resource_3xlnw"), SubResource("Resource_beluj"), SubResource("Resource_4phbx"), SubResource("Resource_8o8v7")])
+default_occurrence = "meet_bolo"
+occurrences = Array[String](["meet_bolo", "bolo_before_moon", "bolo_at_toppled_stones", "bolo_surface_invitation"])
+endings = Array[String](["joined", "done", "accepted", "later"])
+talkers = Array[String](["Unknown Woman", "Bolo", "Player"])

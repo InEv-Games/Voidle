@@ -72,6 +72,8 @@ func _sync() -> void:
 		return
 	var ic := $Row/Icon as TextureRect
 	ic.texture = UIIcons.get_icon(resource_id)
+	ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if Economy.is_raw(resource_id) \
+		else CanvasItem.TEXTURE_FILTER_PARENT_NODE   # pixel mineral icons stay crisp
 	value_label.custom_minimum_size.x = value_width
 	value_label.clip_text = value_width > 0.0
 	rate_label.text = rate_text
@@ -90,8 +92,10 @@ func _apply_state() -> void:
 		value_label.add_theme_color_override("font_color", get_theme_color(&"bad", &"Palette"))
 	else:
 		value_label.remove_theme_color_override("font_color")
-	rate_label.add_theme_color_override("font_color",
-		get_theme_color(&"good" if rate_tone == Tone.GOOD else (&"bad" if rate_tone == Tone.BAD else &"text_subtle"), &"Palette"))
+	# an inactive chip dims its rate too (playtest 07.11: a bright green "+0")
+	var rate_col := get_theme_color(&"text_subtle", &"Palette") if inactive else \
+		get_theme_color(&"good" if rate_tone == Tone.GOOD else (&"bad" if rate_tone == Tone.BAD else &"text_subtle"), &"Palette")
+	rate_label.add_theme_color_override("font_color", Color(rate_col, rate_col.a * (0.4 if inactive else 1.0)))
 	if inactive:
 		add_theme_stylebox_override("panel", get_theme_stylebox(&"panel_inactive", &"ResourceChip"))
 	elif _hovered or preview_hover:

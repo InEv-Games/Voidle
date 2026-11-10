@@ -103,8 +103,8 @@ static func for_planet(data: PlanetData) -> RoadNetwork:
 	return net
 
 ## Forget a planet's network (e.g. its terrain map was rebuilt).
-static func forget(planet_seed: int) -> void:
-	_nets.erase(planet_seed)
+static func forget(p_seed: int) -> void:
+	_nets.erase(p_seed)
 
 func is_ready() -> bool:
 	if not _ready and _task_id >= 0 and WorkerThreadPool.is_task_completed(_task_id):
@@ -130,6 +130,7 @@ func _build() -> void:
 	_land_parent.resize(n)
 	for k in n:
 		_land_parent[k] = k
+	@warning_ignore("integer_division")
 	_astar.reserve_space(n + n / 4)
 	# nodes
 	for y in HEIGHT:

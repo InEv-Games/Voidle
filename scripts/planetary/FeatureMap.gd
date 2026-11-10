@@ -96,6 +96,13 @@ static func wind_texture(planet_seed: int) -> ImageTexture:
 static func river_texture(planet_seed: int) -> ImageTexture:
 	return _maps[planet_seed].get("river", null) if _maps.has(planet_seed) else null
 
+## True on a lake's water (Terran worlds, playtest 07.11): nothing is built there.
+static func is_lake(planet_seed: int, lon: float, lat: float) -> bool:
+	if not _maps.has(planet_seed):
+		return false
+	var lake: PackedByteArray = _maps[planet_seed].get("lake", PackedByteArray())
+	return not lake.is_empty() and lake[_index(lon, lat)] != 0
+
 static func feature_name(id: String) -> String:
 	var i := IDS.find(id)
 	return NAMES[i] if i >= 0 else id
@@ -127,6 +134,7 @@ static func cells_with(planet_seed: int, f: int) -> Array:
 	var bit := 1 << f
 	for i in mask.size():
 		if mask[i] & bit:
+			@warning_ignore("integer_division")
 			out.append(_cell_lonlat(i % WIDTH, i / WIDTH))
 	return out
 
@@ -214,11 +222,12 @@ static func merged_site(pd: PlanetData, poi: POIData) -> Dictionary:
 				break
 	return site
 
-## Geography multiplier of a specialist district's base output (§3, §7.1): 1 +
-## the summed steps of the features at its own site. The Capital (a City) and
-## the Orbit get none, and buildings never get one — only the district's base.
-static func terrain_mult(pd: PlanetData, poi: POIData, resource_id: String, _energy_tag: String = "") -> float:
-	if poi == null or poi.is_orbital() or poi.is_city():
+## Geography multiplier of a district's base output (§3, §7.1): 1 + the summed
+## steps of the features at its own site. Cities (the Capital too) get it as
+## well since playtest 07.11, so where the first City stands matters; the Orbit
+## gets none, and buildings never get one — only the district's base.
+static func terrain_mult(_pd: PlanetData, poi: POIData, resource_id: String, _energy_tag: String = "") -> float:
+	if poi == null or poi.is_orbital():
 		return 1.0
 	return 1.0 + bonus_for(poi.site_features, family_of(resource_id))
 
@@ -399,6 +408,8 @@ static func build_async(data: PlanetData, host: Node) -> void:
 
 static func _finish(planet_seed: int, r: Dictionary) -> void:
 	_maps[planet_seed] = {"mask": r["mask"], "tex": ImageTexture.create_from_image(r["img"])}
+	if r.has("lake"):
+		_maps[planet_seed]["lake"] = r["lake"]
 	if r.has("river_img"):
 		_maps[planet_seed]["river"] = ImageTexture.create_from_image(r["river_img"])
 	if r.has("wind_img"):
@@ -435,8 +446,11 @@ static func _compute(data: PlanetData) -> Dictionary:
 			land[i] = 1 if h >= TerrainSampler.SHORE_H else 0
 
 	var river_paths: Array = []
+	var lake := PackedByteArray()
 	if rocky:
 		river_paths = _build_rocky(data, rng, height, land, cover, lines, mask)
+		if data.planet_type == PlanetData.Type.TERRAN:
+			lake = _place_lakes(data, height, land, cover, mask)
 	# Crater, Caves and Ion storm region exist only on the Moon (§3.3)
 	if data.planet_type == PlanetData.Type.MOON:
 		_place_craters(data, rng, land, spots, mask, 10)
@@ -446,8 +460,10 @@ static func _compute(data: PlanetData) -> Dictionary:
 	if rocky and data.planet_type == PlanetData.Type.TERRAN:
 		_place_ruins(rng, land, height, spots, mask, 4)
 	var out := {"mask": mask, "img": _pack(cover, lines, spots, windy)}
-	if not river_paths.is_empty():
-		out["river_img"] = _bake_rivers(river_paths, data.seed, land)
+	if lake.count(1) > 0:
+		out["lake"] = lake
+	if not river_paths.is_empty() or lake.count(1) > 0:
+		out["river_img"] = _bake_rivers(river_paths, data.seed, land, lake)
 	# Wind currents for the Energy lens: only where wind is used — on Mountains
 	# and Tundra of a world with an atmosphere (the Wind Turbine's sites; the
 	# windy region is no longer a feature). Every such cell shows some current,
@@ -472,7 +488,6 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 	var ptype := data.planet_type
 	var forest_n := _noise(data.seed ^ 0xF0E5, 0.035, 4)
 	var arid_n := _noise(data.seed ^ 0xA21D, 0.02, 3)
-	var volc_n := _noise(data.seed ^ 0x701C, 0.05, 2)
 	var real_sea := ptype in [PlanetData.Type.TERRAN, PlanetData.Type.ICE]
 
 	# water bodies: big ones are seas, small enclosed ones are lakes
@@ -553,15 +568,16 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 				PlanetData.Type.ICE:
 					if h < MOUNTAIN_H: c = COVER_TUNDRA
 				PlanetData.Type.TERRAN:
+					# Tundra, Volcanic and the reachable Glacier get their shares
+					# after this loop (_terran_shares); past the placement band
+					# the old polar Tundra stays for the look
 					var arid := _n3(arid_n, ll.x, ll.y) + 0.35 * (1.0 - absf(lat_deg - 25.0) / 25.0)
-					if h < MOUNTAIN_H and lat_deg >= 56.0 and lat_deg < GLACIER_LAT_DEG:
+					if h < MOUNTAIN_H and lat_deg > TerrainSampler.MAX_PLACE_LAT_DEG and lat_deg < GLACIER_LAT_DEG:
 						c = COVER_TUNDRA
 					elif h < MOUNTAIN_H and arid > 0.42:
 						c = COVER_DESERT
 					elif h < MOUNTAIN_H and lat_deg < 60.0 and _n3(forest_n, ll.x, ll.y) > 0.08:
 						c = COVER_FOREST
-					elif h >= mountain_h and _n3(volc_n, ll.x, ll.y) > 0.55:
-						c = COVER_VOLCANIC
 			cover[i] = c
 			match c:
 				COVER_FOREST:   m |= 1 << F.FOREST
@@ -578,8 +594,190 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 			mask[i] = m
 
 	if ptype == PlanetData.Type.TERRAN:
+		_terran_shares(data, height, land, geo, mountain_h, cover, mask)
 		return _trace_rivers(rng, height, land, lines, mask)
 	return []
+
+# ── Lakes (playtest 07.11) ───────────────────────────────────────────────────
+## Lake buildings existed but no lake did: the terrain makes almost no small
+## enclosed waters. Terran worlds get LAKE_MIN..LAKE_MAX lakes (more on more
+## land), in the lowlands away from the sea, spaced apart; their shores are
+## Lakeside, their water takes no district (TerrainSampler.check_site) and is
+## drawn with the rivers. Their own random numbers: nothing else moves.
+const LAKE_MIN := 5
+const LAKE_MAX := 12
+const LAKE_LAND_PER := 1100     # buildable land cells per lake
+const LAKE_SEA_GAP := 4         # cells from the sea
+const LAKE_SPACING := 18        # cells between lakes
+const LAKE_MAX_LAT := 60.0
+
+static func _place_lakes(data: PlanetData, height: PackedFloat32Array, land: PackedByteArray,
+		cover: PackedByteArray, mask: PackedInt32Array) -> PackedByteArray:
+	var n := WIDTH * HEIGHT
+	var lake := PackedByteArray(); lake.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = data.seed ^ 0x1A4E
+	var wob := _noise(data.seed ^ 0x1A4F, 0.3, 2)
+	# distance from the sea (and other water), in cells, up to the gap
+	var dist := PackedInt32Array(); dist.resize(n); dist.fill(99)
+	var q := PackedInt32Array()
+	for i in n:
+		if land[i] == 0:
+			dist[i] = 0
+			q.append(i)
+	var head := 0
+	while head < q.size():
+		var i := q[head]; head += 1
+		if dist[i] >= LAKE_SEA_GAP + 3:
+			continue
+		for j in _neighbours4(i):
+			if dist[j] > dist[i] + 1:
+				dist[j] = dist[i] + 1
+				q.append(j)
+	# never under a district already standing (older saves): its cell and around
+	var taken := {}
+	for poi: POIData in data.custom_pois:
+		if poi.is_orbital():
+			continue
+		var pc := _index(deg_to_rad(poi.lon_deg), deg_to_rad(poi.lat_deg))
+		taken[pc] = true
+		for j in _neighbours8(pc):
+			taken[j] = true
+	var cand: Array[int] = []
+	var reach := 0
+	for i in n:
+		if land[i] == 0:
+			continue
+		@warning_ignore("integer_division")
+		var ll := _cell_lonlat(i % WIDTH, i / WIDTH)
+		var lat_deg := absf(rad_to_deg(ll.y))
+		if lat_deg > TerrainSampler.MAX_PLACE_LAT_DEG:
+			continue
+		reach += 1
+		if lat_deg <= LAKE_MAX_LAT and dist[i] >= LAKE_SEA_GAP and height[i] < PLAIN_TOP_H \
+				and (mask[i] & (1 << F.GLACIER)) == 0 and cover[i] != COVER_VOLCANIC:
+			cand.append(i)
+	if cand.is_empty():
+		return lake
+	@warning_ignore("integer_division")
+	var want := clampi(reach / LAKE_LAND_PER, LAKE_MIN, LAKE_MAX)
+	var centres: Array[int] = []
+	var tries := 0
+	while centres.size() < want and tries < want * 30:
+		tries += 1
+		var c: int = cand[rng.randi() % cand.size()]
+		if _near_any(c, centres, LAKE_SPACING):
+			continue
+		var r := rng.randf_range(1.4, 2.8)
+		var cx := c % WIDTH
+		@warning_ignore("integer_division")
+		var cy := c / WIDTH
+		var cells: Array[int] = []
+		var span := ceili(r * 1.3) + 1
+		for dy in range(-span, span + 1):
+			var y := cy + dy
+			if y < 0 or y >= HEIGHT:
+				continue
+			for dx in range(-span, span + 1):
+				var x := posmod(cx + dx, WIDTH)
+				var i := y * WIDTH + x
+				if land[i] == 0 or dist[i] < 2 or taken.has(i):
+					continue
+				var ll := _cell_lonlat(x, y)
+				var edge := r * (0.8 + 0.4 * (_n3(wob, ll.x, ll.y) * 0.5 + 0.5))
+				if Vector2(dx, dy).length() <= edge:
+					cells.append(i)
+		if cells.size() < 4:
+			continue
+		centres.append(c)
+		for i: int in cells:
+			lake[i] = 1
+	# the water holds nothing; its shore is Lakeside
+	for i in n:
+		if lake[i] == 0:
+			continue
+		mask[i] = 0
+		cover[i] = 0
+		for j in _neighbours8(i):
+			if land[j] == 1 and lake[j] == 0:
+				mask[j] |= 1 << F.LAKESIDE
+	return lake
+
+# ── Terran shares (playtest 07.11) ───────────────────────────────────────────
+## Every Terran world has some of each land: Tundra was only a polar band (from
+## 0.8% to 25% of the buildable land), Glacier none and Volcanic ~0.2% where
+## districts can go. Each now takes a share of the buildable land (|lat| ≤
+## TerrainSampler.MAX_PLACE_LAT_DEG), picked by a score, so every world gets
+## about the same amount, in the places that suit it.
+const TUNDRA_SHARE := 0.08     # cold land: high latitudes first, then cold highlands
+const VOLCANIC_SHARE := 0.025  # around the geothermal fault lines
+const GLACIER_SHARE := 0.02    # the snowiest high mountains outside the tropics
+const TUNDRA_MIN_LAT := 35.0
+const GLACIER_MIN_LAT := 28.0
+
+static func _terran_shares(data: PlanetData, height: PackedFloat32Array, land: PackedByteArray,
+		geo: PackedFloat32Array, mountain_h: float, cover: PackedByteArray, mask: PackedInt32Array) -> void:
+	var tundra_n := _noise(data.seed ^ 0x7D2A, 0.045, 3)
+	var volc_n := _noise(data.seed ^ 0x701C, 0.05, 2)
+	var glacier_bit := 1 << F.GLACIER
+	var reach := 0
+	var t_cells := PackedInt32Array(); var t_score := PackedFloat32Array()
+	var v_cells := PackedInt32Array(); var v_score := PackedFloat32Array()
+	var g_cells := PackedInt32Array(); var g_score := PackedFloat32Array()
+	for y in HEIGHT:
+		for x in WIDTH:
+			var i := y * WIDTH + x
+			if land[i] == 0:
+				continue
+			var ll := _cell_lonlat(x, y)
+			var lat_deg := absf(rad_to_deg(ll.y))
+			if lat_deg > TerrainSampler.MAX_PLACE_LAT_DEG:
+				continue
+			reach += 1
+			var h := height[i]
+			if mask[i] & glacier_bit:
+				continue
+			v_cells.append(i)
+			v_score.append(geo[i] + 0.6 * _n3(volc_n, ll.x, ll.y))
+			if lat_deg >= TUNDRA_MIN_LAT and h < mountain_h:
+				t_cells.append(i)
+				# latitude only leans it poleward: patches and cold highlands reach the
+				# mid-latitudes too, not just the edge of the buildable band
+				t_score.append(0.35 * (lat_deg - TUNDRA_MIN_LAT) / 35.0 + 1.5 * maxf(h - TerrainSampler.SHORE_H, 0.0)
+					+ 0.6 * _n3(tundra_n, ll.x, ll.y))
+			if lat_deg >= GLACIER_MIN_LAT and h >= mountain_h * 0.9:
+				g_cells.append(i)
+				g_score.append(h + 0.004 * lat_deg + 0.05 * _n3(tundra_n, ll.x, ll.y))
+	var volcanic := _top_share(v_cells, v_score, int(reach * VOLCANIC_SHARE))
+	var cover_bits := (1 << F.FOREST) | (1 << F.DESERT) | (1 << F.PLAIN) | (1 << F.TUNDRA) | (1 << F.VOLCANIC)
+	for i: int in volcanic:
+		cover[i] = COVER_VOLCANIC
+		mask[i] = (mask[i] & ~cover_bits) | (1 << F.VOLCANIC)
+	for i: int in _top_share(t_cells, t_score, int(reach * TUNDRA_SHARE)):
+		if cover[i] == COVER_VOLCANIC:
+			continue
+		cover[i] = COVER_TUNDRA
+		mask[i] = (mask[i] & ~cover_bits) | (1 << F.TUNDRA)
+	# glacier: only the high mountains; at most half of what qualifies
+	@warning_ignore("integer_division")
+	var g_want := mini(int(reach * GLACIER_SHARE), g_cells.size() / 2)
+	for i: int in _top_share(g_cells, g_score, g_want):
+		if cover[i] == COVER_VOLCANIC:
+			continue
+		mask[i] = (mask[i] & ~((1 << F.PLAIN) | (1 << F.FOREST) | (1 << F.DESERT))) | glacier_bit
+
+## The `want` cells with the highest scores.
+static func _top_share(cells: PackedInt32Array, scores: PackedFloat32Array, want: int) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if want <= 0 or cells.is_empty():
+		return out
+	var sorted := scores.duplicate()
+	sorted.sort()
+	var cut := sorted[maxi(sorted.size() - want, 0)]
+	for k in cells.size():
+		if scores[k] >= cut and out.size() < want:
+			out.append(cells[k])
+	return out
 
 ## Rivers: every sizeable landmass gets its share (by area), springing from its
 ## own highlands (its upper height range, not a planet-wide mountain line),
@@ -684,7 +882,8 @@ const RIVER_SCALE := 4
 
 ## Draws every river as a smooth, gently meandering line that widens
 ## downstream, with a soft bank around it. R = water, G = bank.
-static func _bake_rivers(paths: Array, planet_seed: int, land: PackedByteArray) -> Image:
+static func _bake_rivers(paths: Array, planet_seed: int, land: PackedByteArray,
+		lake: PackedByteArray = PackedByteArray()) -> Image:
 	var rw := WIDTH * RIVER_SCALE
 	var rh := HEIGHT * RIVER_SCALE
 	var water := PackedByteArray(); water.resize(rw * rh)
@@ -692,6 +891,24 @@ static func _bake_rivers(paths: Array, planet_seed: int, land: PackedByteArray) 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = planet_seed ^ 0x51FE
 	var sc := float(RIVER_SCALE)
+	# lakes: a soft disc on every lake cell, so the cells melt into one shore
+	if not lake.is_empty():
+		var lw := sc * 0.85
+		var lreach := lw + 1.6
+		for i in lake.size():
+			if lake[i] == 0:
+				continue
+			var p := Vector2(float(i % WIDTH) + 0.5, floorf(float(i) / float(WIDTH)) + 0.5) * sc
+			for yy in range(maxi(floori(p.y - lreach), 0), mini(ceili(p.y + lreach), rh - 1) + 1):
+				for xx in range(floori(p.x - lreach), ceili(p.x + lreach) + 1):
+					var d := Vector2(float(xx) + 0.5, float(yy) + 0.5).distance_to(p)
+					if d > lreach:
+						continue
+					var idx := yy * rw + posmod(xx, rw)
+					var wv := int(255.0 * (1.0 - smoothstep(lw - 0.5, lw + 0.5, d)))
+					var bv := int(255.0 * (1.0 - smoothstep(lw, lreach, d)))
+					if wv > water[idx]: water[idx] = wv
+					if bv > bank[idx]: bank[idx] = bv
 	for path: PackedInt32Array in paths:
 		# cell centres in texture pixels, unwrapped across the date line
 		var pts := PackedVector2Array()
@@ -827,6 +1044,7 @@ static func _place_ruins(rng: RandomNumberGenerator, land: PackedByteArray, heig
 	while placed < count and tries < count * 60:
 		tries += 1
 		var i := rng.randi() % (WIDTH * HEIGHT)
+		@warning_ignore("integer_division")
 		var y := i / WIDTH
 		if land[i] == 0 or height[i] >= MOUNTAIN_H or y < HEIGHT * 0.2 or y > HEIGHT * 0.8 or spots[i] != 0:
 			continue
@@ -848,6 +1066,7 @@ static func _pack(cover: PackedByteArray, lines: PackedByteArray,
 
 static func _neighbours4(i: int) -> Array[int]:
 	var x := i % WIDTH
+	@warning_ignore("integer_division")
 	var y := i / WIDTH
 	var out: Array[int] = [y * WIDTH + posmod(x + 1, WIDTH), y * WIDTH + posmod(x - 1, WIDTH)]
 	if y > 0: out.append((y - 1) * WIDTH + x)
@@ -856,6 +1075,7 @@ static func _neighbours4(i: int) -> Array[int]:
 
 static func _neighbours8(i: int) -> Array[int]:
 	var x := i % WIDTH
+	@warning_ignore("integer_division")
 	var y := i / WIDTH
 	var out: Array[int] = []
 	for dy in [-1, 0, 1]:

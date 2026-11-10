@@ -213,10 +213,10 @@ static func _draw_one(pool: Array[TraitDef], slot: int, rng: RandomNumberGenerat
 	for r: int in rarity_weight:
 		total += int(rarity_weight[r])
 	if total > 0:
-		var roll := rng.randi_range(1, total)
+		var pick := rng.randi_range(1, total)
 		for r: int in rarity_weight:
-			roll -= int(rarity_weight[r])
-			if roll <= 0:
+			pick -= int(rarity_weight[r])
+			if pick <= 0:
 				rarity = r
 				break
 	var kin: Array[TraitDef] = []

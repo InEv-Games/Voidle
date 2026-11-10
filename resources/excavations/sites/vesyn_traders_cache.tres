@@ -10,12 +10,10 @@ ruin_id = "vesyn_buried_hall"
 display_name = "The Trader's Cache"
 teaser = "Something has been hidden deeper in the ruin."
 cost = {
-"credits": 500.0,
-"science": 100.0
+"credits": 500.0
 }
 duration_sec = 480.0
 reward = {
-"credits": 750.0,
-"science": 160.0
+"science": 200.0
 }
 story = ExtResource("2_lb2f0")

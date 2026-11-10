@@ -10,15 +10,12 @@ ruin_id = "moon_echo_crater"
 display_name = "The Sealed Hatch"
 teaser = "Your crews have found a hatch, and a camp beside it."
 cost = {
-"credits": 2000.0,
-"moonstone": 100.0,
-"science": 600.0
+"credits": 2000.0
 }
 duration_sec = 1200.0
 reward = {
-"credits": 3000.0,
-"moonstone": 160.0,
-"science": 900.0
+"science": 1125.0,
+"moonstone": 160.0
 }
 terrain = 1
 story = ExtResource("2_hbwst")

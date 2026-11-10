@@ -23,7 +23,7 @@ const MAP := {
 	"cancel": "disabled_by_default", "close": "disabled_by_default", "warning": "report", "danger": "dangerous",
 	"alert": "frame_exclamation", "rename": "drive_file_rename", "settings": "settings", "research": "lab_research",
 	"library": "local_library", "defense": "local_police", "move": "moving_ministry", "notes": "sticky_note_2",
-	"save": "upload_file", "cycle": "cycle",
+	"save": "upload_file", "cycle": "cycle", "calendar": "calendar",
 }
 
 static var _cache: Dictionary = {}

@@ -222,11 +222,11 @@ static func raw_total() -> float:
 	return t
 
 # ── Site ─────────────────────────────────────────────────────────────────────
-## The site multiplier the economy uses: terrain × location, snapped to half
-## steps — 1x, 1.5x, 2x … (playtest 23.10, KARARLAR §10): players read one
-## simple number, and the tooltip shows exactly what is paid out.
+## What a district's base output is multiplied by: terrain × location, exact
+## (playtest 07.11, KARARLAR §12: no rounding and no combined "Site" number for
+## the player; Geography and Location show on their own).
 static func site_mult(terrain: float, location: float) -> float:
-	return maxf(1.0, roundf(terrain * location * 2.0) / 2.0)
+	return maxf(1.0, terrain * location)
 
 ## "1x", "1.5x", "2x" …
 static func mult_text(m: float) -> String:
@@ -333,9 +333,17 @@ static func cost_text(cost: Dictionary) -> String:
 
 ## How many of a model can be bought in a district now (slots, per-district
 ## limit and every part of the cost), up to `cap`.
-static func max_buildable(pp: PlanetProgress, def: BuildingDef, poi: POIData, cap: int) -> int:
+static func max_buildable(pp: PlanetProgress, def: BuildingDef, poi: POIData, cap_n: int) -> int:
+	var n := mini(cap_n, building_room(pp, def, poi))
+	while n > 0 and not can_pay(building_full_cost(pp, def, poi.label, n)):
+		n -= 1
+	return maxi(n, 0)
+
+## How many of `def` the district still has room for: free slots and the
+## per-district / per-planet limits, the cost left out.
+static func building_room(pp: PlanetProgress, def: BuildingDef, poi: POIData) -> int:
 	var free_slots: int = pp.district_slots(poi) - pp.slots_used_in_district(poi.label)
-	var n := mini(cap, int(floor(float(free_slots) / float(maxi(def.slot_cost, 1)))))
+	var n := int(floor(float(free_slots) / float(maxi(def.slot_cost, 1))))
 	if def.max_per_district > 0:
 		var have := 0
 		for b: Dictionary in pp.buildings_in_district(poi.label):
@@ -344,8 +352,6 @@ static func max_buildable(pp: PlanetProgress, def: BuildingDef, poi: POIData, ca
 		n = mini(n, def.max_per_district - have)
 	if def.planet_cap() > 0:
 		n = mini(n, def.planet_cap() - def.count_on_planet(pp))
-	while n > 0 and not can_pay(building_full_cost(pp, def, poi.label, n)):
-		n -= 1
 	return maxi(n, 0)
 
 # ── Population ────────────────────────────────────────────────────────────────
@@ -473,6 +479,9 @@ static func world_max_population(pd: PlanetData, pp: PlanetProgress) -> int:
 			continue   # starved of its upkeep (e.g. Goods) — houses nobody
 		total += float(def.outputs[POPULATION]) * float(b.get("amount", 1)) \
 			* scope_bonus(pp, b.get("district_id", ""), POPULATION, pd) * _housing_mult()
+	# Bolo's people, come up from below (narrative: bolo_surface_invitation)
+	if GameState.bolo_people_joined and pd.seed == GameState.home_planet_seed:
+		total += GameState.BOLO_PEOPLE
 	return int(round(total))
 
 ## Population used on a planet: every district's founding + level costs

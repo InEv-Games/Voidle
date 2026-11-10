@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CompanionDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/CompanionDef.gd" id="1_cdef"]
+[ext_resource type="Texture2D" path="res://resources/companions/portraits/mother_superior.png" id="2_port"]
+
+[resource]
+script = ExtResource("1_cdef")
+companion_id = "mother_superior"
+display_name = "Mother Superior"
+role = "Ship caretaker"
+bio = "One of the two synthetic minds that ran I-330 and signed the First Book of Rules. She raised the colony's first generation aboard."
+hint = ""
+pitch = "I can help you organise supplies and give the colony room to grow."
+order = 0
+portrait = ExtResource("2_port")
+bonus_resource = "credits"
+bonus_value = 0.1

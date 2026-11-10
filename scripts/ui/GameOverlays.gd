@@ -59,12 +59,12 @@ static func _card(min_h: float = 0.0) -> PanelContainer:
 	p.custom_minimum_size = Vector2(CARD_W, min_h)
 	return p
 
-static func _text(txt: String, size: int, col: Color = Color(0, 0, 0, 0), wrap := true) -> Label:
+static func _text(txt: String, size: int, col: Color = Color(0, 0, 0, 0), wrap_text := true) -> Label:
 	var l := Label.new()
 	l.text = txt
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col if col.a > 0.0 else UIStyle.color(&"text_bright"))
-	if wrap:
+	if wrap_text:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = CARD_W - 24.0
 	return l

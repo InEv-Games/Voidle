@@ -18,12 +18,12 @@ var _providers: Dictionary = {}
 
 ## Registers `fn` for `kind`. One provider per owner and kind: registering again
 ## replaces it. Providers of freed owners are dropped automatically.
-func add_provider(kind: String, owner: Object, fn: Callable) -> void:
+func add_provider(kind: String, who: Object, fn: Callable) -> void:
 	var list: Array = _providers.get(kind, [])
 	list = list.filter(func(p: Dictionary) -> bool:
 		var o: Object = (p["owner"] as WeakRef).get_ref()
-		return o != null and o != owner)
-	list.append({"owner": weakref(owner), "fn": fn})
+		return o != null and o != who)
+	list.append({"owner": weakref(who), "fn": fn})
 	_providers[kind] = list
 
 func commands_for(kind: String, target: Variant) -> Array[GameCommand]:

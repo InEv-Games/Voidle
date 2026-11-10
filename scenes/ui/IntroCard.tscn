@@ -58,7 +58,7 @@ autowrap_mode = 3
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7216, 0.8471, 0.9333, 1)
 theme_override_font_sizes/font_size = 11
-text = "Follow the objectives on the right — they lead the way."
+text = "Follow the objectives on the right. They lead the way."
 autowrap_mode = 3
 
 [node name="SaveNote" type="Label" parent="Center/Panel/VBox"]

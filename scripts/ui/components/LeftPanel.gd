@@ -106,6 +106,7 @@ func _ready() -> void:
 var _reveal_queued := false
 
 func reveal() -> void:
+	_last_focus_root = 0   # a new menu: the keys start at its top
 	if _reveal_queued:
 		return
 	_reveal_queued = true
@@ -199,6 +200,14 @@ func _hide_native_frame() -> void:
 		empty.content_margin_right = f.content_margin_right
 		empty.content_margin_bottom = f.content_margin_bottom
 	add_theme_stylebox_override(&"panel", empty)
+
+## The panel itself only takes the mouse in the band it shows (between the
+## resource bar and the news bar), not over its whole full-height rect
+## (playtest 07.11: the news bar and popups in its column took no clicks).
+## Its rows and buttons pick the mouse on their own as before.
+func _has_point(point: Vector2) -> bool:
+	return point.x >= 0.0 and point.x <= size.x \
+		and point.y >= _stroke_span.x and point.y <= _stroke_span.y
 
 ## The gap between the resource bar's bottom and the news bar's top.
 func _update_stroke_span() -> void:
@@ -296,8 +305,8 @@ func is_animating() -> bool:
 
 ## A row's blink factor this BLINK_SEC step; `seed` is rolled per row per
 ## open / close, so the pattern never repeats.
-func _blink(bucket: int, seed: int) -> float:
-	var r := float(hash(Vector2i(bucket, seed)) & 0xffff) / 65535.0
+func _blink(bucket: int, bseed: int) -> float:
+	var r := float(hash(Vector2i(bucket, bseed)) & 0xffff) / 65535.0
 	if r < BLINK_CHANCE:
 		return lerpf(BLINK_DIP.x, BLINK_DIP.y, r / BLINK_CHANCE)
 	return 1.0
@@ -341,7 +350,9 @@ func _apply_fade(t: float) -> void:
 	if t >= 1.0:
 		_end_fade()   # a close reversed before it finished
 		return
+	@warning_ignore("integer_division")
 	var bb := Time.get_ticks_msec() / int(BLINK_SEC * 1000.0)
+	@warning_ignore("integer_division")
 	var gb := Time.get_ticks_msec() / int(FADE_GLYPH_SEC * 1000.0)
 	for id in _rows.keys():
 		var r: Dictionary = _rows[id]
@@ -387,6 +398,7 @@ func _start_row_tween(id: int) -> void:
 	var tw := create_tween()
 	tw.tween_interval(_fade_rng.randf_range(0.0, ROW_IN_STAGGER))
 	tw.tween_method(func(p: float) -> void:
+		@warning_ignore("integer_division")
 		_set_row(id, p, Time.get_ticks_msec() / int(BLINK_SEC * 1000.0),
 			Time.get_ticks_msec() / int(FADE_GLYPH_SEC * 1000.0)),
 		0.0, 1.0, ROW_IN_SEC).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
@@ -542,6 +554,24 @@ var _nav_active := false
 var _nav_focus: Control = null
 var _nav_last_root_id: int = 0
 var _saved_focus_by_root: Dictionary = {}   # root instance_id -> WeakRef(Control)
+## Where the focus was (root id, screen centre): when the panel rebuilds (a
+## building added with →) the focus goes to what stands there now, not the top.
+var _panel_return: WeakRef = null   # where → left the panel for the card
+var _last_focus_root := 0
+var _last_focus_at := Vector2.ZERO
+
+## The item now nearest to where the focus last was in `rid`; null if none / another root.
+func _nearest_to_last(items: Array[Control], rid: int) -> Control:
+	if rid != _last_focus_root or items.is_empty():
+		return null
+	var best: Control = null
+	var best_d := INF
+	for c in items:
+		var d := c.get_global_rect().get_center().distance_squared_to(_last_focus_at)
+		if d < best_d:
+			best_d = d
+			best = c
+	return best
 var _stick_dir := Vector2i.ZERO
 var _stick_timer := 0.0
 const STICK_DEADZONE := 0.45
@@ -552,6 +582,16 @@ func _nav_blocked() -> bool:
 	if not is_visible_in_tree() or GameState.showcase_mode:
 		return true
 	if SkillTreeView.is_open:
+		return true
+	# a story line is up: its keys go to the dialogue panel (the Narrative Log, a
+	# popup over it, keeps the usual navigation)
+	if NewsFeed.browsing:
+		return true   # ← / → go through the news crawl
+	var rb = HUDManager.get("credits_panel")   # untyped: HUDManager ↔ ResourceBar would cycle
+	if rb != null and is_instance_valid(rb) and bool(rb.get("browsing")):
+		return true   # … or through the top bar
+	var top := _active_nav_root()
+	if Narrative.owns_keys() and not (top is ModalPopup or top is StoryDialog or top is CompanionGallery):
 		return true
 	var dc := get_node_or_null("/root/DevConsole")
 	if dc != null and bool(dc.get("_open")):
@@ -574,8 +614,8 @@ func _active_nav_root() -> Node:
 					return rch
 				for j in range(rch.get_child_count() - 1, -1, -1):
 					var cch := rch.get_child(j)
-					if cch is ModalPopup:
-						return cch
+					if cch is ModalPopup or cch is StoryDialog or cch is CompanionGallery:
+						return cch   # full-screen cards: the keys go round their buttons
 	var scene := get_tree().current_scene
 	if scene != null:
 		for i in range(scene.get_child_count() - 1, -1, -1):
@@ -596,6 +636,24 @@ func _active_nav_root() -> Node:
 	if _effective_t() < 0.5:
 		return null
 	return $Layout
+
+## What the keys can reach under `root`; for the panel itself also the buttons
+## on the bottom-right cards (tutorial / objectives), after the panel's own, so
+## ↓ past the panel's last row lands on them (10.11: keyboard-only play).
+func _nav_items(root: Node) -> Array[Control]:
+	var items: Array[Control] = []
+	_collect_focusables(root, items)
+	if Guide.blocking() and not (root is ModalPopup or root is StoryDialog or root is CompanionGallery):
+		return Guide.nav_filter(items)   # the guided step: only what it asks for (10.11)
+	if root == get_node_or_null("Layout"):
+		for card in get_tree().get_nodes_in_group(ObjectivesCard.GROUP):
+			if card is Control and (card as Control).is_visible_in_tree():
+				var own: Array[Control] = []
+				_collect_focusables(card, own)
+				for c in own:
+					if c is BaseButton:   # its buttons, not the card's own hover area
+						items.append(c)
+	return items
 
 func _collect_focusables(n: Node, out: Array[Control]) -> void:
 	if n == null or not is_instance_valid(n):
@@ -665,17 +723,19 @@ func _tick_nav(delta: float) -> void:
 		return
 	var rid := root.get_instance_id()
 	var focus_valid := _nav_focus != null and is_instance_valid(_nav_focus) \
-		and _nav_focus.is_visible_in_tree() and root.is_ancestor_of(_nav_focus)
+		and _nav_focus.is_visible_in_tree() \
+		and (root.is_ancestor_of(_nav_focus) or _nav_items(root).has(_nav_focus))   # or on a card
 	if rid != _nav_last_root_id or not focus_valid:
 		_nav_last_root_id = rid
-		var items: Array[Control] = []
-		_collect_focusables(root, items)
+		var items := _nav_items(root)
 		var restored: Control = null
 		if _saved_focus_by_root.has(rid):
 			var w: WeakRef = _saved_focus_by_root[rid]
 			var cand = w.get_ref() if w != null else null
 			if cand != null and is_instance_valid(cand) and items.has(cand as Control):
 				restored = cand as Control
+		if restored == null:
+			restored = _nearest_to_last(items, rid)
 		if restored != null:
 			_set_nav_focus(restored, false)
 		elif not items.is_empty():
@@ -708,21 +768,36 @@ func _input(event: InputEvent) -> void:
 				_handle_nav_back()
 				get_viewport().set_input_as_handled()
 			return
+		if not ke.echo and Guide.blocks_panel_keys() and not (_active_nav_root() is ModalPopup):
+			if k == KEY_ESCAPE:
+				return   # no "back" in the panel; Esc still opens the pause menu
+			if k == KEY_TAB or pk == KEY_TAB or k == KEY_BACKSPACE:
+				get_viewport().set_input_as_handled()   # the guided step: don't lead away from it
+				AudioManager.play("denied")
+				return
 		if not ke.echo and (k == KEY_TAB or pk == KEY_TAB):
+			var top := _active_nav_root()
+			if top != null and top != $Layout:
+				return   # a popup is up: Tab doesn't slide the panel behind it
 			if _toggle_panel():
 				get_viewport().set_input_as_handled()
 			return
 		var dir := Vector2.ZERO
-		if k == KEY_UP or pk == KEY_W:
+		# arrow keys only: WASD turns the globe (PlanetaryView._tick_key_spin)
+		if k == KEY_UP:
 			dir = Vector2(0, -1)
-		elif k == KEY_DOWN or pk == KEY_S:
+		elif k == KEY_DOWN:
 			dir = Vector2(0, 1)
-		elif k == KEY_LEFT or pk == KEY_A:
+		elif k == KEY_LEFT:
 			dir = Vector2(-1, 0)
-		elif k == KEY_RIGHT or pk == KEY_D:
+		elif k == KEY_RIGHT:
 			dir = Vector2(1, 0)
 		if dir != Vector2.ZERO:
 			if _handle_nav_dir(dir):
+				get_viewport().set_input_as_handled()
+			return
+		if not ke.echo and (pk == KEY_X or pk == KEY_B) and not ke.ctrl_pressed and not ke.meta_pressed:
+			if _nav_active and _step_focused(pk == KEY_B):
 				get_viewport().set_input_as_handled()
 			return
 		if not ke.echo and (k == KEY_ENTER or k == KEY_KP_ENTER or k == KEY_SPACE):
@@ -731,10 +806,6 @@ func _input(event: InputEvent) -> void:
 			return
 		if not ke.echo and (k == KEY_BACKSPACE or k == KEY_ESCAPE):
 			if _handle_nav_back():
-				get_viewport().set_input_as_handled()
-			return
-		if not ke.echo and (k == KEY_C or pk == KEY_C):
-			if _nav_active and _context_focused():
 				get_viewport().set_input_as_handled()
 			return
 	elif event is InputEventJoypadButton:
@@ -784,17 +855,20 @@ func _input(event: InputEvent) -> void:
 			JOY_BUTTON_X:
 				if _nav_active and _context_focused():
 					get_viewport().set_input_as_handled()
+			JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER:
+				if _nav_active and _step_focused(jb.button_index == JOY_BUTTON_RIGHT_SHOULDER):
+					get_viewport().set_input_as_handled()
 
 var _self_slide_tw: Tween = null
 
 func _toggle_panel() -> bool:
 	var scene := get_tree().current_scene
 	if scene != null and scene.has_method("_set_panel_open"):
-		var now_open := not bool(scene.get("_panel_open"))
+		var open_next := not bool(scene.get("_panel_open"))
 		AudioManager.play("click")
-		if not now_open:
+		if not open_next:
 			_clear_nav_focus()
-		scene.call("_set_panel_open", now_open)
+		scene.call("_set_panel_open", open_next)
 		return true
 	var now_open := slide_t < 0.5
 	AudioManager.play("click")
@@ -808,13 +882,15 @@ func _toggle_panel() -> bool:
 
 func _handle_nav_dir(dir: Vector2) -> bool:
 	var scene := get_tree().current_scene
-	if _effective_t() < 0.5 and scene != null and scene.has_method("_set_panel_open"):
-		scene.call("_set_panel_open", true)
 	var root := _active_nav_root()
+	# a popup / dropdown on top takes the keys; only with nothing up does the
+	# closed panel open for them (10.11: arrows on the advisor choice opened it)
+	if root == null and _effective_t() < 0.5 and scene != null and scene.has_method("_set_panel_open"):
+		scene.call("_set_panel_open", true)
+		root = _active_nav_root()
 	if root == null:
 		return false
-	var items: Array[Control] = []
-	_collect_focusables(root, items)
+	var items := _nav_items(root)
 	if items.is_empty():
 		return false
 	_nav_active = true
@@ -826,22 +902,13 @@ func _handle_nav_dir(dir: Vector2) -> bool:
 			var cand = w.get_ref() if w != null else null
 			if cand != null and is_instance_valid(cand) and items.has(cand as Control):
 				saved = cand as Control
+		if saved == null:
+			saved = _nearest_to_last(items, _nav_last_root_id)
 		_set_nav_focus(saved if saved != null else items[0], true)
 		return true
 
-	# Stepper ListItem (e.g. filled building slot card): Left = Minus (−), Right = Plus (+)
-	if absf(dir.x) > 0.5 and _nav_focus is ListItem and (_nav_focus as ListItem).show_stepper:
-		var li := _nav_focus as ListItem
-		var btn_path := "Row/Body/Bottom/Stepper/Plus" if dir.x > 0.0 else "Row/Body/Bottom/Stepper/Minus"
-		var btn := li.get_node_or_null(btn_path) as BaseButton
-		if btn != null and btn.visible:
-			if btn.disabled:
-				AudioManager.play("denied")
-			else:
-				btn.pressed.emit()
-			return true
-		li.stepped.emit(1 if dir.x > 0.0 else -1)
-		return true
+	# Stepper ListItem (a filled building card): the arrows only move (10.11:
+	# ← / → removed and added buildings while browsing); X / B and LB / RB do it
 
 	if absf(dir.x) > 0.5 and _nav_focus is HSlider:
 		var sl := _nav_focus as HSlider
@@ -896,6 +963,30 @@ func _handle_nav_dir(dir: Vector2) -> bool:
 			if next_idx != idx:
 				best = items[next_idx]
 
+	# → from the panel to the bottom-right card's buttons (tutorial / objectives),
+	# ← back to where it was in the panel (10.11)
+	if best == null and absf(dir.x) > 0.5:
+		var in_panel := is_ancestor_of(_nav_focus)
+		if dir.x > 0.0 and in_panel:
+			var near_d := INF
+			for c in items:
+				if is_ancestor_of(c):
+					continue
+				var d := c.get_global_rect().get_center().distance_squared_to(cur_c)
+				if d < near_d:
+					near_d = d
+					best = c
+			if best != null:
+				_panel_return = weakref(_nav_focus)
+		elif dir.x < 0.0 and not in_panel:
+			var back = _panel_return.get_ref() if _panel_return != null else null
+			if back != null and is_instance_valid(back) and items.has(back as Control):
+				best = back as Control
+			else:
+				for c in items:
+					if is_ancestor_of(c):
+						best = c
+						break
 	if best != null and best != _nav_focus:
 		_set_nav_focus(best, true)
 	return true
@@ -908,6 +999,8 @@ func _set_nav_focus(c: Control, play_sound: bool) -> void:
 		var root := _active_nav_root()
 		if root != null:
 			_saved_focus_by_root[root.get_instance_id()] = weakref(_nav_focus)
+			_last_focus_root = root.get_instance_id()
+			_last_focus_at = _nav_focus.get_global_rect().get_center()
 		_scroll_into_view(_nav_focus)
 		TooltipManager.set_focus_anchor(_nav_focus)
 		_apply_hover_visual(_nav_focus, true)
@@ -949,6 +1042,19 @@ func _scroll_into_view(c: Control) -> void:
 			break
 		p = p.get_parent()
 
+## X / B (LB / RB) on a building card: remove one at once / add one (the card's
+## "key_remove" / "key_add", set by the planet view). False when it isn't one.
+func _step_focused(add: bool) -> bool:
+	if _nav_focus == null or not is_instance_valid(_nav_focus) or not (_nav_focus is ListItem):
+		return false
+	var key := "key_add" if add else "key_remove"
+	if not _nav_focus.has_meta(key):
+		return false
+	var f: Callable = _nav_focus.get_meta(key)
+	if f.is_valid():
+		f.call()
+	return true
+
 func _activate_focused() -> bool:
 	if _nav_focus == null or not is_instance_valid(_nav_focus) or not _nav_focus.is_visible_in_tree():
 		return false
@@ -959,15 +1065,7 @@ func _activate_focused() -> bool:
 			li.pressed.emit()
 			return true
 		if li.show_stepper:
-			var plus_btn := li.get_node_or_null("Row/Body/Bottom/Stepper/Plus") as BaseButton
-			if plus_btn != null and plus_btn.visible:
-				if plus_btn.disabled:
-					AudioManager.play("denied")
-				else:
-					plus_btn.pressed.emit()
-				return true
-			li.stepped.emit(1)
-			return true
+			return false   # Enter adds nothing by itself (10.11); B / RB adds one
 		return false
 	if c is LineEdit:
 		(c as LineEdit).grab_focus()
@@ -1035,6 +1133,8 @@ func _handle_nav_back() -> bool:
 					return true
 				for j in range(rch.get_child_count() - 1, -1, -1):
 					var cch := rch.get_child(j)
+					if cch is StoryDialog or cch is CompanionGallery:
+						return false   # they close on Esc themselves (a paid dig's story must not)
 					if cch is ModalPopup:
 						if (cch as ModalPopup).dismissable:
 							AudioManager.play("click")

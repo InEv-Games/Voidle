@@ -181,16 +181,16 @@ func _build_right_panel() -> void:
 	_panel_stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(_panel_stats)
 
-func _make_lbl(text: String, size: int, col: Color) -> Label:
+func _make_lbl(text: String, font_px: int, col: Color) -> Label:
 	var lbl := Label.new()
 	lbl.text = text
 	if _orbitron: lbl.add_theme_font_override("font", _orbitron)
-	lbl.add_theme_font_size_override("font_size", size)
+	lbl.add_theme_font_size_override("font_size", font_px)
 	lbl.add_theme_color_override("font_color", col)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return lbl
 
-func _add_sep(vbox: VBoxContainer, col: Color) -> void:
+func _add_sep(vbox: VBoxContainer, _col: Color) -> void:
 	var sep := HSeparator.new()
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(sep)

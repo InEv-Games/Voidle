@@ -109,25 +109,82 @@ func _ready() -> void:
 var _skill_btns: Array[Button] = []
 var _explore_btns: Array[Button] = []
 var _trade_btns: Array[Button] = []   # shown only once Trade Access is researched
+var _companion_btns: Array[Button] = []   # shown once someone has joined
+
+# ── Shortcuts open one by one (playtest 07.11) ──────────────────────────────
+## Upgrade Tree: once the first Science district stands (the tutorial's next
+## step is a research), or once anything has been researched (older saves).
+## Companions: from the handover (the advisors). Trade: Trade Access (as before).
+var _tree_seen := false
+
+func _tree_open() -> bool:
+	if _tree_seen:
+		return true
+	var st := get_node_or_null("/root/SkillTree")
+	if st != null and (st.unlocked_skills as Array).size() > SkillTree.DEFAULT_SKILLS.size():
+		_tree_seen = true
+		return true
+	for pseed: int in GameState._planet_progress:
+		var pd := GameState.get_planet_data(pseed)
+		if pd == null:
+			continue
+		for poi: POIData in pd.custom_pois:
+			var dd := ProductionManager.district_def(poi)
+			if dd != null and dd.id == DistrictDef.Type.SCIENCE and not poi.constructing:
+				_tree_seen = true
+				return true
+	return false
+
+## The two caretakers are on the roster from the handover on (narrative J-d).
+static func _companions_open() -> bool:
+	return GameState.onboarding_stage == "done"
+
+## Shows each shortcut once it is open; the row (and its rule) only with one in it.
+func _sync_shortcuts() -> void:
+	_prune_shortcuts()   # a typed loop over a freed button errors before any check
+	var tree_ok := _tree_open()
+	var comp_ok := _companions_open()
+	for pair: Array in [[_skill_btns, tree_ok], [_companion_btns, comp_ok], [_trade_btns, Trade.has_access()],
+			[_explore_btns, GameState.explore_available()]]:
+		for b in pair[0]:
+			if is_instance_valid(b):
+				(b as Button).visible = pair[1]
+	for b in _skill_btns:
+		if not is_instance_valid(b) or (b as Button).get_parent() == null:
+			continue
+		var row := (b as Button).get_parent() as Control
+		var any := false
+		for c in row.get_children():
+			if c is Control and (c as Control).visible:
+				any = true
+				break
+		row.visible = any
+		var rule := row.get_parent().get_node_or_null("ShortcutRule") as CanvasItem if row.get_parent() != null else null
+		if rule != null:
+			rule.visible = any
+
+## Drops shortcut buttons freed with their view (a panel or planet view closed).
+func _prune_shortcuts() -> void:
+	for list: Array in [_skill_btns, _explore_btns, _trade_btns, _companion_btns]:
+		for i in range(list.size() - 1, -1, -1):
+			if not is_instance_valid(list[i]):
+				list.remove_at(i)
 
 func fill_shortcuts(row: HBoxContainer) -> void:
 	var skill_btn := _make_skill_button()
 	var trade_btn := _make_trade_button()
 	var companions_btn := _make_companions_button()
 	var explore_btn := _make_explore_button()
-	explore_btn.visible = GameState.explore_available()
-	trade_btn.visible = Trade.has_access()
 	for b: Button in [skill_btn, trade_btn, companions_btn, explore_btn]:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # share the row evenly
 		row.add_child(b)
 	companions_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # square, icon only
-	for list: Array[Button] in [_skill_btns, _explore_btns, _trade_btns]:   # drop rows freed with their view
-		for i in range(list.size() - 1, -1, -1):
-			if not is_instance_valid(list[i]):
-				list.remove_at(i)
+	_prune_shortcuts()
 	_skill_btns.append(skill_btn)
 	_explore_btns.append(explore_btn)
 	_trade_btns.append(trade_btn)
+	_companion_btns.append(companions_btn)
+	_sync_shortcuts()
 
 ## Upgrade Tree button (opens / closes the SkillTreeView layer).
 func _make_skill_button() -> Button:
@@ -167,7 +224,7 @@ func _make_skill_button() -> Button:
 		
 	skill_btn.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("Upgrade Tree", "Research new buildings and upgrades with Science."))
+		TooltipManager.show_tip("Upgrade Tree", "Research new buildings and upgrades with Science.  [U]"))
 	skill_btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
@@ -219,7 +276,7 @@ func _make_trade_button() -> Button:
 		toggle_trade_panel())
 	b.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("Trade", "Buy and sell (prices move with your trades), keep reserves and set standing orders." \
+		TooltipManager.show_tip("Trade", "Buy and sell (prices move with your trades), keep reserves and set standing orders.  [T]" \
 			if Trade.has_access() else "Research Trade Access to buy and sell."))
 	b.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
@@ -235,7 +292,9 @@ func _make_companions_button() -> Button:
 		CompanionGallery.open(self))
 	b.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip("Companions", "Joined: %d / %d. Each gives a bonus everywhere." % [Excavations.joined_count(), CompanionDef.all().size()]))
+		var adv := CompanionDef.find(GameState.active_advisor)
+		TooltipManager.show_tip("Companions", ("Your advisor: %s. " % adv.display_name if adv != null else "") \
+			+ "One advisor at a time gives their bonus everywhere."))
 	b.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
@@ -317,7 +376,18 @@ func toggle_trade_panel() -> void:
 	get_tree().root.add_child(_trade_layer)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+	if _try_shortcut_key(event):
+		get_viewport().set_input_as_handled()
+		return
+	var jb := event as InputEventJoypadButton
+	if jb != null and jb.pressed and jb.button_index == JOY_BUTTON_BACK:   # pad Back/Select: the shortcuts menu
+		var sc := get_tree().current_scene
+		if sc != null and not sc.scene_file_path.ends_with("MainMenu.tscn") and not get_tree().paused:
+			get_viewport().set_input_as_handled()
+			ShortcutsHelp.toggle(self)
+		return
+	var pad_start := jb != null and jb.pressed and jb.button_index == JOY_BUTTON_START   # pad Start: as Esc
+	if pad_start or event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		# Don't show pause menu when on the main menu
 		var current_scene := get_tree().current_scene
 		if current_scene == null or current_scene.scene_file_path.ends_with("MainMenu.tscn"):
@@ -339,6 +409,91 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if _top_layer != null and is_instance_valid(_top_layer):
 			show_pause_menu()
+
+## T: Trade, U: Upgrade Tree (10.11). Each presses its shortcut button, so a key
+## does only what a click could: nothing before the button is unlocked and
+## visible, nothing the guided tutorial shuts. Not while typing, in a story
+## line, the console or the pause menu.
+func _try_shortcut_key(event: InputEvent) -> bool:
+	var ke := event as InputEventKey
+	if ke == null or not ke.pressed or ke.echo or ke.ctrl_pressed or ke.meta_pressed or ke.alt_pressed:
+		return false
+	var key := ke.keycode if ke.keycode != KEY_NONE else ke.physical_keycode
+	var help := ke.unicode == 63   # "?" (wherever it sits on the layout); H is the globe's (hold: hide markers)
+	if key != KEY_T and key != KEY_U and key != KEY_C and not help:
+		return false
+	var scene := get_tree().current_scene
+	if scene == null or scene.scene_file_path.ends_with("MainMenu.tscn") or get_tree().paused:
+		return false
+	if Narrative.owns_keys() or GameState.showcase_mode:
+		return false
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit:
+		return false
+	var dc := get_node_or_null("/root/DevConsole")
+	if dc != null and bool(dc.get("_open")):
+		return false
+	if help:
+		ShortcutsHelp.toggle(self)
+		return true
+	return press_shortcut({KEY_T: "trade", KEY_U: "tree", KEY_C: "companions"}[key])
+
+## Opens / closes Trade ("trade") or the Upgrade Tree ("tree") as its button
+## would (nothing before it is unlocked, nothing the guided tutorial shuts);
+## open, the same call closes it, wherever its button is. False if it can't.
+func press_shortcut(which: String) -> bool:
+	if not Guide.allows_shortcut(which):
+		AudioManager.play("denied")   # the guided step comes first
+		return true
+	if which == "tree" and SkillTreeView.is_open:
+		return _try_close_skill_tree()
+	if which == "trade" and TradePanel.is_open:
+		AudioManager.play("click")
+		toggle_trade_panel()
+		return true
+	if which == "companions" and _companions_shown():
+		AudioManager.play("click")
+		_close_companions()
+		return true
+	_prune_shortcuts()
+	for b in _shortcut_list(which):
+		if (b as Button).is_visible_in_tree() and not (b as Button).disabled:
+			(b as Button).pressed.emit()
+			return true
+	return false
+
+func _shortcut_list(which: String) -> Array[Button]:
+	match which:
+		"trade": return _trade_btns
+		"companions": return _companion_btns
+	return _skill_btns
+
+## The Companions screen is up (C closes it as it opened it).
+func _companions_shown() -> bool:
+	for n in get_tree().root.get_children():
+		if n is CanvasLayer:
+			for c in n.get_children():
+				if c is CompanionGallery:
+					return true
+	return false
+
+func _close_companions() -> void:
+	for n in get_tree().root.get_children():
+		if n is CanvasLayer:
+			for c in n.get_children():
+				if c is CompanionGallery:
+					(c as CompanionGallery)._close()
+					return
+
+## Whether its button is there to press (the shortcuts menu lists only those).
+func shortcut_open(which: String) -> bool:
+	if (which == "tree" and SkillTreeView.is_open) or (which == "trade" and TradePanel.is_open):
+		return true
+	_prune_shortcuts()
+	for b in _shortcut_list(which):
+		if (b as Button).is_visible_in_tree() and not (b as Button).disabled:
+			return true
+	return false
 
 func _try_close_skill_tree() -> bool:
 	var root := get_tree().root
@@ -596,21 +751,29 @@ func show_settings_popup() -> void:
 	p.add_content(fs_chk)
 	slider_row.call("Night Shadows", SettingsManager.night_shadow, func(v: float): SettingsManager.set_night_shadow(v))
 	_add_theme_builder(p)
+	# 10.11: back, as in the first tutorial: played once, the guided run gives
+	# way to an optional checklist; this brings the guided run back
 	p.add_content(HSeparator.new())
-	var tut_row := HBoxContainer.new()
-	var tut_lbl := Label.new()
-	tut_lbl.text = "Tutorial"
-	tut_lbl.theme_type_variation = &"TitleLabel"
-	tut_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tut_row.add_child(tut_lbl)
-	var reset_btn := IconButton.create_text("RESET TUTORIAL", IconButton.Variant.NEUTRAL)
-	reset_btn.pressed.connect(func() -> void:
-		SettingsManager.tutorial_ever_done = false
-		SettingsManager.save_settings()
-		TutorialManager.tutorial_enabled = true
-		AudioManager.play("ui_click"))
-	tut_row.add_child(reset_btn)
-	p.add_content(tut_row)
+	section.call("TUTORIAL")
+	var note := Label.new()
+	note.theme_type_variation = &"SubLabel"
+	var note_text := func() -> String:
+		return "Played once: new games get an optional checklist." if SettingsManager.tutorial_ever_done \
+			else "Guided: the advisor shows each step."
+	note.text = note_text.call()
+	p.add_content(note)
+	var reset := IconButton.create("RESET TUTORIAL", "notes", IconButton.Variant.DEFAULT)
+	reset.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	reset.disabled = not SettingsManager.tutorial_ever_done
+	reset.mouse_entered.connect(func() -> void:
+		TooltipManager.show_tip("Reset Tutorial", "Play the guided tutorial again, from this game's next step. Rewards already paid aren't paid twice."))
+	reset.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	reset.pressed.connect(func() -> void:
+		AudioManager.play("ui_click")
+		Guide.reset_tutorial()
+		reset.disabled = true
+		note.text = note_text.call())
+	p.add_content(reset)
 
 ## Credits / science changes show through the resource bar's gain animation.
 func _on_credits_changed(_new_val: float) -> void:
@@ -627,12 +790,7 @@ func _process(delta: float) -> void:
 		_res_poll = 0.0
 		_maybe_show_offline()
 		_maybe_celebrate_moon()
-		for b: Button in _explore_btns:
-			if is_instance_valid(b):
-				b.visible = GameState.explore_available()
-		for b: Button in _trade_btns:
-			if is_instance_valid(b):
-				b.visible = Trade.has_access()
+		_sync_shortcuts()
 
 ## The demo's high point: the first City on the Moon, in the news bar.
 func _maybe_celebrate_moon() -> void:
@@ -678,7 +836,7 @@ func _maybe_show_offline() -> void:
 		return
 	GameState.offline_pending = false
 	# the hero's caption says how long ("Away for 4 min")
-	var body := "Offline progress is switched on in this profile, but it isn't implemented yet — nothing was produced." \
+	var body := "Offline progress is switched on in this profile, but it isn't implemented yet: nothing was produced." \
 		if GameState.offline_progress_enabled() \
 		else "Nothing was produced while the game was closed. Your economy picks up where you left it."
 	ConfirmPanel.ask(self, "WELCOME BACK", body, "CONTINUE", Callable(), false) \
@@ -752,8 +910,8 @@ func _on_tut_highlight(target: String) -> void:
 
 func _on_tut_highlight_clear() -> void:
 	if is_instance_valid(_skill_btn_tween): _skill_btn_tween.kill(); _skill_btn_tween = null
-	for b: Button in _skill_btns:
-		if is_instance_valid(b): b.modulate = Color.WHITE
+	for b in _skill_btns:
+		if is_instance_valid(b): (b as Button).modulate = Color.WHITE
 
 
 
@@ -762,7 +920,7 @@ func _on_tut_highlight_clear() -> void:
 ## Shown once, when the final rocket arrives: Civilization 0 is complete.
 func _show_act1_complete() -> void:
 	# scenes/ui/DemoEndScreen.tscn — texts and layout are edited in the scene
-	var layer := CanvasLayer.new()
-	layer.layer = 240
-	get_tree().root.add_child(layer)
-	layer.add_child((load("res://scenes/ui/DemoEndScreen.tscn") as PackedScene).instantiate())
+	var cl := CanvasLayer.new()
+	cl.layer = 240
+	get_tree().root.add_child(cl)
+	cl.add_child((load("res://scenes/ui/DemoEndScreen.tscn") as PackedScene).instantiate())

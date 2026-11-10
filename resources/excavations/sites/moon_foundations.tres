@@ -10,15 +10,12 @@ ruin_id = "moon_second_hatch"
 display_name = "The Foundations"
 teaser = "Dorian has found a second hatch. He says you should see this."
 cost = {
-"credits": 3000.0,
-"moonstone": 150.0,
-"science": 900.0
+"credits": 3000.0
 }
 duration_sec = 1800.0
 reward = {
-"credits": 4500.0,
-"moonstone": 240.0,
-"science": 1350.0
+"science": 1690.0,
+"moonstone": 240.0
 }
 terrain = 1
 story = ExtResource("2_4vf86")

@@ -86,9 +86,9 @@ func remove_ship(planet_seed: int, ship_id: String) -> void:
 			return
 
 ## Launch a new ship from a spaceport planet. Returns the new ShipData.
-func launch(planet_seed: int, name: String, cargo: Dictionary = {}) -> ShipData:
+func launch(planet_seed: int, ship_name: String, cargo: Dictionary = {}) -> ShipData:
 	var angle := randf() * TAU
-	var ship   := ShipData.make(name, planet_seed, angle)
+	var ship   := ShipData.make(ship_name, planet_seed, angle)
 	ship.cargo  = cargo
 	add_ship(ship)
 	return ship

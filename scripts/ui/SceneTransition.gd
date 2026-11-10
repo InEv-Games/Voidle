@@ -10,8 +10,8 @@ func _ready() -> void:
 	_overlay.color            = Color(0, 0, 0, 1)   # start fully black
 	_overlay.anchor_right     = 1.0
 	_overlay.anchor_bottom    = 1.0
-	_overlay.grow_horizontal  = 2
-	_overlay.grow_vertical    = 2
+	_overlay.grow_horizontal  = Control.GROW_DIRECTION_BOTH
+	_overlay.grow_vertical    = Control.GROW_DIRECTION_BOTH
 	_overlay.mouse_filter     = Control.MOUSE_FILTER_STOP
 	add_child(_overlay)
 	_fade_to_clear()           # reveal the first scene

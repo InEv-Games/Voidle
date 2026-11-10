@@ -13,7 +13,7 @@ extends VBoxContainer
 @export_multiline var msg_bad_email := "That doesn't look like an email address."
 @export_multiline var msg_sending := "Sending…"
 @export_multiline var msg_thanks := "Thanks! You're on the list."
-@export_multiline var msg_failed := "Couldn't reach the server — please try again."
+@export_multiline var msg_failed := "Couldn't reach the server. Please try again."
 @export var ok_color := Color(0.2902, 0.902, 0.5412)
 @export var error_color := Color(1.0, 0.4196, 0.5059)
 

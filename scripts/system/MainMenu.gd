@@ -817,15 +817,35 @@ func _process(delta: float) -> void:
 # and can't be played. Rows come in with RowReveal; Esc or ‹ MENU goes back.
 
 const SLOT_CARD_W := 210.0
+const SLOT_COLUMNS := 4   # the slot cards wrap after this many
 const MENU_REVEAL_SLOW := 3.0   # the menu's transitions run 3x slower than a tooltip's
 const MENU_BLINK_SOUND := &"ui/blink"   # VAM event on every row blink of the menu's transitions
 
 var _menu_root: VBoxContainer
 var _saves_root: VBoxContainer
 
+## PLAY: the save slots, or (no save anywhere yet) straight into a new game.
 func _on_play() -> void:
+	var shown := _shown_slots()
+	if shown.size() == 1 and GameState.slot_info(shown[0]).is_empty():
+		_play_slot(shown[0])
+		return
 	AudioManager.play("click", 0.0)
 	_open_saves()
+
+## The slots the list shows: every one with a save, then the first empty one
+## (none when all are taken).
+static func _shown_slots() -> Array[int]:
+	var out: Array[int] = []
+	var empty := -1
+	for slot in GameState.SAVE_SLOTS:
+		if not GameState.slot_info(slot).is_empty():
+			out.append(slot)
+		elif empty < 0:
+			empty = slot
+	if empty >= 0:
+		out.append(empty)
+	return out
 
 func _open_saves() -> void:
 	if is_instance_valid(_saves_root):
@@ -840,9 +860,11 @@ func _open_saves() -> void:
 	back.pressed.connect(_close_saves)
 	_saves_root.add_child(back)
 	_saves_root.add_child(HeroHeader.create("Save slots", "PLAY"))
-	var cards := HBoxContainer.new()
-	cards.add_theme_constant_override("separation", 10)
-	for slot in GameState.SAVE_SLOTS:
+	var cards := GridContainer.new()
+	cards.columns = SLOT_COLUMNS
+	cards.add_theme_constant_override("h_separation", 10)
+	cards.add_theme_constant_override("v_separation", 10)
+	for slot in _shown_slots():
 		cards.add_child(_slot_card(slot))
 	_saves_root.add_child(cards)
 	RowReveal.play(_saves_root, MENU_REVEAL_SLOW, false, MENU_BLINK_SOUND)
@@ -1319,6 +1341,7 @@ static func _slot_lines(info: Dictionary, blocked: String) -> Array[String]:
 	if blocked != "":
 		return [blocked]
 	var secs := int(info.get("play_seconds", 0.0))
+	@warning_ignore("integer_division")
 	var played := "%dh %02dm" % [secs / 3600, (secs / 60) % 60] if secs >= 3600 else "%dm" % (secs / 60)
 	var t: int = int(info.get("saved_at", 0.0)) + Time.get_time_zone_from_system().get("bias", 0) * 60
 	var d := Time.get_datetime_dict_from_unix_time(t)
@@ -1364,9 +1387,16 @@ func _on_new_game() -> void:
 	AudioManager.play("click", 0.0)
 	_show_intro(func() -> void: GameState.delete_save())
 
-## The short goal card before the first scene (scenes/ui/IntroCard.tscn);
-## `start` runs on BEGIN, before the first scene opens.
+## A new game opens straight on its home world: the story's opening plays there
+## (docs/design/narrative, slice 1; PlanetaryView._run_onboarding). The goal card
+## (scenes/ui/IntroCard.tscn) no longer shows; `start` runs first.
 func _show_intro(start: Callable) -> void:
+	start.call()
+	_enter_game()
+
+## The old goal card before the first scene, kept for reference: unused since
+## the narrative opening (playtest 07.11 J).
+func _show_intro_card(start: Callable) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 235
 	add_child(layer)
@@ -1383,6 +1413,7 @@ static func _slot_text(info: Dictionary) -> String:
 	if not info.get("ok", false):
 		return String(info.get("why", "Can't be loaded"))
 	var secs := int(info.get("play_seconds", 0.0))
+	@warning_ignore("integer_division")
 	var played := "%dh %02dm" % [secs / 3600, (secs / 60) % 60] if secs >= 3600 else "%dm" % (secs / 60)
 	var t: int = int(info.get("saved_at", 0.0)) + Time.get_time_zone_from_system().get("bias", 0) * 60
 	var d := Time.get_datetime_dict_from_unix_time(t)

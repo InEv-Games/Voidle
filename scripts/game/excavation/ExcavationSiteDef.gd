@@ -20,12 +20,14 @@ enum Terrain { RUINS, CRATER, ANY }
 @export var display_name: String = ""
 ## One line under the name, before the player pays.
 @export_multiline var teaser: String = ""
-## { resource id: amount } paid to start digging.
+## { resource id: amount } paid to start digging: credits only (playtest 07.11),
+## a quarter less inside a City's reach (Excavations.cost_of).
 @export var cost: Dictionary = {}
 ## How long the crews dig, in seconds of play time (they stop while the game is closed).
 @export var duration_sec: float = 300.0
 ## { resource id: amount } it always pays when it ends, on top of what the story
-## adds: more than `cost` of everything in it, so a dig never loses.
+## adds: Science and the site's material, never credits: a dig turns credits
+## into what money can't easily buy (playtest 07.11).
 @export var reward: Dictionary = {}
 ## Where its mark goes; the next kinds are tried if the world has none of it.
 @export var terrain: Terrain = Terrain.RUINS
