@@ -20,10 +20,10 @@ const ROWS := [
 	["F", "Y", "Buy what is missing and build (on a build row)"],
 	["T", "Menu", "Trade"],
 	["U", "Menu", "Upgrade Tree"],
-	["C", "Menu", "Companions"],
+	["C", "Menu", "Government and Agents"],
 	["N", "Menu", "Browse the news"],
 	["R", "Menu", "Browse the top bar"],
-	["O", "Menu", "Show / hide the objectives"],
+	["O", "Menu", "Notifications"],
 	["L", "Menu", "Narrative Log (in a story line)"],
 	["?", "Back", "This list"],
 	["H (hold)", "", "Hide the markers on the globe"],
@@ -76,12 +76,12 @@ static func open(host: Node) -> void:
 		row.add_child(b)
 	add.call("UPGRADE TREE", "research", HUDManager.shortcut_open("tree"), func() -> void: HUDManager.press_shortcut("tree"))
 	add.call("TRADE", "trade", HUDManager.shortcut_open("trade"), func() -> void: HUDManager.press_shortcut("trade"))
-	add.call("COMPANIONS", "population", HUDManager.shortcut_open("companions"), func() -> void: HUDManager.press_shortcut("companions"))
+	add.call("GOVERNMENT", "population", HUDManager.shortcut_open("companions"), func() -> void: HUDManager.press_shortcut("companions"))
 	add.call("NEWS", "notes", true, func() -> void: NewsFeed.start_browsing())
 	var rb = HUDManager.get("credits_panel")
 	add.call("TOP BAR", "explore", rb != null and is_instance_valid(rb), func() -> void: rb.call("start_browsing"))
 	add.call("NARRATIVE LOG", "notes", true, func() -> void: Narrative.open_log())
-	add.call("OBJECTIVES", "flag", NewsFeed.has_objective_card(), func() -> void: NewsFeed.toggle_objectives())
+	add.call("NOTIFICATIONS", "flag", true, func() -> void: Inbox.open())
 	if row.get_child_count() > 0:
 		p.add_content(HSeparator.new())
 		p.add_content(row)

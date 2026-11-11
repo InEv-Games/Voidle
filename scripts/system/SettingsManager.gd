@@ -24,6 +24,9 @@ var ui_volume:     float = 1.0
 var sfx_volume:    float = 1.0
 var is_fullscreen: bool = true
 var tutorial_ever_done: bool = false
+## Start worlds opened across games (SessionPrep): "terran" always, others
+## once a City stands on such a world (11.11).
+var unlocked_starts: Array = ["terran"]
 ## How dark the night side of planets gets: 0 = fully lit, 1 = full shadow.
 var night_shadow: float = 1.0
 ## Lowest layer of the current civ (Tip 0: buildings) shown as stacks ×N (true)
@@ -76,6 +79,7 @@ func load_settings() -> void:
 		sfx_volume         = config.get_value("audio",    "sfx_volume",    1.0)
 		is_fullscreen      = config.get_value("video",    "fullscreen",    true)
 		tutorial_ever_done = config.get_value("tutorial", "ever_done",     false)
+		unlocked_starts    = config.get_value("meta",     "unlocked_starts", ["terran"])
 		night_shadow       = config.get_value("video",    "night_shadow",  1.0)
 		stack_lowest_layer = config.get_value("ui",       "stack_lowest",  true)
 		theme_id           = config.get_value("ui",       "theme",         "cyan")
@@ -102,6 +106,7 @@ func save_settings() -> void:
 	config.set_value("video",    "fullscreen",    is_fullscreen)
 	config.set_value("video",    "night_shadow",  night_shadow)
 	config.set_value("tutorial", "ever_done",     tutorial_ever_done)
+	config.set_value("meta",     "unlocked_starts", unlocked_starts)
 	config.set_value("ui",       "stack_lowest",  stack_lowest_layer)
 	config.set_value("ui",       "theme",         theme_id)
 	config.set_value("ui",       "theme_hue",       theme_hue)

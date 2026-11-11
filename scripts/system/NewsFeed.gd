@@ -114,7 +114,9 @@ func _ready() -> void:
 ## when events are waiting. `detail` (with its `title`) is the tooltip an
 ## important item shows on hover.
 func post(text: String, kind: Kind = Kind.EVENT, detail: String = "", title: String = "",
-		loc: Dictionary = {}) -> void:
+		loc: Dictionary = {}, _inbox := true) -> void:
+	# (10.11) what happened stays here; the notifications panel (Inbox) only
+	# lists what can be done now. `_inbox` is kept for the callers, unused.
 	if text == "":
 		return
 	if kind == Kind.FLAVOUR and not _queue.is_empty():
@@ -130,7 +132,7 @@ func post_planet_level(planet_seed: int, level: int) -> void:
 	var new_pick := level in Balance.cfg.trait_slot_levels.slice(1)
 	post("%s reaches planet level %d.%s" % [pname, level, "  A trait slot can be opened." if new_pick else ""],
 		Kind.EVENT, "The planet can now hold %d Cities.%s" % [Leveling.max_cities(GameState.get_planet(planet_seed)),
-			"\nOpen it on the planet page (Science + Rare Elements) and pick a trait." if new_pick else ""],
+			"\nOpen it on the planet page (Science + Rare Metals) and pick a trait." if new_pick else ""],
 		"%s // Level %d" % [pname, level], {"seed": planet_seed})
 
 # ── Sources ──────────────────────────────────────────────────────────────────
@@ -166,7 +168,7 @@ func _connect_sources() -> void:
 		var node = SkillTree.nodes.get(id, null)
 		if node != null and float(node.cost) > 0.0:
 			post("Research complete: %s." % node.name, Kind.EVENT,
-				"%s\n\n%s" % [node.description, node.effect_desc], node.name))
+				"%s\n\n%s" % [node.description, node.effect_desc], node.name, {"tree": true}))
 	GameState.minerals_discovered.connect(func(body_seed: int, ids: Array) -> void:
 		var pd := GameState.get_planet_data(body_seed)
 		var names: Array[String] = []
@@ -420,6 +422,7 @@ var _obj_btn: IconButton = null
 ## A new objective came in while the card is closed: the button blinks
 ## yellow (its "on" look) until the card is opened.
 var _obj_blink := false
+var _inbox_seen := 0   # unread count last seen (a rise blinks the flag)
 const OBJ_BLINK_SEC := 0.45   # half a blink: yellow, then blue
 const OBJ_BTN_W := 22.0
 const OBJ_BTN_GAP := 4.0
@@ -535,18 +538,20 @@ func _bind_objectives_btn() -> void:
 	var sb := _obj_btn.get_theme_stylebox("normal")
 	var icon_px := maxf(10.0, HEIGHT - 1.0 - sb.content_margin_top - sb.content_margin_bottom)
 	(_obj_btn.get_node("Row/Icon") as Control).custom_minimum_size = Vector2(icon_px, icon_px)
+	set_objectives_open(true)   # the card isn't hidden by O any more: O is the notifications
+	# 10.11: the notifications panel (Inbox); the count of unread beside the flag
 	_obj_btn.pressed.connect(func() -> void:
-		AudioManager.play("click")
 		TooltipManager.hide_tip()
-		toggle_objectives())
+		_obj_blink = false
+		Inbox.toggle())
 	_obj_btn.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
-		var cur := ""
-		for t in _obj_sources.values():
-			if String(t) != "":
-				cur = String(t)
-		TooltipManager.show_tip("Objectives", ("Hide" if objectives_open else "Show") + " the objectives (O)."
-			+ ("\nNow: " + cur if cur != "" else "")))
+		var n := Inbox.unread()
+		TooltipManager.show_tip("Notifications", ("%d new.  " % n if n > 0 else "") + "What happened that you can act on.  [O]"))
+	Inbox.changed.connect(func() -> void:
+		if Inbox.unread() > _inbox_seen:
+			_obj_blink = true   # something new: the flag blinks until it is opened
+		_inbox_seen = Inbox.unread())
 	_obj_btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
@@ -638,6 +643,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			_set_browsing(true)
 		return
+	if k.keycode == KEY_O:   # O: the notifications panel
+		var focus := get_viewport().gui_get_focus_owner()
+		if not (focus is LineEdit or focus is TextEdit) and not Narrative.owns_keys():
+			get_viewport().set_input_as_handled()
+			_obj_blink = false
+			Inbox.toggle()
+		return
 	if k.keycode != KEY_O:
 		return
 	if not _obj_sources.is_empty():
@@ -650,9 +662,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _layout_objectives_btn() -> void:
 	if _obj_btn == null or not is_instance_valid(_obj_btn):
 		return
-	var on := not _obj_sources.is_empty()
+	var on := true   # the notifications button is always there (10.11)
 	_obj_btn.visible = on
-	var lit := objectives_open
+	var n := Inbox.unread()
+	var ctext := str(n) if n > 0 else ""
+	if _obj_btn.counter != ctext:
+		_obj_btn.counter = ctext
+	var lit := Inbox.is_open()
+	if Inbox.is_open():
+		_obj_blink = false
 	if _obj_blink and on:
 		@warning_ignore("integer_division")
 		lit = int(Time.get_ticks_msec() / int(OBJ_BLINK_SEC * 1000.0)) % 2 == 0
@@ -665,11 +683,16 @@ func _layout_objectives_btn() -> void:
 	if on:
 		_obj_btn.anchor_left = 1.0
 		_obj_btn.anchor_right = 1.0
+		var bw := OBJ_BTN_W + (8.0 * ctext.length() + 6.0 if ctext != "" else 0.0)   # room for the count
+		# the button's own width with the count can be wider than the guess: it
+		# grows to the left, never past the screen's right edge (11.11)
+		bw = maxf(bw, _obj_btn.get_combined_minimum_size().x)
+		_obj_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 		_obj_btn.offset_right = right
-		_obj_btn.offset_left = right - OBJ_BTN_W
+		_obj_btn.offset_left = right - bw
 		_obj_btn.offset_top = 2.0
 		_obj_btn.offset_bottom = HEIGHT + 1.0
-		right -= OBJ_BTN_W + OBJ_BTN_GAP
+		right -= bw + OBJ_BTN_GAP
 	var tag := _bar.get_node("Tag") as Control
 	tag.offset_right = right
 	tag.offset_left = right - 46.0
@@ -876,6 +899,10 @@ func _on_bar_input(ev: InputEvent) -> void:
 ## Takes the camera to a place: the planet view focuses it in place, or opens
 ## on its world first (PlanetaryView picks the request up on load).
 func go_to(loc: Dictionary) -> void:
+	if loc.get("tree", false):   # a research: the Upgrade Tree
+		if not SkillTreeView.is_open:
+			HUDManager.press_shortcut("tree")
+		return
 	if loc.get("solar", false):   # the star system view (e.g. the final rocket's flight)
 		SceneTransition.go("res://scenes/solar/SolarView.tscn", GameState.get_home_solar())
 		return

@@ -238,13 +238,13 @@ func _init() -> void:
 	_n("fuel_storage", "Bulk Storage", "Storage Facilities: nine Warehouses' worth of room.",
 		900.0, Vector2(-4.55, -0.75), ["fuel_processing"], "processing", "Unlocks Storage Facility",
 		{"grants": ["storage_facility"]})
-	_n("rare_processing", "Rare Processing", "Extract rare elements from bulk ore.",
-		900.0, _at("fuel_processing", 140, 1.2), ["fuel_processing"], "processing", "Unlocks Rare Element Forge, Rare access",
+	_n("rare_processing", "Rare Processing", "Extract rare metals from bulk ore.",
+		900.0, _at("fuel_processing", 140, 1.2), ["fuel_processing"], "processing", "Unlocks Rare Metal Forge, Rare access",
 		{"grants": ["molecular_forge"], "common": true})
-	_n("rare_refining", "Rare Refining", "Rare Elements in bulk.",
-		1800.0, _at("rare_processing", 140, 1.15), ["rare_processing"], "processing", "Unlocks Rare Element Refinery",
+	_n("rare_refining", "Rare Refining", "Rare Metals in bulk.",
+		1800.0, _at("rare_processing", 140, 1.15), ["rare_processing"], "processing", "Unlocks Rare Metal Refinery",
 		{"grants": ["rare_element_refinery"]})
-	_n("cavern_refining", "Cavern Refining", "Moon only: a refinery sealed in the Moon's Caves makes Goods, Fuel and Rare Elements together.",
+	_n("cavern_refining", "Cavern Refining", "Moon only: a refinery sealed in the Moon's Caves makes Goods, Fuel and Rare Metals together.",
 		900.0, _at("rare_processing", 60, 1.1), ["rare_processing"], "processing", "Unlocks Cavern Refinery (Moon only)",
 		{"grants": ["cavern_refinery"], "requires": ["processing_basics", "dense_fuel"]})
 	_n("surface_excavation", "Mining", "Proper mines for the world's mineral.",
@@ -391,7 +391,7 @@ func _init() -> void:
 	_n("advanced_research", "Advanced Research", "Dedicated research institutes.",
 		350.0, _at("field_research", 135, 1.2), ["field_research", "mountain_optics", "forest_research"], "science", "Unlocks Research Institute",
 		{"grants": ["advanced_lab"]})
-	_n("particle_physics", "Particle Physics", "Accelerators fed with Rare Elements.",
+	_n("particle_physics", "Particle Physics", "Accelerators fed with Rare Metals.",
 		900.0, _at("advanced_research", 135, 1.2), ["advanced_research"], "science", "Unlocks Particle Accelerator",
 		{"grants": ["particle_accelerator"], "access": ["rare"], "shape": NodeShape.CIRCLE})
 	_n("mountain_optics", "Mountain Optics", "Observatories on high peaks. The district must stand on a Mountain.",

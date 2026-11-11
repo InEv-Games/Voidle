@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_def")
 building_id = "rare_element_refinery"
-display_name = "Rare Element Refinery"
-description = "Rare Elements in bulk from Ferrite."
+display_name = "Rare Metal Refinery"
+description = "Rare Metals in bulk from Ferrite."
 allowed_poi_types = Array[int]([1])
 allowed_planet_types = Array[int]([])
 base_cost = 5400.0

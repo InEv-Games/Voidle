@@ -321,6 +321,19 @@ var ghost_card: Array = []
 var _card_panel: PanelContainer = null
 var _card_key := ""
 
+## Hides the placement card now (the site stays marked), e.g. while the City
+## is named: emptying ghost_card alone left the drawn card on screen (10.11).
+func hide_ghost_card() -> void:
+	ghost_card = []
+	# the small site name beside the marker goes too (it sat on the naming box, 11.11)
+	if not _ghost.is_empty() and (String(_ghost.get("title", "")) != "" or not (_ghost.get("lines", []) as Array).is_empty()):
+		_ghost["title"] = ""
+		_ghost["lines"] = []
+		if _ghost_info_ctrl != null and is_instance_valid(_ghost_info_ctrl):
+			_ghost_info_ctrl.queue_redraw()
+	if _card_panel != null and is_instance_valid(_card_panel):
+		_card_panel.visible = false
+
 func _place_ghost_card() -> void:
 	if ghost_card.is_empty() or _ghost.is_empty() or not placement_mode or not _ghost_info_at.is_finite() \
 			or _ghost_info_layer == null:
@@ -399,6 +412,8 @@ func _draw_ghost_info(font: Font, sp: Vector2, ok: bool, target: CanvasItem) -> 
 	const PAD        := 6.0
 	var title: String = _ghost["title"]
 	var lines: Array  = _ghost.get("lines", [])
+	if title == "" and lines.is_empty():
+		return
 	var w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_SIZE).x
 	for ln: Array in lines:
 		w = maxf(w, font.get_string_size(ln[0], HORIZONTAL_ALIGNMENT_LEFT, -1, LINE_SIZE).x)

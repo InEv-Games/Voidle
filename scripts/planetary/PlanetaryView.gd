@@ -1201,6 +1201,9 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
 			and _key_spin_allowed() and not GameState.showcase_mode:
+		if _try_body_hotkey(event as InputEventKey):
+			get_viewport().set_input_as_handled()
+			return
 		if _try_lens_hotkey(event as InputEventKey):
 			get_viewport().set_input_as_handled()
 			return
@@ -1626,6 +1629,18 @@ func _activate_world_cursor() -> void:
 	if planet_renderer == null:
 		return
 	var center := planet_renderer.global_position + planet_renderer.size * 0.5
+	# in orbit first: the Orbit City and ships aren't on the surface (10.11)
+	if _orbital_layer != null and is_instance_valid(_orbital_layer) and _orbital_layer.is_visible_in_tree():
+		var st := _orbital_layer._station_poi_at(center - _orbital_layer.global_position)
+		if st != "":
+			AudioManager.play("click")
+			_orbital_layer.station_poi_clicked.emit(st)
+			return
+		var sh := _orbital_layer._ship_at(center)
+		if sh != null:
+			AudioManager.play("click")
+			_orbital_layer.select_ship(sh)
+			return
 	if poi_layer != null and poi_layer.trigger_click_at(center):
 		return
 	_on_planet_clicked(center)
@@ -2192,7 +2207,8 @@ func _place_objectives() -> void:
 	var tut = TutorialManager.get("_quest_panel")
 	var tut_up: bool = tut != null and is_instance_valid(tut) and bool((tut as ObjectivesCard).active)
 	tut_up = tut_up or Guide.is_active()   # the AI's tutorial card has the spot first
-	_objectives.active = not GameState.showcase_mode and not tut_up
+	# 10.11: the final rocket is a notification now (Inbox TASKS), not a card
+	_objectives.active = false and not GameState.showcase_mode and not tut_up
 
 ## The final rocket (GDD §20.12–§20.18): its state, cost, target and the button
 ## that starts its preparation — in the Objectives panel.
@@ -3967,6 +3983,10 @@ func _spawn_district(data: PlanetData, lbl: String, def: DistrictDef, site: Vect
 	# the price at this moment is what was just paid for it (refund ledger)
 	poi.paid_credits = DistrictDef.placement_cost(def, data, "" if def.is_system_anchor() else parent_city)
 	poi.paid_materials = DistrictDef.placement_materials(def, data).duplicate()
+	if SessionPrep.free_district(def, data):
+		GameState.story_flags.erase(SessionPrep.FREE_DISTRICT)   # used up
+	if def.is_system_anchor():
+		SessionPrep.note_city(data)   # a City on a red / ice world opens that start
 	poi.label        = POIData.make_key(data)   # internal id; `lbl` is the shown name
 	poi.display_name = lbl
 	poi.parent_city  = "" if def.is_system_anchor() else parent_city
@@ -4443,7 +4463,7 @@ func _planet_tag_items(data: PlanetData) -> Array:
 	return out
 
 ## The world's three trait slots (playtest 31.10): its trait; a pick waiting;
-## a slot ready to open for Science and Rare Elements (then a pick of three,
+## a slot ready to open for Science and Rare Metals (then a pick of three,
 ## roguelite style); or locked, its requirement written on it.
 func _build_trait_slots(data: PlanetData) -> Control:
 	var row := HBoxContainer.new()
@@ -5208,6 +5228,7 @@ func _process(delta: float) -> void:
 	_update_placement_hover()
 	_tick_lens_tip()
 	_fade_lens_ui()
+	_sync_bar_reserve()
 	_tick_lander(delta)
 	_tick_companions()
 	_tick_key_spin(delta)
@@ -5530,6 +5551,22 @@ func _place_lens_bar() -> void:
 	_place_lens_legend()
 	_fade_lens_ui()
 
+## The calendar keeps left of the lens row as it grows (the Orbit toggle joins
+## it later: 10.11, the calendar sat under it).
+var _bar_reserve_w := -1.0
+
+func _sync_bar_reserve() -> void:
+	if _lens_bar == null or not is_instance_valid(_lens_bar) or _lens_top == null or not is_instance_valid(_lens_top):
+		return
+	var w := _lens_top.get_combined_minimum_size().x
+	if absf(w - _bar_reserve_w) < 0.5:
+		return
+	_bar_reserve_w = w
+	var bar := HUDManager.credits_panel
+	if bar != null and is_instance_valid(bar):
+		bar.right_reserve = LENS_BAR_RIGHT + w
+	_place_lens_bar()
+
 const LENS_LEGEND_GAP := 6.0
 
 func _place_lens_legend() -> void:
@@ -5549,18 +5586,47 @@ func _fade_lens_ui() -> void:
 	if SkillTreeView.is_open and _lens_menu_open:
 		_set_lens_menu(false)
 
-## Orbital surface scan: a bright band sweeps the globe once, then the role
-## lenses of this world work (GameState.scanned_bodies).
+## Orbital surface scan (11.11: a sonar over the surface): a tilted plane sweeps
+## the globe, and its cut is drawn as a ring hugging the sphere. Where it passes,
+## the land under it lights up in its geography's lens colour and fades; a thin
+## lat / lon grid stays on the scanned side; pings ripple out behind the ring.
+## Everything is placed by lon / lat, so it stays on the surface as the globe
+## turns. Then the role lenses of this world work (GameState.scanned_bodies).
 var _scan_fx: Dictionary = {}
 var _scan_canvas: Control = null
-const SCAN_SEC := 2.8
+const SCAN_SEC := 3.4
+const SCAN_TILT := 0.6          # rad the sweeping plane leans towards the viewer
+const SCAN_GLOW := 0.32         # how far behind the ring (plane units) the land stays lit
+const SCAN_GRID := 48           # sample points across the disc, per side
+const SCAN_PING_SEC := 0.45
+const SCAN_COL := Color(0.55, 1.0, 0.85)
 
 func _start_surface_scan(data: PlanetData) -> void:
 	if data == null or GameState.is_scanned(data.seed) or not _scan_fx.is_empty():
 		return
 	AudioManager.play("survey")
 	_set_zoom_target(ZOOM_MIN, Vector2.INF)
-	_scan_fx = {"t": 0.0, "seed": data.seed}
+	# the land on the visible side, by lon / lat, with the colour it lights up in
+	var pts: Array = []
+	for iy in SCAN_GRID:
+		for ix in SCAN_GRID:
+			var d := Vector2((float(ix) + 0.5) / SCAN_GRID * 2.0 - 1.0, (float(iy) + 0.5) / SCAN_GRID * 2.0 - 1.0)
+			if d.length_squared() >= 0.97:
+				continue
+			var ll: Vector2 = planet_renderer.view_to_lonlat(Vector3(d.x, d.y, sqrt(1.0 - d.length_squared())))
+			var m := FeatureMap.mask_at(data.seed, ll.x, ll.y)
+			if m == 0:
+				continue
+			var col := Color(0.0, 0.0, 0.0, 0.0)
+			for f in FeatureMap.IDS.size():
+				if f == FeatureMap.F.WIND or f == FeatureMap.F.PLAIN or not (m & (1 << f)):
+					continue
+				col = FeatureMap.feature_color(FeatureMap.IDS[f])
+				break
+			if col.a == 0.0:
+				col = Color(SCAN_COL, 0.55)   # plain land: the scanner's own colour, softer
+			pts.append([ll, col])
+	_scan_fx = {"t": 0.0, "seed": data.seed, "pts": pts, "pings": [], "next_ping": 0.3}
 	if _scan_canvas == null or not is_instance_valid(_scan_canvas):
 		_scan_canvas = Control.new()
 		_scan_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -5573,11 +5639,30 @@ func _tick_surface_scan(delta: float) -> void:
 	if _scan_fx.is_empty():
 		return
 	_scan_fx["t"] = float(_scan_fx["t"]) + delta
+	# pings: now and then a ripple from a lit spot just behind the ring
+	var t := float(_scan_fx["t"])
+	if t >= float(_scan_fx["next_ping"]) and t < SCAN_SEC - 0.3:
+		_scan_fx["next_ping"] = t + SCAN_PING_SEC
+		var s := _scan_front(t)
+		var n := _scan_normal()
+		var best: Array = []
+		for p: Array in _scan_fx["pts"]:
+			var v: Vector3 = planet_renderer.lonlat_to_view((p[0] as Vector2).x, (p[0] as Vector2).y)
+			var behind := s - n.dot(v)
+			if v.z > 0.2 and behind > 0.02 and behind < 0.12 and (p[1] as Color).a > 0.9:
+				best = p
+				if randf() < 0.35:
+					break
+		if not best.is_empty():
+			(_scan_fx["pings"] as Array).append({"ll": best[0], "col": best[1], "t0": t})
+			AudioManager.play("tick", -10.0)
 	if is_instance_valid(_scan_canvas):
 		_scan_canvas.queue_redraw()
 	if float(_scan_fx["t"]) >= SCAN_SEC:
 		var seed_val: int = _scan_fx["seed"]
 		_scan_fx = {}
+		if is_instance_valid(_scan_canvas):
+			_scan_canvas.queue_redraw()
 		GameState.scanned_bodies[seed_val] = true
 		# a newly scanned world draws its trait: pick one of three (PlanetTags)
 		var scanned := GameState.get_planet_data(seed_val)
@@ -5591,24 +5676,90 @@ func _tick_surface_scan(delta: float) -> void:
 		_rebuild_lens_bar()
 		_refresh_active_panel()
 
+## The sweeping plane: its normal (view space, leaning towards the viewer) and
+## where it stands at time t (n · v = s; from the left limb to the right).
+func _scan_normal() -> Vector3:
+	return Vector3(cos(SCAN_TILT), 0.0, -sin(SCAN_TILT))
+
+func _scan_front(t: float) -> float:
+	var k := clampf(t / SCAN_SEC, 0.0, 1.0)
+	k = k * k * (3.0 - 2.0 * k)   # eases in and out
+	return lerpf(-1.05, 1.05, k)
+
 func _draw_surface_scan() -> void:
 	if _scan_fx.is_empty():
 		return
 	var cv := _scan_canvas
-	var k := clampf(float(_scan_fx["t"]) / SCAN_SEC, 0.0, 1.0)
+	var t := float(_scan_fx["t"])
 	var c := planet_renderer.global_position + planet_renderer.size * 0.5 - cv.get_global_rect().position
 	var r := float(planet_renderer._planet_radius_px)
-	# the band runs across the disc left → right; scanned side keeps a faint grid
-	var x := lerpf(-r, r, k)
-	for yy in range(int(-r), int(r), 3):
-		var half := sqrt(maxf(r * r - float(yy * yy), 0.0))
-		if absf(x) > half:
+	var n := _scan_normal()
+	var s := _scan_front(t)
+	var fade := clampf((SCAN_SEC - t) / 0.4, 0.0, 1.0)   # everything eases out at the end
+	var to_screen := func(v: Vector3) -> Vector2: return c + Vector2(v.x, v.y) * r
+	# the scanned side keeps a faint lat / lon grid on the surface
+	var grid_col := Color(SCAN_COL, 0.10 * fade)
+	for lat_i in range(-4, 5):
+		_scan_line(cv, to_screen, n, s, grid_col, func(u: float) -> Vector2:
+			return Vector2(u * TAU, float(lat_i) * PI / 10.0))
+	for lon_i in 12:
+		_scan_line(cv, to_screen, n, s, grid_col, func(u: float) -> Vector2:
+			return Vector2(float(lon_i) * TAU / 12.0, lerpf(-1.4, 1.4, u)))
+	# the land lit by the pass, fading behind the ring
+	var px := maxf(2.0, roundf(r / SCAN_GRID * 1.6))
+	for p: Array in _scan_fx["pts"]:
+		var ll: Vector2 = p[0]
+		var v: Vector3 = planet_renderer.lonlat_to_view(ll.x, ll.y)
+		if v.z <= 0.0:
 			continue
-		cv.draw_rect(Rect2(c + Vector2(x - 2.0, float(yy)), Vector2(4, 3)), Color(0.55, 1.0, 0.85, 0.85))
-		cv.draw_rect(Rect2(c + Vector2(x - 14.0, float(yy)), Vector2(12, 3)), Color(0.55, 1.0, 0.85, 0.18))
-	for gx in range(int(-r), int(x), 18):
-		var half2 := sqrt(maxf(r * r - float(gx * gx), 0.0))
-		cv.draw_line(c + Vector2(float(gx), -half2), c + Vector2(float(gx), half2), Color(0.55, 1.0, 0.85, 0.07), 1.0)
+		var behind := s - n.dot(v)
+		if behind <= 0.0 or behind > SCAN_GLOW:
+			continue
+		var a := (1.0 - behind / SCAN_GLOW)
+		var col: Color = p[1]
+		var sp: Vector2 = to_screen.call(v)
+		cv.draw_rect(Rect2(sp - Vector2(px, px) * 0.5, Vector2(px, px)), Color(col, col.a * a * a * 0.85 * fade))
+	# the ring: the plane's cut through the sphere, front side only
+	var rr := sqrt(maxf(0.0, 1.0 - s * s))
+	if rr > 0.001:
+		var u := Vector3(0.0, 1.0, 0.0)
+		var w := n.cross(u).normalized()
+		var block := maxf(2.0, roundf(r / 90.0))
+		for i in 160:
+			var th := TAU * float(i) / 160.0
+			var v := n * s + (u * cos(th) + w * sin(th)) * rr
+			if v.z <= 0.0:
+				continue
+			var sp: Vector2 = to_screen.call(v)
+			var lim := clampf(v.z * 3.0, 0.25, 1.0)   # dimmer towards the limb
+			cv.draw_rect(Rect2(sp - Vector2(block, block) * 0.5, Vector2(block, block)), Color(SCAN_COL, 0.9 * lim * fade))
+			cv.draw_rect(Rect2(sp - Vector2(block, block) * 1.5, Vector2(block, block) * 3.0), Color(SCAN_COL, 0.10 * lim * fade))
+	# pings: rings that grow on the surface's screen spot and fade
+	for pg: Dictionary in _scan_fx["pings"]:
+		var age := t - float(pg["t0"])
+		if age > 0.9:
+			continue
+		var v: Vector3 = planet_renderer.lonlat_to_view((pg["ll"] as Vector2).x, (pg["ll"] as Vector2).y)
+		if v.z <= 0.0:
+			continue
+		var sp: Vector2 = to_screen.call(v)
+		var col: Color = pg["col"]
+		cv.draw_arc(sp, 3.0 + age * r * 0.12, 0.0, TAU, 28, Color(col, (1.0 - age / 0.9) * 0.8 * fade), 1.5)
+
+## A surface line (lon / lat along u in 0..1), drawn where it is on the front of
+## the globe and on the scanned side of the ring.
+func _scan_line(cv: Control, to_screen: Callable, n: Vector3, s: float, col: Color, at: Callable) -> void:
+	var prev := Vector2.INF
+	for i in 49:
+		var ll: Vector2 = at.call(float(i) / 48.0)
+		var v: Vector3 = planet_renderer.lonlat_to_view(ll.x, ll.y)
+		if v.z <= 0.05 or n.dot(v) > s:
+			prev = Vector2.INF
+			continue
+		var sp: Vector2 = to_screen.call(v)
+		if prev.is_finite():
+			cv.draw_line(prev, sp, col, 1.0)
+		prev = sp
 
 func _style_lens_bar() -> void:
 	# the lens that's on is Neutral (selection), the rest Default
@@ -5697,6 +5848,29 @@ func _lens_menu_input(event: InputEvent) -> bool:
 
 ## Number keys 1..5 toggle the 5 surface lenses (Energy, Population, Production,
 ## Science, Commercial); 0 or ` returns to Normal.
+## Shift + 1 / 2 / 3 …: the home world, then its moons (10.11: the keys had no
+## way to the Moon). The body in view needs nothing.
+func _try_body_hotkey(ke: InputEventKey) -> bool:
+	if not ke.shift_pressed or ke.ctrl_pressed or ke.meta_pressed or _placing_def != null or _naming_open:
+		return false
+	var pk := ke.physical_keycode if ke.physical_keycode != KEY_NONE else ke.keycode
+	if pk < KEY_1 or pk > KEY_9:
+		return false
+	var home := GameState.get_home_planet()
+	if home == null:
+		return false
+	var bodies: Array = [home]
+	bodies.append_array(home.moons)
+	var i := int(pk - KEY_1)
+	if i >= bodies.size():
+		AudioManager.play("error")
+		return true
+	var pd: PlanetData = bodies[i]
+	if current_data != null and pd.seed == current_data.seed:
+		return true
+	focus_news_location({"seed": pd.seed})
+	return true
+
 func _try_lens_hotkey(ke: InputEventKey) -> bool:
 	if current_data == null or not FeatureMap.has_map(current_data.seed):
 		return false
@@ -6095,6 +6269,7 @@ func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void
 	if sp != null and bool(sp.get("_nav_active")):
 		_using_right_stick = true
 	_placing_def = def
+	_hover_cell = ""
 	# picked with the keys (the mouse is hidden, resting off the globe): aim with
 	# the centre cursor, or the spot never shows (10.11: Production placed blind)
 	if CursorManager.keys_mode or _using_right_stick:
@@ -6127,6 +6302,8 @@ static func _placement_lens(def: DistrictDef) -> String:
 var _role_before_place := "-"
 
 func _end_district_placement() -> void:
+	_hover_cell = ""   # the next placing draws its card at once
+	_road_cache.clear()   # roads change once something is placed
 	if _role_before_place != "-":
 		_set_role(_role_before_place)
 		_role_before_place = "-"
@@ -6171,9 +6348,24 @@ func _show_place_hint(def: DistrictDef) -> void:
 ## would-be neighbour and to the nearest settlement of its City. Routed without
 ## committing them, recomputed only when the cursor moves to a new cell.
 var _ghost_road_key := ""
+## A road route (A*, a sea lane near the coast) is the dear part of the
+## placement card (10.11: placing by the sea stuttered): it waits until the
+## mouse rests on a spot for ROAD_REST_MS; while it moves the last roads go.
+const ROAD_REST_MS := 140
+var _road_wait_key := ""
+var _road_wait_since := 0
+var _road_cache: Dictionary = {}   # "spot>town" -> route, for one placing
+
 func _update_ghost_roads(lon: float, lat: float, neighbors: Array) -> void:
 	var key := "%d,%d" % [roundi(rad_to_deg(lon) * 2.0), roundi(rad_to_deg(lat) * 2.0)]
 	if key == _ghost_road_key:
+		return
+	if key != _road_wait_key:
+		_road_wait_key = key
+		_road_wait_since = Time.get_ticks_msec()
+		poi_layer.ghost_roads = []
+		return
+	if Time.get_ticks_msec() - _road_wait_since < ROAD_REST_MS:
 		return
 	_ghost_road_key = key
 	var out: Array = []
@@ -6197,23 +6389,44 @@ func _update_ghost_roads(lon: float, lat: float, neighbors: Array) -> void:
 			if i >= _territories.size():
 				continue
 			var pd: POIData = _territories[i]["poi"]
-			var r := net.route(lon, lat, deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg),
-				false, _is_sea_site(pd), false)
+			# found (or not) once per spot and town while placing: coming back costs nothing
+			var ck := "%s>%s" % [key, pd.label]
+			var r: Dictionary
+			if _road_cache.has(ck):
+				r = _road_cache[ck]
+			else:
+				r = net.route(lon, lat, deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg),
+					false, _is_sea_site(pd), false)
+				_road_cache[ck] = r
 			if not r.is_empty():
 				out.append(r)
 	poi_layer.ghost_roads = out
+
+const HOVER_REFRESH_MS := 250
+var _hover_cell := ""
+var _hover_at := 0
+var _hover_road_args: Array = []   # [lon, lat, neighbours] of the spot the card shows
 
 func _update_placement_hover() -> void:
 	if _placing_def == null or current_data == null:
 		return
 	if _naming_open:   # naming the spot: it stays marked, its card goes (it sat over the popup, 10.11)
-		if not poi_layer.ghost_card.is_empty():
-			poi_layer.ghost_card = []
-			poi_layer.queue_redraw()
+		poi_layer.hide_ghost_card()
 		return
 	var mouse := (planet_renderer.global_position + planet_renderer.size * 0.5) \
 		if (_using_right_stick and planet_renderer != null) else get_viewport().get_mouse_position()
 	var hit := _screen_to_lonlat(mouse)
+	# the card is built only when the spot changes, or every HOVER_REFRESH_MS
+	# (prices, a road waiting to be drawn): it was rebuilt every frame (10.11)
+	var cell := "%d,%d" % [roundi(rad_to_deg(float(hit.get("lon", 0.0))) * 20.0),
+		roundi(rad_to_deg(float(hit.get("lat", 0.0))) * 20.0)] if hit["hit"] else "-"
+	var now := Time.get_ticks_msec()
+	if cell == _hover_cell and now - _hover_at < HOVER_REFRESH_MS:
+		if _ghost_road_key != _road_wait_key and not _hover_road_args.is_empty():
+			_update_ghost_roads(_hover_road_args[0], _hover_road_args[1], _hover_road_args[2])   # the road, once it rests
+		return
+	_hover_cell = cell
+	_hover_at = now
 	# a tutorial card covers the planet: no site tooltip through it
 	if not hit["hit"] or not _is_over_planet_area(mouse) or TutorialManager.is_narrating():
 		poi_layer.clear_ghost()
@@ -6233,7 +6446,17 @@ func _update_placement_hover() -> void:
 			on_names.append(FeatureMap.feature_name(fid))
 	var site_name := " // ".join(on_names) if not on_names.is_empty() else "Open ground"
 	var sys := _placement_system_check(_placing_def, hit["lon"], hit["lat"])
-	_update_ghost_roads(hit["lon"], hit["lat"], sys["neighbors"])
+	# a spot that can't take it gets no road: from water or a cut-off strip of
+	# sand the search finds no way and walks the whole map first (10.11: the
+	# stutter by the sea)
+	if chk["ok"] and sys["ok"]:
+		_hover_road_args = [hit["lon"], hit["lat"], sys["neighbors"]]
+		_update_ghost_roads(hit["lon"], hit["lat"], sys["neighbors"])
+	else:
+		_hover_road_args = []
+		_ghost_road_key = ""
+		_road_wait_key = ""
+		poi_layer.ghost_roads = []
 	poi_layer.ghost_card = _placement_card(_placing_def, chk, sys, site_name, hit["lon"], hit["lat"], t)
 	poi_layer.set_ghost(hit["lon"], hit["lat"], chk["ok"] and sys["ok"], site_name, [],
 		_placing_def.type_key(), sys["neighbors"])
@@ -8329,7 +8552,7 @@ func _supports_tip(sup: Dictionary) -> String:
 	for id: String in sup:
 		var s: Dictionary = sup[id]
 		var parts: Array[String] = []
-		for k: Array in [["city", "Capital"], ["planet", "Planet"], ["companions", "Companions"]]:
+		for k: Array in [["city", "Capital"], ["planet", "Planet"], ["companions", "Agents"]]:
 			if float(s[k[0]]) > 0.0005:
 				parts.append("%s +%s%%" % [k[1], _pct(snappedf(float(s[k[0]]), 0.01))])
 		lines.append("%s  %s   %s" % [UIIcons.bb(id, 11, Economy.color_of(id)),
@@ -9794,7 +10017,7 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 	var slots_now := pp.district_slots(poi)
 	var tip := ""
 	if pp.is_district_upgrading(poi.label):
-		btn.label_text = "UPGRADING…  (click to cancel)"
+		btn.label_text = "UPGRADING…"
 		btn.counter = "Lv %d → %d" % [lv, lv + 1]
 		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),
 			func() -> float: return float(pp.district_upgrading.get(poi.label, 1.0)), true)
@@ -11818,7 +12041,7 @@ func _build_orbit_level_row(planet: PlanetData, pp: PlanetProgress) -> Button:
 		btn.counter_items = _cost_items({Economy.CREDITS: credits})
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if pp.orbit_upgrading >= 0.0:
-		btn.label_text = "LEVELLING UP…  (click to cancel)"
+		btn.label_text = "LEVELLING UP…"
 		btn.counter_items = PackedStringArray()
 		btn.counter = "Lv %d → %d" % [lv, next]
 		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),
@@ -11998,7 +12221,7 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 	btn.counter_items = PackedStringArray(["credits:" + Economy.fmt(credits), "worker:" + Economy.fmt(pop)])
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if upgrading:
-		btn.label_text = "LEVELLING UP…  (click to cancel)"
+		btn.label_text = "LEVELLING UP…"
 		btn.counter_items = PackedStringArray()
 		btn.counter = "Lv %d → %d" % [lv, next]
 		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),

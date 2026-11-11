@@ -567,6 +567,8 @@ func _nearest_to_last(items: Array[Control], rid: int) -> Control:
 	var best: Control = null
 	var best_d := INF
 	for c in items:
+		if _is_close_btn(c) and items.size() > 1:
+			continue   # never start on a window's ✕
 		var d := c.get_global_rect().get_center().distance_squared_to(_last_focus_at)
 		if d < best_d:
 			best_d = d
@@ -643,6 +645,16 @@ func _active_nav_root() -> Node:
 func _nav_items(root: Node) -> Array[Control]:
 	var items: Array[Control] = []
 	_collect_focusables(root, items)
+	# a window's ✕ (top right) comes last: the keys start on its first real
+	# button and reach the ✕ by going up past the top (11.11)
+	if root != get_node_or_null("Layout"):
+		var closes: Array[Control] = []
+		for c in items:
+			if _is_close_btn(c):
+				closes.append(c)
+		for c in closes:
+			items.erase(c)
+			items.append(c)
 	if Guide.blocking() and not (root is ModalPopup or root is StoryDialog or root is CompanionGallery):
 		return Guide.nav_filter(items)   # the guided step: only what it asks for (10.11)
 	if root == get_node_or_null("Layout"):
@@ -654,6 +666,11 @@ func _nav_items(root: Node) -> Array[Control]:
 					if c is BaseButton:   # its buttons, not the card's own hover area
 						items.append(c)
 	return items
+
+## An icon-only ✕ button (a window's close).
+static func _is_close_btn(c: Control) -> bool:
+	return c is IconButton and String((c as IconButton).icon_name) == "close" \
+		and String((c as IconButton).label_text).strip_edges() == ""
 
 func _collect_focusables(n: Node, out: Array[Control]) -> void:
 	if n == null or not is_instance_valid(n):
@@ -963,30 +980,29 @@ func _handle_nav_dir(dir: Vector2) -> bool:
 			if next_idx != idx:
 				best = items[next_idx]
 
-	# → from the panel to the bottom-right card's buttons (tutorial / objectives),
-	# ← back to where it was in the panel (10.11)
+	# nothing level with it that way: the nearest item that way, whatever its
+	# height (a list beside a detail card: Agents' APPOINT; the panel → the
+	# bottom-right card), ← back to where → left the panel (10.11)
 	if best == null and absf(dir.x) > 0.5:
 		var in_panel := is_ancestor_of(_nav_focus)
-		if dir.x > 0.0 and in_panel:
-			var near_d := INF
-			for c in items:
-				if is_ancestor_of(c):
-					continue
-				var d := c.get_global_rect().get_center().distance_squared_to(cur_c)
-				if d < near_d:
-					near_d = d
-					best = c
-			if best != null:
-				_panel_return = weakref(_nav_focus)
-		elif dir.x < 0.0 and not in_panel:
+		if dir.x < 0.0 and not in_panel:
 			var back = _panel_return.get_ref() if _panel_return != null else null
 			if back != null and is_instance_valid(back) and items.has(back as Control):
 				best = back as Control
-			else:
-				for c in items:
-					if is_ancestor_of(c):
-						best = c
-						break
+		if best == null:
+			var near_d := INF
+			for c in items:
+				if c == _nav_focus:
+					continue
+				var d := c.get_global_rect().get_center() - cur_c
+				if d.x * dir.x <= 4.0:
+					continue
+				var score := d.length_squared()
+				if score < near_d:
+					near_d = score
+					best = c
+		if best != null and dir.x > 0.0 and in_panel and not is_ancestor_of(best):
+			_panel_return = weakref(_nav_focus)
 	if best != null and best != _nav_focus:
 		_set_nav_focus(best, true)
 	return true
@@ -1082,6 +1098,7 @@ func _activate_focused() -> bool:
 		var btn := c as BaseButton
 		if btn.disabled:
 			AudioManager.play("denied")
+			_apply_hover_visual(btn, true)   # its tip says why (10.11: "why can't I?")
 			return true
 		if btn.toggle_mode:
 			btn.button_pressed = not btn.button_pressed

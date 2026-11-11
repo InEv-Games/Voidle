@@ -33,7 +33,7 @@ const INFO := {
 	POPULATION: {"name": "Population",     "short": "pop",  "color": Color(0.60, 0.95, 0.60)},
 	GOODS:      {"name": "Consumer Goods", "short": "goods","color": Color(0.95, 0.60, 0.35)},
 	FUEL:       {"name": "Fuel Rods",      "short": "fuel", "color": Color(0.55, 0.95, 0.85)},
-	RARE:       {"name": "Rare Elements",  "short": "rare", "color": Color(0.80, 0.55, 1.00)},
+	RARE:       {"name": "Rare Metals",  "short": "rare", "color": Color(0.80, 0.55, 1.00)},
 }
 
 ## One colour per output family, taken from its resource's symbol, so a

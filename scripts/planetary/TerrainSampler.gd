@@ -25,8 +25,13 @@ const SHORE_H: float = 0.10
 ## Height where green land begins (above the sand band). Roads only run on green.
 const GREEN_H: float = 0.12
 
-## Districts can't be placed beyond this latitude (matches LocationFinder's range).
+## The world generator's placement band (geography shares, lakes, the polar
+## Tundra): kept as it is, worlds would change otherwise.
 const MAX_PLACE_LAT_DEG: float = 70.0
+## Districts can't be placed beyond this latitude (11.11: was 70°, "too close to
+## the pole" blocked good Glacier / Tundra land): where roads still reach
+## (RoadNetwork.LAT_LIMIT, 1.40 rad ≈ 80°), less a margin.
+const MAX_SITE_LAT_DEG: float = 78.0
 ## Minimum angular distance between two surface districts.
 const MIN_SPACING_DEG: float = 4.0
 ## Districts whose settlements are within this gap of each other are neighbours.
@@ -197,7 +202,7 @@ static func city_spacing_deg(data: PlanetData) -> float:
 static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: float, ignore: Array = []) -> Dictionary:
 	var t := sample(data, lon, lat)
 	var result := {"ok": true, "reason": "", "terrain": t}
-	if absf(rad_to_deg(lat)) > MAX_PLACE_LAT_DEG:
+	if absf(rad_to_deg(lat)) > MAX_SITE_LAT_DEG:
 		result.ok = false
 		result.reason = "Too close to the pole"
 		return result

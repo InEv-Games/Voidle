@@ -893,6 +893,15 @@ func _input(event: InputEvent) -> void:
 	var dc := get_node_or_null("/root/DevConsole")
 	if dc != null and bool(dc.get("_open")):
 		return
+	# typing in a text field (the New Game seed): its keys are its own; Enter /
+	# Esc only leave it (11.11: Backspace closed the window, W moved away)
+	var fo := get_viewport().gui_get_focus_owner()
+	if fo is LineEdit and event is InputEventKey:
+		var fk := event as InputEventKey
+		if fk.pressed and not fk.echo and fk.keycode == KEY_ESCAPE:
+			fo.release_focus()
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey:
 		var ke := event as InputEventKey
 		if not ke.pressed:
@@ -1048,6 +1057,10 @@ func _default_focus_for(root: Node, items: Array[Control]) -> Control:
 		return null
 	if root == _saves_root and items.size() > 1:
 		return items[1]
+	# a window's ✕ (top right) is never where the keys start (11.11)
+	for c in items:
+		if not LeftPanel._is_close_btn(c):
+			return c
 	return items[0]
 
 func _tick_nav(delta: float) -> void:
@@ -1242,6 +1255,10 @@ func _activate_focused() -> bool:
 		return true
 	if c is HSlider:
 		return true
+	if c is LineEdit:   # Enter on a text field: type in it (Enter / Esc leave it)
+		(c as LineEdit).grab_focus()
+		(c as LineEdit).select_all()
+		return true
 	if c is BaseButton:
 		var btn := c as BaseButton
 		if btn.disabled:
@@ -1352,7 +1369,7 @@ func _play_slot(slot: int) -> void:
 	AudioManager.play("click", 0.0)
 	var info := GameState.slot_info(slot)
 	if info.is_empty():
-		_show_intro(func() -> void: GameState.new_game_in(slot))
+		SessionPrep.open(self, func() -> void: _show_intro(func() -> void: GameState.new_game_in(slot)))
 		return
 	if not bool(info.get("ok", false)):
 		return
@@ -1385,7 +1402,7 @@ func _delete_slot(slot: int) -> void:
 ## PLAY DEMO (the browser demo has no saves).
 func _on_new_game() -> void:
 	AudioManager.play("click", 0.0)
-	_show_intro(func() -> void: GameState.delete_save())
+	SessionPrep.open(self, func() -> void: _show_intro(func() -> void: GameState.delete_save()))
 
 ## A new game opens straight on its home world: the story's opening plays there
 ## (docs/design/narrative, slice 1; PlanetaryView._run_onboarding). The goal card

@@ -1,7 +1,12 @@
 class_name CompanionGallery
 extends Control
 
-## The advisors (docs/design/narrative/ADVISORS.md, UI.md "Companions"): the two
+## AGENTS (10.11: was Companions): the collectable Agents; one sits in each
+## open ministry of the Government (GovernmentPanel) and gives their bonus.
+## Opened for a ministry (`open(host, ministry)`, the Chancellery by default),
+## APPOINT puts the picked Agent there: free once the sitting one's term is
+## over, before that for credits (GameState.early_appoint_cost).
+## Before: the advisors (docs/design/narrative/ADVISORS.md, UI.md "Companions"): the two
 ## caretakers, Bolo and Burkai, and a ??? for who is still to come. One of them
 ## is the ACTIVE advisor and gives their bonus; the others can be appointed
 ## once met, after the tutorial and once the active one's five-year term is
@@ -33,13 +38,21 @@ var _status: RichTextLabel = null
 var _assign: IconButton = null
 var _invite: IconButton = null   # Bolo's people's offer, when it waits
 var _picked := ""
+var ministry := "chancellery"   # where APPOINT puts the picked Agent (GameState.CHANCELLERY)
+var on_closed := Callable()
 
-static func open(host: Node) -> void:
+static func open(host: Node, for_ministry: String = "chancellery", closed_cb := Callable()) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = LAYER
 	host.get_tree().root.add_child(layer)
-	layer.add_child((load(SCENE_PATH) as PackedScene).instantiate())
+	var g := (load(SCENE_PATH) as PackedScene).instantiate() as CompanionGallery
+	g.ministry = for_ministry
+	g.on_closed = closed_cb
+	layer.add_child(g)
 	AudioManager.play("click")
+
+func _title_of(ministry_id: String) -> String:
+	return String(GameState.ministry_def(ministry_id).get("title", "Minister"))
 
 func _ready() -> void:
 	_name.set_title_size(NAME_SIZE)
@@ -62,7 +75,7 @@ func _ready() -> void:
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.add_theme_font_size_override(&"normal_font_size", 11)
 	info.add_child(_status)
-	_assign = IconButton.create("ASSIGN", "confirm", IconButton.Variant.POSITIVE)
+	_assign = IconButton.create("APPOINT AS %s" % _title_of(ministry).to_upper(), "confirm", IconButton.Variant.POSITIVE)
 	_assign.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_assign.pressed.connect(_on_assign)
 	info.add_child(_assign)
@@ -70,6 +83,7 @@ func _ready() -> void:
 	_invite.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_invite.pressed.connect(func() -> void:
 		AudioManager.play("click")
+		on_closed = Callable()   # not back to Government: the scene plays next
 		_close()   # the scene plays in the panel under this screen
 		Excavations.hear_bolo_invitation())
 	info.add_child(_invite)
@@ -83,13 +97,15 @@ func _build_list() -> void:
 		c.queue_free()
 	_items.clear()
 	_ids.clear()
-	var active := CompanionDef.find(GameState.active_advisor)
-	($Center/Card/Hero as HeroHeader).caption = "Advisor: %s" % active.display_name if active != null else "No advisor yet"
+	var sitting := CompanionDef.find(GameState.minister_of(ministry))
+	var hero := $Center/Card/Hero as HeroHeader
+	hero.title = "AGENTS"
+	hero.caption = "%s: %s" % [_title_of(ministry), sitting.display_name] if sitting != null else "%s: vacant" % _title_of(ministry)
 	for def: CompanionDef in CompanionDef.all():
 		var met := GameState.unlocked_advisors.has(def.companion_id)
-		var is_active := def.companion_id == GameState.active_advisor
+		var office := GameState.ministry_of(def.companion_id)
 		var it := ListItem.create(def.display_name.to_upper() if met else "???", "population" if met else "unknown",
-			"ACTIVE" if is_active else "", [], def.role if met else "Not met yet")
+			_title_of(office).to_upper() if office != "" else "", [], ("%s  //  Lv %d" % [def.role, GameState.agent_level(def.companion_id)]) if met else "Not met yet")
 		_add_item(it, def.companion_id)
 	_add_item(ListItem.create("???", "unknown", "", [], "Later civilizations"), FUTURE)
 
@@ -132,24 +148,35 @@ func _refresh_assign() -> void:
 		_assign.visible = false
 		return
 	_status.visible = true
-	if _picked == GameState.active_advisor:
+	var office := GameState.ministry_of(_picked)
+	if office != "":
 		_assign.visible = false
-		var left := GameState.advisor_ready_at - GameState.calendar_seconds
-		_status.text = "[color=#%s]Your active advisor.[/color]%s" % [UIStyle.hex(&"good"),
+		var left := GameState.ministry_ready_at(office) - GameState.calendar_seconds
+		_status.text = "[color=#%s]Your %s.[/color]%s" % [UIStyle.hex(&"good"), _title_of(office),
 			("  Serves at least %s more." % GameState.calendar_span_text(left)) if left > 0.0 else ""]
 		return
-	var why := GameState.advisor_block(_picked)
+	var hard := GameState.appoint_block(_picked, ministry)
+	var cost := GameState.early_appoint_cost(ministry) if hard == "" else 0.0
 	_assign.visible = true
-	_assign.disabled = why != ""
-	_status.text = "[color=#%s]%s[/color]" % [UIStyle.hex(&"text_subtle"),
-		why if why != "" else "Appointing them ends the current term; they serve at least five years."]
+	_assign.disabled = hard != "" or (cost > 0.0 and GameState.credits < cost)
+	_assign.counter_items = PackedStringArray(["credits:" + HUDManager.fmt_credits(cost)]) if cost > 0.0 else PackedStringArray()
+	var dim := UIStyle.hex(&"text_subtle")
+	if hard != "":
+		_status.text = "[color=#%s]%s[/color]" % [dim, hard]
+	elif cost > 0.0:
+		var sitting := CompanionDef.find(GameState.minister_of(ministry))
+		var left := GameState.ministry_ready_at(ministry) - GameState.calendar_seconds
+		_status.text = "[color=#%s]%s's term runs %s more: replacing them now costs %s. Free once it ends.[/color]" % [dim,
+			sitting.display_name if sitting != null else "The minister", GameState.calendar_span_text(left),
+			"%s %s" % [UIIcons.bb(Economy.CREDITS, 11, Economy.color_of(Economy.CREDITS)), HUDManager.fmt_credits(cost)]]
+	else:
+		_status.text = "[color=#%s]Appointing them ends the current term; they serve at least five years.[/color]" % dim
 
 func _on_assign() -> void:
-	if _picked == FUTURE or GameState.advisor_block(_picked) != "":
+	if _picked == FUTURE or not GameState.appoint_now(_picked, ministry):
 		AudioManager.play("error")
 		return
 	AudioManager.play("click")
-	GameState.appoint_advisor(_picked)
 	_build_list()
 	_pick(_picked)
 
@@ -164,3 +191,5 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _close() -> void:
 	StoryDialog.pop_out(_card, get_parent())
+	if on_closed.is_valid():
+		on_closed.call_deferred()

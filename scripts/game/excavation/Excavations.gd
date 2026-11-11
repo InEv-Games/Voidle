@@ -81,20 +81,25 @@ static func time_text(sec: float) -> String:
 
 ## Global multiplier from the active advisor for resource `id` (1 = none).
 ## One advisor at a time gives their bonus (docs/design/narrative/ADVISORS.md):
-## Production ("raw") covers raw output and Goods, Fuel, Rare Elements.
+## Production ("raw") covers raw output and Goods, Fuel, Rare Metals.
+## 10.11: every Agent in office (Government) adds theirs, at their level.
 static func global_mult(id: String) -> float:
 	var key := Economy.RAW if id in [Economy.RAW, Economy.GOODS, Economy.FUEL, Economy.RARE] else id
-	var c := CompanionDef.find(GameState.active_advisor)
-	if c != null and c.bonus == CompanionDef.Bonus.RESOURCE and c.bonus_resource == key:
-		return 1.0 + c.bonus_value
-	return 1.0
+	var m := 1.0
+	for a: String in GameState.active_agents():
+		var c := CompanionDef.find(a)
+		if c != null and c.bonus == CompanionDef.Bonus.RESOURCE and c.bonus_resource == key:
+			m += c.bonus_value_at(GameState.agent_level(a))
+	return m
 
-## Build speed from the active advisor (1 = none).
+## Build speed from the Agents in office (1 = none).
 static func build_speed() -> float:
-	var c := CompanionDef.find(GameState.active_advisor)
-	if c != null and c.bonus == CompanionDef.Bonus.BUILD_SPEED:
-		return 1.0 + c.bonus_value
-	return 1.0
+	var m := 1.0
+	for a: String in GameState.active_agents():
+		var c := CompanionDef.find(a)
+		if c != null and c.bonus == CompanionDef.Bonus.BUILD_SPEED:
+			m += c.bonus_value_at(GameState.agent_level(a))
+	return m
 
 # ── Sites ────────────────────────────────────────────────────────────────────
 
@@ -278,17 +283,8 @@ static func tick() -> void:
 		var s := find_site(id)
 		if s != null:
 			NewsFeed.post("Excavation ready: %s. Your crews are waiting." % s.display_name, NewsFeed.Kind.EVENT,
-				s.teaser, s.display_name, _site_loc(id))
-			# and where it can't be missed (playtest 07.11): the message card with a
-			# button to what they found, and the "ready" sound
-			var site_id := id
-			NewsFeed.show_message("excavation_ready_" + id, "Excavation", "%s IS READY" % s.display_name.to_upper(),
-				"Your crews are waiting. Click its mark on the map, or here, to see what they found.",
-				{"sec": 15.0, "action": "SEE THE FINDS", "action_icon": "explore",
-				"on_action": func() -> void:
-					var host := (Engine.get_main_loop() as SceneTree).current_scene
-					if host != null:
-						StoryDialog.open(host, site_id)})
+				s.teaser, s.display_name, _site_loc(id), false)
+			# the notifications panel lists it (Inbox, EXCAVATIONS), 10.11
 			VAM.play(&"sfx/ready")
 		GameState.excavations_changed.emit()
 
@@ -327,13 +323,8 @@ const FIRST_RUIN := "vesyn_toppled_stones"
 static func _after_story(s: ExcavationSiteDef) -> void:
 	if bolo_invitation_ready() and not GameState.story_flags.has("bolo_invitation_told"):
 		GameState.story_flags["bolo_invitation_told"] = true
-		NewsFeed.show_message("bolo_invitation", "Companions", "BOLO HAS NEWS",
-			"All five surveys are done. Bolo is waiting to talk to you about her people.",
-			{"sec": 20.0, "action": "COMPANIONS", "action_icon": "population",
-			"on_action": func() -> void:
-				var host := (Engine.get_main_loop() as SceneTree).current_scene
-				if host != null:
-					CompanionGallery.open(host)})
+		Inbox.post("story:bolo", "story", "population", "Bolo has news",
+			"All five surveys are done. Bolo is waiting to talk to you about her people.", {"companions": true})
 	if s.site_id != FIRST_RUIN:
 		return
 	if GameState.bolo_intro_route == "":

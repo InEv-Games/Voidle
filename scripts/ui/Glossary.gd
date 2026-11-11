@@ -35,7 +35,7 @@ static func entry(id: String) -> Array:
 		"science_d":
 			return ["Science District", "Built under a City. Makes Science every cycle; labs there add more."]
 		"industrial":
-			return ["Production District", "Mines this world's minerals; its processing buildings turn them into Consumer Goods, Fuel Rods and Rare Elements."]
+			return ["Production District", "Mines this world's minerals; its processing buildings turn them into Consumer Goods, Fuel Rods and Rare Metals."]
 		"upgrade_tree":
 			return ["Upgrade Tree", "Research: Science buys nodes that open buildings and raise output. Open it from the bottom bar."]
 		"grid":

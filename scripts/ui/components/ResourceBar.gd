@@ -16,7 +16,7 @@ const TIPS := {
 	"science": "Produced by Science districts. Spent in the Upgrade Tree.",
 	"goods": "Consumer Goods: made from raw resources in Industrial districts.\nUsed by luxury housing and trade.",
 	"fuel": "Fuel Rods: made from raw resources in Industrial districts.\nUsed by advanced power plants.",
-	"rare_elements": "Rare Elements: made from raw resources in Industrial districts.\nUsed by advanced science.",
+	"rare_elements": "Rare Metals: made from raw resources in Industrial districts.\nUsed by advanced science.",
 }
 
 ## id -> value Label
@@ -268,7 +268,7 @@ static func _desc(id: String) -> String:
 		Economy.FUEL:
 			return "Fuel Rods: made from raw minerals in %s. Used by advanced power plants." % Glossary.t("industrial", "Production districts")
 		Economy.RARE:
-			return "Rare Elements: made from raw minerals in %s. Used by advanced science and planet traits." % Glossary.t("industrial", "Production districts")
+			return "Rare Metals: made from raw minerals in %s. Used by advanced science and planet traits." % Glossary.t("industrial", "Production districts")
 	return String(TIPS.get(id, ""))
 
 ## An inline icon for the corner (UIIcons name, tint as hex).
@@ -711,6 +711,8 @@ func _shown_cells() -> Array[Control]:
 	return out
 
 func _light(c: Control) -> void:
+	if c != _kb_chip:
+		_dd_i = -1
 	if _kb_chip != null and is_instance_valid(_kb_chip):
 		_kb_chip.modulate = Color.WHITE
 		_kb_chip.mouse_exited.emit()
@@ -718,6 +720,37 @@ func _light(c: Control) -> void:
 	c.modulate = Color(1.35, 1.35, 1.35)
 	TooltipManager.set_focus_anchor(c)
 	c.mouse_entered.emit()
+
+## ↑ / ↓ on the Raw chip with its list open: through the minerals (their tips),
+## ↑ past the first back to the chip. Opens the list if it is shut.
+var _dd_i := -1
+
+func _dd_step(d: int) -> void:
+	if _kb_chip == null or not is_instance_valid(_kb_chip) or (_kb_chip as ResourceChip).resource_id != Economy.RAW:
+		return
+	if _raw_dd == null and d > 0:
+		_toggle_raw_dropdown()
+		_dd_i = -1
+	if _raw_dd_list == null or not is_instance_valid(_raw_dd_list):
+		return
+	var rows: Array[Control] = []
+	for c in _raw_dd_list.get_children():
+		if c is Control and (c as Control).visible:
+			rows.append(c)
+	if rows.is_empty():
+		return
+	if _dd_i >= 0 and _dd_i < rows.size():
+		rows[_dd_i].modulate = Color.WHITE
+		rows[_dd_i].mouse_exited.emit()
+	_dd_i = clampi(_dd_i + d, -1, rows.size() - 1)
+	AudioManager.play("hover")
+	if _dd_i < 0:
+		_light(_kb_chip)   # back on the chip
+		return
+	var r := rows[_dd_i]
+	r.modulate = Color(1.35, 1.35, 1.35)
+	TooltipManager.set_focus_anchor(r)
+	r.mouse_entered.emit()
 
 func _act_on(c: Control) -> void:
 	var id := (c as ResourceChip).resource_id if c is ResourceChip else ""
@@ -757,13 +790,18 @@ func _browse_input(event: InputEvent) -> void:
 		elif not k.echo and key in [KEY_ESCAPE, KEY_R, KEY_BACKSPACE]:
 			stop = true
 		elif key in [KEY_UP, KEY_DOWN, KEY_W, KEY_S]:
-			get_viewport().set_input_as_handled()   # nothing up or down here
+			get_viewport().set_input_as_handled()
+			_dd_step(-1 if key in [KEY_UP, KEY_W] else 1)   # down into the raw list (10.11)
 			return
 	var jb := event as InputEventJoypadButton
 	if jb != null and jb.pressed:
 		match jb.button_index:
 			JOY_BUTTON_DPAD_LEFT: step = -1
 			JOY_BUTTON_DPAD_RIGHT: step = 1
+			JOY_BUTTON_DPAD_UP, JOY_BUTTON_DPAD_DOWN:
+				get_viewport().set_input_as_handled()
+				_dd_step(-1 if jb.button_index == JOY_BUTTON_DPAD_UP else 1)
+				return
 			JOY_BUTTON_A: act = true
 			JOY_BUTTON_B: stop = true
 	if step == 0 and not act and not stop:

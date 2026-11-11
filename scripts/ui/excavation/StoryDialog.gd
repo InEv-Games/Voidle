@@ -59,6 +59,10 @@ static func open(host: Node, site_id: String) -> void:
 	if s == null:
 		return
 	NewsFeed.clear_message("excavation_ready_" + site_id)   # its "ready" card has done its job
+	# the camera goes to the site and closes in, so the player sees where it is (10.11)
+	var loc := Excavations._site_loc(site_id)
+	if not loc.is_empty() and host.has_method("focus_news_location"):
+		host.call("focus_news_location", loc)
 	var layer := CanvasLayer.new()
 	layer.layer = LAYER
 	host.get_tree().root.add_child(layer)

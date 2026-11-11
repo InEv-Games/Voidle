@@ -264,6 +264,10 @@ func live(build: Callable) -> void:
 func _tick_live(delta: float) -> void:
 	if not _live.is_valid():
 		return
+	# the tip's builder went with its scene (back to the main menu): drop it
+	if not is_instance_id_valid(_live.get_object_id()):
+		_live = Callable()
+		return
 	if _panel.title != _live_title or (_live_owner != null \
 			and (not is_instance_valid(_live_owner) or not _live_owner.is_visible_in_tree())):
 		_live = Callable()

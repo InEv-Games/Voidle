@@ -176,6 +176,8 @@ static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: Stri
 			if poi.is_city() and not poi.is_orbital():
 				cities += 1
 		return 0.0 if cities == 0 else roundf(Balance.geometric(Balance.cfg.city_base_cost, Balance.cfg.city_cost_growth, cities - 1))
+	if SessionPrep.free_district(def, data):
+		return 0.0   # the INDUSTRY head start: the first Production District is free (11.11)
 	return roundf(Balance.geometric(Balance.cfg.district_base_cost, Balance.cfg.district_cost_growth,
 		districts_in_city(data, parent_city)))
 

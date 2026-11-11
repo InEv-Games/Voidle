@@ -115,14 +115,16 @@ var _companion_btns: Array[Button] = []   # shown once someone has joined
 ## Upgrade Tree: once the first Science district stands (the tutorial's next
 ## step is a research), or once anything has been researched (older saves).
 ## Companions: from the handover (the advisors). Trade: Trade Access (as before).
-var _tree_seen := false
+## Once open it stays open, in that game only (11.11: a session flag kept it
+## open in every game after the first one; now in the save's story_flags).
+const TREE_FLAG := "ui:tree_open"
 
 func _tree_open() -> bool:
-	if _tree_seen:
+	if GameState.story_flags.has(TREE_FLAG):
 		return true
 	var st := get_node_or_null("/root/SkillTree")
-	if st != null and (st.unlocked_skills as Array).size() > SkillTree.DEFAULT_SKILLS.size():
-		_tree_seen = true
+	if st != null and SessionPrep.researched_beyond_start():   # a head start's research doesn't open it (11.11)
+		GameState.story_flags[TREE_FLAG] = true
 		return true
 	for pseed: int in GameState._planet_progress:
 		var pd := GameState.get_planet_data(pseed)
@@ -131,7 +133,7 @@ func _tree_open() -> bool:
 		for poi: POIData in pd.custom_pois:
 			var dd := ProductionManager.district_def(poi)
 			if dd != null and dd.id == DistrictDef.Type.SCIENCE and not poi.constructing:
-				_tree_seen = true
+				GameState.story_flags[TREE_FLAG] = true
 				return true
 	return false
 
@@ -287,14 +289,14 @@ func _make_trade_button() -> Button:
 func _make_companions_button() -> Button:
 	var b := IconButton.create("", "population", IconButton.Variant.DEFAULT)
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
-	b.pressed.connect(func() -> void:
+	b.pressed.connect(func() -> void:   # 10.11: Government (ministers) and, from it, the Agents
 		TooltipManager.hide_tip()
-		CompanionGallery.open(self))
+		GovernmentPanel.toggle(self))
 	b.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
 		var adv := CompanionDef.find(GameState.active_advisor)
-		TooltipManager.show_tip("Companions", ("Your advisor: %s. " % adv.display_name if adv != null else "") \
-			+ "One advisor at a time gives their bonus everywhere."))
+		TooltipManager.show_tip("Government", ("Chancellor: %s. " % adv.display_name if adv != null else "") \
+			+ "Seat your Agents in the ministries: each gives their bonus while serving.  [C]"))
 	b.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
@@ -454,6 +456,10 @@ func press_shortcut(which: String) -> bool:
 	if which == "companions" and _companions_shown():
 		AudioManager.play("click")
 		_close_companions()
+		return true
+	if which == "companions" and GovernmentPanel.is_open():
+		AudioManager.play("click")
+		GovernmentPanel.toggle(self)
 		return true
 	_prune_shortcuts()
 	for b in _shortcut_list(which):

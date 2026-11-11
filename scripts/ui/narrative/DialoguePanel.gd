@@ -31,6 +31,8 @@ var _next: IconButton
 var _typing: Tween = null
 var _has_choices := false
 var _skip: IconButton = null
+var _log_btn: IconButton = null
+var _btn_lit: Control = null   # LOG / SKIP / CONTINUE lit by ← / → (10.11)
 var _lit := -1   # the answer the keys lit up, -1: none
 
 static func create() -> DialoguePanel:
@@ -79,6 +81,7 @@ func _ready() -> void:
 	buttons.add_theme_constant_override(&"separation", 6)
 	col.add_child(buttons)
 	var log_btn := IconButton.create("LOG", "notes", IconButton.Variant.DEFAULT)
+	_log_btn = log_btn
 	log_btn.pressed.connect(func() -> void: log_requested.emit())
 	log_btn.mouse_entered.connect(func() -> void:
 		TooltipManager.show_tip("Narrative Log", "Read again what has been said.  [L]"))
@@ -125,6 +128,7 @@ func hide_panel() -> void:
 		_card.modulate.a = 1.0)
 
 func show_line(speaker: String, text: String, portrait: Texture2D) -> void:
+	_light_btn(null)
 	_clear_choices()
 	_speaker.visible = speaker != "Narrator"
 	_speaker.text = speaker
@@ -192,6 +196,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 		match jb.button_index:
 			JOY_BUTTON_DPAD_UP: jk = KEY_UP
 			JOY_BUTTON_DPAD_DOWN: jk = KEY_DOWN
+			JOY_BUTTON_DPAD_LEFT: jk = KEY_LEFT
+			JOY_BUTTON_DPAD_RIGHT: jk = KEY_RIGHT
 			JOY_BUTTON_A: jk = KEY_ENTER
 			JOY_BUTTON_B: jk = KEY_ESCAPE
 		if jk != KEY_NONE:
@@ -224,16 +230,41 @@ func _unhandled_input(ev: InputEvent) -> void:
 		log_requested.emit()   # L: the Narrative Log, like LOG
 		return
 	if key in [KEY_LEFT, KEY_RIGHT]:
-		get_viewport().set_input_as_handled()   # nothing for them here; keep them from the panel behind
+		get_viewport().set_input_as_handled()   # the buttons below: LOG / SKIP / CONTINUE
+		var row := _row_buttons()
+		if not row.is_empty():
+			var at := row.find(_btn_lit)
+			at = (row.size() - 1 if key == KEY_LEFT else 0) if at < 0 else clampi(at + (-1 if key == KEY_LEFT else 1), 0, row.size() - 1)
+			_light_btn(row[at])
 		return
 	if not k.echo and key in [KEY_SPACE, KEY_ENTER, KEY_KP_ENTER]:
 		get_viewport().set_input_as_handled()
+		if _btn_lit != null and is_instance_valid(_btn_lit) and _btn_lit.is_visible_in_tree():
+			var b := _btn_lit as BaseButton
+			_light_btn(null)
+			b.pressed.emit()
+			return
 		if _typing != null or not _has_choices:
 			_on_next()
 		elif _lit < 0:
 			_light(0)
 		else:
 			(_choices.get_child(_lit) as BaseButton).pressed.emit()
+
+func _row_buttons() -> Array[Control]:
+	var out: Array[Control] = []
+	for b in [_log_btn, _skip, _next]:
+		if b != null and (b as Control).is_visible_in_tree():
+			out.append(b)
+	return out
+
+func _light_btn(c: Control) -> void:
+	if _btn_lit != null and is_instance_valid(_btn_lit):
+		_hover(_btn_lit, false)
+	_btn_lit = c
+	if c != null:
+		_hover(c, true)
+		AudioManager.play("hover")
 
 ## Lights up answer [i] (wrapping round), as if the mouse were on it.
 func _light(i: int) -> void:

@@ -552,7 +552,7 @@ func _exec(line: String) -> void:
 			else:
 				_log_err("Unknown target. Try: tutorial complete")
 
-		# ── Stocked resources (raw minerals, goods, fuel, rare elements) ──────
+		# ── Stocked resources (raw minerals, goods, fuel, rare metals) ──────
 		"res", "resource", "resources":
 			_cmd_res(parts)
 
