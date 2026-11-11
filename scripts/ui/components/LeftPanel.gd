@@ -54,6 +54,9 @@ func show_overlay(c: Control) -> void:
 					_hidden.append(weakref(child))
 					(child as CanvasItem).visible = false
 		_overlay = c
+		# gone without close_overlay (freed with a rebuilt page, a scene change):
+		# the hidden content must still come back (11.11: the City's hero stayed hidden)
+		c.tree_exiting.connect(_on_overlay_gone.bind(c), CONNECT_ONE_SHOT)
 		c.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		content.add_child(c)
@@ -74,6 +77,21 @@ func close_overlay() -> void:
 				(n as CanvasItem).visible = true
 		_hidden.clear()
 		reveal())
+
+## The overlay left the tree while still the current one: show what it hid.
+func _on_overlay_gone(c: Control) -> void:
+	if _overlay != c:
+		return   # closed or replaced the usual way
+	_overlay = null
+	_force_open = false
+	for w in _hidden:
+		var n = (w as WeakRef).get_ref()
+		if n != null and is_instance_valid(n) and not (n as Node).is_queued_for_deletion():
+			(n as CanvasItem).visible = true
+	_hidden.clear()
+	if is_inside_tree():
+		_place()
+		queue_redraw()
 
 ## Swaps the content right away; reveal() inside `change` plays the scramble.
 func _swap(change: Callable) -> void:
