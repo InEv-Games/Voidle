@@ -1,8 +1,8 @@
 [gd_resource type="Resource" script_class="VAMInterludeEvent" format=3 uid="uid://2iprj5bfc4s7"]
 
-[ext_resource type="AudioStream" uid="uid://dj1i018qbhy14" path="res://assets/soundtrack/VoidleInterlude-1_1.wav" id="1_2f21s"]
-[ext_resource type="AudioStream" uid="uid://d4i80xgxujlif" path="res://assets/soundtrack/VoidleInterlude-1_2.wav" id="2_ex325"]
-[ext_resource type="AudioStream" uid="uid://ir63mc2ihq1c" path="res://assets/soundtrack/VoidleInterlude-1_3.wav" id="3_0uh20"]
+[ext_resource type="AudioStream" uid="uid://dj1i018qbhy14" path="res://assets/soundtrack/Interlude1/VoidleInterlude-1_1.wav" id="1_2f21s"]
+[ext_resource type="AudioStream" uid="uid://d4i80xgxujlif" path="res://assets/soundtrack/Interlude1/VoidleInterlude-1_2.wav" id="2_ex325"]
+[ext_resource type="AudioStream" uid="uid://ir63mc2ihq1c" path="res://assets/soundtrack/Interlude1/VoidleInterlude-1_3.wav" id="3_0uh20"]
 [ext_resource type="Script" uid="uid://48wme56qcy7k" path="res://addons/VAM/data/vam_interlude_event.gd" id="3_ex325"]
 
 [resource]
