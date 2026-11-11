@@ -21,6 +21,7 @@ static func get_shader_path(type: Type) -> String:
 # Core identity
 @export var planet_name: String = "Unknown"
 @export var planet_type: Type = Type.TERRAN
+@warning_ignore("shadowed_global_identifier")
 @export var seed: int = 0
 
 # Visual parameters — can be overridden after from_seed()
@@ -415,9 +416,9 @@ static func get_poi_templates(type: Type) -> Array[Dictionary]:
 				{"label": "Depot",   "placement": L, "lat_range": [-0.6, 0.6], "light_intensity": 0.5},
 			]
 
-static func generate_pois(type: Type, planet_seed: int, sea_level: float = 0.0,
-		roughness: float = 1.0, continent_scale: float = 1.0) -> Array[Dictionary]:
-	var lf       := LocationFinder.new(planet_seed, sea_level, roughness, continent_scale)
+static func generate_pois(type: Type, planet_seed: int, p_sea_level: float = 0.0,
+		roughness: float = 1.0, p_continent_scale: float = 1.0) -> Array[Dictionary]:
+	var lf       := LocationFinder.new(planet_seed, p_sea_level, roughness, p_continent_scale)
 	var templates := get_poi_templates(type)
 	var result:   Array[Dictionary] = []
 

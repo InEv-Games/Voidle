@@ -103,8 +103,8 @@ static func for_planet(data: PlanetData) -> RoadNetwork:
 	return net
 
 ## Forget a planet's network (e.g. its terrain map was rebuilt).
-static func forget(planet_seed: int) -> void:
-	_nets.erase(planet_seed)
+static func forget(p_seed: int) -> void:
+	_nets.erase(p_seed)
 
 func is_ready() -> bool:
 	if not _ready and _task_id >= 0 and WorkerThreadPool.is_task_completed(_task_id):
@@ -130,6 +130,7 @@ func _build() -> void:
 	_land_parent.resize(n)
 	for k in n:
 		_land_parent[k] = k
+	@warning_ignore("integer_division")
 	_astar.reserve_space(n + n / 4)
 	# nodes
 	for y in HEIGHT:
@@ -224,10 +225,24 @@ func route(lon_a: float, lat_a: float, lon_b: float, lat_b: float,
 		sea_a: bool = false, sea_b: bool = false, commit: bool = true) -> Dictionary:
 	if not is_ready():
 		return {}
+	var ids := _path(lon_a, lat_a, lon_b, lat_b, sea_a, sea_b)
+	# 11.11: a district on the water's edge got a sea endpoint in a tiny cut-off
+	# pond (no harbour reaches it) and the two were joined by a straight "sea
+	# lane" over land. Retry from the land around it, then from the sea.
+	if ids.is_empty() and (sea_a or sea_b):
+		ids = _path(lon_a, lat_a, lon_b, lat_b, false, false)
+	if ids.is_empty() and commit and not (sea_a and sea_b):   # not while previewing: a failed search is slow
+		ids = _path(lon_a, lat_a, lon_b, lat_b, true, true)
+	if ids.is_empty():
+		return {}
+	return _commit_and_shape(ids, lon_a, lat_a, lon_b, lat_b, commit)
+
+## The A* cell path between two points with the given endpoint kinds ([] if none).
+func _path(lon_a: float, lat_a: float, lon_b: float, lat_b: float, sea_a: bool, sea_b: bool) -> PackedInt64Array:
 	var a := _endpoint(lon_a, lat_a, sea_a)
 	var b := _endpoint(lon_b, lat_b, sea_b)
 	if a < 0 or b < 0 or a == b:
-		return {}
+		return PackedInt64Array()
 	# the cheapest of road and sea lane wins, on one landmass too (playtest
 	# 30.10: a long coastal road looks worse than a short sea lane); ports are
 	# still only opened near the two ends. LAND_ONLY_SAME_LANDMASS restores the
@@ -242,8 +257,10 @@ func route(lon_a: float, lat_a: float, lon_b: float, lat_b: float,
 	var ids := _astar.get_id_path(a, b)
 	_astar.land_only = false
 	_astar.port_reach = 0.0
-	if ids.is_empty():
-		return {}
+	return ids
+
+func _commit_and_shape(ids: PackedInt64Array, lon_a: float, lat_a: float, lon_b: float, lat_b: float,
+		commit: bool) -> Dictionary:
 	var n := WIDTH * HEIGHT
 	for id: int in ids:
 		if not commit:

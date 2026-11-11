@@ -235,6 +235,7 @@ func _draw_placement_overlay(font: Font) -> void:
 	for poi in _pois:
 		spacing_circles.append([poi["lon"], poi["lat"], spacing])
 	_draw_circle_union(spacing_circles, Color(1.0, 0.45, 0.35, 0.45))
+	_draw_suggested(font)
 	_draw_ghost_roads()
 	if _ghost.is_empty():
 		return
@@ -262,6 +263,28 @@ func _draw_placement_overlay(font: Font) -> void:
 	_ghost_overlay()
 	if not ghost_card.is_empty():
 		_place_ghost_card.call_deferred()   # never add or move controls from inside _draw
+
+## Suggested City sites while the first Capital is placed (playtest 07.11: the
+## first decision offered nothing to go by): [{lon, lat, r}] in radians, r = the
+## reach the City would have there. Gold beam, brackets and its reach outline.
+var suggested_sites: Array = []:
+	set(v):
+		suggested_sites = v
+		queue_redraw()
+const SUGGEST_COL := Color(1.0, 0.82, 0.35)
+
+func _draw_suggested(font: Font) -> void:
+	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
+	for st: Dictionary in suggested_sites:
+		var pt := project(float(st["lon"]), float(st["lat"]))
+		if pt.z <= 0.0 or not _clip_rect().has_point(Vector2(pt.x, pt.y)):
+			continue
+		_draw_surface_circle(float(st["lon"]), float(st["lat"]), float(st["r"]), Color(SUGGEST_COL, 0.35), 1.0)
+		_draw_site_beam(float(st["lon"]), float(st["lat"]), SUGGEST_COL)
+		var sp := _snap(Vector2(pt.x, pt.y)) - global_position
+		_draw_pixel_brackets(sp, block * 5.0, block, Color(SUGGEST_COL, 0.9))
+		draw_string(font, sp + Vector2(block * 7.0, 4.0), "SUGGESTED", HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
+			Color(SUGGEST_COL, 0.95))
 
 ## Title + detail lines in a dark box beside the cursor.
 ## Top-layer canvas for the placement info box (created on first use).
@@ -297,6 +320,19 @@ func _ghost_overlay() -> Control:
 var ghost_card: Array = []
 var _card_panel: PanelContainer = null
 var _card_key := ""
+
+## Hides the placement card now (the site stays marked), e.g. while the City
+## is named: emptying ghost_card alone left the drawn card on screen (10.11).
+func hide_ghost_card() -> void:
+	ghost_card = []
+	# the small site name beside the marker goes too (it sat on the naming box, 11.11)
+	if not _ghost.is_empty() and (String(_ghost.get("title", "")) != "" or not (_ghost.get("lines", []) as Array).is_empty()):
+		_ghost["title"] = ""
+		_ghost["lines"] = []
+		if _ghost_info_ctrl != null and is_instance_valid(_ghost_info_ctrl):
+			_ghost_info_ctrl.queue_redraw()
+	if _card_panel != null and is_instance_valid(_card_panel):
+		_card_panel.visible = false
 
 func _place_ghost_card() -> void:
 	if ghost_card.is_empty() or _ghost.is_empty() or not placement_mode or not _ghost_info_at.is_finite() \
@@ -376,6 +412,8 @@ func _draw_ghost_info(font: Font, sp: Vector2, ok: bool, target: CanvasItem) -> 
 	const PAD        := 6.0
 	var title: String = _ghost["title"]
 	var lines: Array  = _ghost.get("lines", [])
+	if title == "" and lines.is_empty():
+		return
 	var w := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_SIZE).x
 	for ln: Array in lines:
 		w = maxf(w, font.get_string_size(ln[0], HORIZONTAL_ALIGNMENT_LEFT, -1, LINE_SIZE).x)
@@ -408,6 +446,7 @@ func _draw_construct_bar(sp: Vector2, px: float, progress: float, alpha: float) 
 	draw_rect(Rect2(origin - Vector2(px, px), Vector2((W + 2) * px, (H + 2) * px)), Color(0, 0, 0, 0.85 * alpha))
 	draw_rect(Rect2(origin, Vector2(W * px, H * px)), Color(0.18, 0.16, 0.08, 0.9 * alpha))
 	var filled := int(round(clampf(progress, 0.0, 1.0) * W))
+	@warning_ignore("integer_division")
 	var shift := int(Time.get_ticks_msec() / 160) % 4
 	for x in filled:
 		for y in H:
@@ -590,7 +629,7 @@ func _draw_sites() -> void:
 		var total: int = r.get("total", 1)
 		var head := block * 3.0   # room above the mark for its hover label
 		if total > 1:
-			var part := 1.0 - Excavations.time_left(s) / maxf(s.duration_sec, 1.0) if digging else 0.0
+			var part := 1.0 - Excavations.time_left(s) / maxf(Excavations.dig_length(s), 1.0) if digging else 0.0
 			_draw_site_bar(sp, int(r.get("done", 0)), total, block, part)
 			head = block * 9.0
 		var below := ""
@@ -1178,7 +1217,7 @@ const LABEL_MERGE_PX := 90.0
 
 ## Returns { hidden: Dictionary(poi index -> true), extra: Dictionary(index -> hidden count) }.
 func _label_merges() -> Dictionary:
-	var hidden := {}
+	var hid := {}
 	var extra := {}
 	var groups := {}
 	for i in _pois.size():
@@ -1210,9 +1249,9 @@ func _label_merges() -> Dictionary:
 				continue
 			var d: float = (_pois[m]["screen"] as Vector2).distance_to(_pois[lead]["screen"])
 			if d < LABEL_MERGE_PX:
-				hidden[m] = true
+				hid[m] = true
 				extra[lead] = int(extra.get(lead, 0)) + 1
-	return {"hidden": hidden, "extra": extra}
+	return {"hidden": hid, "extra": extra}
 
 func _draw() -> void:
 	var font: Font = _orbitron if _orbitron else ThemeDB.fallback_font

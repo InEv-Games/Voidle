@@ -10,14 +10,11 @@ ruin_id = "vesyn_counting_house"
 display_name = "The Ledger Vault"
 teaser = "Another ruin, with a lock Sera thinks she can read."
 cost = {
-"credits": 1200.0,
-"ferrite": 150.0,
-"science": 300.0
+"credits": 1200.0
 }
 duration_sec = 900.0
 reward = {
-"credits": 1800.0,
-"ferrite": 240.0,
-"science": 450.0
+"science": 565.0,
+"ferrite": 240.0
 }
 story = ExtResource("2_u4eof")

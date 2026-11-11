@@ -1,0 +1,85 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_dwvm5"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_qs135"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_a7kkr"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_2wu7e"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_6xj3v"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_talker_modifier.gd" id="6_6odsn"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="7_xpuax"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="8_q1pbm"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="9_t5sgl"]
+
+[sub_resource type="Resource" id="Resource_1sxpp"]
+script = ExtResource("2_qs135")
+target_id = 2
+
+[sub_resource type="Resource" id="Resource_dnh3a"]
+script = ExtResource("5_6xj3v")
+entry_name = "archive_lazarus"
+exits = Array[ExtResource("2_qs135")]([SubResource("Resource_1sxpp")])
+id = 1
+
+[sub_resource type="Resource" id="Resource_bsxbl"]
+script = ExtResource("2_qs135")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_5kfym"]
+script = ExtResource("6_6odsn")
+talker = "I-330 Archive"
+
+[sub_resource type="Resource" id="Resource_fxsaj"]
+script = ExtResource("7_xpuax")
+text = "In 2200, the nuclear war began. Project Lazarus launched eight seedships before Earth's last launch sites went dark."
+exits = Array[ExtResource("2_qs135")]([SubResource("Resource_bsxbl")])
+id = 2
+graph_position = Vector2(340, 0)
+modifiers = Array[ExtResource("4_2wu7e")]([SubResource("Resource_5kfym")])
+
+[sub_resource type="Resource" id="Resource_yod40"]
+script = ExtResource("2_qs135")
+target_id = 4
+
+[sub_resource type="Resource" id="Resource_rpdj8"]
+script = ExtResource("6_6odsn")
+talker = "I-330 Archive"
+
+[sub_resource type="Resource" id="Resource_6y602"]
+script = ExtResource("7_xpuax")
+text = "I-330 was bound for LHS 1140 b. During the crossing, a field of debris forced the ship off course. The next confirmed position is the world below."
+exits = Array[ExtResource("2_qs135")]([SubResource("Resource_yod40")])
+id = 3
+graph_position = Vector2(680, 0)
+modifiers = Array[ExtResource("4_2wu7e")]([SubResource("Resource_rpdj8")])
+
+[sub_resource type="Resource" id="Resource_xts62"]
+script = ExtResource("2_qs135")
+target_id = 5
+
+[sub_resource type="Resource" id="Resource_iqbr2"]
+script = ExtResource("6_6odsn")
+talker = "I-330 Archive"
+
+[sub_resource type="Resource" id="Resource_eg4ue"]
+script = ExtResource("7_xpuax")
+text = "Navigation note. The planet resembles the target. No catalogue match for the sky."
+exits = Array[ExtResource("2_qs135")]([SubResource("Resource_xts62")])
+id = 4
+graph_position = Vector2(1020, 0)
+modifiers = Array[ExtResource("4_2wu7e")]([SubResource("Resource_iqbr2")])
+
+[sub_resource type="Resource" id="Resource_m7tps"]
+script = ExtResource("8_q1pbm")
+exit_name = "done"
+id = 5
+graph_position = Vector2(1360, 0)
+
+[resource]
+script = ExtResource("9_t5sgl")
+graph_name = "ship_records"
+next_free_id = 6
+nodes = Array[ExtResource("1_dwvm5")]([SubResource("Resource_dnh3a"), SubResource("Resource_fxsaj"), SubResource("Resource_6y602"), SubResource("Resource_eg4ue"), SubResource("Resource_m7tps")])
+default_occurrence = "archive_lazarus"
+occurrences = Array[String](["archive_lazarus"])
+endings = Array[String](["done"])
+talkers = Array[String](["I-330 Archive"])

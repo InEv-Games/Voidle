@@ -10,11 +10,9 @@ ruin_id = "vesyn_buried_hall"
 display_name = "The Toppled Stones"
 teaser = "Surveyors report a buried chamber under the Old Ruins."
 cost = {
-"credits": 300.0,
-"science": 50.0
+"credits": 300.0
 }
 reward = {
-"credits": 450.0,
-"science": 80.0
+"science": 100.0
 }
 story = ExtResource("2_v1m8i")

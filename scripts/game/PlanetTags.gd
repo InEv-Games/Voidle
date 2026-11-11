@@ -5,7 +5,7 @@ extends RefCounted
 ## and its atmosphere — and three trait slots. The first opens with the world
 ## (the home world starts with CRADLE; any other draws a pick when scanned);
 ## the others need a planet level (Balance trait_slot_levels) and are opened
-## by paying Science and Rare Elements (trait_slot_costs) — then the player
+## by paying Science and Rare Metals (trait_slot_costs) — then the player
 ## picks one of three, roguelite style, and may re-roll them: the first re-roll
 ## of a pick is free, the next ones cost Science (reroll_cost). The traits are
 ## files in res://resources/traits (TraitDef), each with a rarity; later slots
@@ -213,10 +213,10 @@ static func _draw_one(pool: Array[TraitDef], slot: int, rng: RandomNumberGenerat
 	for r: int in rarity_weight:
 		total += int(rarity_weight[r])
 	if total > 0:
-		var roll := rng.randi_range(1, total)
+		var pick := rng.randi_range(1, total)
 		for r: int in rarity_weight:
-			roll -= int(rarity_weight[r])
-			if roll <= 0:
+			pick -= int(rarity_weight[r])
+			if pick <= 0:
 				rarity = r
 				break
 	var kin: Array[TraitDef] = []

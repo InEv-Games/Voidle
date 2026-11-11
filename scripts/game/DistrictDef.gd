@@ -176,6 +176,8 @@ static func placement_cost(def: DistrictDef, data: PlanetData, parent_city: Stri
 			if poi.is_city() and not poi.is_orbital():
 				cities += 1
 		return 0.0 if cities == 0 else roundf(Balance.geometric(Balance.cfg.city_base_cost, Balance.cfg.city_cost_growth, cities - 1))
+	if SessionPrep.free_district(def, data):
+		return 0.0   # the INDUSTRY head start: the first Production District is free (11.11)
 	return roundf(Balance.geometric(Balance.cfg.district_base_cost, Balance.cfg.district_cost_growth,
 		districts_in_city(data, parent_city)))
 
@@ -247,8 +249,8 @@ static func prefab_items(def: DistrictDef) -> Array:
 			var owned := placed.size() if c.building_counter_scope != "model" else placed.count(bdef.building_id)
 			var cost := {Economy.CREDITS: roundf(Balance.geometric(bdef.base_cost, c.building_cost_growth, owned))}
 			var mats := Economy.building_materials(bdef)
-			for id: String in mats:
-				cost[id] = ceilf(Balance.geometric(float(mats[id]), c.building_cost_growth, owned) - 0.0001)
+			for rid: String in mats:
+				cost[rid] = ceilf(Balance.geometric(float(mats[rid]), c.building_cost_growth, owned) - 0.0001)
 			out.append([bdef.building_id, cost])
 			placed.append(bdef.building_id)
 	return out
@@ -257,8 +259,8 @@ static func prefab_items(def: DistrictDef) -> Array:
 static func prefab_cost(def: DistrictDef, _data: PlanetData = null) -> Dictionary:
 	var total := {}
 	for item: Array in prefab_items(def):
-		for id: String in item[1]:
-			total[id] = float(total.get(id, 0.0)) + float(item[1][id])
+		for rid: String in item[1]:
+			total[rid] = float(total.get(rid, 0.0)) + float(item[1][rid])
 	return total
 
 ## Full placement price: { credits, material: amount }.

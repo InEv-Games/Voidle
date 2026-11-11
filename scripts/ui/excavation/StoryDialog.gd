@@ -20,7 +20,6 @@ var site: ExcavationSiteDef
 var _page := Page.SITE
 var _mgr: VSMManager = null
 var _typing: Tween = null
-var _bb_len := 0
 
 @onready var _card: Control = $Center/Card
 @onready var _hero: HeroHeader = $Center/Card/Front/Hero
@@ -59,6 +58,11 @@ static func open(host: Node, site_id: String) -> void:
 	var s := Excavations.find_site(site_id)
 	if s == null:
 		return
+	NewsFeed.clear_message("excavation_ready_" + site_id)   # its "ready" card has done its job
+	# the camera goes to the site and closes in, so the player sees where it is (10.11)
+	var loc := Excavations._site_loc(site_id)
+	if not loc.is_empty() and host.has_method("focus_news_location"):
+		host.call("focus_news_location", loc)
 	var layer := CanvasLayer.new()
 	layer.layer = LAYER
 	host.get_tree().root.add_child(layer)
@@ -68,6 +72,8 @@ static func open(host: Node, site_id: String) -> void:
 	AudioManager.play("click")
 
 func _ready() -> void:
+	($Center/Card as Control).add_to_group(&"tutorial_passthrough")   # the tutorial never blocks it
+	add_to_group(&"story_dialog")   # story scenes wait until it is closed
 	_later.pressed.connect(_close)
 	_next.pressed.connect(_on_next)
 	_hero.caption = _counter_text()
@@ -110,7 +116,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				_close()
 
 func _dig_progress() -> float:
-	return 1.0 - Excavations.time_left(site) / maxf(site.duration_sec, 1.0)
+	return 1.0 - Excavations.time_left(site) / maxf(Excavations.dig_length(site), 1.0)
 
 ## "Excavation  //  VESYN 2 / 5", the hero's caption.
 func _counter_text() -> String:
@@ -243,6 +249,7 @@ func _on_choices(texts: Array[String]) -> void:
 	for i in texts.size():
 		var b := IconButton.create(texts[i], "confirm", IconButton.Variant.DEFAULT)
 		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN   # stacked down the left
+		_explain_choice(b, _exit_at(i))   # what it gives and whether it is remembered (playtest 07.11)
 		var at := i
 		b.pressed.connect(func() -> void:
 			if _typing != null:
@@ -251,6 +258,42 @@ func _on_choices(texts: Array[String]) -> void:
 			AudioManager.play("click")
 			_mgr.choose(at))
 		_choices.add_child(b)
+
+## The exit behind the i-th choice shown (the manager's visible exits, or its
+## sub-graph's while one runs).
+func _exit_at(i: int) -> VSMExitLink:
+	var m = _mgr
+	while m.get("_sub_mgr") != null:
+		m = m.get("_sub_mgr")
+	var exits: Array = m.get("_visible_exits") if m.get("_visible_exits") != null else []
+	return exits[i] as VSMExitLink if i < exits.size() else null
+
+## A choice shows what it gives (icon amounts on the button) and, in its tip,
+## that later stories remember it, so a choice reads as a choice.
+func _explain_choice(b: IconButton, exit: VSMExitLink) -> void:
+	if exit == null:
+		return
+	var gives := {}
+	var remembered := false
+	for a in exit.actions:
+		if a is StoryGrant:
+			for id: String in (a as StoryGrant).resources:
+				gives[id] = float(gives.get(id, 0.0)) + float((a as StoryGrant).resources[id])
+		elif a is StorySetFlag or a is StoryJoinCompanion:
+			remembered = true
+	var items := PackedStringArray()
+	for id: String in gives:
+		items.append("%s:+%s" % [id, Economy.fmt(float(gives[id]))])
+	b.counter_items = items
+	var lines: Array[String] = []
+	if not gives.is_empty():
+		lines.append("Adds to what the dig returns:  " + _amounts_bb(gives))
+	if remembered:
+		lines.append("Later excavations remember this choice.")
+	if lines.is_empty():
+		return
+	b.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Choice", "\n\n".join(lines)))
+	b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 
 func _clear_choices() -> void:
 	for c in _choices.get_children():
@@ -270,18 +313,32 @@ func _show_pay() -> void:
 	_page = Page.PAY
 	_later.visible = true
 	_next.visible = true
-	_time_row.value = Excavations.time_text(site.duration_sec)
+	_time_row.value = Excavations.time_text(Excavations.duration_of(site))
 	_returns.text = "[right]%s[/right]" % _amounts_bb(site.reward)
 	_details.visible = true
 	_next.label_text = "EXCAVATE"
+	var cost := Excavations.cost_of(site)
 	var items := PackedStringArray()
-	for id: String in site.cost:
-		items.append("%s:%s" % [id, Economy.fmt(float(site.cost[id]))])
+	for id: String in cost:
+		items.append("%s:%s" % [id, Economy.fmt(float(cost[id]))])
 	_next.counter_items = items
 	var why := Excavations.start_block(site)
 	_next.disabled = why != ""
-	_block.text = _missing_bb() if Economy.cost_block(site.cost) != "" else why
-	_block.visible = why != ""
+	var lines: Array[String] = []
+	if why != "":
+		lines.append(_missing_bb() if Economy.cost_block(cost) != "" else why)
+	# inside a City's reach it goes faster and costs less; outside, say so (playtest 07.11)
+	var near := Excavations.city_near(site)
+	var pct_t := int(round((1.0 - Excavations.CITY_TIME_MULT) * 100.0))
+	var pct_c := int(round((1.0 - Excavations.CITY_COST_MULT) * 100.0))
+	if near != null:
+		lines.append("[color=#%s]Inside %s's reach: %d%% faster, %d%% cheaper.[/color]" % [
+			UIStyle.hex(&"good"), near.shown_name(), pct_t, pct_c])
+	else:
+		lines.append("[color=#%s]Digs inside a City's reach go %d%% faster and cost %d%% less.[/color]" % [
+			UIStyle.hex(&"text_subtle"), pct_t, pct_c])
+	_block.text = "\n".join(lines)
+	_block.visible = true
 	_details.modulate.a = 0.0
 	_reveal(_details)
 
@@ -327,8 +384,9 @@ func _show_end() -> void:
 func _missing_bb() -> String:
 	var bad := UIStyle.color(&"bad")
 	var parts: Array[String] = []
-	for id: String in site.cost:
-		var short := float(site.cost[id]) - Economy.payable_amount(id)
+	var cost := Excavations.cost_of(site)
+	for id: String in cost:
+		var short := float(cost[id]) - Economy.payable_amount(id)
 		if short > 0.0:
 			parts.append("%s %s" % [UIIcons.bb(id, 13, bad), Economy.fmt(short)])
 	return "Missing   " + "   ".join(parts)

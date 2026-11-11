@@ -11,3 +11,4 @@ bio = "Knows every route worth flying and most that aren't. Her bronze compass i
 hint = "Someone else is digging in the Old Ruins of your home world."
 bonus_resource = "credits"
 legacy_relic_id = "first_compass"
+retired = true

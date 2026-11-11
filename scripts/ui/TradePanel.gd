@@ -35,7 +35,7 @@ const MODE_GLYPH := {"off": "–", "sell": "▼", "buy": "▲", "keep": "■"}
 const MARKET_LINES := [
 	"Haulers dock and undock all day; every crate you trade moves the board.",
 	"Brokers shout over the hum of the cargo lifts. Prices settle as the shifts change.",
-	"The exchange never sleeps — big orders make waves that fade within minutes.",
+	"The exchange never sleeps: big orders make waves that fade within minutes.",
 	"Traders watch the screens and each other. Buy cheap, sell dear, don't flood the floor.",
 	"A freighter captain swears the Goods price moved because she sneezed.",
 ]
@@ -197,9 +197,9 @@ func _show_trade_tip() -> void:
 
 ## "− [icon] 22K": an amount by its resource icon, red when it is paid,
 ## the resource's colour when it is gained (body size: the title stays larger).
-static func _amount_bb(sign: String, rid: String, amount: float, paid: bool) -> String:
+static func _amount_bb(sgn: String, rid: String, amount: float, paid: bool) -> String:
 	var col := UIStyle.color(&"bad") if paid else Economy.color_of(rid)
-	return "[color=#%s]%s %s %s[/color]" % [col.to_html(false), sign,
+	return "[color=#%s]%s %s %s[/color]" % [col.to_html(false), sgn,
 		UIIcons.bb(rid, 13, Economy.color_of(rid)), Economy.fmt(amount)]
 
 func _process(delta: float) -> void:
@@ -221,26 +221,34 @@ func _build_rows() -> void:
 		_list.add_child(_product_row(id))
 	_refresh()
 
-## A label row over the columns: "AUTOMATION" above the target and mode.
+## A label row over the columns, one label per column, left-aligned on it
+## (playtest 07.11: a lone centred "AUTOMATION" looked out of place):
+## PRICE (icon + price) // TREND (chart) // AUTOMATION (target + mode) // TRADE.
 func _column_head() -> Control:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", GAP)
-	var fill := Control.new()
-	fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	head.add_child(fill)
-	var auto := _label("AUTOMATION", 8, UIStyle.color(&"text_muted"))
-	auto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_fixed(auto, TARGET_W + GAP + ROW_H - 2.0, 12.0)
-	auto.mouse_filter = Control.MOUSE_FILTER_STOP
-	_tip(auto, "Automation", func() -> String:
-		return "Set a target and a mode: the market trades for you every 20 s, a little worse than by hand." \
-			if Trade.has_automation() else "Research Trade Automation for standing orders.")
-	head.add_child(auto)
-	var trade_sp := Control.new()   # over SELL / BUY
-	_fixed(trade_sp, BTN_W * 2.0 + GAP, 12.0)
-	trade_sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	head.add_child(trade_sp)
+	var cols := [
+		["PRICE", ICON_BOX + GAP + PRICE_W, "Price", func() -> String:
+			return "What one unit costs now. Buying raises it, selling lowers it; it drifts back."],
+		["TREND", -1.0, "Trend", func() -> String:
+			return "The last minutes of its price against the usual price (dotted)."],
+		["AUTOMATION", TARGET_W + GAP + ROW_H - 2.0, "Automation", func() -> String:
+			return "Set a target and a mode: the market trades for you every 20 s, a little worse than by hand." \
+				if Trade.has_automation() else "Research Trade Automation for standing orders."],
+		["TRADE", BTN_W * 2.0 + GAP, "Trade", func() -> String:
+			return "Sell or buy one lot. Shift ×10, Ctrl/Cmd everything you can."],
+	]
+	for c: Array in cols:
+		var l := _label(String(c[0]), 8, UIStyle.color(&"text_muted"))
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		if float(c[1]) > 0.0:
+			_fixed(l, float(c[1]), 12.0)
+		else:
+			l.custom_minimum_size = Vector2(CHART_W, 12.0)
+			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # over the chart, which stretches
+		l.mouse_filter = Control.MOUSE_FILTER_STOP
+		_tip(l, String(c[2]), c[3])
+		head.add_child(l)
 	return head
 
 ## One lot of a product, grown with the player's stockpile (playtest 31.10):
@@ -251,8 +259,8 @@ const LOT_SHARE := 0.05
 
 static func lot(id: String) -> float:
 	var cap := Economy.cap(id)
-	var scale := maxf(Trade.stock(id), 100.0) if cap == INF else maxf(cap, Trade.stock(id))
-	return _nice(scale * LOT_SHARE)
+	var bar_scale := maxf(Trade.stock(id), 100.0) if cap == INF else maxf(cap, Trade.stock(id))
+	return _nice(bar_scale * LOT_SHARE)
 
 ## The 1-2-5 number nearest below or at `v` (at least 1).
 static func _nice(v: float) -> float:
@@ -302,16 +310,24 @@ func _product_row(id: String) -> Control:
 	box.add_theme_stylebox_override("panel", sb)
 	_fixed(box, ICON_BOX, ICON_BOX)
 	var icon := TextureRect.new()
-	icon.texture = UIIcons.get_icon(id if not Economy.is_raw(id) else UIIcons.RAW_PLACEHOLDER)
-	icon.self_modulate = Economy.color_of(id)
+	# an unfound mineral is an unnamed "?" box (no spoiler); found ones their own pixel icon
+	var unfound := Economy.is_raw(id) and not Economy.is_mineral_discovered(id)
+	icon.texture = UIIcons.get_icon("unknown" if unfound else id)   # (playtest 07.11)
+	icon.self_modulate = UIStyle.color(&"neutral_stroke") if unfound \
+		else (Color.WHITE if Economy.is_raw(id) else Economy.color_of(id))
+	if Economy.is_raw(id) and not unfound:
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.custom_minimum_size = Vector2(16, 16)
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(icon)
 	box.mouse_filter = Control.MOUSE_FILTER_STOP
-	_tip(box, Economy.display_name(id), func() -> String:
-		return "%s %s a unit now (usually %s).%s" % [UIIcons.bb(Economy.CREDITS, 11, Economy.color_of(Economy.CREDITS)), _price(Trade.unit_price(id)),
+	if unfound:
+		_tip(box, "Undiscovered", func() -> String: return "A mineral you haven't found yet. " + block + ".")
+	else:
+		_tip(box, Economy.display_name(id), func() -> String:
+			return "%s %s a unit now (usually %s).%s" % [UIIcons.bb(Economy.CREDITS, 11, Economy.color_of(Economy.CREDITS)), _price(Trade.unit_price(id)),
 			_price(Trade.reference_price(id)), _trend(id)])
 	row.add_child(box)
 
@@ -355,7 +371,7 @@ func _product_row(id: String) -> Control:
 	chart.mouse_filter = Control.MOUSE_FILTER_STOP
 	_tip(chart, "%s price" % Economy.display_name(id), func() -> String:
 		var minutes := float(Trade.history(id).size()) * Trade.HISTORY_STEP / 60.0
-		return "The last %.0f min of its price against the usual price (dotted).\nGreen: up, dearer than usual — good to sell. Red: down, cheap — good to buy." % maxf(minutes, 1.0))
+		return "The last %.0f min of its price against the usual price (dotted).\nGreen: up, dearer than usual, good to sell. Red: down, cheap, good to buy." % maxf(minutes, 1.0))
 	row.add_child(chart)
 
 	# automation: a target and the square mode button (greyed until researched)
@@ -553,11 +569,12 @@ static func _compact_button(t: String, variation: StringName) -> Button:
 		b.add_theme_stylebox_override(st, sb)
 	return b
 
-## A live tooltip: `body` is called each time the mouse comes over `c`.
+## A live tooltip: `body` is read when the mouse comes over `c` and again
+## while the tip stays up (TooltipManager.live).
 func _tip(c: Control, title: String, body: Callable) -> void:
 	c.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
-		TooltipManager.show_tip(title, String(body.call())))
+		TooltipManager.live(func() -> void: TooltipManager.show_tip(title, String(body.call()))))
 	c.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())

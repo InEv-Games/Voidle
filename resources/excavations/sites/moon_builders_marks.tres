@@ -10,15 +10,12 @@ ruin_id = "moon_echo_crater"
 display_name = "The Builder's Marks"
 teaser = "Straight cuts along a crater wall. Nature doesn't do straight."
 cost = {
-"credits": 1500.0,
-"moonstone": 50.0,
-"science": 450.0
+"credits": 1500.0
 }
 duration_sec = 900.0
 reward = {
-"credits": 2250.0,
-"moonstone": 90.0,
-"science": 700.0
+"science": 875.0,
+"moonstone": 90.0
 }
 terrain = 1
 story = ExtResource("2_nwrj6")

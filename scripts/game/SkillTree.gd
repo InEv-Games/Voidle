@@ -202,7 +202,7 @@ func _init() -> void:
 	# decisions of 29.10 (§9–§16): Tier 0 models need no research; Capital
 	# supports need none either.
 	_line = "exploration"
-	_n("rocketry", "Rocketry", "Heavy-lift launch technology. Build a Spaceport in a Capital District — on Earth, the Moon and every world.",
+	_n("rocketry", "Rocketry", "Heavy-lift launch technology. Build a Spaceport in a Capital District, on Earth, the Moon and every world.",
 		900.0, _at("root", -90, 1.7), ["root"], "common", "Unlocks Spaceport",
 		{"grants": ["spaceport"], "requires": ["fuel_processing"], "common": true})
 	_n("orbital_assembly", "Orbital Assembly", "Assemble an Orbit from Spaceport launches: its Orbit City and five kinds of support district, each +10% to the whole planet. The road to the Moon goes through orbit.",
@@ -211,7 +211,7 @@ func _init() -> void:
 	_n("lunar_program", "Lunar Program", "A lander that carries settlers to the Moon. It needs your Orbit first. Pick the Moon in the Local System view. Earth buildings work there too; three Moon-only buildings use its Craters, Caves and Ion storm regions.",
 		1200.0, _at("orbital_assembly", -90, 4.6), ["orbital_assembly"], "common", "Unlocks the Moon lander",
 		{"events": ["orbit_station"], "common": true, "shape": NodeShape.CIRCLE})
-	_n("lunar_materials", "Lunar Materials", "Learn to build with what the Moon gives — the step before the final rocket. Any of your Spaceports can launch it.",
+	_n("lunar_materials", "Lunar Materials", "Learn to build with what the Moon gives, the step before the final rocket. Any of your Spaceports can launch it.",
 		1200.0, _at("lunar_program", -90, 2.3), ["lunar_program"], "common", "On the road to the final rocket",
 		{"events": ["moon_production"], "common": true})
 	_n("advanced_planet_rocket", "Advanced Planetary Rocket", "The rocket that leaves the Moon for a new world.",
@@ -226,7 +226,7 @@ func _init() -> void:
 	_n("processing_basics", "Basic Processing", "Factories that turn Ferrite into Goods.",
 		100.0, _at("start_production", 180, 1.2), ["start_production"], "processing", "Unlocks Goods Factory",
 		{"grants": ["refinery"], "common": true})
-	_n("fuel_processing", "Fuel Processing", "Small-scale Fuel production — the first step towards rockets.",
+	_n("fuel_processing", "Fuel Processing", "Small-scale Fuel production, the first step towards rockets.",
 		450.0, _at("processing_basics", 180, 1.2), ["processing_basics"], "processing", "Unlocks Compact Fuel Workshop, Fuel access",
 		{"grants": ["compact_fuel_workshop"], "common": true})
 	_n("dense_fuel", "Dense Fuel", "Refineries that turn out Fuel in bulk.",
@@ -238,13 +238,13 @@ func _init() -> void:
 	_n("fuel_storage", "Bulk Storage", "Storage Facilities: nine Warehouses' worth of room.",
 		900.0, Vector2(-4.55, -0.75), ["fuel_processing"], "processing", "Unlocks Storage Facility",
 		{"grants": ["storage_facility"]})
-	_n("rare_processing", "Rare Processing", "Extract rare elements from bulk ore.",
-		900.0, _at("fuel_processing", 140, 1.2), ["fuel_processing"], "processing", "Unlocks Rare Element Forge, Rare access",
+	_n("rare_processing", "Rare Processing", "Extract rare metals from bulk ore.",
+		900.0, _at("fuel_processing", 140, 1.2), ["fuel_processing"], "processing", "Unlocks Rare Metal Forge, Rare access",
 		{"grants": ["molecular_forge"], "common": true})
-	_n("rare_refining", "Rare Refining", "Rare Elements in bulk.",
-		1800.0, _at("rare_processing", 140, 1.15), ["rare_processing"], "processing", "Unlocks Rare Element Refinery",
+	_n("rare_refining", "Rare Refining", "Rare Metals in bulk.",
+		1800.0, _at("rare_processing", 140, 1.15), ["rare_processing"], "processing", "Unlocks Rare Metal Refinery",
 		{"grants": ["rare_element_refinery"]})
-	_n("cavern_refining", "Cavern Refining", "Moon only: a refinery sealed in the Moon's Caves makes Goods, Fuel and Rare Elements together.",
+	_n("cavern_refining", "Cavern Refining", "Moon only: a refinery sealed in the Moon's Caves makes Goods, Fuel and Rare Metals together.",
 		900.0, _at("rare_processing", 60, 1.1), ["rare_processing"], "processing", "Unlocks Cavern Refinery (Moon only)",
 		{"grants": ["cavern_refinery"], "requires": ["processing_basics", "dense_fuel"]})
 	_n("surface_excavation", "Mining", "Proper mines for the world's mineral.",
@@ -280,7 +280,7 @@ func _init() -> void:
 	_n("fusion_power", "Fission Power", "Fuel-fired fission reactors.",
 		450.0, _at("solar_matrix", 0, 1.2), ["solar_matrix"], "energy", "Unlocks Fission Reactor",
 		{"grants": ["fission_reactor"], "access": ["fuel"]})
-	_n("antimatter_power", "Antimatter Power", "Annihilation plants — the top of the energy line.",
+	_n("antimatter_power", "Antimatter Power", "Annihilation plants, the top of the energy line.",
 		900.0, _at("fusion_power", 0, 1.2), ["fusion_power"], "energy", "Unlocks Antimatter Plant",
 		{"grants": ["antimatter_chamber"], "access": ["rare"], "shape": NodeShape.CIRCLE})
 	_n("wind_power", "Wind Power", "Turbines on windy ground. The district must stand on a Mountain or Tundra of a world with an atmosphere.",
@@ -391,7 +391,7 @@ func _init() -> void:
 	_n("advanced_research", "Advanced Research", "Dedicated research institutes.",
 		350.0, _at("field_research", 135, 1.2), ["field_research", "mountain_optics", "forest_research"], "science", "Unlocks Research Institute",
 		{"grants": ["advanced_lab"]})
-	_n("particle_physics", "Particle Physics", "Accelerators fed with Rare Elements.",
+	_n("particle_physics", "Particle Physics", "Accelerators fed with Rare Metals.",
 		900.0, _at("advanced_research", 135, 1.2), ["advanced_research"], "science", "Unlocks Particle Accelerator",
 		{"grants": ["particle_accelerator"], "access": ["rare"], "shape": NodeShape.CIRCLE})
 	_n("mountain_optics", "Mountain Optics", "Observatories on high peaks. The district must stand on a Mountain.",
@@ -474,7 +474,7 @@ func _init() -> void:
 	# Bridges: one per pair of neighbouring lines, all on one outer ring
 	# (BRIDGE_RING) on the bisector between the two lines; either side opens
 	# them, and the links are drawn as arcs along the ring.
-	_bridge("materials_science", "Materials Science", "What the labs learn, the mines use — and the other way round.", 250.0,
+	_bridge("materials_science", "Materials Science", "What the labs learn, the mines use, and the other way round.", 250.0,
 		"rare_processing", "mountain_optics", 157.5, "science", "+3% Raw output, +3% Science",
 		{"bonus": {"mine_output": 0.03, "science": 0.03}})
 	_bridge("smart_homes", "Smart Districts", "Districts that plan their power together.", 250.0,
@@ -531,20 +531,20 @@ const GEO_HOSTS := {
 }
 
 ## A small passive (one level) hanging off `host` on its line.
-func _minor(id: String, name: String, desc: String, cost: float, host: String, deg: float, step: float,
+func _minor(id: String, node_name: String, desc: String, cost: float, host: String, deg: float, step: float,
 		branch: String, bonus: Dictionary, eff: String) -> void:
 	_line = (nodes[host] as SkillNode).line
-	_n(id, name, desc, cost, _at(host, deg, step), [host], branch, eff, {"shape": NodeShape.DIAMOND, "bonus": bonus})
+	_n(id, node_name, desc, cost, _at(host, deg, step), [host], branch, eff, {"shape": NodeShape.DIAMOND, "bonus": bonus})
 
 ## Radius (grid units) of the outer ring the bridges sit on.
 const BRIDGE_RING := 5.4
 
 ## A node between two neighbouring lines, opened from either: on the bridge
 ## ring at screen angle `deg` (the bisector of the two lines).
-func _bridge(id: String, name: String, desc: String, cost: float, a: String, b: String, deg: float,
+func _bridge(id: String, node_name: String, desc: String, cost: float, a: String, b: String, deg: float,
 		branch: String, eff: String, opts: Dictionary) -> void:
 	_line = "bridge"
-	_n(id, name, desc, cost, Vector2.from_angle(deg_to_rad(deg)) * BRIDGE_RING, [a, b], branch, eff, opts)
+	_n(id, node_name, desc, cost, Vector2.from_angle(deg_to_rad(deg)) * BRIDGE_RING, [a, b], branch, eff, opts)
 
 ## Grid position `step` units from node `from`, at screen angle `deg`
 ## (0 = right, -90 = up). Lines fork by giving siblings different angles.
@@ -554,10 +554,10 @@ func _at(from: String, deg: float, step: float) -> Vector2:
 
 ## Shorthand: opts = {max, shape, grants, requires, access, events, common,
 ## min_civ, civ, legacy, act2}. `pos` is in grid units.
-func _n(id: String, name: String, desc: String, cost: float, pos: Vector2, parents: Array[String],
+func _n(id: String, node_name: String, desc: String, cost: float, pos: Vector2, parents: Array[String],
 		branch: String, eff: String, opts: Dictionary = {}) -> void:
 	var default_shape := NodeShape.HEXAGON
-	_add_node(id, name, desc, cost, pos * GRID, parents, 1, eff, int(opts.get("max", 1)), opts.get("shape", default_shape))
+	_add_node(id, node_name, desc, cost, pos * GRID, parents, 1, eff, int(opts.get("max", 1)), opts.get("shape", default_shape))
 	var node: SkillNode = nodes[id]
 	node.branch = branch
 	node.line = _line
@@ -579,8 +579,8 @@ func _n(id: String, name: String, desc: String, cost: float, pos: Vector2, paren
 			_grant_of[b] = []
 		(_grant_of[b] as Array).append(id)
 
-func _add_node(id: String, name: String, desc: String, cost: float, pos: Vector2, parents: Array[String], tier: int, eff: String, max_lv: int = 1, shape: NodeShape = NodeShape.HEXAGON) -> void:
-	nodes[id] = SkillNode.new(id, name, desc, cost, pos, parents, tier, eff, max_lv, shape)
+func _add_node(id: String, node_name: String, desc: String, cost: float, pos: Vector2, parents: Array[String], tier: int, eff: String, max_lv: int = 1, shape: NodeShape = NodeShape.HEXAGON) -> void:
+	nodes[id] = SkillNode.new(id, node_name, desc, cost, pos, parents, tier, eff, max_lv, shape)
 
 ## Capital supports need no research (integration decisions 29.10 §9.1).
 func _ready() -> void:
@@ -820,7 +820,7 @@ func buyout_missing(civ: int) -> int:
 
 func buyout_block(civ: int) -> String:
 	if GameState.playable_content_type < civ + 1:
-		return "Preview only — Civilization %d isn't playable in the demo" % (civ + 1)
+		return "Preview only: Civilization %d isn't playable in the demo" % (civ + 1)
 	if buyout_missing(civ) == 0:
 		return "Nothing missing"
 	if GameState.science_points < buyout_cost(civ):
@@ -1032,7 +1032,7 @@ func get_housing_mult() -> float:
 func get_energy_consume_mult() -> float:
 	return maxf(0.1, 1.0 - 0.05 * _lv("grid_efficiency") + _bonus("energy_consume"))
 
-## Cluster Planning: every proximity / centre contribution ×(1 + 0.1//level).
+## Cluster Planning: every same-family proximity contribution ×(1 + 0.1//level).
 func get_proximity_mult() -> float:
 	return 1.0 + 0.10 * _lv("cluster_planning") + _bonus("proximity")
 

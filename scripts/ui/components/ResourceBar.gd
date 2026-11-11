@@ -14,9 +14,9 @@ const FLOAT_FONT := preload("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
 const TIPS := {
 	"credits": "Earned by Commercial districts. Spent on districts and buildings.",
 	"science": "Produced by Science districts. Spent in the Upgrade Tree.",
-	"goods": "Consumer Goods — made from raw resources in Industrial districts.\nUsed by luxury housing and trade.",
-	"fuel": "Fuel Rods — made from raw resources in Industrial districts.\nUsed by advanced power plants.",
-	"rare_elements": "Rare Elements — made from raw resources in Industrial districts.\nUsed by advanced science.",
+	"goods": "Consumer Goods: made from raw resources in Industrial districts.\nUsed by luxury housing and trade.",
+	"fuel": "Fuel Rods: made from raw resources in Industrial districts.\nUsed by advanced power plants.",
+	"rare_elements": "Rare Metals: made from raw resources in Industrial districts.\nUsed by advanced science.",
 }
 
 ## id -> value Label
@@ -40,6 +40,7 @@ func _ready() -> void:
 	for c in $Row.get_children():
 		if c is ResourceChip:
 			_bind_chip(c)
+	_add_calendar_chip()
 	_refresh_resource_cells()
 
 func _process(delta: float) -> void:
@@ -47,6 +48,43 @@ func _process(delta: float) -> void:
 	if _poll >= 0.25:
 		_poll = 0.0
 		_refresh_resource_cells()
+		_refresh_calendar()
+
+# ── Colony calendar (narrative J-d) ──────────────────────────────────────────
+## "2465" at the bar's end once the handover is over; the month in its tip.
+var _calendar: ResourceChip = null
+
+func _add_calendar_chip() -> void:
+	_calendar = ResourceChip.create("calendar")
+	_calendar.icon_color = UIStyle.color(&"icon")
+	_calendar.mouse_filter = Control.MOUSE_FILTER_STOP
+	_calendar.mouse_entered.connect(func() -> void:
+		TooltipManager.live(func() -> void:
+			TooltipManager.show_tip("Colony calendar", "Year %d, month %d.\n\nA colony month passes every %d s of play; a year every %d s." % [
+				GameState.calendar_year(), GameState.calendar_month(), int(GameState.MONTH_SEC), int(GameState.MONTH_SEC * 12.0)])
+			TooltipManager.set_title_icon("calendar")))
+	_calendar.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	# 10.11: at the bar's right end, beside the view's lens button (right_reserve)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$Row.add_child(gap)
+	$Row.add_child(_calendar)
+	_refresh_calendar()
+
+## Room kept free at the bar's right end (px) for what a view puts there (the
+## planet view's lens button); the calendar sits just left of it.
+var right_reserve := 0.0:
+	set(v):
+		right_reserve = v
+		($Row as Control).offset_right = -6.0 - v
+
+func _refresh_calendar() -> void:
+	if _calendar == null or not is_instance_valid(_calendar):
+		return
+	_calendar.visible = GameState.onboarding_stage == "done"
+	if _calendar.visible:
+		_calendar.value_text = str(GameState.calendar_year())
 
 ## Largest value size is the theme's ValueLabel font size (voidle_theme.tres).
 const VALUE_FONT_MIN := 7
@@ -62,10 +100,10 @@ func _set_value(lbl: Label, text: String) -> void:
 	if w <= 0.0:
 		lbl.remove_theme_font_size_override("font_size")
 		return
-	var size := UIStyle.font_size(&"ValueLabel")
-	while size > VALUE_FONT_MIN and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > w:
-		size -= 1
-	lbl.add_theme_font_size_override("font_size", size)
+	var fsize := UIStyle.font_size(&"ValueLabel")
+	while fsize > VALUE_FONT_MIN and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x > w:
+		fsize -= 1
+	lbl.add_theme_font_size_override("font_size", fsize)
 
 ## ── Incoming resources ──────────────────────────────────────────────────────
 ## A gain shows as "+x" under its cell, floats up into the bar, and the value
@@ -187,7 +225,7 @@ func _bind_chip(cell: ResourceChip) -> void:
 				TooltipManager.show_tip(title, "Click to show every raw resource.")
 				TooltipManager.set_title_icon(id)
 			return
-		_show_cell_tip(id, title))
+		TooltipManager.live(func() -> void: _show_cell_tip(id, title)))   # amounts and rates stay current
 	cell.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
@@ -205,10 +243,13 @@ func _bind_chip(cell: ResourceChip) -> void:
 		cell.gui_input.connect(func(e: InputEvent) -> void:
 			if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
 					and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+				cell.accept_event()
+				if not Guide.allows_shortcut("trade"):
+					AudioManager.play("denied")   # the guided step comes first
+					return
 				AudioManager.play("click")
 				TooltipManager.hide_tip()
-				HUDManager.toggle_trade_panel()
-				cell.accept_event())
+				HUDManager.toggle_trade_panel())
 
 const GOOD_HEX := "8fe39a"
 const BAD_HEX := "e36a6a"
@@ -222,12 +263,12 @@ static func _desc(id: String) -> String:
 		Economy.SCIENCE:
 			return "Made by %s. Spent in the %s." % [Glossary.t("science_d", "Science districts"), Glossary.t("upgrade_tree", "Upgrade Tree")]
 		Economy.GOODS:
-			return "Consumer Goods — made from raw minerals in %s. Used by luxury housing and %s." % [
+			return "Consumer Goods: made from raw minerals in %s. Used by luxury housing and %s." % [
 				Glossary.t("industrial", "Production districts"), Glossary.t("trade", "Trade")]
 		Economy.FUEL:
-			return "Fuel Rods — made from raw minerals in %s. Used by advanced power plants." % Glossary.t("industrial", "Production districts")
+			return "Fuel Rods: made from raw minerals in %s. Used by advanced power plants." % Glossary.t("industrial", "Production districts")
 		Economy.RARE:
-			return "Rare Elements — made from raw minerals in %s. Used by advanced science and planet traits." % Glossary.t("industrial", "Production districts")
+			return "Rare Metals: made from raw minerals in %s. Used by advanced science and planet traits." % Glossary.t("industrial", "Production districts")
 	return String(TIPS.get(id, ""))
 
 ## An inline icon for the corner (UIIcons name, tint as hex).
@@ -278,7 +319,7 @@ func _show_cell_tip(id: String, title: String) -> void:
 					("+" if mx >= used else "−") + Economy.fmt(absi(mx - used)), GOOD_HEX if mx >= used else BAD_HEX) + _idle_pop_text()
 				var spd := Economy.pop_speed(pd, pp)
 				if spd < 0.999:
-					detail += "\n\n" + _c("Overcrowded — a %s: every cycle on every world makes %d%% of its output." % [
+					detail += "\n\n" + _c("Overcrowded: a %s: every cycle on every world makes %d%% of its output." % [
 						Glossary.t("deficit", "deficit"), int(round(spd * 100.0))], BAD_HEX)
 		_:
 			# a storage cap is worth the corner; a lone stock number is not
@@ -411,11 +452,35 @@ func _idle_pop_text() -> String:
 		out += "\n  +%d%% Raw and processed output  (Production Reserve)" % int(round((reserve - 1.0) * 100.0))
 	return out
 
-## Every resource shows in the bar from the start, even before the player
-## makes any (playtest 23.10) — what's ahead is part of the goal.
-func _update_reveals(_rates: Dictionary) -> void:
+## A resource joins the bar once the player has some or makes some, and stays
+## (10.11: step by step, no row of zeros for what is still unexplored; this
+## replaces "everything from the start", playtest 23.10). Credits always show.
+## Once seen is kept in GameState.story_flags ("res_seen:<id>"), so a resource
+## spent to zero doesn't vanish again.
+func _update_reveals(rates: Dictionary) -> void:
 	for id: String in _res_slots:
-		(_res_slots[id] as Control).visible = true
+		var key := "res_seen:" + id
+		if not GameState.story_flags.has(key) and _resource_found(id, rates):
+			GameState.story_flags[key] = true
+		(_res_slots[id] as Control).visible = id == Economy.CREDITS or GameState.story_flags.has(key)
+
+func _resource_found(id: String, rates: Dictionary) -> bool:
+	match id:
+		Economy.CREDITS:
+			return true
+		Economy.SCIENCE:
+			return GameState.science_points > 0.0 or float(rates.get(id, 0.0)) > 0.0
+		Economy.ENERGY:
+			var esp: Vector2 = ProductionManager.get_global_energy_split()
+			return esp.x > 0.0 or esp.y > 0.0
+		Economy.POPULATION:
+			var pp: PlanetProgress = GameState.get_planet(GameState.home_planet_seed)
+			return pp != null and pp.is_colonized and GameState.has_founded_city()
+		Economy.RAW:
+			if Economy.raw_total() > 0.0 or float(rates.get(id, 0.0)) != 0.0:
+				return true
+			return not _listed_raws().is_empty()   # a mineral discovered
+	return Economy.amount(id) > 0.0 or float(rates.get(id, 0.0)) != 0.0
 
 ## The world whose rates the bar shows: the one in view (null when none is colonized).
 func _rate_planet() -> PlanetProgress:
@@ -548,19 +613,19 @@ func _fill_raw_dropdown() -> void:
 			return
 		rows = []
 		for r: Dictionary in raws:
-			var chip := ResourceChip.create(UIIcons.RAW_PLACEHOLDER)
-			chip.icon_color = r["color"]
+			var chip := ResourceChip.create("unknown")
 			chip.value_width = 44.0
 			var nm: String = r["name"]
 			var rid: String = r["id"]
 			chip.mouse_filter = Control.MOUSE_FILTER_STOP
-			chip.mouse_entered.connect(func() -> void:
+			var mineral_tip := func() -> void:
 				if Economy.is_mineral_discovered(rid) or Economy.amount(rid) > 0.0:
 					TooltipManager.show_tip(nm, "A raw mineral, mined by %s." % Glossary.t("industrial", "Production districts"))
 					TooltipManager.set_corner("%s %s %s" % [Economy.fmt(Economy.amount(rid)), _ic("warehouse", DIM_HEX), Economy.fmt(Economy.cap(rid))])
 					TooltipManager.set_detail(breakdown_text(rid))
 				else:
-					TooltipManager.show_tip("Undiscovered", "A mineral you haven't found yet."))
+					TooltipManager.show_tip("Undiscovered", "A mineral you haven't found yet.")
+			chip.mouse_entered.connect(func() -> void: TooltipManager.live(mineral_tip))
 			chip.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 			_raw_dd_list.add_child(chip)
 			rows.append(chip)
@@ -568,13 +633,16 @@ func _fill_raw_dropdown() -> void:
 		var r: Dictionary = raws[i]
 		var chip := rows[i] as ResourceChip
 		var known: bool = Economy.is_mineral_discovered(r["id"]) or Economy.amount(r["id"]) > 0.0
-		chip.icon_color = r["color"] if known else UIStyle.color(&"neutral_stroke")
+		# its own pixel icon once found (playtest 07.11), a "?" box before
+		chip.resource_id = r["id"] if known else "unknown"
+		chip.icon_color = Color.WHITE if known else UIStyle.color(&"neutral_stroke")
 		chip.value_text = Economy.fmt(Economy.amount(r["id"])) if known else "—"
 		chip.alert = Economy.is_full(r["id"])
 		chip.inactive = not known or Economy.amount(r["id"]) <= 0.0
 
 ## Closes the raw dropdown on any click outside it (and outside its cell).
 func _input(event: InputEvent) -> void:
+	_browse_input(event)
 	if _raw_dd == null or not (event is InputEventMouseButton) or not (event as InputEventMouseButton).pressed:
 		return
 	var pos := (event as InputEventMouseButton).global_position
@@ -608,3 +676,164 @@ func _energy_breakdown_text() -> String:
 	lines.append("[b]Net  %s[/b]" % _c(("+" if total >= 0.0 else "−") + BuildingDef._num(snappedf(absf(total), 0.1)),
 		GOOD_HEX if total >= 0.0 else BAD_HEX))
 	return "\n".join(lines)
+
+# ── Browsing with the keys (10.11) ───────────────────────────────────────────
+## R (or the pad's quick menu) starts it: ← / → (A / D, Tab, D-pad) light the
+## chips one by one with their tip; Enter / pad A opens what a click opens (the
+## raw list, Trade); Esc, R or pad B ends it, as does the mouse moving.
+var browsing := false
+var _kb_chip: Control = null
+
+func start_browsing() -> void:
+	var cells := _shown_cells()
+	if cells.is_empty() or browsing:
+		return
+	browsing = true
+	AudioManager.play("click")
+	_light(cells[0])
+
+func stop_browsing() -> void:
+	if not browsing:
+		return
+	browsing = false
+	if _kb_chip != null and is_instance_valid(_kb_chip):
+		_kb_chip.modulate = Color.WHITE
+		_kb_chip.mouse_exited.emit()
+	_kb_chip = null
+	TooltipManager.set_focus_anchor(null)
+	TooltipManager.hide_tip()
+
+func _shown_cells() -> Array[Control]:
+	var out: Array[Control] = []
+	for c in $Row.get_children():
+		if c is ResourceChip and (c as Control).is_visible_in_tree():
+			out.append(c)
+	return out
+
+func _light(c: Control) -> void:
+	if c != _kb_chip:
+		_dd_i = -1
+	if _kb_chip != null and is_instance_valid(_kb_chip):
+		_kb_chip.modulate = Color.WHITE
+		_kb_chip.mouse_exited.emit()
+	_kb_chip = c
+	c.modulate = Color(1.35, 1.35, 1.35)
+	TooltipManager.set_focus_anchor(c)
+	c.mouse_entered.emit()
+
+## ↑ / ↓ on the Raw chip with its list open: through the minerals (their tips),
+## ↑ past the first back to the chip. Opens the list if it is shut.
+var _dd_i := -1
+
+func _dd_step(d: int) -> void:
+	if _kb_chip == null or not is_instance_valid(_kb_chip) or (_kb_chip as ResourceChip).resource_id != Economy.RAW:
+		return
+	if _raw_dd == null and d > 0:
+		_toggle_raw_dropdown()
+		_dd_i = -1
+	if _raw_dd_list == null or not is_instance_valid(_raw_dd_list):
+		return
+	var rows: Array[Control] = []
+	for c in _raw_dd_list.get_children():
+		if c is Control and (c as Control).visible:
+			rows.append(c)
+	if rows.is_empty():
+		return
+	if _dd_i >= 0 and _dd_i < rows.size():
+		rows[_dd_i].modulate = Color.WHITE
+		rows[_dd_i].mouse_exited.emit()
+	_dd_i = clampi(_dd_i + d, -1, rows.size() - 1)
+	AudioManager.play("hover")
+	if _dd_i < 0:
+		_light(_kb_chip)   # back on the chip
+		return
+	var r := rows[_dd_i]
+	r.modulate = Color(1.35, 1.35, 1.35)
+	TooltipManager.set_focus_anchor(r)
+	r.mouse_entered.emit()
+
+func _act_on(c: Control) -> void:
+	var id := (c as ResourceChip).resource_id if c is ResourceChip else ""
+	if c == _calendar or id == "":
+		AudioManager.play("denied")
+		return
+	if id == Economy.RAW:
+		AudioManager.play("click")
+		_toggle_raw_dropdown()
+		return
+	if id == Economy.ENERGY or id == Economy.POPULATION or not Trade.has_access() or not Guide.allows_shortcut("trade"):
+		AudioManager.play("denied")
+		return
+	stop_browsing()
+	AudioManager.play("click")
+	HUDManager.toggle_trade_panel()
+
+func _browse_input(event: InputEvent) -> void:
+	if not browsing:
+		return
+	if event is InputEventMouseMotion:
+		if (event as InputEventMouseMotion).relative.length_squared() > 16.0:
+			stop_browsing()
+		return
+	var step := 0
+	var act := false
+	var stop := false
+	var k := event as InputEventKey
+	if k != null and k.pressed:
+		var key := k.physical_keycode if k.physical_keycode != KEY_NONE else k.keycode
+		if key in [KEY_LEFT, KEY_A] or (key == KEY_TAB and k.shift_pressed):
+			step = -1
+		elif key in [KEY_RIGHT, KEY_D, KEY_TAB]:
+			step = 1
+		elif not k.echo and key in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
+			act = true
+		elif not k.echo and key in [KEY_ESCAPE, KEY_R, KEY_BACKSPACE]:
+			stop = true
+		elif key in [KEY_UP, KEY_DOWN, KEY_W, KEY_S]:
+			get_viewport().set_input_as_handled()
+			_dd_step(-1 if key in [KEY_UP, KEY_W] else 1)   # down into the raw list (10.11)
+			return
+	var jb := event as InputEventJoypadButton
+	if jb != null and jb.pressed:
+		match jb.button_index:
+			JOY_BUTTON_DPAD_LEFT: step = -1
+			JOY_BUTTON_DPAD_RIGHT: step = 1
+			JOY_BUTTON_DPAD_UP, JOY_BUTTON_DPAD_DOWN:
+				get_viewport().set_input_as_handled()
+				_dd_step(-1 if jb.button_index == JOY_BUTTON_DPAD_UP else 1)
+				return
+			JOY_BUTTON_A: act = true
+			JOY_BUTTON_B: stop = true
+	if step == 0 and not act and not stop:
+		return
+	get_viewport().set_input_as_handled()
+	if stop:
+		AudioManager.play("click")
+		stop_browsing()
+		return
+	var cells := _shown_cells()
+	if cells.is_empty():
+		stop_browsing()
+		return
+	if act:
+		if _kb_chip != null and is_instance_valid(_kb_chip):
+			_act_on(_kb_chip)
+		return
+	var i := cells.find(_kb_chip)
+	i = clampi(i + step, 0, cells.size() - 1) if i >= 0 else 0
+	if cells[i] != _kb_chip:
+		AudioManager.play("hover")
+		_light(cells[i])
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	var k := event as InputEventKey
+	if k == null or not k.pressed or k.echo or k.ctrl_pressed or k.meta_pressed or k.alt_pressed:
+		return
+	var key := k.physical_keycode if k.physical_keycode != KEY_NONE else k.keycode
+	if key != KEY_R or browsing or not is_visible_in_tree():
+		return
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit or Narrative.owns_keys() or SkillTreeView.is_open:
+		return
+	get_viewport().set_input_as_handled()
+	start_browsing()

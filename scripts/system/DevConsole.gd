@@ -22,7 +22,6 @@ var show_planet_coords: bool = true
 
 const MAX_LINES    := 200
 const PANEL_H      := 300.0
-const RIGHT_MARGIN_FRAC := 0.31   # right panel is anchored at 0.70 of vp; leave 31% gap
 const FONT_SIZE    := 9
 
 # Retro boot lines: [pre_delay_sec, bbcode_text, sec_per_char]
@@ -59,17 +58,16 @@ func _build_ui() -> void:
 	s.bg_color             = Color(0.03, 0.05, 0.07, 0.97)
 	s.border_color         = Color(0.20, 0.55, 0.30, 0.80)
 	s.border_width_bottom  = 2
-	s.border_width_right   = 1
-	s.corner_radius_bottom_right = 6
 	_panel.add_theme_stylebox_override("panel", s)
-	# anchor_right = 0 → width set dynamically at open time from viewport
+	# full width along the top edge
 	_panel.anchor_left   = 0.0
-	_panel.anchor_right  = 0.0
+	_panel.anchor_right  = 1.0
+	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_panel.anchor_top    = 0.0
 	_panel.anchor_bottom = 0.0
 	_panel.grow_vertical = Control.GROW_DIRECTION_END
 	_panel.offset_left   = 0.0
-	_panel.offset_right  = 800.0   # placeholder; overwritten at open time
+	_panel.offset_right  = 0.0
 	_panel.offset_top    = -PANEL_H
 	_panel.offset_bottom = 0.0
 	add_child(_panel)
@@ -186,10 +184,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _toggle() -> void:
 	_open = not _open
 	if _open:
-		# Set panel width: leave the right 31% for the game side panel
-		var vp_w := get_viewport().get_visible_rect().size.x
-		_panel.offset_right = vp_w * (1.0 - RIGHT_MARGIN_FRAC)
-
 		var hud: Node = get_node_or_null("/root/HUDManager")
 		var top_pad: float = 4.0
 		if hud and hud.get("credits_panel") and is_instance_valid(hud.credits_panel):
@@ -307,6 +301,12 @@ func _exec(line: String) -> void:
 	match cmd:
 		# ── Help ────────────────────────────────────────────────────────────
 		"help", "--help", "-h":
+			if parts.size() > 1 and String(parts[1]).to_lower().trim_prefix("-") == "shortcuts":
+				_log_info("[color=#33cc55]── SHORTCUTS (keys / pad) ───────────────[/color]")
+				for ln: String in ShortcutsHelp.lines():
+					_log_info("  " + ln)
+				return
+			_log_info("  [color=#88ddcc]help shortcuts[/color]              — every key and pad button")
 			_log_info("[color=#33cc55]── ECONOMY ──────────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]credits[/color] [color=#aaaaaa]<amount>[/color]          — add credits")
 			_log_info("  [color=#88ddcc]credits set[/color] [color=#aaaaaa]<amount>[/color]      — set exact")
@@ -335,7 +335,7 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]save[/color]              — force save now")
 			_log_info("  [color=#88ddcc]clear_save[/color]        — delete save file")
 			_log_info("[color=#33cc55]── DEBUG ─────────────────────────────────[/color]")
-			_log_info("  [color=#88ddcc]state[/color]  [color=#88ddcc]clear[/color]  [color=#88ddcc]debug coords[/color]")
+			_log_info("  [color=#88ddcc]state[/color]  [color=#88ddcc]loc[/color]  [color=#88ddcc]clear[/color]  [color=#88ddcc]debug coords[/color]")
 			_log_info("  [color=#88ddcc]--seed[/color]            — seed of what you're looking at (copied)")
 			_log_info("  [color=#88ddcc]moonlaunch[/color] [color=#aaaaaa][sec] [reset][/color] — send the Moon lander now (default 15s)")
 			_log_info("  [color=#88ddcc]rocket[/color] [color=#aaaaaa][sec][/color] — launch the final rocket now (completes Civilization 0)")
@@ -493,12 +493,12 @@ func _exec(line: String) -> void:
 					_log_err("Try: excavate ready | reset")
 
 		"colonize":
-			var seed := GameState.active_planet_seed
-			if seed < 0: _log_err("Not viewing a planet."); return
-			var pp := GameState.get_planet(seed)
+			var pseed := GameState.active_planet_seed
+			if pseed < 0: _log_err("Not viewing a planet."); return
+			var pp := GameState.get_planet(pseed)
 			pp.is_colonized = true
-			GameState.planet_progress_changed.emit(seed)
-			_log_ok("Planet [color=#aabbff]#%d[/color] colonized." % seed)
+			GameState.planet_progress_changed.emit(pseed)
+			_log_ok("Planet [color=#aabbff]#%d[/color] colonized." % pseed)
 
 		# ── Asteroid ────────────────────────────────────────────────────────
 		"scan":
@@ -552,7 +552,7 @@ func _exec(line: String) -> void:
 			else:
 				_log_err("Unknown target. Try: tutorial complete")
 
-		# ── Stocked resources (raw minerals, goods, fuel, rare elements) ──────
+		# ── Stocked resources (raw minerals, goods, fuel, rare metals) ──────
 		"res", "resource", "resources":
 			_cmd_res(parts)
 
@@ -583,6 +583,9 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#aaaaaa]Home colonized[/color]  %s" % yn.call(pp.is_colonized))
 			_log_info("  [color=#aaaaaa]Districts[/color]       [color=#ccddff]%d[/color]" % GameState.get_home_planet().custom_pois.size())
 			_log_info("  [color=#aaaaaa]Buildings[/color]       [color=#ccddff]%d[/color]" % pp.buildings.size())
+
+		"loc":
+			_cmd_loc()
 
 		# ── Clear ───────────────────────────────────────────────────────────
 		"clear":
@@ -726,6 +729,30 @@ func _log_ok(text: String) -> void:
 func _log_err(text: String) -> void:
 	_out_lines.append("[color=#ee5555]✗ %s[/color]" % text)
 
+## The location bonus of the last spot hovered while placing a district: the
+## spot, its City, the distance, the reach and the band (10.11 debugging).
+func _cmd_loc() -> void:
+	var view := get_tree().current_scene
+	var probe = view.get("_last_probe") if view != null else null
+	var pd = view.get("current_data") if view != null else null
+	if probe == null or pd == null:
+		_log_info("Hover a spot while placing a district first.")
+		return
+	var b := Location.breakdown(pd, probe)
+	var city: POIData = b.get("city", null)
+	_log_info("spot  lon %.2f  lat %.2f  parent '%s'" % [probe.lon_deg, probe.lat_deg, probe.parent_city])
+	if city != null:
+		_log_info("city  %s ('%s')  lon %.2f  lat %.2f" % [city.shown_name(), city.label, city.lon_deg, city.lat_deg])
+	var reach := float(b["reach_km"])
+	_log_info("km %.0f  reach %.0f  frac %.2f  band %s  distance +%d%%  mult %.2f" % [float(b["nearest_km"]), reach,
+		float(b["nearest_km"]) / maxf(reach, 1.0), Location.band_label(b["band"]), roundi(float(b["distance"]) * 100.0), float(b["mult"])])
+	var n := 0
+	for p: POIData in pd.custom_pois:
+		if p.is_city():
+			n += 1
+			_log_info("  city poi %s ('%s') lon %.2f lat %.2f orbital %s" % [p.shown_name(), p.label, p.lon_deg, p.lat_deg, p.is_orbital()])
+	_log_info("cities on this world: %d, pois %d" % [n, pd.custom_pois.size()])
+
 func _log_info(text: String) -> void:
 	_out_lines.append(text)
 
@@ -750,9 +777,9 @@ func _stock_ids() -> Array[String]:
 func _resolve_res(word: String) -> String:
 	var w := word.to_lower().replace("_", " ")
 	for id: String in _stock_ids():
-		var name := Economy.display_name(id).to_lower()
+		var res_name := Economy.display_name(id).to_lower()
 		var short: String = Economy.INFO.get(id, {}).get("short", "")
-		if w == id.replace("_", " ") or w == name or w == short or name.begins_with(w):
+		if w == id.replace("_", " ") or w == res_name or w == short or res_name.begins_with(w):
 			return id
 	return ""
 

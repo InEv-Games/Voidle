@@ -660,7 +660,6 @@ func _refresh_cost() -> void:
 		if def != null and def.estimate_cost.is_valid():
 			total += def.estimate_cost.call(t, ctx)
 
-	var tail: String = MissionTaskRegistry.chain_tail_status(_tasks, START_STATUS)
 	var valid: bool  = _tasks.size() > 0
 
 	if _cost_lbl != null and is_instance_valid(_cost_lbl):

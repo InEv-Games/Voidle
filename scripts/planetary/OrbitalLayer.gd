@@ -38,6 +38,7 @@ var landing_site_for: Callable
 signal ship_hovered(ship: ShipData, screen_pos: Vector2)
 signal ship_unhovered()
 signal ship_clicked(ship: ShipData)
+@warning_ignore("unused_signal")
 signal ship_right_clicked(ship: ShipData, screen_pos: Vector2)
 signal ship_deselected()
 signal ship_landed(ship: ShipData)
@@ -368,9 +369,9 @@ func _pad_pois(pd: PlanetData) -> Array[POIData]:
 	return out
 
 func _tick_pad_trips(delta: float) -> void:
-	for tr: Dictionary in _pad_trips:
-		tr["t"] = float(tr["t"]) + delta / TRIP_SEC
-	_pad_trips = _pad_trips.filter(func(tr: Dictionary) -> bool: return float(tr["t"]) < 1.0)
+	for trip: Dictionary in _pad_trips:
+		trip["t"] = float(trip["t"]) + delta / TRIP_SEC
+	_pad_trips = _pad_trips.filter(func(trip: Dictionary) -> bool: return float(trip["t"]) < 1.0)
 	var pd := GameState.get_planet_data(_planet_seed)
 	var hub := Leveling.orbit_hub(pd)
 	if hub == null or hub.constructing:
@@ -384,8 +385,8 @@ func _tick_pad_trips(delta: float) -> void:
 	for p: POIData in pd.custom_pois:
 		if p.is_city() and not p.is_orbital():
 			cap_lv = maxi(cap_lv, Leveling.city_level(pp, p))
-	var size := pp.orbit_level + Leveling.orbit_stations(pd).size() + cap_lv
-	var max_trips := clampi(1 + floori(float(size - 3) / 2.0), 1, 8)
+	var slots := pp.orbit_level + Leveling.orbit_stations(pd).size() + cap_lv
+	var max_trips := clampi(1 + floori(float(slots - 3) / 2.0), 1, 8)
 	_trip_cd -= delta
 	if _trip_cd <= 0.0 and _pad_trips.size() < max_trips:
 		_trip_cd = randf_range(3.0, 7.0) / float(max_trips)
@@ -412,17 +413,17 @@ static func _arc_at(pts: Array[Vector3], f: float) -> Vector3:
 	return pts[i].lerp(pts[i + 1], x - float(i))
 
 func _draw_pad_trips(center: Vector2, pd: PlanetData, hv: Vector3) -> void:
-	for tr: Dictionary in _pad_trips:
+	for trip: Dictionary in _pad_trips:
 		var poi: POIData = null
 		for p: POIData in pd.custom_pois:
-			if p.label == String(tr["label"]):
+			if p.label == String(trip["label"]):
 				poi = p
 		if poi == null:
 			continue
 		var pts := _pad_arc(poi, hv)
-		if not bool(tr["up"]):
+		if not bool(trip["up"]):
 			pts.reverse()
-		var t: float = tr["t"]
+		var t: float = trip["t"]
 		var reach := clampf(t / TRIP_THROW, 0.0, 1.0)                                  # line thrown out
 		var at := smoothstep(0.0, 1.0, clampf((t - TRIP_THROW) / (1.0 - TRIP_THROW), 0.0, 1.0))   # shuttle
 		var n := 24
@@ -478,6 +479,7 @@ func _draw_pixel_shipyard(pos: Vector2, col: Color) -> void:
 	draw_rect(Rect2(p + Vector2(-10, -2), Vector2(16, 4)), hull)
 	draw_rect(Rect2(p + Vector2(6, -1), Vector2(4, 2)), hull)
 	draw_rect(Rect2(p + Vector2(-12, -1), Vector2(2, 2)), Color(0.55, 0.75, 1.0, col.a))
+	@warning_ignore("integer_division")
 	var on := int(Time.get_ticks_msec() / 400) % 2 == 0
 	var lamp := Color(1.0, 0.6, 0.15, col.a) if on else Color(0.5, 0.25, 0.05, col.a * 0.6)
 	draw_rect(Rect2(p + Vector2(-18, -7), Vector2(2, 2)), lamp)

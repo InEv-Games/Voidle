@@ -34,7 +34,7 @@ const GUIDED_STEPS: Array = [
 		"type":  "narr",
 		"pages": [
 			[
-				"Year 2387. Your ark made it — barely.",
+				"Year 2387. Your ark made it, barely.",
 				"You are the Governor of a fragile new colony.",
 			],
 			[
@@ -116,7 +116,7 @@ const GUIDED_STEPS: Array = [
 		"pages": [
 			[
 				"Districts grow by level: more income, +2 building slots.",
-				"The Capital District leads — level it up first.",
+				"The Capital District leads: level it up first.",
 			],
 		],
 	},
@@ -133,7 +133,7 @@ const GUIDED_STEPS: Array = [
 		"pages": [
 			[
 				"Enough district levels let the whole City grow.",
-				"Open the City and press CITY LEVEL UP — room for more districts.",
+				"Open the City and press CITY LEVEL UP for room for more districts.",
 			],
 		],
 	},
@@ -271,7 +271,7 @@ const QUESTS := [
 	{"id": "fuel", "title": "Fuel for the Journey", "desc": "Research Fuel Processing and make or buy Fuel.",
 		"reward_credits": 300.0, "reward_science": 100.0, "reward_text": "+300 credits  +100 sci",
 		"sub_steps": [{"type": "skill", "target": "fuel_processing"}]},
-	{"id": "rocketry", "title": "Rocketry", "desc": "Research Rocketry and build a Spaceport in your Capital (one free slot — level the Capital up if they are taken).",
+	{"id": "rocketry", "title": "Rocketry", "desc": "Research Rocketry and build a Spaceport in your Capital (one free slot; level the Capital up if they are taken).",
 		"reward_credits": 600.0, "reward_science": 150.0, "reward_text": "+600 credits  +150 sci",
 		"sub_steps": [{"type": "skill", "target": "rocketry"}, {"type": "building", "target": "spaceport"}]},
 	{"id": "orbital", "title": "Into Orbit", "desc": "Research Orbital Assembly, then found your Orbit from the planet panel: the Spaceport launches its Orbit City. The Moon needs it.",
@@ -374,10 +374,8 @@ var _topup_key: String              = ""      # the step target last topped up o
 # ── Quest UI ───────────────────────────────────────────────────────────────────
 var _quest_panel:    PanelContainer   = null
 var _skip_btn:       Button           = null
-var _title_lbl:      Label            = null    # unused since the hero took the title
 var _hero:           HeroHeader       = null    # the current objective's name
 var _desc_lbl:       Label            = null
-var _sub_lbl:        Label            = null
 var _reward_lbl:     Label            = null
 var _tracker_items:  Array[Dictionary] = []
 
@@ -782,6 +780,11 @@ func _input(event: InputEvent) -> void:
 	var click := mb.position
 	for r in _allowed_rects:
 		if r.has_point(click): return
+	# popups and dialogs over the HUD (an excavation's Later / Investigate …)
+	# are never blocked (playtest 07.11)
+	for n in get_tree().get_nodes_in_group(&"tutorial_passthrough"):
+		if n is Control and (n as Control).is_visible_in_tree() and (n as Control).get_global_rect().has_point(click):
+			return
 	get_viewport().set_input_as_handled()
 	_flash_deny(click)
 
@@ -1107,7 +1110,7 @@ func _hide_action_bar() -> void:
 
 func _show_construction_wait() -> void:
 	NewsFeed.show_message(CONSTRUCTION_MSG, "Tutorial", "CONSTRUCTION",
-		"Building underway — explore freely while you wait.", {"sec": 0.0})
+		"Building underway. Explore freely while you wait.", {"sec": 0.0})
 
 func _hide_construction_wait() -> void:
 	NewsFeed.clear_message(CONSTRUCTION_MSG)
@@ -1391,7 +1394,7 @@ func _flash_reward(text: String) -> void:
 # ── Inventory hint ─────────────────────────────────────────────────────────────
 func _show_inventory_hint() -> void:
 	NewsFeed.show_message("tutorial_stockpile", "Tip", "YOUR STOCKPILE",
-		"It is in the top bar — hover ⛏ Raw for details.", {"sec": 5.0})
+		"It is in the top bar: hover ⛏ Raw for details.", {"sec": 5.0})
 
 # ── Typewriter (plain Label) ──────────────────────────────────────────────────
 func _tw_label(lbl: Label, text: String, spd: float) -> void:
@@ -1421,7 +1424,7 @@ func _mk_lbl(parent: Node, txt: String, sz: int, col: Color) -> Label:
 	parent.add_child(l)
 	return l
 
-func _mk_btn(txt: String, col: Color) -> Button:
+func _mk_btn(txt: String, _col: Color) -> Button:
 	var b := Button.new()
 	b.text = txt; b.flat = true
 	UIStyle.style_button(b, UIStyle.FLAT)

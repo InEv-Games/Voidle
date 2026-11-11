@@ -6,7 +6,7 @@
 script = ExtResource("1_def")
 trait_id = "deep_lodes"
 display_name = "Deep Lodes"
-description = "Huge deposits — mining them takes power."
+description = "Huge deposits: mining them takes power."
 rarity = 1
 effects = {"raw": 0.15, "energy": -0.05}
 allowed_planet_types = Array[int]([])

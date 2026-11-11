@@ -38,8 +38,8 @@ theme_override_constants/separation = 8
 
 [node name="Hero" parent="Center/Card" instance=ExtResource("5_hero")]
 layout_mode = 2
-caption = "Companions"
-title = "COMPANIONS"
+caption = "Agents"
+title = "AGENTS"
 
 [node name="Row" type="HBoxContainer" parent="Center/Card"]
 custom_minimum_size = Vector2(0, 335)

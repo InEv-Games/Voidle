@@ -124,6 +124,7 @@ extends Resource
 ## Total cap on the same-family proximity bonus; 0 = no cap.
 @export var proximity_cap: float = 0.0
 ## Each City (its Capital District) very near / near adds this to every family.
+## Unused since playtest 07.11 (Location: no City-centre part); kept so profiles load.
 @export var centre_very_near: float = 0.10
 @export var centre_near: float = 0.05
 

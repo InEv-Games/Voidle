@@ -97,8 +97,8 @@ func _on_planet_progress_changed(_seed: int) -> void:
 	var total_districts := 0
 	var total_buildings  := 0
 	var colonized_planets := 0
-	for seed: int in GameState._planet_progress:
-		var pp: PlanetProgress = GameState._planet_progress[seed]
+	for pseed: int in GameState._planet_progress:
+		var pp: PlanetProgress = GameState._planet_progress[pseed]
 		var d_count: int = pp.custom_pois_count() if pp.has_method("custom_pois_count") else 0
 		total_districts += d_count
 		if d_count > 0:

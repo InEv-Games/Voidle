@@ -10,12 +10,10 @@ ruin_id = "vesyn_counting_house"
 display_name = "The Pale Line"
 teaser = "The ruins seem to line up with something overhead."
 cost = {
-"credits": 1800.0,
-"science": 500.0
+"credits": 1800.0
 }
 duration_sec = 1200.0
 reward = {
-"credits": 2700.0,
-"science": 750.0
+"science": 940.0
 }
 story = ExtResource("2_hruhc")

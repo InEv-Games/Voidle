@@ -25,8 +25,13 @@ const SHORE_H: float = 0.10
 ## Height where green land begins (above the sand band). Roads only run on green.
 const GREEN_H: float = 0.12
 
-## Districts can't be placed beyond this latitude (matches LocationFinder's range).
+## The world generator's placement band (geography shares, lakes, the polar
+## Tundra): kept as it is, worlds would change otherwise.
 const MAX_PLACE_LAT_DEG: float = 70.0
+## Districts can't be placed beyond this latitude (11.11: was 70°, "too close to
+## the pole" blocked good Glacier / Tundra land): where roads still reach
+## (RoadNetwork.LAT_LIMIT, 1.40 rad ≈ 80°), less a margin.
+const MAX_SITE_LAT_DEG: float = 78.0
 ## Minimum angular distance between two surface districts.
 const MIN_SPACING_DEG: float = 4.0
 ## Districts whose settlements are within this gap of each other are neighbours.
@@ -197,13 +202,17 @@ static func city_spacing_deg(data: PlanetData) -> float:
 static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: float, ignore: Array = []) -> Dictionary:
 	var t := sample(data, lon, lat)
 	var result := {"ok": true, "reason": "", "terrain": t}
-	if absf(rad_to_deg(lat)) > MAX_PLACE_LAT_DEG:
+	if absf(rad_to_deg(lat)) > MAX_SITE_LAT_DEG:
 		result.ok = false
 		result.reason = "Too close to the pole"
 		return result
 	if not fits_placement(t, def.placement):
 		result.ok = false
 		result.reason = "%s must be built on %s" % [def.display_name, placement_label(def.placement)]
+		return result
+	if def.placement != LocationFinder.Placement.SEA and FeatureMap.is_lake(data.seed, lon, lat):
+		result.ok = false
+		result.reason = "Can't build on a lake"   # playtest 07.11: lakes are water
 		return result
 	var min_d := deg_to_rad(min_spacing_deg(data))
 	var city_d := deg_to_rad(city_spacing_deg(data))
@@ -218,6 +227,6 @@ static func check_site(data: PlanetData, def: DistrictDef, lon: float, lat: floa
 		# a city claims a wide area no other city may be founded in
 		if def.is_system_anchor() and p.is_city() and d < city_d:
 			result.ok = false
-			result.reason = "Too close to %s — cities need room to grow" % p.shown_name()
+			result.reason = "Too close to %s: cities need room to grow" % p.shown_name()
 			return result
 	return result

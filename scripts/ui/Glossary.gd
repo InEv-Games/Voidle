@@ -35,7 +35,7 @@ static func entry(id: String) -> Array:
 		"science_d":
 			return ["Science District", "Built under a City. Makes Science every cycle; labs there add more."]
 		"industrial":
-			return ["Production District", "Mines this world's minerals; its processing buildings turn them into Consumer Goods, Fuel Rods and Rare Elements."]
+			return ["Production District", "Mines this world's minerals; its processing buildings turn them into Consumer Goods, Fuel Rods and Rare Metals."]
 		"upgrade_tree":
 			return ["Upgrade Tree", "Research: Science buys nodes that open buildings and raise output. Open it from the bottom bar."]
 		"grid":
@@ -60,14 +60,14 @@ static func entry(id: String) -> Array:
 	return []
 
 ## "[icon] +10" in the resource's colour (a malus red); a mineral by name.
-static func _res(id: String, v: float, sign := "+") -> String:
+static func _res(id: String, v: float, sgn := "+") -> String:
 	var col := Economy.color_of(id) if id != Economy.RAW else UIStyle.color(&"icon")
-	if sign == "−":
+	if sgn == "−":
 		col = UIStyle.color(&"bad")
 	var num := Economy.fmt(absf(v)) if absf(v) >= 1000.0 else BuildingDef._num(snappedf(absf(v), 0.1))
 	if UIIcons.has_icon(id):
-		return "%s [color=#%s]%s%s[/color]" % [UIIcons.bb(id, 11, col), col.to_html(false), sign, num]
-	return "[color=#%s]%s%s %s[/color]" % [col.to_html(false), sign, num, Economy.display_name(id)]
+		return "%s [color=#%s]%s%s[/color]" % [UIIcons.bb(id, 11, col), col.to_html(false), sgn, num]
+	return "[color=#%s]%s%s %s[/color]" % [col.to_html(false), sgn, num, Economy.display_name(id)]
 
 ## A building as the build list shows it (playtest 31.10): its district type
 ## in the top-right corner; one row led by the cycle icon with everything that
@@ -111,8 +111,8 @@ static func _building_entry(bid: String) -> Array:
 	if not once.is_empty():
 		lines.append("[right]%s[/right]" % "   ".join(once))
 	var types: Array[String] = []
-	for t in b.allowed_poi_types:
-		types.append(POIData.TYPE_LABELS[int(t)])
+	for pt in b.allowed_poi_types:
+		types.append(POIData.TYPE_LABELS[int(pt)])
 	var corner := "%s [color=#%s]%s[/color]" % [UIIcons.bb("district", 11, UIStyle.color(&"text_muted")), UIStyle.hex(&"text_muted"), ", ".join(types)]
 	return [b.display_name, "\n".join(lines), corner]
 

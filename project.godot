@@ -45,7 +45,14 @@ ScreenshotManager="*res://scripts/system/ScreenshotManager.gd"
 NavigationManager="*res://scripts/system/NavigationManager.gd"
 CommandRegistry="*res://scripts/commands/CommandRegistry.gd"
 NewsFeed="*res://scripts/system/NewsFeed.gd"
+Narrative="*res://scripts/system/Narrative.gd"
+Guide="*res://scripts/system/Guide.gd"
+Inbox="*res://scripts/system/Inbox.gd"
 ScreenFX="*res://scripts/system/ScreenFX.gd"
+
+[debug]
+
+gdscript/warnings/static_called_on_instance=0
 
 [display]
 

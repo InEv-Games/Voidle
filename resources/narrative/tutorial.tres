@@ -1,0 +1,416 @@
+[gd_resource type="Resource" script_class="VSMData" format=3]
+
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_data.gd" id="1_dpaci"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_link.gd" id="2_0b5d5"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_action.gd" id="3_hsslx"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_node_modifier.gd" id="4_gb268"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_entry_node_data.gd" id="5_xann1"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_talker_modifier.gd" id="6_swd8q"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_dialogue_node_data.gd" id="7_0s6dp"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_exit_node_data.gd" id="8_vdbhj"]
+[ext_resource type="Script" path="res://addons/VSM/data/vsm_data.gd" id="9_sp0l8"]
+
+[sub_resource type="Resource" id="Resource_kykv3"]
+script = ExtResource("2_0b5d5")
+target_id = 2
+
+[sub_resource type="Resource" id="Resource_8ah0r"]
+script = ExtResource("5_xann1")
+entry_name = "guide_city_mother_superior"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_kykv3")])
+id = 1
+
+[sub_resource type="Resource" id="Resource_a5iil"]
+script = ExtResource("2_0b5d5")
+target_id = 3
+
+[sub_resource type="Resource" id="Resource_pnp6p"]
+script = ExtResource("6_swd8q")
+talker = "Mother Superior"
+
+[sub_resource type="Resource" id="Resource_lnri6"]
+script = ExtResource("7_0s6dp")
+text = "Look for a place where you would want to put down roots. Select it when you are ready."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_a5iil")])
+id = 2
+graph_position = Vector2(340, 0)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_pnp6p")])
+
+[sub_resource type="Resource" id="Resource_omwix"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 3
+graph_position = Vector2(680, 0)
+
+[sub_resource type="Resource" id="Resource_ll6jr"]
+script = ExtResource("2_0b5d5")
+target_id = 5
+
+[sub_resource type="Resource" id="Resource_vp6ss"]
+script = ExtResource("5_xann1")
+entry_name = "guide_city_high_father"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_ll6jr")])
+id = 4
+graph_position = Vector2(0, 260)
+
+[sub_resource type="Resource" id="Resource_kr42n"]
+script = ExtResource("2_0b5d5")
+target_id = 6
+
+[sub_resource type="Resource" id="Resource_r04ge"]
+script = ExtResource("6_swd8q")
+talker = "High Father"
+
+[sub_resource type="Resource" id="Resource_44tat"]
+script = ExtResource("7_0s6dp")
+text = "Inspect the terrain. Confirm a valid site for the City."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_kr42n")])
+id = 5
+graph_position = Vector2(340, 260)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_r04ge")])
+
+[sub_resource type="Resource" id="Resource_0ngxr"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 6
+graph_position = Vector2(680, 260)
+
+[sub_resource type="Resource" id="Resource_p6df4"]
+script = ExtResource("2_0b5d5")
+target_id = 8
+
+[sub_resource type="Resource" id="Resource_rgpqh"]
+script = ExtResource("5_xann1")
+entry_name = "guide_capital_mother_superior"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_p6df4")])
+id = 7
+graph_position = Vector2(0, 520)
+
+[sub_resource type="Resource" id="Resource_c5jg5"]
+script = ExtResource("2_0b5d5")
+target_id = 9
+
+[sub_resource type="Resource" id="Resource_kei5p"]
+script = ExtResource("6_swd8q")
+talker = "Mother Superior"
+
+[sub_resource type="Resource" id="Resource_vhxug"]
+script = ExtResource("7_0s6dp")
+text = "Your City already has a centre. Open its Capital District. This is where you can see what the first crews have set up."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_c5jg5")])
+id = 8
+graph_position = Vector2(340, 520)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_kei5p")])
+
+[sub_resource type="Resource" id="Resource_7vlc5"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 9
+graph_position = Vector2(680, 520)
+
+[sub_resource type="Resource" id="Resource_ukw4w"]
+script = ExtResource("2_0b5d5")
+target_id = 11
+
+[sub_resource type="Resource" id="Resource_pgcmu"]
+script = ExtResource("5_xann1")
+entry_name = "guide_capital_high_father"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_ukw4w")])
+id = 10
+graph_position = Vector2(0, 780)
+
+[sub_resource type="Resource" id="Resource_c8330"]
+script = ExtResource("2_0b5d5")
+target_id = 12
+
+[sub_resource type="Resource" id="Resource_3r2mb"]
+script = ExtResource("6_swd8q")
+talker = "High Father"
+
+[sub_resource type="Resource" id="Resource_bxw1u"]
+script = ExtResource("7_0s6dp")
+text = "Open the City panel, then the Capital District. It came with the City and has its own building slots."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_c8330")])
+id = 11
+graph_position = Vector2(340, 780)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_3r2mb")])
+
+[sub_resource type="Resource" id="Resource_s8nch"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 12
+graph_position = Vector2(680, 780)
+
+[sub_resource type="Resource" id="Resource_bgnp6"]
+script = ExtResource("2_0b5d5")
+target_id = 14
+
+[sub_resource type="Resource" id="Resource_q0sex"]
+script = ExtResource("5_xann1")
+entry_name = "guide_district_mother_superior"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_bgnp6")])
+id = 13
+graph_position = Vector2(0, 1040)
+
+[sub_resource type="Resource" id="Resource_68sqh"]
+script = ExtResource("2_0b5d5")
+target_id = 15
+
+[sub_resource type="Resource" id="Resource_2e2ig"]
+script = ExtResource("6_swd8q")
+talker = "Mother Superior"
+
+[sub_resource type="Resource" id="Resource_0kv3h"]
+script = ExtResource("7_0s6dp")
+text = "A district gives part of the City a job. Pick the one you need and place it within the City."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_68sqh")])
+id = 14
+graph_position = Vector2(340, 1040)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_2e2ig")])
+
+[sub_resource type="Resource" id="Resource_6vtq8"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 15
+graph_position = Vector2(680, 1040)
+
+[sub_resource type="Resource" id="Resource_ucx8c"]
+script = ExtResource("2_0b5d5")
+target_id = 17
+
+[sub_resource type="Resource" id="Resource_ylyy2"]
+script = ExtResource("5_xann1")
+entry_name = "guide_district_high_father"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_ucx8c")])
+id = 16
+graph_position = Vector2(0, 1300)
+
+[sub_resource type="Resource" id="Resource_s0kjq"]
+script = ExtResource("2_0b5d5")
+target_id = 18
+
+[sub_resource type="Resource" id="Resource_ymhss"]
+script = ExtResource("6_swd8q")
+talker = "High Father"
+
+[sub_resource type="Resource" id="Resource_ywyko"]
+script = ExtResource("7_0s6dp")
+text = "Select a district role in the City panel. Check the site and the price before confirming."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_s0kjq")])
+id = 17
+graph_position = Vector2(340, 1300)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_ymhss")])
+
+[sub_resource type="Resource" id="Resource_ydcde"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 18
+graph_position = Vector2(680, 1300)
+
+[sub_resource type="Resource" id="Resource_80c82"]
+script = ExtResource("2_0b5d5")
+target_id = 20
+
+[sub_resource type="Resource" id="Resource_y3a7u"]
+script = ExtResource("5_xann1")
+entry_name = "guide_building_mother_superior"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_80c82")])
+id = 19
+graph_position = Vector2(0, 1560)
+
+[sub_resource type="Resource" id="Resource_iuq0y"]
+script = ExtResource("2_0b5d5")
+target_id = 21
+
+[sub_resource type="Resource" id="Resource_nx5rp"]
+script = ExtResource("6_swd8q")
+talker = "Mother Superior"
+
+[sub_resource type="Resource" id="Resource_y8ihv"]
+script = ExtResource("7_0s6dp")
+text = "Open a district and choose a building. Its card will show what it needs and what it gives the City."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_iuq0y")])
+id = 20
+graph_position = Vector2(340, 1560)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_nx5rp")])
+
+[sub_resource type="Resource" id="Resource_328xr"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 21
+graph_position = Vector2(680, 1560)
+
+[sub_resource type="Resource" id="Resource_5r7i8"]
+script = ExtResource("2_0b5d5")
+target_id = 23
+
+[sub_resource type="Resource" id="Resource_b72vy"]
+script = ExtResource("5_xann1")
+entry_name = "guide_building_high_father"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_5r7i8")])
+id = 22
+graph_position = Vector2(0, 1820)
+
+[sub_resource type="Resource" id="Resource_8187c"]
+script = ExtResource("2_0b5d5")
+target_id = 24
+
+[sub_resource type="Resource" id="Resource_voam1"]
+script = ExtResource("6_swd8q")
+talker = "High Father"
+
+[sub_resource type="Resource" id="Resource_qs2c5"]
+script = ExtResource("7_0s6dp")
+text = "Open a district and inspect a building's inputs, outputs and capacity requirements. Place it when you are ready."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_8187c")])
+id = 23
+graph_position = Vector2(340, 1820)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_voam1")])
+
+[sub_resource type="Resource" id="Resource_a1ox4"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 24
+graph_position = Vector2(680, 1820)
+
+[sub_resource type="Resource" id="Resource_yf3fr"]
+script = ExtResource("2_0b5d5")
+target_id = 26
+
+[sub_resource type="Resource" id="Resource_cd5e5"]
+script = ExtResource("5_xann1")
+entry_name = "guide_done_mother_superior"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_yf3fr")])
+id = 25
+graph_position = Vector2(0, 2080)
+
+[sub_resource type="Resource" id="Resource_wajkl"]
+script = ExtResource("2_0b5d5")
+target_id = 27
+
+[sub_resource type="Resource" id="Resource_4dbct"]
+script = ExtResource("6_swd8q")
+talker = "Mother Superior"
+
+[sub_resource type="Resource" id="Resource_wog4p"]
+script = ExtResource("7_0s6dp")
+text = "The crews know the way to work now. What they build next is up to you."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_wajkl")])
+id = 26
+graph_position = Vector2(340, 2080)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_4dbct")])
+
+[sub_resource type="Resource" id="Resource_wf63i"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 27
+graph_position = Vector2(680, 2080)
+
+[sub_resource type="Resource" id="Resource_vlkhh"]
+script = ExtResource("2_0b5d5")
+target_id = 29
+
+[sub_resource type="Resource" id="Resource_k3wvt"]
+script = ExtResource("5_xann1")
+entry_name = "guide_done_high_father"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_vlkhh")])
+id = 28
+graph_position = Vector2(0, 2340)
+
+[sub_resource type="Resource" id="Resource_4yjdh"]
+script = ExtResource("2_0b5d5")
+target_id = 30
+
+[sub_resource type="Resource" id="Resource_ifwla"]
+script = ExtResource("6_swd8q")
+talker = "High Father"
+
+[sub_resource type="Resource" id="Resource_xq8si"]
+script = ExtResource("7_0s6dp")
+text = "The basic controls are covered. Keep an eye on the objectives when you want to plan your next expansion."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_4yjdh")])
+id = 29
+graph_position = Vector2(340, 2340)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_ifwla")])
+
+[sub_resource type="Resource" id="Resource_0b64e"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 30
+graph_position = Vector2(680, 2340)
+
+[sub_resource type="Resource" id="Resource_v2emk"]
+script = ExtResource("2_0b5d5")
+target_id = 32
+
+[sub_resource type="Resource" id="Resource_pg5jf"]
+script = ExtResource("5_xann1")
+entry_name = "first_ruin_signal_mother_superior"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_v2emk")])
+id = 31
+graph_position = Vector2(0, 2600)
+
+[sub_resource type="Resource" id="Resource_1qhv4"]
+script = ExtResource("2_0b5d5")
+target_id = 33
+
+[sub_resource type="Resource" id="Resource_k086c"]
+script = ExtResource("6_swd8q")
+talker = "Mother Superior"
+
+[sub_resource type="Resource" id="Resource_1vcdc"]
+script = ExtResource("7_0s6dp")
+text = "The surveyors found steps under the fallen stones. Someone once took care to build there. We can send a crew when you are ready."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_1qhv4")])
+id = 32
+graph_position = Vector2(340, 2600)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_k086c")])
+
+[sub_resource type="Resource" id="Resource_5ws7v"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 33
+graph_position = Vector2(680, 2600)
+
+[sub_resource type="Resource" id="Resource_xw17k"]
+script = ExtResource("2_0b5d5")
+target_id = 35
+
+[sub_resource type="Resource" id="Resource_5xath"]
+script = ExtResource("5_xann1")
+entry_name = "first_ruin_signal_high_father"
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_xw17k")])
+id = 34
+graph_position = Vector2(0, 2860)
+
+[sub_resource type="Resource" id="Resource_fbm7m"]
+script = ExtResource("2_0b5d5")
+target_id = 36
+
+[sub_resource type="Resource" id="Resource_p3y56"]
+script = ExtResource("6_swd8q")
+talker = "High Father"
+
+[sub_resource type="Resource" id="Resource_oqhhk"]
+script = ExtResource("7_0s6dp")
+text = "The survey has marked a chamber under the fallen stones. I have added the site to the map. The excavation card has the cost and estimated time."
+exits = Array[ExtResource("2_0b5d5")]([SubResource("Resource_fbm7m")])
+id = 35
+graph_position = Vector2(340, 2860)
+modifiers = Array[ExtResource("4_gb268")]([SubResource("Resource_p3y56")])
+
+[sub_resource type="Resource" id="Resource_1mygi"]
+script = ExtResource("8_vdbhj")
+exit_name = "done"
+id = 36
+graph_position = Vector2(680, 2860)
+
+[resource]
+script = ExtResource("9_sp0l8")
+graph_name = "tutorial"
+next_free_id = 37
+nodes = Array[ExtResource("1_dpaci")]([SubResource("Resource_8ah0r"), SubResource("Resource_lnri6"), SubResource("Resource_omwix"), SubResource("Resource_vp6ss"), SubResource("Resource_44tat"), SubResource("Resource_0ngxr"), SubResource("Resource_rgpqh"), SubResource("Resource_vhxug"), SubResource("Resource_7vlc5"), SubResource("Resource_pgcmu"), SubResource("Resource_bxw1u"), SubResource("Resource_s8nch"), SubResource("Resource_q0sex"), SubResource("Resource_0kv3h"), SubResource("Resource_6vtq8"), SubResource("Resource_ylyy2"), SubResource("Resource_ywyko"), SubResource("Resource_ydcde"), SubResource("Resource_y3a7u"), SubResource("Resource_y8ihv"), SubResource("Resource_328xr"), SubResource("Resource_b72vy"), SubResource("Resource_qs2c5"), SubResource("Resource_a1ox4"), SubResource("Resource_cd5e5"), SubResource("Resource_wog4p"), SubResource("Resource_wf63i"), SubResource("Resource_k3wvt"), SubResource("Resource_xq8si"), SubResource("Resource_0b64e"), SubResource("Resource_pg5jf"), SubResource("Resource_1vcdc"), SubResource("Resource_5ws7v"), SubResource("Resource_5xath"), SubResource("Resource_oqhhk"), SubResource("Resource_1mygi")])
+default_occurrence = "guide_city_mother_superior"
+occurrences = Array[String](["guide_city_mother_superior", "guide_city_high_father", "guide_capital_mother_superior", "guide_capital_high_father", "guide_district_mother_superior", "guide_district_high_father", "guide_building_mother_superior", "guide_building_high_father", "guide_done_mother_superior", "guide_done_high_father", "first_ruin_signal_mother_superior", "first_ruin_signal_high_father"])
+endings = Array[String](["done"])
+talkers = Array[String](["Mother Superior", "High Father"])

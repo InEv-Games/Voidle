@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CompanionDef" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/excavation/CompanionDef.gd" id="1_cdef"]
+[ext_resource type="Texture2D" path="res://resources/companions/portraits/high_father.png" id="2_port"]
+
+[resource]
+script = ExtResource("1_cdef")
+companion_id = "high_father"
+display_name = "High Father"
+role = "Ship caretaker"
+bio = "One of the two synthetic minds that ran I-330 and signed the First Book of Rules. He kept the ship's systems steady through the crossing and the years since."
+hint = ""
+pitch = "I can help keep your power grid steady as the City expands."
+order = 1
+portrait = ExtResource("2_port")
+bonus_resource = "energy"
+bonus_value = 0.1

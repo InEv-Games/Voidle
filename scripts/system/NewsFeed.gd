@@ -19,7 +19,7 @@ const NEWS_PANEL_SCENE := preload("res://scenes/ui/components/NewsPanel.tscn")
 const GROUP := &"news_panel"
 const HEIGHT := 22.0
 ## Crawl speed, px per second.
-const SPEED := 70.0
+const SPEED := 45.0   # playtest 07.11: 70 read too fast
 ## Between two items.
 const SEPARATOR := "     //     "
 ## Buildings finished within this many seconds are told as one entry.
@@ -92,6 +92,12 @@ var _build_where: Dictionary = {}   # "seed|building_id" -> district label (the 
 var _batch_left := 0.0
 var _rng := RandomNumberGenerator.new()
 
+## Browsing with the keys (10.11): N starts it; the crawl slows as under the
+## mouse, ← / → (A / D) light the items one by one with their detail, Enter
+## goes where the lit one points, Esc or N ends it.
+var browsing := false
+var _kb_label: Label = null
+
 ## The bar fades in over this many seconds the next time it shows (0 = at once).
 var _fade_in_sec := 0.0
 
@@ -108,7 +114,9 @@ func _ready() -> void:
 ## when events are waiting. `detail` (with its `title`) is the tooltip an
 ## important item shows on hover.
 func post(text: String, kind: Kind = Kind.EVENT, detail: String = "", title: String = "",
-		loc: Dictionary = {}) -> void:
+		loc: Dictionary = {}, _inbox := true) -> void:
+	# (10.11) what happened stays here; the notifications panel (Inbox) only
+	# lists what can be done now. `_inbox` is kept for the callers, unused.
 	if text == "":
 		return
 	if kind == Kind.FLAVOUR and not _queue.is_empty():
@@ -124,7 +132,7 @@ func post_planet_level(planet_seed: int, level: int) -> void:
 	var new_pick := level in Balance.cfg.trait_slot_levels.slice(1)
 	post("%s reaches planet level %d.%s" % [pname, level, "  A trait slot can be opened." if new_pick else ""],
 		Kind.EVENT, "The planet can now hold %d Cities.%s" % [Leveling.max_cities(GameState.get_planet(planet_seed)),
-			"\nOpen it on the planet page (Science + Rare Elements) and pick a trait." if new_pick else ""],
+			"\nOpen it on the planet page (Science + Rare Metals) and pick a trait." if new_pick else ""],
 		"%s // Level %d" % [pname, level], {"seed": planet_seed})
 
 # ── Sources ──────────────────────────────────────────────────────────────────
@@ -160,7 +168,7 @@ func _connect_sources() -> void:
 		var node = SkillTree.nodes.get(id, null)
 		if node != null and float(node.cost) > 0.0:
 			post("Research complete: %s." % node.name, Kind.EVENT,
-				"%s\n\n%s" % [node.description, node.effect_desc], node.name))
+				"%s\n\n%s" % [node.description, node.effect_desc], node.name, {"tree": true}))
 	GameState.minerals_discovered.connect(func(body_seed: int, ids: Array) -> void:
 		var pd := GameState.get_planet_data(body_seed)
 		var names: Array[String] = []
@@ -338,6 +346,8 @@ func _process(delta: float) -> void:
 			_flush_build_batch()
 	var on := HUDManager.visible and GameState.home_planet_seed >= 0 and not get_tree().paused
 	if not on:
+		browsing = false
+		_kb_label = null
 		if _bar != null and is_instance_valid(_bar):
 			_bar.visible = false
 		# a view's own NewsPanel shows by default until it is adopted (first
@@ -370,6 +380,8 @@ func _process(delta: float) -> void:
 		var gone: Label = _labels.pop_front()
 		if gone == _hover_label:
 			_clear_hover()
+		if gone == _kb_label:
+			_kb_label = _labels[0] if not _labels.is_empty() else null
 		gone.queue_free()
 	# keep the crawl full: the next item starts where the last one ends
 	var end := 0.0 if _labels.is_empty() else _labels[-1].position.x + _shown_width(_labels[-1])
@@ -410,6 +422,7 @@ var _obj_btn: IconButton = null
 ## A new objective came in while the card is closed: the button blinks
 ## yellow (its "on" look) until the card is opened.
 var _obj_blink := false
+var _inbox_seen := 0   # unread count last seen (a rise blinks the flag)
 const OBJ_BLINK_SEC := 0.45   # half a blink: yellow, then blue
 const OBJ_BTN_W := 22.0
 const OBJ_BTN_GAP := 4.0
@@ -525,26 +538,119 @@ func _bind_objectives_btn() -> void:
 	var sb := _obj_btn.get_theme_stylebox("normal")
 	var icon_px := maxf(10.0, HEIGHT - 1.0 - sb.content_margin_top - sb.content_margin_bottom)
 	(_obj_btn.get_node("Row/Icon") as Control).custom_minimum_size = Vector2(icon_px, icon_px)
+	set_objectives_open(true)   # the card isn't hidden by O any more: O is the notifications
+	# 10.11: the notifications panel (Inbox); the count of unread beside the flag
 	_obj_btn.pressed.connect(func() -> void:
-		AudioManager.play("click")
 		TooltipManager.hide_tip()
-		toggle_objectives())
+		_obj_blink = false
+		Inbox.toggle())
 	_obj_btn.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
-		var cur := ""
-		for t in _obj_sources.values():
-			if String(t) != "":
-				cur = String(t)
-		TooltipManager.show_tip("Objectives", ("Hide" if objectives_open else "Show") + " the objectives (O)."
-			+ ("\nNow: " + cur if cur != "" else "")))
+		var n := Inbox.unread()
+		TooltipManager.show_tip("Notifications", ("%d new.  " % n if n > 0 else "") + "What happened that you can act on.  [O]"))
+	Inbox.changed.connect(func() -> void:
+		if Inbox.unread() > _inbox_seen:
+			_obj_blink = true   # something new: the flag blinks until it is opened
+		_inbox_seen = Inbox.unread())
 	_obj_btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
 
+## The first item wholly on screen (else the first one).
+func _first_shown() -> Label:
+	for l: Label in _labels:
+		if l.position.x >= 0.0:
+			return l
+	return _labels[0] if not _labels.is_empty() else null
+
+## Starts browsing (N, or the shortcuts menu).
+func start_browsing() -> void:
+	if _bar != null and is_instance_valid(_bar) and _bar.visible and not _labels.is_empty():
+		_set_browsing(true)
+
+func _set_browsing(on: bool) -> void:
+	if on == browsing:
+		return
+	browsing = on
+	_kb_label = _first_shown() if on else null
+	if not on:
+		_clear_hover()
+		TooltipManager.set_focus_anchor(null)
+	AudioManager.play("click")
+
+## While browsing, the crawl's keys come first (before the view's own).
+func _input(event: InputEvent) -> void:
+	if not browsing:
+		return
+	var jb := event as InputEventJoypadButton   # the pad: D-pad ← / →, A goes, B ends
+	if jb != null and jb.pressed:
+		var jk := KEY_NONE
+		match jb.button_index:
+			JOY_BUTTON_DPAD_LEFT: jk = KEY_LEFT
+			JOY_BUTTON_DPAD_RIGHT: jk = KEY_RIGHT
+			JOY_BUTTON_A: jk = KEY_ENTER
+			JOY_BUTTON_B: jk = KEY_ESCAPE
+		if jk == KEY_NONE:
+			return
+		var fake := InputEventKey.new()
+		fake.keycode = jk
+		fake.pressed = true
+		event = fake
+	var k := event as InputEventKey
+	if k == null or not k.pressed:
+		return
+	if _bar == null or not is_instance_valid(_bar) or not _bar.visible:
+		_set_browsing(false)
+		return
+	var key := k.keycode if k.keycode != KEY_NONE else k.physical_keycode
+	var step := 0
+	if key in [KEY_LEFT, KEY_A]:
+		step = -1
+	elif key in [KEY_RIGHT, KEY_D, KEY_TAB]:
+		step = 1
+	if step != 0:
+		get_viewport().set_input_as_handled()
+		var i := _labels.find(_kb_label)
+		if i < 0:
+			_kb_label = _first_shown()
+		else:
+			_kb_label = _labels[clampi(i + step, 0, _labels.size() - 1)]
+		AudioManager.play("hover")
+		return
+	if k.echo:
+		return
+	if key in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
+		get_viewport().set_input_as_handled()
+		var loc: Dictionary = _kb_label.get_meta("loc", {}) if _kb_label != null and is_instance_valid(_kb_label) else {}
+		if loc.is_empty():
+			AudioManager.play("error")   # nowhere to go: a flavour line
+			return
+		_set_browsing(false)
+		go_to(loc)
+	elif key == KEY_ESCAPE or key == KEY_N:
+		get_viewport().set_input_as_handled()
+		_set_browsing(false)
+
 ## O opens / closes the card too, while there is one.
 func _unhandled_key_input(event: InputEvent) -> void:
 	var k := event as InputEventKey
-	if k == null or not k.pressed or k.echo or k.keycode != KEY_O or k.ctrl_pressed or k.meta_pressed:
+	if k == null or not k.pressed or k.echo or k.ctrl_pressed or k.meta_pressed:
+		return
+	if k.keycode == KEY_N:   # N: browse the news with the keys
+		var focus := get_viewport().gui_get_focus_owner()
+		if _bar != null and is_instance_valid(_bar) and _bar.visible and not _labels.is_empty() \
+				and not (focus is LineEdit or focus is TextEdit) and not Narrative.owns_keys():
+			get_viewport().set_input_as_handled()
+			_set_browsing(true)
+		return
+	if k.keycode == KEY_O:   # O: the notifications panel
+		var focus := get_viewport().gui_get_focus_owner()
+		if not (focus is LineEdit or focus is TextEdit) and not Narrative.owns_keys():
+			get_viewport().set_input_as_handled()
+			_obj_blink = false
+			Inbox.toggle()
+		return
+	if k.keycode != KEY_O:
 		return
 	if not _obj_sources.is_empty():
 		get_viewport().set_input_as_handled()
@@ -556,10 +662,17 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _layout_objectives_btn() -> void:
 	if _obj_btn == null or not is_instance_valid(_obj_btn):
 		return
-	var on := not _obj_sources.is_empty()
+	var on := true   # the notifications button is always there (10.11)
 	_obj_btn.visible = on
-	var lit := objectives_open
+	var n := Inbox.unread()
+	var ctext := str(n) if n > 0 else ""
+	if _obj_btn.counter != ctext:
+		_obj_btn.counter = ctext
+	var lit := Inbox.is_open()
+	if Inbox.is_open():
+		_obj_blink = false
 	if _obj_blink and on:
+		@warning_ignore("integer_division")
 		lit = int(Time.get_ticks_msec() / int(OBJ_BLINK_SEC * 1000.0)) % 2 == 0
 	var v := IconButton.Variant.NEUTRAL if lit else IconButton.Variant.DEFAULT
 	if _obj_btn.variant != v:
@@ -570,11 +683,16 @@ func _layout_objectives_btn() -> void:
 	if on:
 		_obj_btn.anchor_left = 1.0
 		_obj_btn.anchor_right = 1.0
+		var bw := OBJ_BTN_W + (8.0 * ctext.length() + 6.0 if ctext != "" else 0.0)   # room for the count
+		# the button's own width with the count can be wider than the guess: it
+		# grows to the left, never past the screen's right edge (11.11)
+		bw = maxf(bw, _obj_btn.get_combined_minimum_size().x)
+		_obj_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 		_obj_btn.offset_right = right
-		_obj_btn.offset_left = right - OBJ_BTN_W
+		_obj_btn.offset_left = right - bw
 		_obj_btn.offset_top = 2.0
 		_obj_btn.offset_bottom = HEIGHT + 1.0
-		right -= OBJ_BTN_W + OBJ_BTN_GAP
+		right -= bw + OBJ_BTN_GAP
 	var tag := _bar.get_node("Tag") as Control
 	tag.offset_right = right
 	tag.offset_left = right - 46.0
@@ -632,8 +750,8 @@ func _ticker_look(state: StringName) -> void:
 	if _ticker == null or not is_instance_valid(_ticker):
 		return
 	var sb := _ticker.get_theme_stylebox(state, UIStyle.DEFAULT).duplicate() as StyleBox
-	sb.content_margin_left = 4.0
-	sb.content_margin_right = 4.0
+	sb.content_margin_left = 8.0   # playtest 07.11: the text sat on the edges
+	sb.content_margin_right = 8.0
 	sb.content_margin_top = 0.0
 	sb.content_margin_bottom = 0.0
 	_ticker.add_theme_stylebox_override(&"panel", sb)
@@ -689,8 +807,9 @@ func _tick_ticker(delta: float) -> void:
 
 func _fill_ticker(id: String) -> void:
 	_tk_row.size = Vector2((_tk_row.get_parent() as Control).size.x, (_tk_row.get_parent() as Control).size.y)
-	_tk_icon.texture = UIIcons.get_icon(id if not Economy.is_raw(id) else UIIcons.RAW_PLACEHOLDER)
-	_tk_icon.self_modulate = Economy.color_of(id)
+	_tk_icon.texture = UIIcons.get_icon(id)   # minerals: their own pixel icon (playtest 07.11)
+	_tk_icon.self_modulate = Color.WHITE if Economy.is_raw(id) else Economy.color_of(id)
+	_tk_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if Economy.is_raw(id) else CanvasItem.TEXTURE_FILTER_PARENT_NODE
 	var p := Trade.unit_price(id)
 	_tk_price.text = ("%.2f" % p) if p < 10.0 else Economy.fmt(p)
 	var mv := _move_text(_move(id))
@@ -712,14 +831,18 @@ func _ticker_tip() -> String:
 func _update_hover(delta: float) -> void:
 	var mouse := _bar.get_viewport().get_mouse_position()
 	var over := _bar.get_global_rect().has_point(mouse)
+	if browsing:
+		if _kb_label == null or not is_instance_valid(_kb_label) or not _labels.has(_kb_label):
+			_kb_label = _first_shown()
+		over = false   # the lit item stands for the mouse
 	if over:
 		for n in get_tree().get_nodes_in_group(LeftPanel.GROUP):
 			var c := n as Control
 			if c != null and c.is_visible_in_tree() and c.get_global_rect().has_point(mouse):
 				over = false
 				break
-	_speed_k = lerpf(_speed_k, HOVER_SPEED_K if over else 1.0, minf(delta * 6.0, 1.0))
-	var hit: Label = null
+	_speed_k = lerpf(_speed_k, HOVER_SPEED_K if (over or browsing) else 1.0, minf(delta * 6.0, 1.0))
+	var hit: Label = _kb_label if browsing else null
 	if over:
 		for l: Label in _labels:
 			if l.get_global_rect().has_point(mouse):
@@ -729,6 +852,8 @@ func _update_hover(delta: float) -> void:
 		_clear_hover()
 		_hover_label = hit
 		_hover_time = 0.0
+		if browsing:
+			TooltipManager.set_focus_anchor(hit)   # the tip by the lit item, not the mouse
 		if hit != null:
 			hit.move_to_front()   # drawn over its neighbours while it grows
 			if not (hit.get_meta("loc", {}) as Dictionary).is_empty():
@@ -743,7 +868,7 @@ func _update_hover(delta: float) -> void:
 	_hover_time += delta
 	var detail := String(_hover_label.get_meta("detail", ""))
 	if not (_hover_label.get_meta("loc", {}) as Dictionary).is_empty():
-		detail += ("\n\n" if detail != "" else "") + "Click to go there."
+		detail += ("\n\n" if detail != "" else "") + ("Enter to go there." if browsing else "Click to go there.")
 	if detail != "" and not _tip_shown and _hover_time >= TIP_DELAY:
 		var title := String(_hover_label.get_meta("title", ""))
 		TooltipManager.show_tip(title if title != "" else "News", detail)
@@ -774,6 +899,10 @@ func _on_bar_input(ev: InputEvent) -> void:
 ## Takes the camera to a place: the planet view focuses it in place, or opens
 ## on its world first (PlanetaryView picks the request up on load).
 func go_to(loc: Dictionary) -> void:
+	if loc.get("tree", false):   # a research: the Upgrade Tree
+		if not SkillTreeView.is_open:
+			HUDManager.press_shortcut("tree")
+		return
 	if loc.get("solar", false):   # the star system view (e.g. the final rocket's flight)
 		SceneTransition.go("res://scenes/solar/SolarView.tscn", GameState.get_home_solar())
 		return

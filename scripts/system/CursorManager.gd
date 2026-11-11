@@ -1,5 +1,5 @@
 ## CursorManager — autoload singleton.
-## Hides the OS cursor and renders a minimal vector cursor pack (SVG) on a top CanvasLayer.
+## Gives the OS a minimal vector cursor pack (SVG, theme accent) as hardware cursors.
 ## Usage: CursorManager.set_state(CursorManager.State.POINTER)
 extends Node
 
@@ -7,7 +7,6 @@ enum State { NORMAL, HOVER, SPACE, GRAB, EXIT, POINTER, IBEAM }
 
 const DIR          := "res://resources/ui/cursors/"
 const SIZE         := 24.0
-const RASTER_SCALE := 2.0
 const SVG_ACCENT   := "#59D1FF"
 
 const FILES: Array[String] = [
@@ -40,90 +39,120 @@ const FALLBACK_SVGS: Dictionary = {
 	"ibeam": '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"><g stroke="#0A0D18" stroke-width="3.2" stroke-linecap="round"><line x1="9" y1="4" x2="15" y2="4"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="9" y1="20" x2="15" y2="20"/></g><g stroke="#F0F5FF" stroke-width="1.5" stroke-linecap="round"><line x1="9" y1="4" x2="15" y2="4"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="9" y1="20" x2="15" y2="20"/></g><circle cx="12" cy="12" r="1.6" fill="#59D1FF"/></svg>',
 }
 
-var _state:    State               = State.NORMAL
-var _layer:    CanvasLayer         = null
-var _sprite:   TextureRect         = null
-var _textures: Array[Texture2D]    = []
-var _hotspots: Array[Vector2]      = []
+## The cursors are OS (hardware) cursors, so they draw above popups and
+## dropdowns too (playtest 07.11: a CanvasLayer sprite went behind embedded
+## popup windows) and without lag. Godot shows ARROW over any Control, so the
+## current state's image is what ARROW is; Controls asking for a shape of their
+## own get the matching image.
+const FIXED_SHAPES := {
+	Input.CURSOR_POINTING_HAND: State.POINTER,
+	Input.CURSOR_IBEAM: State.IBEAM,
+	Input.CURSOR_DRAG: State.GRAB,
+	Input.CURSOR_MOVE: State.GRAB,
+	Input.CURSOR_CROSS: State.HOVER,
+}
 
-func _notification(what: int) -> void:
-	match what:
-		NOTIFICATION_APPLICATION_FOCUS_OUT:
-			DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_VISIBLE)
-			if _sprite: _sprite.visible = false
-		NOTIFICATION_APPLICATION_FOCUS_IN:
-			DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_HIDDEN)
-			if _sprite: _sprite.visible = true
+var _state: State = State.NORMAL
+var _scale := 0.0   # cursor pixels per SIZE unit the images were made at
+var _images: Array[Image] = []
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_rebuild_textures()
-
-	# Hide OS cursor
-	DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_HIDDEN)
-
-	# CanvasLayer on top of everything
-	_layer       = CanvasLayer.new()
-	_layer.layer = 500
-	_layer.name  = "CursorLayer"
-	add_child(_layer)
-
-	_sprite                = TextureRect.new()
-	_sprite.mouse_filter   = Control.MOUSE_FILTER_IGNORE
-	_sprite.expand_mode    = TextureRect.EXPAND_IGNORE_SIZE
-	_sprite.stretch_mode   = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	_sprite.size           = Vector2(SIZE, SIZE)
-	_layer.add_child(_sprite)
-
+	get_tree().root.size_changed.connect(_on_window_resized)
 	set_state(State.NORMAL)
 	call_deferred("_connect_theme_signal")
+
+# ── Keys play: the cursor hides (10.11) ──────────────────────────────────────
+## A key that moves or acts (arrows, WASD, Tab, Enter, Space, Q / E …) or a pad
+## button hides the mouse cursor; the mouse moving or clicking brings it back.
+## Shortcuts with Cmd / Ctrl and typing in a box leave it alone.
+var keys_mode := false
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		if keys_mode and (event as InputEventMouseMotion).relative.length_squared() > 4.0:
+			_set_keys_mode(false)
+		return
+	if event is InputEventMouseButton:
+		if keys_mode and (event as InputEventMouseButton).pressed:
+			_set_keys_mode(false)
+		return
+	if keys_mode:
+		return
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed:
+		_set_keys_mode(true)
+		return
+	var k := event as InputEventKey
+	if k == null or not k.pressed or k.ctrl_pressed or k.meta_pressed or k.alt_pressed:
+		return
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit:
+		return
+	var key := k.physical_keycode if k.physical_keycode != KEY_NONE else k.keycode
+	if key in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_W, KEY_A, KEY_S, KEY_D, KEY_Q, KEY_E,
+			KEY_TAB, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_BACKSPACE]:
+		_set_keys_mode(true)
+
+func _set_keys_mode(on: bool) -> void:
+	keys_mode = on
+	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN if on else Input.MOUSE_MODE_VISIBLE
+	var anchor = TooltipManager._focus_anchor
+	if on and (anchor == null or not is_instance_valid(anchor)):
+		TooltipManager.hide_tip()   # the tip the resting mouse had goes with it
 
 func _connect_theme_signal() -> void:
 	var sm := get_node_or_null("/root/SettingsManager")
 	if sm != null and sm.has_signal("theme_changed"):
 		sm.connect("theme_changed", func(_theme_id: String) -> void: _rebuild_textures())
 
-func _rebuild_textures() -> void:
-	_textures.clear()
-	_hotspots.clear()
-	var accent_hex := "#" + UIStyle.hex(&"accent").to_upper()
-	for i in FILES.size():
-		_textures.append(_load_vector_cursor(FILES[i], accent_hex))
-		_hotspots.append(HOTSPOTS[i])
-	if _sprite != null and _state < _textures.size():
-		_sprite.texture = _textures[_state]
+func _on_window_resized() -> void:
+	if not is_equal_approx(_cursor_scale(), _scale):
+		_rebuild_textures()
 
-func _process(_delta: float) -> void:
-	if _sprite == null:
-		return
-	var mouse := _sprite.get_viewport().get_mouse_position()
-	var hot   := _hotspots[_state]
-	_sprite.position = mouse - hot
+## Window pixels per UI unit (the stretch scale), so the cursor keeps the size it
+## had as a UI sprite; macOS takes cursor images in points, not pixels.
+func _cursor_scale() -> float:
+	var root := get_tree().root
+	var k := root.get_final_transform().get_scale().x if root != null else 1.0
+	if OS.get_name() == "macOS":
+		k /= maxf(DisplayServer.screen_get_scale(), 1.0)
+	return clampf(k, 0.5, 4.0)
+
+func _rebuild_textures() -> void:
+	_scale = _cursor_scale()
+	var accent_hex := "#" + UIStyle.hex(&"accent").to_upper()
+	_images.clear()
+	for i in FILES.size():
+		_images.append(_load_vector_cursor(FILES[i], accent_hex, _scale))
+	for shape: int in FIXED_SHAPES:
+		_apply(FIXED_SHAPES[shape], shape)
+	_apply(_state, Input.CURSOR_ARROW)
+
+func _apply(s: int, shape: int) -> void:
+	if s < _images.size() and _images[s] != null:
+		Input.set_custom_mouse_cursor(_images[s], shape as Input.CursorShape, HOTSPOTS[s] * _scale)
 
 func set_state(s: State) -> void:
-	if _state == s and _sprite != null and _sprite.texture != null:
+	if s == _state and not _images.is_empty():
 		return
 	_state = s
-	if _sprite != null:
-		_sprite.texture = _textures[s]
+	_apply(s, Input.CURSOR_ARROW)
 
 # ── Internal ──────────────────────────────────────────────────────────────────
 
-func _load_vector_cursor(file_name: String, accent_hex: String) -> Texture2D:
+func _load_vector_cursor(file_name: String, accent_hex: String, k: float) -> Image:
 	var path := DIR + file_name + ".svg"
 	var svg_text := ""
 	if FileAccess.file_exists(path):
 		svg_text = FileAccess.get_file_as_string(path)
 	if svg_text.is_empty():
 		svg_text = String(FALLBACK_SVGS.get(file_name, ""))
-	if not svg_text.is_empty():
-		svg_text = svg_text.replace(SVG_ACCENT, accent_hex)
-		var img := Image.new()
-		if img.load_svg_from_string(svg_text, RASTER_SCALE) == OK:
-			return ImageTexture.create_from_image(img)
-	if ResourceLoader.exists(path):
-		var res := ResourceLoader.load(path) as Texture2D
-		if res != null:
-			return res
-	return ImageTexture.new()
+	if svg_text.is_empty():
+		return null
+	svg_text = svg_text.replace(SVG_ACCENT, accent_hex)
+	var img := Image.new()
+	# SVGs are 24 units wide: render at the cursor scale (OS limit 256 px)
+	if img.load_svg_from_string(svg_text, k * SIZE / 24.0) != OK:
+		return null
+	return img

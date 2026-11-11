@@ -1,7 +1,6 @@
 extends Control
 
 signal planet_selected(planet_data: PlanetData)
-signal back_pressed
 
 @export var solar_data: SolarData       # inject from parent scene / inspector
 @export var random_on_start: bool = true
@@ -19,7 +18,6 @@ var _scan_wrap: VBoxContainer = null
 var _current:      SolarData
 var _star:         ColorRect
 var _star2:        ColorRect   # binary companion, null if not binary
-var _star2_angle:  float = 0.0
 var _pivot:        Node2D
 var _orbit_lines:  OrbitLines
 var _orbits:       Array[PlanetOrbitNode] = []
@@ -28,8 +26,6 @@ var _belt_configs: Array[Dictionary]     = []   # {slot, rx, seed} per belt
 
 var _view_angle:      float     = 0.0
 var _orbit_tilt:      float     = 0.38
-var _solar_view_angle: float    = 0.0
-var _solar_orbit_tilt: float    = 0.38
 var _max_orbit_px:    float     = 200.0  # updated after build_planets
 # Where input put the view; _view_angle / _orbit_tilt ease toward these
 # (_tick_view), and a flung spin keeps turning a moment after release.
@@ -180,6 +176,7 @@ func _draw_rocket_fx() -> void:
 	var flame := 4.0 + 2.0 * sin(Time.get_ticks_msec() * 0.03)
 	_rocket_fx.draw_line(p - dir * 4.0, p - dir * (4.0 + flame), Color(1.0, 0.6, 0.2, 0.9), 2.0, true)
 	var left := int(ceil(float(ex.get("flight_left", 0.0))))
+	@warning_ignore("integer_division")
 	_rocket_fx.draw_string(font, p + Vector2(10, -10), "→ %s  //  %d:%02d" % [target.planet_data.planet_name, left / 60, left % 60],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ROCKET_COL)
 
@@ -614,7 +611,6 @@ func _update_panel() -> void:
 	const SURVEY_CREDITS: float = 200_000.0
 	const SURVEY_SCIENCE: float = 50_000.0
 
-	var orbitron := load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf") as Font
 
 	# Container for the whole survey section (separator + cost + button)
 	var survey_wrap := VBoxContainer.new()

@@ -6,7 +6,7 @@
 script = ExtResource("1_def")
 building_id = "antimatter_chamber"
 display_name = "Antimatter Plant"
-description = "Annihilation power — the top of the energy line."
+description = "Annihilation power, the top of the energy line."
 allowed_poi_types = Array[int]([2])
 allowed_planet_types = Array[int]([])
 base_cost = 1350.0

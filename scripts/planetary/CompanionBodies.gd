@@ -182,7 +182,6 @@ static func _material_for(pd: PlanetData, px: float) -> ShaderMaterial:
 ## Lays the visible page out right-to-left from the top-right corner.
 func _layout() -> void:
 	var x := size.x - RIGHT
-	var shown := 0
 	_base_pos.resize(_views.size())
 	for i in _views.size():
 		var on := i >= _page and i < _page + VISIBLE
@@ -194,7 +193,6 @@ func _layout() -> void:
 		_base_pos[i] = Vector2(x, TOP)
 		_views[i].position = Vector2(x, TOP)
 		x -= GAP
-		shown += 1
 	var paged := _views.size() > VISIBLE
 	_prev_btn.visible = paged and _page > 0
 	_next_btn.visible = paged and _page < _views.size() - VISIBLE
