@@ -338,19 +338,30 @@ static func _under_tree(c: Control) -> bool:
 	var cl := c.get_canvas_layer_node()
 	return cl == null or cl.layer < TREE_LAYER
 
-## In the play room (play_room), most of it, centred in it; its bottom just
-## above the news bar. The portrait stands behind, over the card's right side,
-## from the card's bottom up, and stays inside the card's width.
+## Where the story's cards stand on (their bottom's y): level with the
+## objectives / tutorial card on the right when one is up, so the two line up;
+## else just above the news bar.
+static func play_bottom(ci: CanvasItem, margin: float) -> float:
+	for n in ci.get_tree().get_nodes_in_group(ObjectivesCard.GROUP):
+		var oc := n as Control
+		if oc != null and oc.is_visible_in_tree() and oc.modulate.a > 0.01:
+			return oc.get_global_rect().end.y
+	var news := ci.get_tree().get_first_node_in_group(&"news_panel") as Control
+	if news != null and news.is_visible_in_tree():
+		return news.get_global_rect().position.y - margin
+	return ci.get_viewport_rect().size.y - margin
+
+## In the play room (play_room), most of it, centred in it; its bottom on
+## play_bottom (level with the objectives card). The portrait stands behind,
+## over the card's right side, from the card's bottom up, and stays inside the
+## card's width.
 func _place() -> void:
 	var vp := get_viewport_rect().size
 	var span := play_room(self, MARGIN)
 	var left := span.x
 	var room := maxf(span.y - span.x, MIN_W)
 	var w := minf(clampf(room * ROOM_SHARE, MIN_W, MAX_W), room)
-	var bottom := vp.y - MARGIN
-	var news := get_tree().get_first_node_in_group(&"news_panel") as Control
-	if news != null and news.is_visible_in_tree():
-		bottom = news.get_global_rect().position.y - MARGIN
+	var bottom := DialoguePanel.play_bottom(self, MARGIN)
 	_front.custom_minimum_size = Vector2(w, 0.0)
 	_front.size = Vector2(w, _front.get_combined_minimum_size().y)
 	_card.size = _front.size

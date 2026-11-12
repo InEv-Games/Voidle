@@ -150,8 +150,9 @@ func _process(_delta: float) -> void:
 
 ## Between the left panel (when open) and the right edge, or the objectives /
 ## tutorial card on the right when one is up, centred in that room (never over
-## either); its bottom just above the news bar. The bust stands on the card's
-## bottom edge, over its left end, rising above its top.
+## either); its bottom on DialoguePanel.play_bottom (level with that card).
+## The bust stands on the card's bottom edge, over its left end, rising above
+## its top.
 func _place() -> void:
 	var vp := get_viewport_rect().size
 	var span := DialoguePanel.play_room(self, MARGIN)
@@ -159,10 +160,7 @@ func _place() -> void:
 	var right := span.y
 	var room := maxf(right - left, 320.0)
 	var w := minf(CARD_W, room)
-	var bottom := vp.y - MARGIN
-	var news := get_tree().get_first_node_in_group(&"news_panel") as Control
-	if news != null and news.is_visible_in_tree():
-		bottom = news.get_global_rect().position.y - MARGIN
+	var bottom := DialoguePanel.play_bottom(self, MARGIN)
 	_box.custom_minimum_size.x = w
 	_box.size = Vector2(w, _box.get_combined_minimum_size().y)
 	_box.position = Vector2(0.0, FACE_RISE)
