@@ -3,13 +3,24 @@ extends RefCounted
 
 ## GOVERNMENT (10.11): the ministries, each with one minister's slot. An Agent
 ## in a slot gives their bonus while they sit there (GameState.active_agents).
+## Laid out as the choice screens: a hero across the top (AGENTS and ✕ at its
+## end), the ministries side by side under it, each its minister standing large
+## with, over their lower part, the ministry's name, the minister's card and
+## under it REPLACE / APPOINT.
 ## Only the Chancellery is open (the opening's advisor sits there); the others
 ## stay locked through the demo but show what is to come. A slot's APPOINT /
 ## REPLACE opens AGENTS for that ministry; AGENTS at the bottom browses them all.
 ## C (or the pad's shortcuts menu, or the Agents button by the left panel) opens it.
 
 const LAYER := 234   # under AGENTS (235): its screen comes up over this one
-const PORTRAIT := Vector2(54, 72)
+const COL_W := 250.0        # one ministry's width
+const COL_H := 380.0        # …and height
+const COL_GAP := 28
+const PORTRAIT_H := 330.0   # the minister standing, from the column's top
+const PORTRAIT_X := 0.6     # their centre across the column (share)
+const NAME_SIZE := 24       # the ministry's name (the hero's font, smaller)
+const CARD_H := 112.0       # every card as tall, so the names line up
+const REVEAL_SLOW := 2.0
 
 static var _popup: ModalPopup = null
 
@@ -28,85 +39,127 @@ static func open(host: Node) -> void:
 		_popup.close()
 	var p := ModalPopup.open(host, "Government", "groups", "", LAYER)
 	_popup = p
-	p.use_hero("Year %d  //  %d of %d ministries open" % [GameState.calendar_year(),
+	var hero := p.use_hero("Year %d  //  %d of %d ministries open" % [GameState.calendar_year(),
 		GameState.ministries_unlocked.size(), GameState.MINISTRIES.size()], "GOVERNMENT")
+	p.card.add_theme_stylebox_override(&"panel", StyleBoxEmpty.new())   # the ministries have their own cards
 	(p.card.get_node("VBox/Buttons") as Control).visible = false   # the ✕ by the hero, Esc
 	p.closed.connect(func() -> void: _popup = null)
-	var intro := RichTextLabel.new()
-	intro.bbcode_enabled = true
-	intro.fit_content = true
-	intro.scroll_active = false
-	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	intro.custom_minimum_size = Vector2(520, 0)
-	intro.theme_type_variation = &"PopupBody"
-	intro.add_theme_font_size_override(&"normal_font_size", 11)
-	intro.text = "[color=#%s]Each ministry seats one of your Agents. While they serve, their bonus applies everywhere.[/color]" \
-		% UIStyle.hex(&"text_subtle")
-	p.add_content(intro)
-	for m: Dictionary in GameState.MINISTRIES:
-		p.add_content(_slot(host, p, m))
+	# AGENTS: every Agent met, at the hero's end by the ✕
 	var agents := IconButton.create("AGENTS", "population", IconButton.Variant.DEFAULT,
 		"%d met" % GameState.unlocked_advisors.size())
-	agents.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	agents.size_flags_vertical = Control.SIZE_SHRINK_END   # level with the title
 	agents.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		p.close()
 		CompanionGallery.open(host, GameState.CHANCELLERY, func() -> void: open(host)))
-	p.add_content(HSeparator.new())
-	p.add_content(agents)
+	var head := hero.get_parent()
+	head.add_child(agents)
+	head.move_child(agents, hero.get_index() + 1)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override(&"separation", COL_GAP)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_content(row)
+	var fronts: Array[Control] = []
+	for i in GameState.MINISTRIES.size():
+		row.add_child(_slot(host, p, GameState.MINISTRIES[i] as Dictionary, i, fronts))
+	(func() -> void:   # the cards come in as the panels' rows do
+		for f: Control in fronts:
+			if is_instance_valid(f):
+				RowReveal.play(f, REVEAL_SLOW)).call_deferred()
 
-static func _slot(host: Node, p: ModalPopup, m: Dictionary) -> Control:
+## One ministry: its minister standing (or an empty silhouette), and over their
+## lower part the ministry's name, the card and the button.
+static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Array[Control]) -> Control:
 	var mid: String = m["id"]
 	var open_slot := GameState.ministry_unlocked(mid)
-	var card := PanelContainer.new()
-	card.theme_type_variation = &"ItemPanel"
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override(&"separation", 10)
-	card.add_child(row)
 	var agent_id := GameState.minister_of(mid) if open_slot else ""
 	var def := CompanionDef.find(agent_id)
-	var face := TextureRect.new()
-	face.custom_minimum_size = PORTRAIT
-	face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	face.texture = def.portrait_texture() if def != null else load(CompanionDef.FALLBACK_PORTRAIT) as Texture2D
-	face.modulate = Color.WHITE if def != null else Color(0.25, 0.28, 0.36)
-	row.add_child(face)
-	var col := VBoxContainer.new()
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override(&"separation", 2)
-	row.add_child(col)
-	var head := Label.new()
-	head.text = String(m["name"]).to_upper()
-	head.theme_type_variation = &"HeaderLabel"
-	col.add_child(head)
-	var body := RichTextLabel.new()
-	body.bbcode_enabled = true
-	body.fit_content = true
-	body.scroll_active = false
-	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	body.theme_type_variation = &"PopupBody"
-	body.add_theme_font_size_override(&"normal_font_size", 11)
-	body.custom_minimum_size = Vector2(300, 0)
+	var col := Control.new()
+	col.custom_minimum_size = Vector2(COL_W, COL_H)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# behind: the minister
+	var tex: Texture2D = def.portrait_texture() if def != null else load(CompanionDef.FALLBACK_PORTRAIT) as Texture2D
+	if tex != null:
+		var face := TextureRect.new()
+		face.texture = tex
+		face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		face.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if tex.get_width() <= 512 \
+			else CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var pw := PORTRAIT_H * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+		face.size = Vector2(pw, PORTRAIT_H)
+		face.position = Vector2(COL_W * PORTRAIT_X - pw * 0.5, 0.0)
+		var tint := Color.WHITE if def != null else Color(0.25, 0.28, 0.36)
+		face.modulate = Color(tint, 0.0)
+		col.add_child(face)
+		face.create_tween().tween_property(face, "modulate:a", 1.0, 0.5) \
+			.set_delay(i * 0.12).set_trans(Tween.TRANS_SINE)
+	# in front: the ministry's name, the card, the button
+	var front := VBoxContainer.new()
+	front.add_theme_constant_override(&"separation", 6)
+	front.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(front)
+	fronts.append(front)
+	var title := HeroHeader.create(String(m["title"]),
+		String(m["name"]).replace("Ministry of ", "").to_upper(), NAME_SIZE)
+	(title.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	front.add_child(title)
+	var card := PanelContainer.new()
+	card.theme_type_variation = &"PopupCard"
+	card.custom_minimum_size = Vector2(COL_W, CARD_H)
+	front.add_child(card)
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override(&"separation", 6)
+	card.add_child(inner)
 	var dim := UIStyle.hex(&"text_subtle")
 	if not open_slot:
-		body.text = "[color=#%s]Locked. Opens in a later civilization.[/color]" % dim
-		card.modulate = Color(0.6, 0.62, 0.7, 0.85)
+		inner.add_child(_text("[color=#%s]Locked. Opens in a later civilization.[/color]" % dim))
+		col.modulate = Color(0.6, 0.62, 0.7, 0.85)
 	elif def == null:
-		body.text = "[color=#%s]Vacant: appoint one of your Agents.[/color]" % dim
+		inner.add_child(_text("[color=#%s]Vacant: appoint one of your Agents.[/color]" % dim))
 	else:
+		inner.add_child(_text("[font_size=13]%s[/font_size]\n[color=#%s]%s  //  Lv %d[/color]\n%s" % [
+			def.display_name, dim, def.role, GameState.agent_level(agent_id), def.bonus_bb(12)]))
+		var rule := HSeparator.new()
+		rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(rule)
 		var left := GameState.ministry_ready_at(mid) - GameState.calendar_seconds
-		body.text = "%s  [color=#%s]%s  //  Lv %d[/color]\n%s\n[color=#%s]%s[/color]" % [def.display_name, dim, def.role,
-			GameState.agent_level(agent_id), def.bonus_bb(12), dim,
+		inner.add_child(_text("[color=#%s]%s[/color]" % [dim,
 			("Serves at least %s more; replacing them earlier costs credits." % GameState.calendar_span_text(left)) if left > 0.0
-				else "Their term is over: you may replace them for free."]
-	col.add_child(body)
-	if open_slot:
-		var btn := IconButton.create("REPLACE" if def != null else "APPOINT", "population", IconButton.Variant.DEFAULT)
-		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		btn.pressed.connect(func() -> void:
-			AudioManager.play("click")
-			p.close()
-			CompanionGallery.open(host, mid, func() -> void: open(host)))
-		row.add_child(btn)
-	return card
+				else "Their term is over: you may replace them for free."]))
+	# the button, centred under the card (a locked ministry keeps its room empty)
+	var buttons := HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
+	buttons.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	front.add_child(buttons)
+	var btn := IconButton.create("REPLACE" if def != null else "APPOINT", "population", IconButton.Variant.DEFAULT)
+	btn.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		p.close()
+		CompanionGallery.open(host, mid, func() -> void: open(host)))
+	buttons.add_child(btn)
+	if not open_slot:   # no button, but its room (not focusable by the keys / pad)
+		buttons.custom_minimum_size.y = btn.get_combined_minimum_size().y
+		btn.visible = false
+	# at the column's bottom once its size is known
+	var place := func() -> void:
+		var sz := front.get_combined_minimum_size()
+		front.size = Vector2(COL_W, sz.y)
+		front.position = Vector2(0.0, COL_H - sz.y)
+	front.minimum_size_changed.connect(place)
+	place.call_deferred()
+	return col
+
+static func _text(bb: String) -> RichTextLabel:
+	var r := RichTextLabel.new()
+	r.bbcode_enabled = true
+	r.fit_content = true
+	r.scroll_active = false
+	r.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	r.theme_type_variation = &"PopupBody"
+	r.add_theme_font_size_override(&"normal_font_size", 11)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.text = bb
+	return r
