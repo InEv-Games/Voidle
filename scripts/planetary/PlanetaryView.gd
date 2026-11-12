@@ -1259,8 +1259,7 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 	# World Center Cursor actions when not in district placement mode and LeftPanel nav is inactive
-	if _world_cursor_active and _placing_def == null and not _naming_open and _key_spin_allowed() and planet_renderer != null \
-			and not Guide.blocking():   # the guided step: no picking on the globe outside it
+	if _world_cursor_active and _placing_def == null and not _naming_open and _key_spin_allowed() and planet_renderer != null:
 		var sp := get_node_or_null("SidePanel") as LeftPanel
 		var nav_on := sp != null and sp._nav_active
 		if not nav_on:
@@ -6320,6 +6319,30 @@ func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void
 	if lens != "" and GameState.is_scanned(current_data.seed) and _role != lens:
 		_role_before_place = _role
 		_set_role(lens)
+	_place_zoom_in(def, parent)
+
+## Placing something brings the globe in close (revision 12.11): a district
+## turns to its City and zooms until the City's reach fills most of the view;
+## a new City just comes a step closer. Never for the Capital.
+const PLACE_ZOOM_FILL := 0.36   # the reach's radius, as a share of the view's height
+const PLACE_ZOOM_CITY := 1.35
+const PLACE_ZOOM_MAX := 3.0
+func _place_zoom_in(def: DistrictDef, parent: POIData) -> void:
+	if planet_renderer == null or current_data == null or _mandatory_city or _lunar_landing:
+		return
+	# never for the Capital (revision 12.11): the first City of a world, however
+	# its placing began (the opening, the lander, a world's first settlement)
+	if def.is_system_anchor() and (_city_count(current_data) == 0 or GameState.onboarding_stage != "done"):
+		return
+	var center := planet_renderer.global_position + planet_renderer.size * 0.5
+	var z := PLACE_ZOOM_CITY
+	if parent != null and not def.is_system_anchor():
+		_focus_on_site(parent.lon_deg, parent.lat_deg, 0.5)
+		var reach := _city_reach_rad(parent.label) + deg_to_rad(SETTLE_BASE_DEG * TerrainSampler.body_scale(current_data))
+		z = PLACE_ZOOM_FILL / maxf(_base_radius * sin(minf(reach, PI * 0.5)), 0.01)
+	z = clampf(z, ZOOM_MIN, minf(PLACE_ZOOM_MAX, _zoom_max()))
+	if z > _zoom_target:   # only ever closer: a player already zoomed in stays there
+		_set_zoom_target(z, center)
 
 ## The lens of a district type's family ("" = none, e.g. a City).
 static func _placement_lens(def: DistrictDef) -> String:
@@ -6668,33 +6691,67 @@ const GEO_KEY_COL := Color(0.75, 0.82, 0.95)
 ## district makes, a head row with just its icon and the total multiplier, then one
 ## row per feature (lens colour) with what it gives. The Orbit takes none.
 func _geo_rows(site: Dictionary, outputs: Dictionary, in_orbit: bool) -> Array:
-	var rows: Array = []
 	var head := UIIcons.bb("map", 11, GEO_KEY_COL) + " Geography"
 	if in_orbit:
-		rows.append([head, _bb("none in orbit", BB_DIM)])
-		return rows
+		return [[head, _bb("none in orbit", BB_DIM)]]
 	var good := UIStyle.color(&"good")
-	var seen := {}
 	var table: Dictionary = Balance.cfg.terrain_bonuses
+	var fams: Array[String] = []
+	var icon_of := {}
+	for id: String in outputs:
+		var fam := FeatureMap.family_of(id)
+		if not fams.has(fam):
+			fams.append(fam)
+			icon_of[fam] = id
+	var rows: Array = []
+	for fam in fams:
+		var id: String = icon_of[fam]
+		var col := Economy.color_of(id) if id != Economy.RAW else Color(0.85, 0.78, 0.70)
+		for fid: String in FeatureMap.CATALOGUE:
+			var per := float(table.get(fid, {}).get(fam, 0.0))
+			if site.has(fid) and per > 0.0:
+				var m := 1.0 + per * FeatureMap.step_bonus(float(site[fid])) * SkillTree.get_feature_mult(fid)
+				# several kinds of output: each row says which it helps by its icon
+				rows.append([(UIIcons.bb(id, 11, col) + " " if fams.size() > 1 else "")
+					+ _bb("[b]%s[/b]" % FeatureMap.feature_name(fid), FeatureMap.feature_color(fid))   # bold, same size (revision 12.11)
+					+ (_bb(" nearby", BB_DIM) if float(site[fid]) < 1.0 else ""), _bb(Economy.mult_text(m), good)])
+	if rows.is_empty():
+		rows.append([head, _bb("none here", BB_DIM)])
+	return rows
+
+## The placement card's last word before the cost (revision 12.11): per kind of
+## output, "[icon] Total" and what this spot multiplies it by — geography ×
+## location, as the district's income takes them (Economy.site_mult). Bold, at
+## the rows' size.
+func _site_total_rows(probe: POIData, outputs: Dictionary) -> Array:
+	var rows: Array = []
+	var seen := {}
+	var loc := Location.mult(current_data, probe)
+	var good := UIStyle.color(&"good")
 	for id: String in outputs:
 		var fam := FeatureMap.family_of(id)
 		if seen.has(fam):
 			continue
 		seen[fam] = true
 		var col := Economy.color_of(id) if id != Economy.RAW else Color(0.85, 0.78, 0.70)
-		var feats: Array = []
-		for fid: String in FeatureMap.CATALOGUE:
-			var per := float(table.get(fid, {}).get(fam, 0.0))
-			if site.has(fid) and per > 0.0:
-				var m := 1.0 + per * FeatureMap.step_bonus(float(site[fid])) * SkillTree.get_feature_mult(fid)
-				feats.append(["      " + _bb(FeatureMap.feature_name(fid), FeatureMap.feature_color(fid))
-					+ (_bb(" nearby", BB_DIM) if float(site[fid]) < 1.0 else ""), _bb(Economy.mult_text(m), good)])
-		var total := 1.0 + FeatureMap.bonus_for(site, fam)
-		# 10.11: the output's icon alone heads its rows; "Geography" on each was noise
-		rows.append([UIIcons.bb(id, 11, col),
-			_bb("[b]%s[/b]" % Economy.mult_text(total), good) if not feats.is_empty() else _bb("none here", BB_DIM)])
-		rows.append_array(feats)
+		var m := Economy.site_mult(FeatureMap.terrain_mult(current_data, probe, id), loc)
+		rows.append([UIIcons.bb(id, 11, col) + " " + _bb("[b]Total[/b]", Color(0.90, 0.94, 1.0)),
+			_bb("[b]%s[/b]" % Economy.mult_text(m), good if m > 1.0 + 0.005 else Color.html(BB_DIM))])
 	return rows
+
+## The placement card's title size (the district's name).
+const PLACE_TITLE_FONT := 15
+
+## "helps N of 5" coloured along a scale: 0 dim, then red → green as N climbs
+## to 5 (revision 12.11: the three-step colour didn't say much).
+static func _scale_color(n: int, of: int) -> Color:
+	if n <= 0:
+		return Color.html(BB_DIM)
+	var t := clampf(float(n - 1) / float(maxi(of - 1, 1)), 0.0, 1.0)
+	var bad := Color(0.95, 0.42, 0.38)
+	var mid := Color(0.96, 0.80, 0.40)
+	var good := UIStyle.color(&"good")
+	return bad.lerp(mid, t * 2.0) if t < 0.5 else mid.lerp(good, (t - 0.5) * 2.0)
 
 ## "[icon] Credits" in the resource's colour.
 func _res_name_bb(id: String) -> String:
@@ -6706,23 +6763,25 @@ func _res_name_bb(id: String) -> String:
 ## two words with what it adds (playtest 31.10: no long sentences).
 func _location_rows(loc: Dictionary) -> Array:
 	var rows: Array = []
-	var head := UIIcons.bb("explore", 11, GEO_KEY_COL) + " Location"
 	var total := float(loc["mult"]) - 1.0
 	var good := UIStyle.color(&"good")
 	var city: POIData = loc.get("city", null)
 	if city == null:   # a City itself: it is the centre
-		rows.append([head, _bb("none for a City", BB_DIM)])
+		rows.append([UIIcons.bb("explore", 11, GEO_KEY_COL) + " Location", _bb("none for a City", BB_DIM)])
 		return rows
-	rows.append([head, _bb("[b]+%s%%[/b]" % _pct(snappedf(total, 0.01)), good) if total > 0.005 else _bb("none here", BB_DIM)])
 	# playtest 07.11: two parts, each saying what moves it; nothing that never
 	# changes. Distance from its City always shows (with how to get more).
 	var dv := float(loc["distance"])
 	var band_txt := Location.band_label(loc["band"]).to_lower()
-	rows.append(["      " + _bb("Distance from %s (%s)" % [city.shown_name(), band_txt], Color(0.78, 0.82, 0.92)),
+	rows.append([_bb("Distance from %s (%s)" % [city.shown_name(), band_txt], Color(0.78, 0.82, 0.92)),
 		_bb("+%s%%" % _pct(dv), good) if dv > 0.0 else _bb("farther out: up to +%s%%" % _pct(Location.band_bonus(Location.Band.VERY_FAR)), BB_DIM)])
 	var pv := float(loc["proximity"])
 	if pv > 0.0:
-		rows.append(["      " + _bb("Same-kind neighbours", Color(0.78, 0.82, 0.92)), _bb("+%s%%" % _pct(pv), good)])
+		rows.append([_bb("Same-kind neighbours", Color(0.78, 0.82, 0.92)), _bb("+%s%%" % _pct(pv), good)])
+	# revision 12.11: its total last, at the rows' size (only the card's
+	# overall Total is large)
+	rows.append([UIIcons.bb("explore", 11, GEO_KEY_COL) + " " + _bb("Location total", Color(0.90, 0.94, 1.0)),
+		_bb("[b]+%s%%[/b]" % _pct(snappedf(total, 0.01)), good) if total > 0.005 else _bb("none here", BB_DIM)])
 	return rows
 
 ## How placing `probe` raises the location bonus of the districts already
@@ -6749,6 +6808,8 @@ func _neighbour_effect_rows(probe: POIData) -> Array:
 static func _rows_text(rows: Array) -> Array[String]:
 	var out: Array[String] = []
 	for r: Array in rows:
+		if r.is_empty():   # a separator row (placement card): nothing in text
+			continue
 		out.append(String(r[0]) + ("    " + String(r[1]) if r.size() > 1 and String(r[1]) != "" else ""))
 	return out
 
@@ -6815,7 +6876,7 @@ func _placement_card(def: DistrictDef, chk: Dictionary, sys: Dictionary, site_na
 	var ok: bool = chk["ok"] and sys["ok"]
 	var good := UIStyle.color(&"good")
 	var head: Array = []
-	head.append(["[font_size=15]%s[/font_size]" % def.display_name,
+	head.append(["[font_size=%d]%s[/font_size]" % [PLACE_TITLE_FONT, def.display_name],
 		_bb("Click to place", good) if ok else _bb("Can't place", BB_BAD)])
 	head.append([_bb(site_name, Color(0.78, 0.82, 0.92)), ""])
 	if not ok:
@@ -6826,10 +6887,10 @@ func _placement_card(def: DistrictDef, chk: Dictionary, sys: Dictionary, site_na
 	_last_probe = probe   # the console's `loc`
 	# a City: no per-output bonus rows; "Within reach" below says more (10.11)
 	if not def.base_outputs.is_empty() and not def.is_system_anchor():
-		var bon: Array = []
-		bon.append_array(_geo_rows(probe.site_features, def.base_outputs, false))
-		bon.append_array(_location_rows(Location.breakdown(current_data, probe)))
-		card.append(bon)
+		# revision 12.11: the geography, the location with its total; the
+		# overall Total sits above the cost
+		card.append(_geo_rows(probe.site_features, def.base_outputs, false))
+		card.append(_location_rows(Location.breakdown(current_data, probe)))
 	if def.is_system_anchor():   # a City: what its reach holds for later districts
 		card.append(_reach_rows(lon, lat))
 	var nb_rows := _neighbour_effect_rows(probe)
@@ -6859,6 +6920,8 @@ func _placement_card(def: DistrictDef, chk: Dictionary, sys: Dictionary, site_na
 		var full := DistrictDef.placement_full_cost(def, current_data, pl)
 		right = _full_cost_bb(full, Economy.founding_pop(def, current_data, pl), current_data, pp)
 		can_pay = Economy.can_pay(full)
+	if not def.base_outputs.is_empty() and not def.is_system_anchor():
+		card.append(_site_total_rows(probe, def.base_outputs))
 	card.append([[left, right, can_pay]])
 	return card
 
@@ -6947,12 +7010,12 @@ func _suggest_city_sites(def: DistrictDef) -> Array:
 ## The reach summary as card rows: a head with how many district kinds the land
 ## helps, then the strongest features (share of the land, the kinds they help).
 func _reach_rows(lon: float, lat: float) -> Array:
+	# revision 12.11, as the district card: the features first (names bold),
+	# then under a separator the summary "Within reach  helps N of 5"
 	var sm := _reach_summary(lon, lat)
 	var rows: Array = []
 	var nf: int = (sm["families"] as Array).size()
-	var col: String = UIStyle.color(&"good").to_html(false) if nf >= 4 else ("f2cc66" if nf >= 2 else BB_DIM)
-	rows.append([UIIcons.bb("explore", 11, GEO_KEY_COL) + " Within reach",
-		_bb("[b]helps %d of %d district kinds[/b]" % [nf, REACH_FAMILIES.size()], col)])
+	var col := _scale_color(nf, REACH_FAMILIES.size())
 	var land := maxi(int(sm["land"]), 1)
 	var feats: Array = []
 	for fid: String in sm["counts"]:
@@ -6961,13 +7024,16 @@ func _reach_rows(lon: float, lat: float) -> Array:
 	feats.sort_custom(func(x: String, y: String) -> bool: return int(sm["counts"][x]) > int(sm["counts"][y]))
 	for fid: String in feats.slice(0, 4):
 		var pct := roundi(100.0 * float(sm["counts"][fid]) / float(land))
-		rows.append(["      " + _bb(FeatureMap.feature_name(fid), FeatureMap.feature_color(fid)) + _bb("  %d%%" % maxi(pct, 1), BB_DIM),
+		rows.append([_bb("[b]%s[/b]" % FeatureMap.feature_name(fid), FeatureMap.feature_color(fid)) + _bb("  %d%%" % maxi(pct, 1), BB_DIM),
 			_bb(FeatureMap.helped_families(fid), Color(0.78, 0.82, 0.92))])
 	if feats.is_empty():
-		rows.append(["      " + _bb("Nothing that helps a district", BB_DIM), ""])
+		rows.append([_bb("Nothing that helps a district", BB_DIM), ""])
 	var water := int(sm["total"]) - int(sm["land"])
 	if water * 2 > int(sm["total"]):
-		rows.append(["      " + _bb("Mostly water: little room for districts", BB_BAD), ""])
+		rows.append([_bb("Mostly water: little room for districts", BB_BAD), ""])
+	rows.append([])
+	rows.append([UIIcons.bb("explore", 11, GEO_KEY_COL) + " " + _bb("Within reach", Color(0.90, 0.94, 1.0)),
+		_bb("[b]helps %d of %d district kinds[/b]" % [nf, REACH_FAMILIES.size()], col)])
 	return rows
 
 ## Site mineral shares are gone (playtest 30.10): a world yields its whole
@@ -7545,27 +7611,20 @@ func _build_planet_overview(data: PlanetData) -> void:
 	root.add_child(HSeparator.new())
 
 	if pp.is_upgrading:
-		var up_card := PanelContainer.new()
-		up_card.theme_type_variation = &"ItemPanel"
-		ProgressFill.attach(up_card, UIStyle.color(&"positive_stroke"),
-			func() -> float: return pp.upgrade_progress, true)
-		var up_lbl := Label.new()
-		up_lbl.text = "UPGRADING TO LV %d..." % (pp.level + 1)
-		up_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		up_lbl.theme_type_variation = &"TitleLabel"
-		up_lbl.add_theme_color_override("font_color", UIStyle.color(&"good"))
-		up_card.add_child(up_lbl)
-		up_card.mouse_filter = Control.MOUSE_FILTER_STOP
-		up_card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-		up_card.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Upgrading",
+		# revision 12.11: the same in-progress look as the City / Orbit level-ups
+		# (the button itself, LEVELLING UP…, a striped fill), not the old card
+		var up_card := IconButton.create("LEVELLING UP…", "upgrade", IconButton.Variant.POSITIVE)
+		up_card.counter = "Lv %d → %d" % [pp.level, pp.level + 1]
+		up_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ProgressFill.attach(up_card, UIStyle.color(&"neutral_stroke"),
+			func() -> float: return pp.upgrade_progress if pp.is_upgrading else 1.0, true)
+		up_card.mouse_entered.connect(func() -> void: TooltipManager.show_tip("Planet level up",
 			"Click to call it off: %d%% of what it cost comes back." % _refund_pct()))
 		up_card.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
-		up_card.gui_input.connect(func(e: InputEvent) -> void:
-			if e is InputEventMouseButton and (e as InputEventMouseButton).pressed \
-					and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-				TooltipManager.hide_tip()
-				_ask_cancel_upgrade("planet upgrade", func() -> String:
-					return Economy.cost_text(Settlement.cancel_planet_level(pp))))
+		up_card.pressed.connect(func() -> void:
+			TooltipManager.hide_tip()
+			_ask_cancel_upgrade("planet upgrade", func() -> String:
+				return Economy.cost_text(Settlement.cancel_planet_level(pp))))
 		root.add_child(up_card)
 	else:
 		var up_btn := IconButton.create("UPGRADE PLANET  LV %d → %d" % [pp.level, pp.level + 1], "upgrade", IconButton.Variant.POSITIVE)
@@ -10282,60 +10341,42 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	_refresh_bar_label_status(pm_key)
 	return card
 
-## Spaceport card — phase-driven: idle → configuring → preparing → launch_ready → cooldown.
+## Spaceport card (revision 12.11: the old hand-built card, now a ListItem
+## like every other building): its name and rocket icon, a status line under
+## it; at the home world the Moon lander's build fills it, striped.
 func _build_spaceport_card(def: BuildingDef, pm_key: String,
 		pp: PlanetProgress, _poi: POIData, _entry: Dictionary = {}) -> PanelContainer:
-
-	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", _card_panel_style())
+	var card := ListItem.create(def.display_name.to_upper(), "rocket", "", PackedStringArray(), "Operational")
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",  10)
-	margin.add_theme_constant_override("margin_right",  8)
-	margin.add_theme_constant_override("margin_top",    7)
-	margin.add_theme_constant_override("margin_bottom", 7)
-	card.add_child(margin)
-
-	var left_vbox := VBoxContainer.new()
-	left_vbox.add_theme_constant_override("separation", 2)
-	margin.add_child(left_vbox)
-
-	var name_lbl := Label.new()
-	name_lbl.text = def.display_name
-	_apply_orbitron(name_lbl, 10)
-	name_lbl.add_theme_color_override("font_color", UIStyle.color(&"text_bright"))
-	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left_vbox.add_child(name_lbl)
-
-	var status_lbl := Label.new()
-	status_lbl.text = "Operational"
-	_apply_orbitron(status_lbl, 8)
-	status_lbl.add_theme_color_override("font_color", Color(UIStyle.color(&"text"), 0.70))
-	status_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left_vbox.add_child(status_lbl)
-
+	card.icon_color = UIStyle.color(&"accent")
+	card.progress_color = UIStyle.color(&"neutral_stroke")
+	card.progress_striped = true
+	card.clickable = false
+	card.mouse_entered.connect(func() -> void:
+		AudioManager.play("hover")
+		TooltipManager.show_tip(def.display_name, def.description))
+	card.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	# the Moon lander is built here: show its construction (GDD §20.4)
 	if pp.planet_seed == GameState.home_planet_seed:
-		var prep_fill := ProgressFill.attach(card, UIStyle.color(&"neutral_stroke"), Callable(), true)
 		var sp_refresh := func() -> void:
-			if not is_instance_valid(status_lbl):
+			if not is_instance_valid(card):
 				return
 			var ex := GameState.expedition("lander")
+			var txt := "Operational"
+			var prog := -1.0
 			match String(ex.get("state", "")):
 				"preparing":
 					var left: float = float(ex.get("prep_left", 0.0))
-					status_lbl.text = "Building the Moon lander: %ds" % int(ceil(left))
-					prep_fill.progress = 1.0 - left / GameState.LANDER_PREP_SEC
+					txt = "Building the Moon lander: %ds" % int(ceil(left))
+					prog = 1.0 - left / GameState.LANDER_PREP_SEC
 				"launching":
-					status_lbl.text = "Lander lifting off"
-					prep_fill.progress = -1.0
+					txt = "Lander lifting off"
 				"orbiting":
-					status_lbl.text = "Lander circling the planet"
-					prep_fill.progress = -1.0
-				_:
-					status_lbl.text = "Operational"
-					prep_fill.progress = -1.0
+					txt = "Lander circling the planet"
+			if card.description != txt:
+				card.description = txt
+			if not is_equal_approx(card.progress, prog):
+				card.progress = prog
 		sp_refresh.call()
 		var sp_timer := Timer.new()
 		sp_timer.wait_time = 0.25
