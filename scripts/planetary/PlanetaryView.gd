@@ -112,6 +112,7 @@ var _transit_canvas: Control = null
 ## body -> its stand-in while a switch animation runs (flights follow them).
 var _switch_ghosts: Dictionary = {}
 const DescentScript := preload("res://scripts/planetary/DescentFX.gd")
+const POILayerScript := preload("res://scripts/planetary/POILayer.gd")   # its marker colours
 ## The colony lander is on its way down (OrbitalLayer DescentFX).
 var _lander_descending: bool = false
 ## The first City must be founded (placement can't be cancelled meanwhile).
@@ -7848,7 +7849,7 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	if poi.constructing:
 		card.description = "Constructing..."
 		card.stats = PackedStringArray()
-		_poll_progress(card, func() -> float: return c_poi.construct_progress, UIStyle.color(&"neutral_stroke"), true)
+		_poll_progress(card, func() -> float: return c_poi.construct_progress, _poi_bar_color(poi), true)
 		# a visible way back (playtest 30.10): cancel it for a full refund; ✖ sits beside the card
 		if Settlement.cancel_district_block(planet, poi) == "":
 			cancel_btn = IconButton.create("", "cancel", IconButton.Variant.NEGATIVE)   # icon only; the tip says what it does
@@ -7861,17 +7862,13 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 	elif as_city and pp.city_upgrading.has(poi.label):
 		card.description = "City levelling up…"
 		card.stats = PackedStringArray()
-		_poll_progress(card, func() -> float: return float(pp.city_upgrading.get(c_poi.label, 1.0)), UIStyle.color(&"neutral_stroke"), true)
+		_poll_progress(card, func() -> float: return float(pp.city_upgrading.get(c_poi.label, 1.0)), _poi_bar_color(poi), true)
 	elif not as_city and pp.is_district_upgrading(poi.label):
-		_poll_progress(card, func() -> float: return float(pp.district_upgrading.get(c_poi.label, 1.0)), UIStyle.color(&"neutral_stroke"), true)
+		_poll_progress(card, func() -> float: return float(pp.district_upgrading.get(c_poi.label, 1.0)), _poi_bar_color(poi), true)
 	elif not poi.is_orbital() and ProductionManager.district_def(poi) != null:
 		var d_inc := ProductionManager.district_income_shown(pp, poi)
 		if ProductionManager._has_stock_income(d_inc):
-			var cyc_col := UIStyle.color(&"accent")
-			for rid: String in d_inc:
-				if rid != Economy.ENERGY and rid != Economy.POPULATION:
-					cyc_col = UIStyle.resource_color(rid)
-					break
+			var cyc_col := _poi_bar_color(poi)   # the district's colour on the globe (revision 12.11)
 			_poll_progress(card, func() -> float: return ProductionManager.base_progress(p_seed, c_poi.label), cyc_col)
 
 	var cap_poi    := poi
@@ -7965,6 +7962,12 @@ func _income_stats(pp: PlanetProgress, poi: POIData) -> PackedStringArray:
 			Economy.POPULATION: out.append("population:+%s" % Economy.fmt(v))
 			_: out.append("%s:+%s" % [id, BuildingDef._num(snappedf(v, 0.1))])
 	return out
+
+## A district's / City's progress bars in the panels take the colour of its
+## marker on the globe (revision 12.11): Residential green, Science blue …,
+## a City gold.
+static func _poi_bar_color(poi: POIData) -> Color:
+	return POILayerScript._marker_color(poi.type_tag if poi != null else "")
 
 ## Keeps a ListItem's bar on `progress` (0..1), polled a few times a second.
 ## `striped`: building / levelling (crawling stripes), unlike a production cycle's plain fill.
@@ -10111,7 +10114,7 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 	if pp.is_district_upgrading(poi.label):
 		btn.label_text = "UPGRADING…"
 		btn.counter = "Lv %d → %d" % [lv, lv + 1]
-		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),
+		ProgressFill.attach(btn, _poi_bar_color(poi),
 			func() -> float: return float(pp.district_upgrading.get(poi.label, 1.0)), true)
 		btn.pressed.connect(func() -> void:
 			_ask_cancel_upgrade("Capital level-up" if poi.is_city() else "district level-up", func() -> String:
@@ -12298,7 +12301,7 @@ func _build_city_level_row(city: POIData, planet: PlanetData, pp: PlanetProgress
 		btn.label_text = "LEVELLING UP…"
 		btn.counter_items = PackedStringArray()
 		btn.counter = "Lv %d → %d" % [lv, next]
-		ProgressFill.attach(btn, UIStyle.color(&"neutral_stroke"),
+		ProgressFill.attach(btn, _poi_bar_color(city),
 			func() -> float: return float(pp.city_upgrading.get(city.label, 1.0)), true)
 		btn.pressed.connect(func() -> void:
 			_ask_cancel_upgrade("City level-up", func() -> String:
