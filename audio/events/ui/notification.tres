@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="VAMSfxEvent" format=3 uid="uid://6t05ly0bj3x5"]
+
+[ext_resource type="AudioStream" uid="uid://cpvx6jcy083j5" path="res://assets/sfx/SFX-Reward.wav" id="1_8eeg4"]
+[ext_resource type="Script" uid="uid://bm5cj2qn18qx3" path="res://addons/VAM/data/vam_sfx_event.gd" id="2_jumnh"]
+
+[resource]
+script = ExtResource("2_jumnh")
+clips = Array[AudioStream]([ExtResource("1_8eeg4")])
+clip_volumes_db = PackedFloat32Array()
+clip_pitches_st = PackedFloat32Array()
+pitch_scale = 2.0
+scale_notes = PackedInt32Array()
