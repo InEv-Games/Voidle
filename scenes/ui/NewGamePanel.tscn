@@ -76,16 +76,45 @@ theme_type_variation = &"PopupCard"
 [node name="Steps" type="VBoxContainer" parent="Center/Box/Pages"]
 layout_mode = 2
 
-[node name="Start" type="VBoxContainer" parent="Center/Box/Pages/Steps"]
+[node name="Civ" type="VBoxContainer" parent="Center/Box/Pages/Steps"]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="CivHead" type="Label" parent="Center/Box/Pages/Steps/Start"]
+[node name="CivHead" type="Label" parent="Center/Box/Pages/Steps/Civ"]
 layout_mode = 2
 theme_type_variation = &"HeaderLabel"
 text = "CIVILIZATION"
 
-[node name="CivRow" type="HBoxContainer" parent="Center/Box/Pages/Steps/Start"]
+[node name="CivSlider" type="HSlider" parent="Center/Box/Pages/Steps/Civ"]
+layout_mode = 2
+focus_mode = 2
+max_value = 7.0
+rounded = true
+tick_count = 8
+ticks_on_borders = true
+
+[node name="CivScale" type="Control" parent="Center/Box/Pages/Steps/Civ"]
+custom_minimum_size = Vector2(0, 14)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="CivName" type="Label" parent="Center/Box/Pages/Steps/Civ"]
+layout_mode = 2
+theme_type_variation = &"HeaderLabel"
+text = "CIVILIZATION 0"
+
+[node name="CivInfo" type="RichTextLabel" parent="Center/Box/Pages/Steps/Civ"]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"PopupBody"
+theme_override_font_sizes/normal_font_size = 11
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="Start" type="VBoxContainer" parent="Center/Box/Pages/Steps"]
 layout_mode = 2
 theme_override_constants/separation = 6
 

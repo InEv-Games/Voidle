@@ -49,8 +49,14 @@ const CIVS := {
 	"c0": ["CIVILIZATION 0", "city", "One world and its moon: grow a colony up to its final rocket.", true],
 	"c1": ["CIVILIZATION 1", "explore", "Launch the final rocket to unlock: the whole star system is yours to settle.", false],
 	"c2": ["CIVILIZATION 2", "map", "The stars beyond: a galaxy to cross. Comes after Civilization 1.", false],
+	"c3": ["CIVILIZATION 3", "map", "The whole galaxy under one hand. Comes after Civilization 2.", false],
+	"c4": ["CIVILIZATION 4", "map", "Past your galaxy: its neighbours. Comes after Civilization 3.", false],
+	"c5": ["CIVILIZATION 5", "map", "Clusters of galaxies bound into one reach. Comes after Civilization 4.", false],
+	"c6": ["CIVILIZATION 6", "map", "Out to the edge of what can be seen. Comes after Civilization 5.", false],
+	"c7": ["CIVILIZATION 7", "map", "What lies past it, no one aboard I-330 can say. Comes after Civilization 6.", false],
 }
-const CIV_ORDER := ["c0", "c1", "c2"]
+## The civilization slider's stops, 0 to 7 (NewGamePanel's first step).
+const CIV_ORDER := ["c0", "c1", "c2", "c3", "c4", "c5", "c6", "c7"]
 
 ## Head starts: id → [title, icon, what it gives].
 const BOONS := {
