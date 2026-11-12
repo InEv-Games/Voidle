@@ -122,12 +122,17 @@ static func map_color(c: Color, hues: Dictionary, vividness: float, force_accent
 		return c
 	var hue: float = hues[Role.SECONDARY if role == Role.TEXT else role]
 	var out := Color.from_hsv(hue, clampf(c.s * vividness, 0.0, 1.0), c.v, c.a)
-	# backgrounds keep their brightness across hues (a yellow at the same value
-	# reads far lighter than a blue), so the panels stay as dark as the base
+	# Backgrounds keep their brightness across hues (a yellow at the same value
+	# reads far lighter than a blue), so high-luminance panels stay as dark as base.
+	# When an accent hue has low luminance (e.g. crimson, violet), backgrounds scale down
+	# proportionally to maintain contrast against text and borders.
 	if role == Role.DOMINANT or role == Role.SECONDARY:
 		var lum := out.get_luminance()
 		if lum > 0.0001:
-			out = Color.from_hsv(hue, out.s, clampf(c.v * c.get_luminance() / lum, 0.0, minf(1.0, c.v * 1.35)), c.a)
+			var acc_lum := Color.from_hsv(hues[Role.ACCENT], clampf(0.85 * vividness, 0.0, 1.0), 0.91).get_luminance()
+			var contrast_scale := clampf(acc_lum / 0.614, 0.45, 1.0)
+			var scale := minf(1.0, c.get_luminance() / lum) * contrast_scale
+			out = Color.from_hsv(hue, out.s, c.v * scale, c.a)
 	return out
 
 static func _role(c: Color, force_accent: bool) -> int:
