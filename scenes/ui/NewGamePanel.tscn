@@ -1,0 +1,208 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/NewGamePanel.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/NewGamePreview.gd" id="2_preview"]
+[ext_resource type="PackedScene" uid="uid://dcaw5kheox1ap" path="res://scenes/ui/components/HeroHeader.tscn" id="3_hero"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/IconButton.tscn" id="4_button"]
+
+[node name="NewGamePanel" type="Control"]
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.6)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Box" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Stage" type="Control" parent="Center/Box"]
+custom_minimum_size = Vector2(0, 340)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Preview" type="Control" parent="Center/Box/Stage"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 480.0
+grow_horizontal = 2
+mouse_filter = 2
+script = ExtResource("2_preview")
+
+[node name="Head" type="HBoxContainer" parent="Center/Box"]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Hero" parent="Center/Box/Head" instance=ExtResource("3_hero")]
+layout_mode = 2
+size_flags_horizontal = 3
+caption = "Prepare your colony  //  1 / 2"
+title = "NEW GAME"
+
+[node name="Close" parent="Center/Box/Head" instance=ExtResource("4_button")]
+layout_mode = 2
+size_flags_vertical = 8
+label_text = ""
+icon_name = "close"
+
+[node name="Pages" type="PanelContainer" parent="Center/Box"]
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+theme_type_variation = &"PopupCard"
+
+[node name="Steps" type="VBoxContainer" parent="Center/Box/Pages"]
+layout_mode = 2
+
+[node name="Start" type="VBoxContainer" parent="Center/Box/Pages/Steps"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="CivHead" type="Label" parent="Center/Box/Pages/Steps/Start"]
+layout_mode = 2
+theme_type_variation = &"HeaderLabel"
+text = "CIVILIZATION"
+
+[node name="CivRow" type="HBoxContainer" parent="Center/Box/Pages/Steps/Start"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="WorldHead" type="Label" parent="Center/Box/Pages/Steps/Start"]
+layout_mode = 2
+theme_type_variation = &"HeaderLabel"
+text = "START WORLD"
+
+[node name="WorldRow" type="HBoxContainer" parent="Center/Box/Pages/Steps/Start"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="MoonHead" type="Label" parent="Center/Box/Pages/Steps/Start"]
+layout_mode = 2
+theme_type_variation = &"HeaderLabel"
+text = "MOON"
+
+[node name="MoonRow" type="HBoxContainer" parent="Center/Box/Pages/Steps/Start"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Info" type="RichTextLabel" parent="Center/Box/Pages/Steps/Start"]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"PopupBody"
+theme_override_font_sizes/normal_font_size = 11
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="Rest" type="VBoxContainer" parent="Center/Box/Pages/Steps"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BoonHead" type="Label" parent="Center/Box/Pages/Steps/Rest"]
+layout_mode = 2
+theme_type_variation = &"HeaderLabel"
+text = "HEAD START"
+
+[node name="Boons" type="GridContainer" parent="Center/Box/Pages/Steps/Rest"]
+layout_mode = 2
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
+columns = 2
+
+[node name="BoonDesc" type="RichTextLabel" parent="Center/Box/Pages/Steps/Rest"]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"PopupBody"
+theme_override_font_sizes/normal_font_size = 11
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="Rule" type="HSeparator" parent="Center/Box/Pages/Steps/Rest"]
+layout_mode = 2
+
+[node name="PlanetHead" type="Label" parent="Center/Box/Pages/Steps/Rest"]
+layout_mode = 2
+theme_type_variation = &"HeaderLabel"
+text = "PLANET"
+
+[node name="SeedRow" type="HBoxContainer" parent="Center/Box/Pages/Steps/Rest"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="NameEdit" type="LineEdit" parent="Center/Box/Pages/Steps/Rest/SeedRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.7
+placeholder_text = "World name"
+alignment = 1
+max_length = 20
+
+[node name="SeedEdit" type="LineEdit" parent="Center/Box/Pages/Steps/Rest/SeedRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Seed"
+alignment = 1
+max_length = 32
+
+[node name="Random" parent="Center/Box/Pages/Steps/Rest/SeedRow" instance=ExtResource("4_button")]
+layout_mode = 2
+label_text = "RANDOM"
+icon_name = "cycle"
+
+[node name="Buttons" type="HBoxContainer" parent="Center/Box"]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="Back" parent="Center/Box/Buttons" instance=ExtResource("4_button")]
+layout_mode = 2
+size_flags_horizontal = 4
+label_text = "BACK"
+icon_name = "cancel"
+
+[node name="Tutorial" parent="Center/Box/Buttons" instance=ExtResource("4_button")]
+layout_mode = 2
+size_flags_horizontal = 4
+label_text = "TUTORIAL"
+icon_name = "confirm"
+
+[node name="Begin" parent="Center/Box/Buttons" instance=ExtResource("4_button")]
+layout_mode = 2
+size_flags_horizontal = 4
+label_text = "BEGIN"
+icon_name = "rocket"
+variant = 1
+
+[node name="Next" parent="Center/Box/Buttons" instance=ExtResource("4_button")]
+layout_mode = 2
+size_flags_horizontal = 4
+label_text = "NEXT"
+icon_name = "confirm"
+variant = 1

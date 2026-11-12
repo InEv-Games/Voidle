@@ -13,18 +13,23 @@ const LIST_ITEM := "res://scenes/ui/components/ListItem.tscn"
 
 signal closed
 
-@onready var card: PopupCard = $Center/Card
+## The card (PopupCard). A window with its own scene built on this class
+## (NewGamePanel) may have none: then the card's parts are its own.
+@onready var card: PopupCard = get_node_or_null("Center/Card") as PopupCard
 
 ## False: no close button, Esc and clicks outside do nothing (a choice is required).
 var dismissable: bool = true:
 	set(v):
 		dismissable = v
-		(card.get_node("VBox/Header/Close") as Control).visible = v
+		if card != null:
+			(card.get_node("VBox/Header/Close") as Control).visible = v
 		if _hero_close != null:
 			_hero_close.visible = v
-		cancel_button().visible = v
+		if cancel_button() != null:
+			cancel_button().visible = v
 
-## The close button beside the hero (use_hero), which takes the header's place.
+## The close button beside the hero (use_hero, or a window's own scene), which
+## takes the header's place.
 var _hero_close: Control = null
 
 static func open(host: Node, title: String, icon_name: String, body := "", layer := 235) -> ModalPopup:
