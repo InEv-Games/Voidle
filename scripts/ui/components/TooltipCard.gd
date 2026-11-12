@@ -40,6 +40,29 @@ var _corner: RichTextLabel = null
 var _detail_sep: HSeparator = null
 var _detail: RichTextLabel = null
 
+## A detail line starting with TOTAL ("[total]Net\t+12 /s") is drawn apart, under
+## its own separator, larger, key left and value right (revision 12.11).
+const TOTAL := "[total]"
+var _total_sep: HSeparator = null
+var _total_row: HBoxContainer = null
+var _total_key: RichTextLabel = null
+var _total_val: RichTextLabel = null
+
+## The total line for a detail block: `key` on the left, `value` on the right.
+static func total_line(key: String, value: String) -> String:
+	return "%s%s\t%s" % [TOTAL, key, value]
+
+## Splits a detail text into the text and its total line ["", ""] (the total
+## line is taken out wherever it sits; whatever follows it stays in the text).
+static func _split_total(d: String) -> Array:
+	var lines := d.split("\n")
+	for i in lines.size():
+		if lines[i].begins_with(TOTAL):
+			var rest := lines.slice(0, i)
+			rest.append_array(lines.slice(i + 1))
+			return ["\n".join(rest).strip_edges(), lines[i].substr(TOTAL.length())]
+	return [d, ""]
+
 ## A [url] term in the body or detail is hovered / left (nested tips).
 signal term_hovered(term: String)
 signal term_left(term: String)
@@ -142,10 +165,12 @@ func _sync() -> void:
 		vb.move_child(_detail, at + 1)
 		if not Engine.is_editor_hint():
 			_hook_terms(_detail)
+	var split := _split_total(detail)
 	if _detail != null:
-		_detail.text = detail
-		_detail.visible = detail != ""
-		_detail_sep.visible = detail != ""
+		_detail.text = split[0]
+		_detail.visible = split[0] != ""
+		_detail_sep.visible = split[0] != ""
+	_sync_total(String(split[1]))
 	($VBox/Rows as Control).visible = ($VBox/Rows as Node).get_child_count() > 0
 	var rich := footer_right != "" or footer_left != ""
 	($VBox/CostBox as Control).visible = cost != "" or rich
@@ -170,6 +195,36 @@ func _sync() -> void:
 		_foot_l.text = footer_left
 		_foot_r.text = footer_right
 	($VBox/Actions as Control).visible = ($VBox/Actions as Node).get_child_count() > 0
+
+func _sync_total(t: String) -> void:
+	if t != "" and _total_row == null:
+		var vb := $VBox as VBoxContainer
+		_total_sep = HSeparator.new()
+		_total_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_total_row = HBoxContainer.new()
+		_total_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_total_row.add_theme_constant_override(&"separation", 16)
+		_total_key = _foot_label()
+		_total_key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_total_val = _foot_label()
+		_total_row.add_child(_total_key)
+		_total_row.add_child(_total_val)
+		var at := (_detail.get_index() + 1) if _detail != null else (($VBox/Body as Node).get_index() + 1)
+		vb.add_child(_total_sep)
+		vb.move_child(_total_sep, at)
+		vb.add_child(_total_row)
+		vb.move_child(_total_row, at + 1)
+		if not Engine.is_editor_hint():
+			_hook_terms(_total_key)
+	if _total_row == null:
+		return
+	_total_sep.visible = t != ""
+	_total_row.visible = t != ""
+	# as large as the card's title (HeaderLabel, bold), no larger (revision 12.11)
+	var fs := ($VBox/Header/Title as Label).get_theme_font_size(&"font_size")
+	var parts := t.split("\t")
+	_total_key.text = "[font_size=%d][b]%s[/b][/font_size]" % [fs, parts[0]]
+	_total_val.text = "[font_size=%d][b]%s[/b][/font_size]" % [fs, parts[1] if parts.size() > 1 else ""]
 
 ## Body from mixed parts: Strings (BBCode) and Texture2D icons drawn inline.
 func set_body_parts(parts: Array, icon_size: int = 13) -> void:
