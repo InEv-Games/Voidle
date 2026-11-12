@@ -71,21 +71,33 @@ static func build(base: Theme, accent_deg: float, harmony: int, vividness: float
 
 ## Slider handle: a small upright bar (px), not Godot's default 16px knob.
 const GRABBER_SIZE := Vector2i(6, 16)
+## Hovered (or lit by the keys / pad, which hover it): larger and near white,
+## so the slider being worked is plain to see (12.11: with a pad it wasn't).
+const GRABBER_HL_SIZE := Vector2i(8, 20)
+const GRABBER_HL_LIGHTEN := 0.75
+const FILL_HL_LIGHTEN := 0.25   # the filled part of the track, hovered
 ## The dark edge that sets the handle off from the same-coloured fill.
 const GRABBER_EDGE := Color(0.02, 0.06, 0.1, 1.0)
 
 ## Gives HSlider / VSlider a small upright-bar handle (lying flat on a VSlider)
-## in the slider's fill colour (the accent, so it follows the theme); a lighter
-## one on hover, a dim one disabled. Icons aren't recoloured by build(), so
-## they're drawn here from the theme.
+## in the slider's fill colour (the accent, so it follows the theme); a larger,
+## near-white one on hover (with a lighter fill), a dim one disabled. Icons
+## aren't recoloured by build(), so they're drawn here from the theme.
 static func set_slider_grabbers(t: Theme) -> void:
 	var fill := t.get_stylebox(&"grabber_area", &"HSlider")
 	var col: Color = (fill as StyleBoxFlat).bg_color if fill is StyleBoxFlat else Color(0.22, 0.82, 1.0)
 	for type: StringName in [&"HSlider", &"VSlider"]:
-		var sz := GRABBER_SIZE if type == &"HSlider" else Vector2i(GRABBER_SIZE.y, GRABBER_SIZE.x)
+		var flat := type == &"HSlider"
+		var sz := GRABBER_SIZE if flat else Vector2i(GRABBER_SIZE.y, GRABBER_SIZE.x)
+		var hl := GRABBER_HL_SIZE if flat else Vector2i(GRABBER_HL_SIZE.y, GRABBER_HL_SIZE.x)
 		t.set_icon(&"grabber", type, _bar(sz, col))
-		t.set_icon(&"grabber_highlight", type, _bar(sz, col.lightened(0.3)))
+		t.set_icon(&"grabber_highlight", type, _bar(hl, col.lightened(GRABBER_HL_LIGHTEN)))
 		t.set_icon(&"grabber_disabled", type, _bar(sz, Color(col, 0.4)))
+		var area := t.get_stylebox(&"grabber_area", type) if t.has_stylebox(&"grabber_area", type) else null
+		if area is StyleBoxFlat:
+			var lit := (area as StyleBoxFlat).duplicate() as StyleBoxFlat
+			lit.bg_color = lit.bg_color.lightened(FILL_HL_LIGHTEN)
+			t.set_stylebox(&"grabber_area_highlight", type, lit)
 
 ## A filled rectangle `size` big with a 1px GRABBER_EDGE border.
 static func _bar(size: Vector2i, col: Color) -> ImageTexture:
