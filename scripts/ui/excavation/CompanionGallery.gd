@@ -85,6 +85,12 @@ func _ready() -> void:
 	_assign = IconButton.create("APPOINT AS %s" % _title_of(ministry).to_upper(), "confirm", IconButton.Variant.POSITIVE)
 	_assign.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_assign.pressed.connect(_on_assign)
+	# what appointing changes (whose bonus goes, whose comes, the price) is its
+	# tip; the card keeps only why it can't be done
+	_assign.mouse_entered.connect(func() -> void:
+		TooltipManager.live(func() -> void:
+			TooltipManager.show_tip(_assign.label_text.capitalize(), _appoint_tip())))
+	_assign.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override(&"separation", 6)
 	actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -177,10 +183,31 @@ func _refresh_assign() -> void:
 	var dim := UIStyle.hex(&"text_subtle")
 	if hard != "":
 		_status.text = "[color=#%s]%s[/color]" % [dim, hard]
-	elif cost > 0.0:   # the price stands on the button: no note
+	else:   # what it changes and costs: the button's tip (_appoint_tip)
 		_status.visible = false
-	else:
-		_status.text = "[color=#%s]Appointing them ends the current term; they serve at least five years.[/color]" % dim
+
+## APPOINT's tip: the ministry's minister now → the picked Agent, the bonus
+## that ends and the one that starts, and what it costs.
+func _appoint_tip() -> String:
+	var def := CompanionDef.find(_picked) if _picked != FUTURE else null
+	if def == null:
+		return ""
+	var dim := UIStyle.hex(&"text_subtle")
+	var sitting := CompanionDef.find(GameState.minister_of(ministry))
+	var lines: Array[String] = []
+	lines.append("[color=#%s]%s[/color]  %s  >  %s" % [dim, _title_of(ministry),
+		sitting.display_name if sitting != null else "vacant", def.display_name])
+	if sitting != null:
+		lines.append("[color=#%s]Ends:[/color]  %s" % [UIStyle.hex(&"bad"), sitting.bonus_bb(12)])
+	lines.append("[color=#%s]Starts:[/color]  %s" % [UIStyle.hex(&"good"), def.bonus_bb(12)])
+	var cost := GameState.early_appoint_cost(ministry)
+	if cost > 0.0:
+		var left := GameState.ministry_ready_at(ministry) - GameState.calendar_seconds
+		lines.append("[color=#%s]%s's term runs %s more:[/color]  %s %s" % [dim,
+			sitting.display_name if sitting != null else "The minister", GameState.calendar_span_text(left),
+			UIIcons.bb(Economy.CREDITS, 12, Economy.color_of(Economy.CREDITS)), HUDManager.fmt_credits(cost)])
+	lines.append("[color=#%s]%s serves at least five years.[/color]" % [dim, def.display_name])
+	return "\n".join(lines)
 
 func _on_assign() -> void:
 	if _picked == FUTURE or not GameState.appoint_now(_picked, ministry):

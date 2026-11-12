@@ -331,8 +331,9 @@ static func _after_story(s: ExcavationSiteDef) -> void:
 	if s.site_id != FIRST_RUIN:
 		return
 	if GameState.bolo_intro_route == "":
-		Narrative.play(BOLO_GRAPH, "meet_bolo", {"id": "meet_bolo", "on_done": func(_exit: String) -> void:
-			met_bolo("excavation")})
+		Narrative.play(BOLO_GRAPH, "meet_bolo", {"id": "meet_bolo", "outcomes": bolo_joins_outcomes(),
+			"on_done": func(_exit: String) -> void:
+				met_bolo("excavation")})
 	else:
 		Narrative.play(BOLO_GRAPH, "bolo_at_toppled_stones", {"id": "bolo_at_toppled_stones"})
 
@@ -346,8 +347,19 @@ static func met_bolo(route: String) -> void:
 
 ## Plays Bolo's people's offer (from Companions). Accepted: they come up and
 ## the home world houses GameState.BOLO_PEOPLE more; "later" leaves it open.
+## What meeting Bolo does, for her scene's answers' tips (Narrative "outcomes").
+static func bolo_joins_outcomes() -> Dictionary:
+	var bolo := CompanionDef.find("bolo")
+	var text := "Bolo joins your Agents." + (("\n%s once she serves in a ministry." % bolo.bonus_bb(12)) if bolo != null else "")
+	return {"joined": text, "done": text}
+
 static func hear_bolo_invitation() -> void:
+	var pop := Economy.color_of(Economy.POPULATION)
 	Narrative.play(BOLO_GRAPH, "bolo_surface_invitation", {"id": "bolo_surface_invitation", "once": false, "now": true,
+		"outcomes": {
+			"accepted": "%s [color=#%s]+%s[/color] Population on your home world: Bolo's people come up from below." % [
+				UIIcons.bb(Economy.POPULATION, 12, pop), pop.to_html(false), Economy.fmt(float(GameState.BOLO_PEOPLE))],
+			"later": "[color=#%s]Nothing yet: Bolo will ask again.[/color]" % UIStyle.hex(&"text_subtle")},
 		"on_done": func(exit_name: String) -> void:
 			if exit_name != "accepted" or GameState.bolo_people_joined:
 				return

@@ -128,8 +128,9 @@ func show_line(speaker: String, text: String, portrait: Texture2D) -> void:
 	_next.visible = true
 	_type(text)
 
-## The answers to the line on screen; CONTINUE gives way to them.
-func show_choices(texts: Array[String]) -> void:
+## The answers to the line on screen; CONTINUE gives way to them. `tips[i]`:
+## what that answer leads to in the game, shown in its tooltip ("": none).
+func show_choices(texts: Array[String], tips: Array[String] = []) -> void:
 	_clear_choices()
 	_has_choices = true
 	_side.custom_minimum_size.x = SIDE_W
@@ -144,8 +145,13 @@ func show_choices(texts: Array[String]) -> void:
 				_skip_typing()
 				return
 			AudioManager.play("click")
+			TooltipManager.hide_tip()
 			_clear_choices()
 			choice_made.emit(at, label))
+		var tip := tips[i] if i < tips.size() else ""
+		if tip != "":   # what it leads to (the keys / pad light it as a hover: the tip shows too)
+			b.mouse_entered.connect(func() -> void: TooltipManager.show_tip(label, tip))
+			b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 		_choices.add_child(b)
 	_choices.modulate.a = 0.0 if _typing != null else 1.0
 

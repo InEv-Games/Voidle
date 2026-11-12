@@ -17,6 +17,9 @@
 ##   "once"    true (default): a scene that played to its end never plays again
 ##             (GameState.completed_scenes)
 ##   "on_done" Callable(exit_name: String), called when the scene ends
+##   "outcomes" { exit_name: bbcode }: what an ending does in the game (what
+##             on_done gives). An answer that leads to that ending (past lines
+##             with one way on) shows it in its tooltip: nothing in the panel.
 ##   "now"     the player asked for it (a button): it starts at once, ahead of
 ##             the queue and the waits; a short line on screen gives way to it
 ##
@@ -77,7 +80,7 @@ func play(graph_path: String, entry: String, opts: Dictionary = {}) -> bool:
 	var item := {"graph": graph_path, "entry": entry, "id": id, "main": main,
 		"pause": bool(opts.get("pause", main)), "once": once, "on_done": opts.get("on_done", Callable()),
 		"now": bool(opts.get("now", false)), "lines": opts.get("lines", []),
-		"skippable": bool(opts.get("skippable", false))}
+		"skippable": bool(opts.get("skippable", false)), "outcomes": opts.get("outcomes", {})}
 	if item["now"]:
 		if not _current.is_empty() and not bool(_current["main"]):
 			_end_scene("", true)   # a short line gives way (it stays in the log)
@@ -265,7 +268,39 @@ func _on_choices(texts: Array[String]) -> void:
 		_comms.hide_panel()
 		_panel.show_panel()
 		_panel.show_line(String(_last_line[0]), String(_last_line[1]), portrait_for(String(_last_line[0])))
-	_panel.show_choices(texts)
+	_panel.show_choices(texts, _answer_tips(texts.size()))
+
+## Each answer on screen's tip: what the ending it leads to does in the game
+## (the scene's "outcomes"); "" when it leads to none (or another choice first).
+func _answer_tips(n: int) -> Array[String]:
+	var tips: Array[String] = []
+	tips.resize(n)
+	tips.fill("")
+	var outcomes: Dictionary = _current.get("outcomes", {})
+	if _mgr == null or outcomes.is_empty():
+		return tips
+	var m := _mgr
+	while m._sub_mgr != null:   # a sub-graph asking
+		m = m._sub_mgr
+	for i in mini(n, m._visible_exits.size()):
+		var ending := _ending_of(m.data, m._visible_exits[i])
+		tips[i] = String(outcomes.get(ending, ""))
+	return tips
+
+## The ending an exit leads to, past lines with only one way on; "" when a
+## choice (or a branch) comes first.
+static func _ending_of(data: VSMData, exit: VSMExitLink) -> String:
+	var node := data.get_node_by_id(exit.target_id)
+	for i in 64:
+		if node == null:
+			return ""
+		if node is VSMExitNodeData:
+			return (node as VSMExitNodeData).exit_name
+		var outs = node.get("exits")
+		if outs == null or (outs as Array).size() != 1:
+			return ""
+		node = data.get_node_by_id(((outs as Array)[0] as VSMExitLink).target_id)
+	return ""
 
 ## Someone speaks in the middle of play, as a notice: `text` in the CommsCard,
 ## the game running on (a short scene of one line). With an `id` it is said

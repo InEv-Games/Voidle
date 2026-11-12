@@ -2176,6 +2176,7 @@ func _setup_moon_colonize_button(btn: IconButton, data: PlanetData) -> void:
 			AudioManager.play("click")
 			_go_to_spaceport()
 			Narrative.play(Excavations.BOLO_GRAPH, "bolo_before_moon", {"id": "bolo_before_moon", "now": true,
+				"outcomes": Excavations.bolo_joins_outcomes(),
 				"on_done": func(_exit: String) -> void:
 					Excavations.met_bolo("spaceport")
 					start_lander.call()})

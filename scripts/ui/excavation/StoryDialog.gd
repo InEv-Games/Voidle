@@ -20,6 +20,7 @@ var site: ExcavationSiteDef
 var _page := Page.SITE
 var _mgr: VSMManager = null
 var _typing: Tween = null
+var _next_tip := ""   # the main button's tip: what its step brings (EXCAVATE: time, returns)
 
 @onready var _card: Control = $Center/Card
 @onready var _hero: HeroHeader = $Center/Card/Front/Hero
@@ -76,6 +77,11 @@ func _ready() -> void:
 	add_to_group(&"story_dialog")   # story scenes wait until it is closed
 	_later.pressed.connect(_close)
 	_next.pressed.connect(_on_next)
+	# what the button's step would bring stands in its tip, not in the card
+	_next.mouse_entered.connect(func() -> void:
+		if _next_tip != "":
+			TooltipManager.show_tip(_next.label_text.capitalize(), _next_tip))
+	_next.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	_hero.caption = _counter_text()
 	_hero.title = site.display_name.to_upper()
 	($Center/Card/Front/Panel as Control).gui_input.connect(func(ev: InputEvent) -> void:
@@ -197,6 +203,7 @@ func _on_next() -> void:
 ## The site's name and teaser, nothing to pay yet.
 func _show_site() -> void:
 	_page = Page.SITE
+	_next_tip = ""
 	_show_face(null)
 	_body.text = site.teaser
 	_next.label_text = "INVESTIGATE"
@@ -210,6 +217,7 @@ func _show_site() -> void:
 
 func _play(page: Page, entry: String) -> void:
 	_page = page
+	_next_tip = ""
 	_block.visible = false
 	_time_box.visible = false
 	_details.visible = false
@@ -283,10 +291,6 @@ func _explain_choice(b: IconButton, exit: VSMExitLink) -> void:
 				gives[id] = float(gives.get(id, 0.0)) + float((a as StoryGrant).resources[id])
 		elif a is StorySetFlag or a is StoryJoinCompanion:
 			remembered = true
-	var items := PackedStringArray()
-	for id: String in gives:
-		items.append("%s:+%s" % [id, Economy.fmt(float(gives[id]))])
-	b.counter_items = items
 	var lines: Array[String] = []
 	if not gives.is_empty():
 		lines.append("Adds to what the dig returns:  " + _amounts_bb(gives))
@@ -309,15 +313,14 @@ func _on_finished(_exit_name: String) -> void:
 	else:
 		_show_end()
 
-## The opening's last line stays; under it how long it takes and what it returns
-## at least, the price on the button.
+## The opening's last line stays; the price on the button, and in its tip how
+## long it takes, what it returns at least and what a City's reach does (the
+## card keeps only why it can't start yet).
 func _show_pay() -> void:
 	_page = Page.PAY
 	_later.visible = true
 	_next.visible = true
-	_time_row.value = Excavations.time_text(Excavations.duration_of(site))
-	_returns.text = "[right]%s[/right]" % _amounts_bb(site.reward)
-	_details.visible = true
+	_details.visible = false
 	_next.label_text = "EXCAVATE"
 	var cost := Excavations.cost_of(site)
 	var items := PackedStringArray()
@@ -326,26 +329,27 @@ func _show_pay() -> void:
 	_next.counter_items = items
 	var why := Excavations.start_block(site)
 	_next.disabled = why != ""
-	var lines: Array[String] = []
-	if why != "":
-		lines.append(_missing_bb() if Economy.cost_block(cost) != "" else why)
-	# inside a City's reach it goes faster and costs less; outside, say so (playtest 07.11)
+	_block.text = (_missing_bb() if Economy.cost_block(cost) != "" else why) if why != "" else ""
+	_block.visible = why != ""
+	# the tip: time, returns, and (playtest 07.11) what a City's reach does
 	var near := Excavations.city_near(site)
 	var pct_t := int(round((1.0 - Excavations.CITY_TIME_MULT) * 100.0))
 	var pct_c := int(round((1.0 - Excavations.CITY_COST_MULT) * 100.0))
+	var dim := UIStyle.hex(&"text_subtle")
+	var tip: Array[String] = [
+		"[color=#%s]Digging time[/color]  %s" % [dim, Excavations.time_text(Excavations.duration_of(site))],
+		"[color=#%s]Returns at least[/color]  %s" % [dim, _amounts_bb(site.reward)]]
 	if near != null:
-		lines.append("[color=#%s]Inside %s's reach: %d%% faster, %d%% cheaper.[/color]" % [
+		tip.append("[color=#%s]Inside %s's reach: %d%% faster, %d%% cheaper.[/color]" % [
 			UIStyle.hex(&"good"), near.shown_name(), pct_t, pct_c])
 	else:
-		lines.append("[color=#%s]Digs inside a City's reach go %d%% faster and cost %d%% less.[/color]" % [
-			UIStyle.hex(&"text_subtle"), pct_t, pct_c])
-	_block.text = "\n".join(lines)
-	_block.visible = true
-	_details.modulate.a = 0.0
-	_reveal(_details)
+		tip.append("[color=#%s]Digs inside a City's reach go %d%% faster and cost %d%% less.[/color]" % [
+			dim, pct_t, pct_c])
+	_next_tip = "\n".join(tip)
 
 func _show_digging() -> void:
 	_page = Page.DIGGING
+	_next_tip = ""
 	_show_face(null)
 	_speaker.visible = false
 	_block.visible = false
@@ -363,6 +367,7 @@ func _show_digging() -> void:
 ## What it paid, and the companion with their bonus if one joined.
 func _show_end() -> void:
 	_page = Page.END
+	_next_tip = ""
 	var result := Excavations.finish(site, _mgr.blackboard)
 	_rewards.text = _amounts_bb(result["grants"])
 	_rewards.visible = not (result["grants"] as Dictionary).is_empty()

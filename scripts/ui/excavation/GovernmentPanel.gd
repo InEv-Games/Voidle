@@ -19,7 +19,7 @@ const COL_GAP := 28
 const PORTRAIT_H := 330.0   # the minister standing, from the column's top
 const PORTRAIT_X := 0.6     # their centre across the column (share)
 const NAME_SIZE := 24       # the ministry's name (the hero's font, smaller)
-const CARD_H := 112.0       # every card as tall, so the names line up
+const CARD_H := 76.0        # every card as tall, so the names line up
 const REVEAL_SLOW := 2.0
 
 static var _popup: ModalPopup = null
@@ -123,13 +123,6 @@ static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Arra
 	else:
 		inner.add_child(_text("[font_size=13]%s[/font_size]\n[color=#%s]%s  //  Lv %d[/color]\n%s" % [
 			def.display_name, dim, def.role, GameState.agent_level(agent_id), def.bonus_bb(12)]))
-		var rule := HSeparator.new()
-		rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		inner.add_child(rule)
-		var left := GameState.ministry_ready_at(mid) - GameState.calendar_seconds
-		inner.add_child(_text("[color=#%s]%s[/color]" % [dim,
-			("Serves at least %s more; replacing them earlier costs credits." % GameState.calendar_span_text(left)) if left > 0.0
-				else "Their term is over: you may replace them for free."]))
 	# the button, centred under the card (a locked ministry keeps its room empty)
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -140,6 +133,12 @@ static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Arra
 		AudioManager.play("click")
 		p.close()
 		CompanionGallery.open(host, mid, func() -> void: open(host)))
+	# the term and what replacing costs: its tip, not the card
+	if def != null:
+		btn.mouse_entered.connect(func() -> void:
+			TooltipManager.live(func() -> void:
+				TooltipManager.show_tip("Replace", _replace_tip(mid, def))))
+		btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	buttons.add_child(btn)
 	if not open_slot:   # no button, but its room (not focusable by the keys / pad)
 		buttons.custom_minimum_size.y = btn.get_combined_minimum_size().y
@@ -152,6 +151,22 @@ static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Arra
 	front.minimum_size_changed.connect(place)
 	place.call_deferred()
 	return col
+
+## REPLACE's tip: whose bonus would end, how long their term still runs and
+## what replacing them now costs.
+static func _replace_tip(mid: String, def: CompanionDef) -> String:
+	var dim := UIStyle.hex(&"text_subtle")
+	var lines: Array[String] = ["[color=#%s]Ends:[/color]  %s" % [UIStyle.hex(&"bad"), def.bonus_bb(12)]]
+	var left := GameState.ministry_ready_at(mid) - GameState.calendar_seconds
+	var cost := GameState.early_appoint_cost(mid)
+	if left > 0.0 and cost > 0.0:
+		lines.append("[color=#%s]Serves at least %s more: replacing them now costs[/color]  %s %s" % [dim,
+			GameState.calendar_span_text(left), UIIcons.bb(Economy.CREDITS, 12, Economy.color_of(Economy.CREDITS)),
+			HUDManager.fmt_credits(cost)])
+	else:
+		lines.append("[color=#%s]Their term is over: replacing them is free.[/color]" % dim)
+	lines.append("[color=#%s]Pick who takes their seat in AGENTS.[/color]" % dim)
+	return "\n".join(lines)
 
 static func _text(bb: String) -> RichTextLabel:
 	var r := RichTextLabel.new()
