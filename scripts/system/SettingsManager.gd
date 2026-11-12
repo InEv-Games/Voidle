@@ -9,11 +9,11 @@ signal theme_changed(theme_id: String)
 ## Theme presets: an accent hue and a harmony for ThemeBuilder. "cyan" is the
 ## project theme as authored (voidle_theme.tres); "custom" is the theme builder's.
 const THEMES := {
-	"cyan":    {"label": "Cyan (Default)",    "hue": 194.0, "harmony": ThemeBuilder.Harmony.ANALOGOUS,     "original": true},
-	"yellow":  {"label": "Solar Gold (News)", "hue": 43.0,  "harmony": ThemeBuilder.Harmony.COMPLEMENTARY},
-	"emerald": {"label": "Bio Emerald",       "hue": 151.0, "harmony": ThemeBuilder.Harmony.ANALOGOUS},
-	"crimson": {"label": "Mars Crimson",      "hue": 352.0, "harmony": ThemeBuilder.Harmony.MONOCHROMATIC},
-	"violet":  {"label": "Nebula Violet",     "hue": 265.0, "harmony": ThemeBuilder.Harmony.ANALOGOUS},
+	"cyan":    {"label": "The Cyan of the Void",                  "hue": 194.0, "harmony": ThemeBuilder.Harmony.ANALOGOUS,     "original": true},
+	"yellow":  {"label": "Unexpected News from West Continent",   "hue": 43.0,  "harmony": ThemeBuilder.Harmony.COMPLEMENTARY},
+	"emerald": {"label": "Borben Kallas Green",                   "hue": 151.0, "harmony": ThemeBuilder.Harmony.ANALOGOUS},
+	"crimson": {"label": "Alone in red",                          "hue": 352.0, "harmony": ThemeBuilder.Harmony.MONOCHROMATIC},
+	"violet":  {"label": "Nebula Violet",                         "hue": 265.0, "harmony": ThemeBuilder.Harmony.ANALOGOUS},
 	"custom":  {"label": "Custom"},
 }
 const THEME_ORDER: Array[String] = ["cyan", "yellow", "emerald", "crimson", "violet", "custom"]
