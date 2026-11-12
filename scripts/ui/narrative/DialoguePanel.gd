@@ -52,6 +52,7 @@ static func create() -> DialoguePanel:
 	return (load(SCENE_PATH) as PackedScene).instantiate() as DialoguePanel
 
 func _ready() -> void:
+	_card.visible = false   # until a scene shows it (the scene may keep it visible for editing)
 	(_hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF   # one line
 	_box.gui_input.connect(_on_card_input)
 	_skip.pressed.connect(func() -> void:
@@ -72,6 +73,7 @@ func set_skippable(on: bool) -> void:
 		_skip.visible = on
 
 var _hiding: Tween = null   # the card fading out (a scene ended)
+var _show_n := 0   # each show / hide: a coming-in left waiting gives way
 
 func show_panel() -> void:
 	if _hiding != null:   # a scene ended and the next one starts at once: it stays up
@@ -81,11 +83,21 @@ func show_panel() -> void:
 	if _card.visible:
 		return
 	_card.visible = true
+	# unseen until its line is in and the containers have laid it out (the
+	# first frame drew it at the top left, squeezed), then it pops in
+	_card.modulate.a = 0.0
+	_show_n += 1
+	var n := _show_n
+	for i in 2:
+		await get_tree().process_frame
+	if n != _show_n or not _card.visible:
+		return
 	_place()
 	StoryDialog.pop_in(_card)
 
 func hide_panel() -> void:
 	_kill_typing()
+	_show_n += 1
 	if not _card.visible:
 		return
 	if _hiding != null:

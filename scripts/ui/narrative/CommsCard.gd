@@ -42,6 +42,7 @@ static func create() -> CommsCard:
 	return (load("res://scenes/ui/narrative/CommsCard.tscn") as PackedScene).instantiate() as CommsCard
 
 func _ready() -> void:
+	_card.visible = false   # until a line shows it (the scene may keep it visible for editing)
 	_box.mouse_filter = Control.MOUSE_FILTER_STOP
 	_box.gui_input.connect(func(ev: InputEvent) -> void:
 		var mb := ev as InputEventMouseButton
@@ -50,6 +51,7 @@ func _ready() -> void:
 			_box.accept_event())
 
 var _hiding: Tween = null   # the card fading out (a scene ended)
+var _show_n := 0   # each show / hide: a coming-in left waiting gives way
 
 func show_panel() -> void:
 	if _hiding != null:   # a scene ended and the next one starts at once: it stays up
@@ -59,11 +61,21 @@ func show_panel() -> void:
 	if _card.visible:
 		return
 	_card.visible = true
+	# unseen until its line is in and the containers have laid it out (the
+	# first frame drew it at the top left, squeezed), then it pops in
+	_card.modulate.a = 0.0
+	_show_n += 1
+	var n := _show_n
+	for i in 2:
+		await get_tree().process_frame
+	if n != _show_n or not _card.visible:
+		return
 	_place()
 	StoryDialog.pop_in(_card)
 
 func hide_panel() -> void:
 	_kill_typing()
+	_show_n += 1
 	_line_id += 1
 	if not _card.visible:
 		return
