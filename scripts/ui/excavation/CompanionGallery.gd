@@ -61,6 +61,7 @@ func _title_of(ministry_id: String) -> String:
 
 func _ready() -> void:
 	_name.set_title_size(NAME_SIZE)
+	_name.set_outline()   # over the Agent's portrait
 	var back := LeftPanel.back_button("BACK")
 	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	back.pressed.connect(func() -> void:

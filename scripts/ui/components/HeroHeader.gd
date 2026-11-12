@@ -64,6 +64,19 @@ func _fit_spacing() -> void:
 		_title.add_theme_constant_override(&"line_spacing", -16)
 		add_theme_constant_override(&"separation", -8)
 
+## A dark outline (the panel colour) round the caption and title, for a hero
+## standing over a portrait: on its light parts (a white coat) the text read
+## poorly. `px` for the title; the caption gets a thinner one.
+const OUTLINE_PX := 3
+
+func set_outline(px := OUTLINE_PX) -> void:
+	outline_label(get_node("Title") as Label, px)
+	outline_label(get_node("Caption") as Label, maxi(1, px - 1))
+
+static func outline_label(l: Label, px := OUTLINE_PX) -> void:
+	l.add_theme_constant_override(&"outline_size", px)
+	l.add_theme_color_override(&"font_outline_color", UIStyle.color(&"panel_bg"))
+
 func _ready() -> void:
 	_sync()
 

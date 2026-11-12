@@ -83,11 +83,13 @@ static func _option(opt: Dictionary, p: ModalPopup, on_pick: Callable, i: int,
 		var c := Label.new()
 		c.text = cap
 		c.theme_type_variation = &"SubLabel"
+		HeroHeader.outline_label(c, HeroHeader.OUTLINE_PX - 1)   # over the portrait
 		front.add_child(c)
 	var name_l := Label.new()
 	name_l.text = String(opt.get("name", ""))
 	name_l.theme_type_variation = &"HeaderLabel"
 	name_l.add_theme_font_size_override(&"font_size", NAME_SIZE)
+	HeroHeader.outline_label(name_l)   # over the portrait
 	front.add_child(name_l)
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 4

@@ -54,6 +54,7 @@ static func create() -> DialoguePanel:
 func _ready() -> void:
 	_card.visible = false   # until a scene shows it (the scene may keep it visible for editing)
 	(_hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF   # one line
+	_hero.set_outline()   # the speaker's portrait stands behind it
 	_box.gui_input.connect(_on_card_input)
 	_skip.pressed.connect(func() -> void:
 		AudioManager.play("click")

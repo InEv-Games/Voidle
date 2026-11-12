@@ -104,6 +104,7 @@ static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Arra
 	var title := HeroHeader.create(String(m["title"]),
 		String(m["name"]).replace("Ministry of ", "").to_upper(), NAME_SIZE)
 	(title.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF
+	title.set_outline()   # over the minister's portrait
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	front.add_child(title)
 	var card := PanelContainer.new()
