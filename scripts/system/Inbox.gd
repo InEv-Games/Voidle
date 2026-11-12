@@ -137,8 +137,30 @@ func load_data(a: Array) -> void:
 	_changed()
 
 func _changed() -> void:
+	_ping_if_new()
 	changed.emit()
 	_refresh_panel()
+
+## A new unread row plays the notification sound (revision 12.11: they went
+## unnoticed). The rows a game loads with don't: the first look only notes them.
+const PING_EVENT := "ui/notification"
+var _pinged := {}   # ids already heard (or there at load)
+var _primed := false
+func _ping_if_new() -> void:
+	if NewsFeed.on_main_menu() or GameState.home_planet_seed < 0:
+		_primed = false
+		_pinged.clear()
+		return
+	var fresh := false
+	for e: Dictionary in items():
+		var id := String(e["id"])
+		if _pinged.has(id) or GameState.story_flags.has("inbox_seen:" + id):
+			continue
+		_pinged[id] = true
+		fresh = true
+	if fresh and _primed:
+		AudioManager.play(PING_EVENT)
+	_primed = true
 
 # ── What can be done now (worked out each second) ────────────────────────────
 func _process(delta: float) -> void:
@@ -164,6 +186,24 @@ func _process(delta: float) -> void:
 	if sig != _sig:
 		_sig = sig
 		_changed()
+
+## The card as tall as its rows (up to MAX_H, then it scrolls), its
+## bottom-right corner just above the news bar. Placed by position, not by
+## anchors: reset_size() on a bottom-anchored card moved its bottom edge, and
+## the card slid off the screen (revision 12.11).
+func _fit_card(card: PanelContainer, scroll: ScrollContainer, list: VBoxContainer) -> void:
+	if not is_instance_valid(card) or not is_instance_valid(list) or not card.is_inside_tree():
+		return
+	scroll.custom_minimum_size.y = minf(list.get_combined_minimum_size().y, MAX_H)
+	card.size = Vector2.ZERO   # shrinks to its minimum
+	var sz := card.get_combined_minimum_size()
+	card.size = sz
+	var vp := card.get_viewport_rect().size
+	var bottom := vp.y - 30.0
+	var bar = NewsFeed.get("_bar")
+	if bar != null and is_instance_valid(bar) and (bar as Control).is_visible_in_tree():
+		bottom = (bar as Control).get_global_rect().position.y - 6.0
+	card.position = Vector2(vp.x - MARGIN - sz.x, maxf(MARGIN, bottom - sz.y))
 
 static func _row(id: String, kind: String, icon: String, title: String, text: String, act := {}) -> Dictionary:
 	return {"id": id, "kind": kind, "icon": icon, "title": title, "text": text, "act": act}
@@ -288,6 +328,7 @@ func open() -> void:
 	_layer = CanvasLayer.new()
 	_layer.layer = LAYER
 	_layer.set_meta("left_panel_dropdown", true)   # the left panel's keys run it, Esc closes
+	_layer.set_meta("inbox", true)   # LeftPanel.close_dropdowns leaves it be
 	_layer.tree_exiting.connect(func() -> void: _mark_seen.call_deferred())
 	get_tree().root.add_child(_layer)
 	var catcher := Control.new()   # a click elsewhere closes it
@@ -374,24 +415,16 @@ func _refresh_panel(focus_first := false) -> void:
 		list.add_child(row)
 		if first == null:
 			first = li
-	# bottom right, just above the news bar, anchored there (any window size)
-	card.anchor_left = 1.0
-	card.anchor_right = 1.0
-	card.anchor_top = 1.0
-	card.anchor_bottom = 1.0
-	card.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	card.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	var vp_h := _layer.get_viewport().get_visible_rect().size.y
-	var bar = NewsFeed.get("_bar")
-	var above := 30.0
-	if bar != null and is_instance_valid(bar):
-		above = vp_h - (bar as Control).get_global_rect().position.y + 6.0
-	card.offset_right = -MARGIN
-	card.offset_bottom = -above
+	# bottom right, just above the news bar (_fit_card places it)
 	_layer.add_child(card)
-	scroll.custom_minimum_size = Vector2(W - 24.0, minf(list.get_combined_minimum_size().y, MAX_H))
-	card.offset_left = card.offset_right - card.get_combined_minimum_size().x
-	card.offset_top = card.offset_bottom - card.get_combined_minimum_size().y
+	scroll.custom_minimum_size = Vector2(W - 24.0, 0.0)
+	_fit_card(card, scroll, list)
+	# wrapped row texts know their height only once laid out at the list's
+	# width: fit again whenever the rows' size changes, and the next frame
+	list.minimum_size_changed.connect(func() -> void: _fit_card.call_deferred(card, scroll, list))
+	(func() -> void:
+		await get_tree().process_frame
+		_fit_card(card, scroll, list)).call()
 	# the keys start on the first row (Esc / O / B goes back to where they were)
 	if first != null and focus_first:
 		var f := first
