@@ -2921,6 +2921,21 @@ func _play_capital_lead_in() -> void:
 ## a game closed half-way picks up at the step it was on.
 const OPENING_GRAPH := "res://resources/narrative/opening.tres"
 var _onboarding_busy := false
+## Before the narrator's first line: the camera moves in on the world, slightly
+## (OPENING_ZOOM times closer) and slowly (OPENING_ZOOM_SEC, eased in and out).
+const OPENING_ZOOM := 1.12
+const OPENING_ZOOM_SEC := 1.5
+
+func _opening_zoom_in(sec: float, factor: float) -> Tween:
+	_zoom_anchor = Vector2.INF
+	var tw := create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_method(func(z: float) -> void:
+		_zoom_target = z
+		_zoom = z   # the tween does the easing; no extra lag on top
+		_zoom_vel = 0.0
+		_apply_zoom(),
+		_zoom_target, _zoom_target * factor, sec)
+	return tw
 
 func _run_onboarding() -> void:
 	if _onboarding_busy:
@@ -2928,12 +2943,17 @@ func _run_onboarding() -> void:
 	match GameState.onboarding_stage:
 		"", "intro":
 			_onboarding_busy = true
-			# the world keeps turning behind it ("look at it for a moment")
-			var queued := Narrative.play(OPENING_GRAPH, "intro", {"id": "opening_intro", "pause": false,
-				"skippable": SettingsManager.tutorial_ever_done,   # seen before: SKIP (10.11)
-				"on_done": func(_exit: String) -> void: _onboarding_next("choose")})
-			if not queued:   # read already (a game closed at the choice)
+			if Narrative.has_played("opening_intro"):   # read already (a game closed at the choice)
 				_onboarding_next("choose")
+				return
+			# first a slow, slight move in on the world; then the narrator speaks
+			# while it keeps turning behind ("look at it for a moment")
+			_opening_zoom_in(OPENING_ZOOM_SEC, OPENING_ZOOM).finished.connect(func() -> void:
+				var queued := Narrative.play(OPENING_GRAPH, "intro", {"id": "opening_intro", "pause": false,
+					"skippable": SettingsManager.tutorial_ever_done,   # seen before: SKIP (10.11)
+					"on_done": func(_exit: String) -> void: _onboarding_next("choose")})
+				if not queued:
+					_onboarding_next("choose"))
 		"choose":
 			_onboarding_busy = true
 			AdvisorChoice.open(self, func(id: String) -> void:
