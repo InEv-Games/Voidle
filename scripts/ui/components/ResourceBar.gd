@@ -64,20 +64,36 @@ func _add_calendar_chip() -> void:
 				GameState.calendar_year(), GameState.calendar_month(), int(GameState.MONTH_SEC), int(GameState.MONTH_SEC * 12.0)])
 			TooltipManager.set_title_icon("calendar")))
 	_calendar.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
-	# 10.11: at the bar's right end, beside the view's lens button (right_reserve)
+	# at the bar's right end; the view's lens button just left of it (right_reserve)
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	$Row.add_child(gap)
+	_reserve = Control.new()
+	_reserve.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_reserve.item_rect_changed.connect(func() -> void: reserve_moved.emit())
+	$Row.add_child(_reserve)
 	$Row.add_child(_calendar)
 	_refresh_calendar()
 
-## Room kept free at the bar's right end (px) for what a view puts there (the
-## planet view's lens button); the calendar sits just left of it.
+## Room kept free (px) for what a view puts on the bar (the planet view's lens
+## button): just left of the calendar, which ends the bar. The view places its
+## thing by reserve_right(), and again on reserve_moved (the calendar showing
+## up or growing moves the room).
+signal reserve_moved
+var _reserve: Control = null
 var right_reserve := 0.0:
 	set(v):
 		right_reserve = v
-		($Row as Control).offset_right = -6.0 - v
+		if _reserve != null:
+			_reserve.custom_minimum_size.x = v
+			_reserve.visible = v > 0.0
+
+## From the reserved room's right edge to the screen's right edge (px).
+func reserve_right() -> float:
+	if _reserve == null or not _reserve.is_inside_tree():
+		return 6.0
+	return get_viewport_rect().size.x - _reserve.get_global_rect().end.x
 
 func _refresh_calendar() -> void:
 	if _calendar == null or not is_instance_valid(_calendar):

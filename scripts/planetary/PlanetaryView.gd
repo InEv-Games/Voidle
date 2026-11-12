@@ -5554,10 +5554,11 @@ func _rebuild_lens_bar() -> void:
 	_style_lens_bar()
 	_place_lens_bar()
 
-## The lens button sits at the right end of the resource bar, centred on its
-## height; the lens colour key stays at the bottom of the view, above the news.
+## The lens button sits at the right end of the resource bar, just left of the
+## calendar (in the room the bar keeps for it), centred on its height; the lens
+## colour key stays at the bottom of the view, above the news.
 const LENS_BAR_MARGIN := 30.0   # the colour key clears the news crawl (NewsFeed.HEIGHT)
-const LENS_BAR_RIGHT := 6.0     # gap to the screen's right edge
+const LENS_BAR_RIGHT := 6.0     # gap to the calendar (or the screen's right edge)
 
 func _place_lens_bar() -> void:
 	if _lens_bar == null or not is_instance_valid(_lens_bar):
@@ -5568,11 +5569,15 @@ func _place_lens_bar() -> void:
 		bar_h = bar.size.y
 	var btn_h := _lens_main.get_combined_minimum_size().y if is_instance_valid(_lens_main) else 0.0
 	var w := _lens_bar.get_combined_minimum_size().x
-	_lens_bar.offset_right = -LENS_BAR_RIGHT
-	_lens_bar.offset_left = -LENS_BAR_RIGHT - w
-	if bar != null and is_instance_valid(bar):   # the calendar keeps left of the lens button
+	var right := 0.0   # from the screen's right edge
+	if bar != null and is_instance_valid(bar):   # the bar keeps room for it, left of the calendar
 		var top_w := _lens_top.get_combined_minimum_size().x if _lens_top != null and is_instance_valid(_lens_top) else w
 		bar.right_reserve = LENS_BAR_RIGHT + top_w
+		if not bar.reserve_moved.is_connected(_place_lens_bar):
+			bar.reserve_moved.connect(_place_lens_bar)
+		right = bar.reserve_right()
+	_lens_bar.offset_right = -right
+	_lens_bar.offset_left = -right - w
 	_lens_bar.offset_top = maxf(0.0, (bar_h - btn_h) * 0.5)
 	_lens_bar.offset_bottom = _lens_bar.offset_top + _lens_bar.get_combined_minimum_size().y
 	_place_lens_legend()
