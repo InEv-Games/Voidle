@@ -226,6 +226,7 @@ func _play(page: Page, entry: String) -> void:
 	_mgr.start(site.story, entry)
 
 func _on_line(speaker: String, text: String) -> void:
+	Narrative.log_line(site.site_id, speaker, text)   # the Narrative Log has the digs' stories too
 	_clear_choices()
 	_show_face(_companion_named(speaker))
 	_speaker.visible = speaker != "Narrator"
@@ -256,6 +257,7 @@ func _on_choices(texts: Array[String]) -> void:
 				_skip_typing()
 				return
 			AudioManager.play("click")
+			Narrative.log_line(site.site_id, "Player", texts[at], "choice")
 			_mgr.choose(at))
 		_choices.add_child(b)
 

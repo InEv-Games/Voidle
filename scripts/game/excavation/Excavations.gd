@@ -301,8 +301,11 @@ static func finish(s: ExcavationSiteDef, blackboard: Dictionary) -> Dictionary:
 		GameState.story_flags[String(flag)] = true
 	GameState.excavations_digging.erase(s.site_id)
 	GameState.excavations_done[s.site_id] = int(Time.get_unix_time_from_system())
+	if not grants.is_empty():
+		Narrative.log_event("Recovered: %s." % Narrative.amounts_text(grants), s.site_id)
 	var who := CompanionDef.find(String(blackboard.get(BB_JOIN, "")))
 	if who != null:
+		Narrative.log_event("%s joins you." % who.display_name, s.site_id)
 		GameState.companions_joined[who.companion_id] = int(Time.get_unix_time_from_system())
 		Economy.invalidate_bonus_cache()
 		NewsFeed.post("%s joins you." % who.display_name, NewsFeed.Kind.EVENT,

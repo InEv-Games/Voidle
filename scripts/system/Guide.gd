@@ -207,6 +207,8 @@ func _pay(step: String) -> void:
 		return
 	GameState.story_flags[flag] = true
 	var r: Dictionary = REWARDS.get(step, {})
+	if not r.is_empty():
+		Narrative.log_event("Step done: %s. Reward: %s." % [String(TITLES.get(step, step)), Narrative.amounts_text(r)])
 	for id: String in r:
 		if id == Economy.CREDITS:
 			GameState.earn_credits(float(r[id]))

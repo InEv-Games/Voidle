@@ -1,0 +1,67 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/narrative/NarrativeLog.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://dcaw5kheox1ap" path="res://scenes/ui/components/HeroHeader.tscn" id="2_hero"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/IconButton.tscn" id="3_button"]
+
+[node name="NarrativeLog" type="Control"]
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.25)
+
+[node name="Side" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -392.0
+offset_top = 40.0
+offset_right = -12.0
+offset_bottom = -44.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_type_variation = &"PopupCard"
+
+[node name="Col" type="VBoxContainer" parent="Side"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Head" type="HBoxContainer" parent="Side/Col"]
+layout_mode = 2
+
+[node name="Hero" parent="Side/Col/Head" instance=ExtResource("2_hero")]
+layout_mode = 2
+size_flags_horizontal = 3
+caption = "What has been said"
+title = "LOG"
+
+[node name="Close" parent="Side/Col/Head" instance=ExtResource("3_button")]
+layout_mode = 2
+size_flags_vertical = 8
+label_text = ""
+icon_name = "close"
+
+[node name="Scroll" type="ScrollContainer" parent="Side/Col"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Entries" type="VBoxContainer" parent="Side/Col/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14

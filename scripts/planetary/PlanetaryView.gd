@@ -2941,6 +2941,8 @@ func _run_onboarding() -> void:
 					if not GameState.unlocked_advisors.has(a):
 						GameState.unlocked_advisors.append(a)
 				GameState.appoint_advisor(id)   # bonus on; serves five years from the handover
+				var adv_def := CompanionDef.find(id)
+				Narrative.log_event("%s is appointed as your advisor." % (adv_def.display_name if adv_def != null else id))
 				_onboarding_next("handover"))
 		"handover":
 			_onboarding_busy = true

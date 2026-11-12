@@ -26,6 +26,7 @@ extends Node
 
 signal scene_started(scene_id: String)
 signal scene_finished(scene_id: String, exit_name: String)
+signal log_changed   # an entry was added to the Narrative Log (an open log follows)
 
 const LAYER := 233   # over the news bar (229) and the HUD (230), under popups (235+)
 const LOG_MAX := 600
@@ -262,9 +263,38 @@ func _end_scene(exit_name: String, completed: bool) -> void:
 		cb.call(exit_name)
 
 func _log(kind: String, speaker: String, text: String) -> void:
-	GameState.narrative_log.append({"s": String(_current.get("id", "")), "k": kind, "n": speaker, "t": text})
+	_append(String(_current.get("id", "")), kind, speaker, text)
+
+## A line ("line") or an answer ("choice", speaker "Player") shown somewhere
+## else than the dialogue panel (an excavation's story), into the log under
+## `scene` (for an excavation, its site id).
+func log_line(scene: String, speaker: String, text: String, kind := "line") -> void:
+	_append(scene, kind, speaker, text)
+
+## What the story did in the game, written in the log as it happened: what a
+## reward paid, who joined, who was appointed. Under `scene`, or the scene on
+## screen, or (between two scenes) the one logged last.
+func log_event(text: String, scene := "") -> void:
+	if scene == "":
+		scene = String(_current.get("id", ""))
+	if scene == "" and not GameState.narrative_log.is_empty():
+		scene = String((GameState.narrative_log.back() as Dictionary).get("s", ""))
+	_append(scene, "event", "", text)
+
+## "+500 Credits, +40 Science": what a reward paid, for log_event.
+static func amounts_text(amounts: Dictionary) -> String:
+	var parts: Array[String] = []
+	for id: String in amounts:
+		var v := float(amounts[id])
+		if absf(v) > 0.0001:
+			parts.append("%s%s %s" % ["+" if v > 0.0 else "", Economy.fmt(v), Economy.display_name(id)])
+	return ", ".join(parts)
+
+func _append(scene: String, kind: String, speaker: String, text: String) -> void:
+	GameState.narrative_log.append({"s": scene, "k": kind, "n": speaker, "t": text})
 	while GameState.narrative_log.size() > LOG_MAX:
 		GameState.narrative_log.pop_front()
+	log_changed.emit()
 
 static func portrait_for(speaker: String) -> Texture2D:
 	var path := String(PORTRAITS.get(speaker, ""))
@@ -279,4 +309,4 @@ func open_log() -> void:
 		_log_popup.close()
 		_log_popup = null
 		return
-	_log_popup = NarrativeLog.open(self)
+	_log_popup = NarrativeLog.show_log(self)
