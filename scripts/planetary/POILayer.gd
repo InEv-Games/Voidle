@@ -444,7 +444,7 @@ func _draw_ghost_info(font: Font, sp: Vector2, ok: bool, target: CanvasItem) -> 
 ## lander being built at the Spaceport: { district label: progress 0..1 }.
 var extra_progress: Dictionary = {}
 
-func _draw_construct_bar(sp: Vector2, px: float, progress: float, alpha: float) -> void:
+func _draw_construct_bar(sp: Vector2, px: float, progress: float, alpha: float, col := Color(1.0, 0.82, 0.15)) -> void:
 	const W := 11   # in pixel blocks
 	const H := 2
 	var origin := (sp + Vector2(-W * px * 0.5, -px * 8.0)).floor()
@@ -457,7 +457,7 @@ func _draw_construct_bar(sp: Vector2, px: float, progress: float, alpha: float) 
 		for y in H:
 			var yellow := (x + y + shift) % 4 < 2
 			draw_rect(Rect2(origin + Vector2(x, y) * px, Vector2(px, px)),
-				Color(1.0, 0.82, 0.15, alpha) if yellow else Color(0.08, 0.07, 0.05, alpha))
+				Color(col, alpha) if yellow else Color(0.08, 0.07, 0.05, alpha))
 
 # ── Pixel-art helpers ─────────────────────────────────────────────────────────
 # Markers snap to the planet shader's pixel grid so they read as part of the art.
@@ -700,7 +700,9 @@ func _marker_icon(tag: String, is_city: bool = false) -> Array:
 		return _ICONS["capital_city"]
 	return _ICONS.get(tag, _ICONS["default"])
 
-func _marker_color(tag: String) -> Color:
+## A marker's colour on the globe by its type tag; the panels' progress bars
+## for the same district / City use it too (revision 12.11).
+static func _marker_color(tag: String) -> Color:
 	match tag:
 		"generator":   return Economy.family_color("energy")
 		"mining":      return Economy.family_color("production")
@@ -1395,13 +1397,13 @@ func _draw_scene(font: Font) -> void:
 		var cpoi = poi["data"].get("poi")
 		var cpp = poi["data"].get("pp")
 		if cpoi is POIData and (cpoi as POIData).constructing:
-			_draw_construct_bar(sp, line_px, (cpoi as POIData).construct_progress, alpha)
+			_draw_construct_bar(sp, line_px, (cpoi as POIData).construct_progress, alpha, base_col)
 		elif cpoi is POIData and cpp is PlanetProgress \
 				and (cpp as PlanetProgress).district_upgrading.has((cpoi as POIData).label):
 			_draw_construct_bar(sp, line_px,
-				float((cpp as PlanetProgress).district_upgrading[(cpoi as POIData).label]), alpha)
+				float((cpp as PlanetProgress).district_upgrading[(cpoi as POIData).label]), alpha, base_col)
 		elif cpoi is POIData and extra_progress.has((cpoi as POIData).label):
-			_draw_construct_bar(sp, line_px, float(extra_progress[(cpoi as POIData).label]), alpha)
+			_draw_construct_bar(sp, line_px, float(extra_progress[(cpoi as POIData).label]), alpha, base_col)
 		if is_city:   # its Capital District, selectable from the map
 			var cap_at := _snap_local(sp + Vector2(0.0, -vert_dir * line_px * 10.5))   # a gap from the City icon (playtest 30.10)
 			var cap_hover: bool = hovered_capital == i
