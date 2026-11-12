@@ -37,6 +37,7 @@ static func toggle(host: Node) -> void:
 static func open(host: Node) -> void:
 	if is_open():
 		_popup.close()
+	LeftPanel.close_dropdowns(host.get_tree())   # revision 12.11: none left open behind it
 	var p := ModalPopup.open(host, "Government", "groups", "", LAYER)
 	_popup = p
 	var hero := p.use_hero("Year %d  //  %d of %d ministries open" % [GameState.calendar_year(),
