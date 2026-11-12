@@ -2,9 +2,12 @@ class_name DialoguePanel
 extends Control
 
 ## The story's visual-novel panel (docs/design/narrative/UI.md): at the bottom,
-## between the left panel and the screen's right edge, above the news bar; the
-## speaker's portrait on the left (about a quarter), then their name, the line
-## typing itself, and the answers or CONTINUE. Narrative drives it.
+## between the left panel and the screen's right edge, above the news bar. The
+## speaker's name (or NARRATOR) is a hero over the card; in the card the line
+## types itself on the left and, past a rule, the answers stack on the right
+## (or SKIP / LOG / CONTINUE at its bottom right). Behind it all,
+## large and standing over the card's right side, the speaker's portrait.
+## Narrative drives it.
 ##
 ## Input: the first press (CONTINUE, a click on the card, Space / Enter) finishes
 ## the line being typed, the next one goes on. Answers are only taken by a click
@@ -18,92 +21,50 @@ signal skip_requested   # SKIP / Esc / pad B on a scene that may be skipped
 ## How fast a line types itself, in characters per second.
 const TYPE_CPS := 55.0
 const MARGIN := 12.0
-const MIN_W := 440.0
-const MAX_W := 780.0
-const PORTRAIT_H := 150.0
+const MIN_W := 480.0
+const MAX_W := 700.0
+const ROOM_SHARE := 0.62    # of the room between the left panel and the right edge
+const PORTRAIT_H := 540.0   # the standing portrait's height: its foot at the card's bottom, behind it
+const PORTRAIT_X := 0.78    # its centre across the card (share of the card's width)
+const SIDE_W := 220.0       # the answers' column, at least, while there are answers;
+                            # else it is just as wide as its buttons (the rule sits by them)
 
-var _card: PanelContainer
-var _portrait: TextureRect
-var _speaker: Label
-var _body: RichTextLabel
-var _choices: VBoxContainer
-var _next: IconButton
+const SCENE_PATH := "res://scenes/ui/narrative/DialoguePanel.tscn"
+
+@onready var _card: Control = $Card                  # the whole: portrait, hero and card (shown / hidden as one)
+@onready var _front: VBoxContainer = $Card/Front     # the hero and the card
+@onready var _box: PanelContainer = $Card/Front/Box  # the card
+@onready var _portrait: TextureRect = $Card/Portrait
+@onready var _hero: HeroHeader = $Card/Front/Head/Hero
+@onready var _body: RichTextLabel = $Card/Front/Box/Row/Body
+@onready var _side: VBoxContainer = $Card/Front/Box/Row/Side
+@onready var _choices: VBoxContainer = $Card/Front/Box/Row/Side/Choices
+@onready var _skip: IconButton = $Card/Front/Box/Row/Side/Buttons/Skip
+@onready var _log_btn: IconButton = $Card/Front/Box/Row/Side/Buttons/Log
+@onready var _next: IconButton = $Card/Front/Box/Row/Side/Buttons/Next
 var _typing: Tween = null
 var _has_choices := false
-var _skip: IconButton = null
-var _log_btn: IconButton = null
-var _btn_lit: Control = null   # LOG / SKIP / CONTINUE lit by ← / → (10.11)
+var _btn_lit: Control = null   # SKIP / LOG / CONTINUE lit by ← / → (10.11)
 var _lit := -1   # the answer the keys lit up, -1: none
 
+## Layout: scenes/ui/narrative/DialoguePanel.tscn.
 static func create() -> DialoguePanel:
-	var p := DialoguePanel.new()
-	p.name = "DialoguePanel"
-	return p
+	return (load(SCENE_PATH) as PackedScene).instantiate() as DialoguePanel
 
 func _ready() -> void:
-	process_mode = Node.PROCESS_MODE_ALWAYS
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_card = PanelContainer.new()
-	_card.theme_type_variation = &"PopupCard"
-	_card.mouse_filter = Control.MOUSE_FILTER_STOP
-	_card.gui_input.connect(_on_card_input)
-	add_child(_card)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override(&"separation", 12)
-	_card.add_child(row)
-	_portrait = TextureRect.new()
-	_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_portrait)
-	var col := VBoxContainer.new()
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override(&"separation", 6)
-	row.add_child(col)
-	_speaker = Label.new()
-	_speaker.theme_type_variation = &"HeaderLabel"
-	col.add_child(_speaker)
-	_body = RichTextLabel.new()
-	_body.theme_type_variation = &"PopupBody"
-	_body.add_theme_font_size_override(&"normal_font_size", 12)
-	_body.bbcode_enabled = true
-	_body.fit_content = true
-	_body.scroll_active = false
-	_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(_body)
-	_choices = VBoxContainer.new()
-	_choices.add_theme_constant_override(&"separation", 4)
-	col.add_child(_choices)
-	var buttons := HBoxContainer.new()
-	buttons.add_theme_constant_override(&"separation", 6)
-	col.add_child(buttons)
-	var log_btn := IconButton.create("LOG", "notes", IconButton.Variant.DEFAULT)
-	_log_btn = log_btn
-	log_btn.pressed.connect(func() -> void: log_requested.emit())
-	log_btn.mouse_entered.connect(func() -> void:
-		TooltipManager.show_tip("Narrative Log", "Read again what has been said.  [L]"))
-	log_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
-	buttons.add_child(log_btn)
-	var gap := Control.new()
-	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	buttons.add_child(gap)
-	_skip = IconButton.create("SKIP", "close", IconButton.Variant.NEUTRAL)
+	(_hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF   # one line
+	_box.gui_input.connect(_on_card_input)
 	_skip.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		skip_requested.emit())
 	_skip.mouse_entered.connect(func() -> void:
 		TooltipManager.show_tip("Skip", "You have played this before: skip the rest of the scene.  [Esc]"))
 	_skip.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
-	_skip.visible = false
-	buttons.add_child(_skip)
-	_next = IconButton.create("CONTINUE", "confirm", IconButton.Variant.POSITIVE)
+	_log_btn.pressed.connect(func() -> void: log_requested.emit())
+	_log_btn.mouse_entered.connect(func() -> void:
+		TooltipManager.show_tip("Narrative Log", "Read again what has been said.  [L]"))
+	_log_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	_next.pressed.connect(_on_next)
-	buttons.add_child(_next)
-	_card.visible = false
 
 ## SKIP shows for scenes the player may skip (the opening after a first run).
 func set_skippable(on: bool) -> void:
@@ -130,8 +91,8 @@ func hide_panel() -> void:
 func show_line(speaker: String, text: String, portrait: Texture2D) -> void:
 	_light_btn(null)
 	_clear_choices()
-	_speaker.visible = speaker != "Narrator"
-	_speaker.text = speaker
+	# the speaker is the hero (the narrator too), in the title font
+	_hero.title = "NARRATOR" if speaker == "" else speaker.to_upper()
 	var was := _portrait.texture if _portrait.visible else null
 	_portrait.visible = portrait != null
 	if portrait != null:
@@ -149,10 +110,11 @@ func show_line(speaker: String, text: String, portrait: Texture2D) -> void:
 func show_choices(texts: Array[String]) -> void:
 	_clear_choices()
 	_has_choices = true
+	_side.custom_minimum_size.x = SIDE_W
 	_next.visible = false
 	for i in texts.size():
 		var b := IconButton.create(texts[i], "confirm", IconButton.Variant.DEFAULT)
-		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # the column's width, stacked
 		var at := i
 		var label := texts[i]
 		b.pressed.connect(func() -> void:
@@ -167,6 +129,7 @@ func show_choices(texts: Array[String]) -> void:
 
 func _clear_choices() -> void:
 	_has_choices = false
+	_side.custom_minimum_size.x = 0.0
 	_lit = -1
 	for c in _choices.get_children():
 		_choices.remove_child(c)
@@ -230,7 +193,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		log_requested.emit()   # L: the Narrative Log, like LOG
 		return
 	if key in [KEY_LEFT, KEY_RIGHT]:
-		get_viewport().set_input_as_handled()   # the buttons below: LOG / SKIP / CONTINUE
+		get_viewport().set_input_as_handled()   # the buttons below: SKIP / LOG / CONTINUE
 		var row := _row_buttons()
 		if not row.is_empty():
 			var at := row.find(_btn_lit)
@@ -253,7 +216,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 func _row_buttons() -> Array[Control]:
 	var out: Array[Control] = []
-	for b in [_log_btn, _skip, _next]:
+	for b in [_skip, _log_btn, _next]:
 		if b != null and (b as Control).is_visible_in_tree():
 			out.append(b)
 	return out
@@ -318,8 +281,9 @@ func _process(_delta: float) -> void:
 	if _card.visible:
 		_place()
 
-## Between the left panel (when open) and the right edge, about two thirds of
-## that room, centred in it; its bottom just above the news bar.
+## Between the left panel (when open) and the right edge, most of that room,
+## centred in it; its bottom just above the news bar. The portrait stands
+## behind, over the card's right side, from the card's bottom up.
 func _place() -> void:
 	var vp := get_viewport_rect().size
 	var left := MARGIN
@@ -328,12 +292,20 @@ func _place() -> void:
 		if lp != null and lp.is_visible_in_tree() and (lp.get_node("Layout") as CanvasItem).visible:
 			left = maxf(left, lp.get_global_rect().end.x + MARGIN)
 	var room := maxf(vp.x - MARGIN - left, MIN_W)
-	var w := clampf(room * 0.66, MIN_W, MAX_W)
+	var w := clampf(room * ROOM_SHARE, MIN_W, MAX_W)
 	var bottom := vp.y - MARGIN
 	var news := get_tree().get_first_node_in_group(&"news_panel") as Control
 	if news != null and news.is_visible_in_tree():
 		bottom = news.get_global_rect().position.y - MARGIN
-	_portrait.custom_minimum_size = Vector2(w * 0.22, PORTRAIT_H) if _portrait.visible else Vector2.ZERO
-	_card.custom_minimum_size = Vector2(w, 0.0)
-	_card.size = Vector2(w, _card.get_combined_minimum_size().y)
+	_front.custom_minimum_size = Vector2(w, 0.0)
+	_front.size = Vector2(w, _front.get_combined_minimum_size().y)
+	_card.size = _front.size
 	_card.position = Vector2(left + (room - w) * 0.5, bottom - _card.size.y)
+	_front.position = Vector2.ZERO
+	if _portrait.visible and _portrait.texture != null:
+		var tex := _portrait.texture
+		var foot := _box.position.y + _box.size.y
+		var ph := minf(PORTRAIT_H, _card.position.y + foot - MARGIN)   # never above the screen
+		var pw := ph * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+		_portrait.size = Vector2(pw, ph)
+		_portrait.position = Vector2(w * PORTRAIT_X - pw * 0.5, foot - ph)

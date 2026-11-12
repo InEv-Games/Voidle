@@ -1,0 +1,131 @@
+[gd_scene format=3 uid="uid://1w0uookno3r1"]
+
+[ext_resource type="Script" uid="uid://dosjjg5uplyub" path="res://scripts/ui/narrative/DialoguePanel.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://dcaw5kheox1ap" path="res://scenes/ui/components/HeroHeader.tscn" id="2_hero"]
+[ext_resource type="PackedScene" path="res://scenes/ui/components/IconButton.tscn" id="3_button"]
+
+[node name="DialoguePanel" type="Control" unique_id=333528950]
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_script")
+
+[node name="Card" type="Control" parent="." unique_id=1916284506]
+anchors_preset = 0
+mouse_filter = 2
+
+[node name="Portrait" type="TextureRect" parent="Card" unique_id=1336634175]
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Front" type="VBoxContainer" parent="Card" unique_id=730700072]
+layout_mode = 0
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="Head" type="HBoxContainer" parent="Card/Front" unique_id=46217372]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Hero" parent="Card/Front/Head" unique_id=1370527602 instance=ExtResource("2_hero")]
+layout_mode = 2
+size_flags_horizontal = 3
+caption = ""
+title = "SPEAKER"
+
+[node name="Box" type="PanelContainer" parent="Card/Front" unique_id=1635763580]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+theme_type_variation = &"PopupCard"
+
+[node name="Row" type="HBoxContainer" parent="Card/Front/Box" unique_id=243730958]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Body" type="RichTextLabel" parent="Card/Front/Box/Row" unique_id=1904841170]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_type_variation = &"PopupBody"
+theme_override_font_sizes/normal_font_size = 12
+bbcode_enabled = true
+text = "The line."
+fit_content = true
+scroll_active = false
+
+[node name="Rule" type="VSeparator" parent="Card/Front/Box/Row" unique_id=1387879129]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Side" type="VBoxContainer" parent="Card/Front/Box/Row" unique_id=467698114]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Choices" type="VBoxContainer" parent="Card/Front/Box/Row/Side" unique_id=916291703]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Log" parent="Card/Front/Box/Row/Side/Choices" unique_id=1241191544 instance=ExtResource("3_button")]
+custom_minimum_size = Vector2(68, 26)
+layout_mode = 2
+label_text = "LOG"
+icon_name = "notes"
+counter_items = PackedStringArray()
+
+[node name="Log2" parent="Card/Front/Box/Row/Side/Choices" unique_id=768218598 instance=ExtResource("3_button")]
+custom_minimum_size = Vector2(68, 26)
+layout_mode = 2
+label_text = "LOG"
+icon_name = "notes"
+counter_items = PackedStringArray()
+
+[node name="Log3" parent="Card/Front/Box/Row/Side/Choices" unique_id=2077458288 instance=ExtResource("3_button")]
+custom_minimum_size = Vector2(68, 26)
+layout_mode = 2
+label_text = "LOG"
+icon_name = "notes"
+counter_items = PackedStringArray()
+
+[node name="Log4" parent="Card/Front/Box/Row/Side/Choices" unique_id=1382925662 instance=ExtResource("3_button")]
+custom_minimum_size = Vector2(68, 26)
+layout_mode = 2
+label_text = "LOG"
+icon_name = "notes"
+counter_items = PackedStringArray()
+
+[node name="Buttons" type="HBoxContainer" parent="Card/Front/Box/Row/Side" unique_id=1191659365]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 2
+
+[node name="Skip" parent="Card/Front/Box/Row/Side/Buttons" unique_id=617086285 instance=ExtResource("3_button")]
+custom_minimum_size = Vector2(72, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonNeutral"
+label_text = "SKIP"
+icon_name = "close"
+variant = 2
+counter_items = PackedStringArray()
+
+[node name="Log" parent="Card/Front/Box/Row/Side/Buttons" unique_id=1237892380 instance=ExtResource("3_button")]
+custom_minimum_size = Vector2(68, 26)
+layout_mode = 2
+label_text = "LOG"
+icon_name = "notes"
+counter_items = PackedStringArray()
+
+[node name="Next" parent="Card/Front/Box/Row/Side/Buttons" unique_id=740354524 instance=ExtResource("3_button")]
+custom_minimum_size = Vector2(101, 26)
+layout_mode = 2
+theme_type_variation = &"ButtonPositive"
+label_text = "CONTINUE"
+icon_name = "confirm"
+variant = 1
+counter_items = PackedStringArray()
