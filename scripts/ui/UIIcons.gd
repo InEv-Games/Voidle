@@ -24,6 +24,7 @@ const MAP := {
 	"alert": "frame_exclamation", "rename": "drive_file_rename", "settings": "settings", "research": "lab_research",
 	"library": "local_library", "defense": "local_police", "move": "moving_ministry", "notes": "sticky_note_2",
 	"save": "upload_file", "cycle": "cycle", "calendar": "calendar",
+	"year": "calendar_year", "month": "calendar_month",
 }
 
 static var _cache: Dictionary = {}
