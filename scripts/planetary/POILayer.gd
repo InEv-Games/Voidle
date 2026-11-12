@@ -374,6 +374,11 @@ func _rebuild_ghost_card() -> void:
 			sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			vb.add_child(sep)
 		for row: Array in ghost_card[si]:
+			if row.is_empty():   # [] = a separator inside the section (a total under its parts)
+				var isep := HSeparator.new()
+				isep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				vb.add_child(isep)
+				continue
 			var h := HBoxContainer.new()
 			h.add_theme_constant_override("separation", 16)
 			h.mouse_filter = Control.MOUSE_FILTER_IGNORE
