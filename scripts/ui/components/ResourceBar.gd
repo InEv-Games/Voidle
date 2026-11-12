@@ -60,8 +60,7 @@ func _add_calendar_chip() -> void:
 	_calendar.mouse_filter = Control.MOUSE_FILTER_STOP
 	_calendar.mouse_entered.connect(func() -> void:
 		TooltipManager.live(func() -> void:
-			TooltipManager.show_tip("Colony calendar", "Year %d, month %d.\n\nA colony month passes every %d s of play; a year every %d s." % [
-				GameState.calendar_year(), GameState.calendar_month(), int(GameState.MONTH_SEC), int(GameState.MONTH_SEC * 12.0)])
+			TooltipManager.show_tip("Colony calendar", _calendar_tip())
 			TooltipManager.set_title_icon("calendar")))
 	_calendar.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	# at the bar's right end; the view's lens button just left of it (right_reserve)
@@ -94,6 +93,17 @@ func reserve_right() -> float:
 	if _reserve == null or not _reserve.is_inside_tree():
 		return 6.0
 	return get_viewport_rect().size.x - _reserve.get_global_rect().end.x
+
+## The calendar's tip: the year and the month by their icons, when the next
+## month comes, and how fast the colony's time runs.
+func _calendar_tip() -> String:
+	var icon := UIStyle.color(&"icon")
+	var dim := UIStyle.hex(&"text_subtle")
+	var next := GameState.MONTH_SEC - fmod(GameState.calendar_seconds, GameState.MONTH_SEC)
+	return "%s  Year [b]%d[/b]\n%s  Month [b]%d[/b] of 12   [color=#%s]next in %d s[/color]\n\n[color=#%s]A colony month passes every %d s of play; a year every %d s.[/color]" % [
+		UIIcons.bb("year", 13, icon), GameState.calendar_year(),
+		UIIcons.bb("month", 13, icon), GameState.calendar_month(), dim, int(ceil(next)),
+		dim, int(GameState.MONTH_SEC), int(GameState.MONTH_SEC * 12.0)]
 
 func _refresh_calendar() -> void:
 	if _calendar == null or not is_instance_valid(_calendar):
@@ -331,8 +341,8 @@ func _show_cell_tip(id: String, title: String) -> void:
 				var mx := Economy.max_population(pd, pp)
 				corner = "%s %s   %s %s" % [_ic("worker", "d9e0ff"), Economy.fmt(used),
 					_ic("population", Economy.color_of(Economy.POPULATION).to_html(false)), Economy.fmt(mx)]
-				detail = _population_groups_text() + "\n[b]Free  %s[/b]" % _c(
-					("+" if mx >= used else "−") + Economy.fmt(absi(mx - used)), GOOD_HEX if mx >= used else BAD_HEX) + _idle_pop_text()
+				detail = _population_groups_text() + "\n" + TooltipCard.total_line("Free", _c(
+					("+" if mx >= used else "−") + Economy.fmt(absi(mx - used)), GOOD_HEX if mx >= used else BAD_HEX)) + _idle_pop_text()
 				var spd := Economy.pop_speed(pd, pp)
 				if spd < 0.999:
 					detail += "\n\n" + _c("Overcrowded: a %s: every cycle on every world makes %d%% of its output." % [
@@ -371,7 +381,7 @@ static func breakdown_text(id: String) -> String:
 	if keys.is_empty():
 		lines.append(_c("Nothing makes or uses it yet.", DIM_HEX))
 	else:
-		lines.append("[b]Net  %s[/b]" % _c(("+" if net >= 0.0 else "−") + Economy.fmt(absf(net)) + " /s", GOOD_HEX if net >= 0.0 else BAD_HEX))
+		lines.append(TooltipCard.total_line("Net", _c(("+" if net >= 0.0 else "−") + Economy.fmt(absf(net)) + " /s", GOOD_HEX if net >= 0.0 else BAD_HEX)))
 	return "\n".join(lines)
 
 ## Group lines "+32 Solar Arrays" (largest first), each opening its units in a
@@ -415,8 +425,8 @@ func _energy_groups_text() -> String:
 			net += float(groups[g][u])
 	var worlds := _energy_breakdown_text()
 	Glossary.put("grp:energy:worlds", "Worlds", worlds)
-	lines.append("[b]%s  %s[/b]" % [Glossary.t("grp:energy:worlds", "Net"),
-		_c(("+" if net >= 0.0 else "−") + String(fmt.call(absf(net))), GOOD_HEX if net >= 0.0 else BAD_HEX)])
+	lines.append(TooltipCard.total_line(Glossary.t("grp:energy:worlds", "Net"),
+		_c(("+" if net >= 0.0 else "−") + String(fmt.call(absf(net))), GOOD_HEX if net >= 0.0 else BAD_HEX)))
 	return "\n".join(lines)
 
 ## Housing by district type (+) and workers by district type (−), every world,
@@ -615,7 +625,8 @@ func _close_raw_dropdown() -> void:
 func _fill_raw_dropdown() -> void:
 	if not is_instance_valid(_raw_dd_list):
 		return
-	# every raw mineral has a row; undiscovered ones show unnamed (no spoiler)
+	# every raw mineral has a row; undiscovered ones show unnamed (no spoiler),
+	# and only the next of them (revision 12.11: a column of locked "?" rows)
 	var raws: Array = Economy.RAW_TABLE
 	var rows := _raw_dd_list.get_children()
 	if rows.size() != raws.size() or raws.is_empty():
@@ -645,10 +656,14 @@ func _fill_raw_dropdown() -> void:
 			chip.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 			_raw_dd_list.add_child(chip)
 			rows.append(chip)
+	var locked_shown := false
 	for i in raws.size():
 		var r: Dictionary = raws[i]
 		var chip := rows[i] as ResourceChip
 		var known: bool = Economy.is_mineral_discovered(r["id"]) or Economy.amount(r["id"]) > 0.0
+		chip.visible = known or not locked_shown
+		if not known:
+			locked_shown = true
 		# its own pixel icon once found (playtest 07.11), a "?" box before
 		chip.resource_id = r["id"] if known else "unknown"
 		chip.icon_color = Color.WHITE if known else UIStyle.color(&"neutral_stroke")
