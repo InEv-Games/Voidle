@@ -62,6 +62,7 @@ func _ready() -> void:
 	_skip.mouse_entered.connect(func() -> void:
 		TooltipManager.show_tip("Skip", "You have played this before: skip the rest of the scene.  [Esc]"))
 	_skip.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	_log_btn.visible = false   # revision 12.11: the Log lives on the news bar, bottom right
 	_log_btn.pressed.connect(func() -> void: log_requested.emit())
 	_log_btn.mouse_entered.connect(func() -> void:
 		TooltipManager.show_tip("Narrative Log", "Read again what has been said.  [L]"))
