@@ -106,6 +106,7 @@ var _hero: HeroHeader = null
 var _desc: RichTextLabel = null
 var _checks: RichTextLabel = null
 var _reward: RichTextLabel = null
+var _reward_rule: HSeparator = null   # between what is left and the reward (shown with the reward)
 var _shown_step := ""
 var _poll := 0.0
 var _capital_opened := false
@@ -238,6 +239,7 @@ func _show_step(step: String) -> void:
 	_desc.visible = false
 	_reward.text = _reward_bb(step)
 	_reward.visible = _reward.text != ""
+	_reward_rule.visible = _reward.visible
 	_skip.visible = false
 	_checks.text = ""
 	_card.active = true
@@ -437,6 +439,7 @@ func _process_checklist(delta: float) -> void:
 		_desc.text = "[color=#%s]Do them in any order; each one pays when it is done.[/color]" % UIStyle.hex(&"text_subtle")
 		_desc.visible = true
 		_reward.visible = false
+		_reward_rule.visible = false
 		_skip.visible = true
 		_subs_text = ""
 		_card.active = true
@@ -863,6 +866,10 @@ func _ensure_card() -> void:
 	_card.content.add_child(_desc)
 	_checks = _rich(11)
 	_card.content.add_child(_checks)
+	_reward_rule = HSeparator.new()
+	_reward_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_reward_rule.visible = false
+	_card.content.add_child(_reward_rule)
 	_reward = _rich(11)
 	_card.content.add_child(_reward)
 	# the optional checklist can be skipped: every reward not paid yet comes at once (11.11)
