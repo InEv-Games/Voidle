@@ -419,6 +419,9 @@ signal objectives_changed(open: bool)
 var objectives_open := true          # saved through TutorialManager._collapsed
 var _obj_sources: Dictionary = {}    # source id → [active, tip title]
 var _obj_btn: IconButton = null
+## The Narrative Log, beside the notifications flag (revision 12.11: it was only
+## on the dialogue card); shown once the story has logged something.
+var _log_btn: IconButton = null
 ## A new objective came in while the card is closed: the button blinks
 ## yellow (its "on" look) until the card is opened.
 var _obj_blink := false
@@ -528,6 +531,7 @@ func set_objectives_source(id: int, active: bool, tip := "") -> void:
 		_obj_sources.erase(id)
 
 func _bind_objectives_btn() -> void:
+	_bind_log_btn()
 	_obj_btn = _bar.get_node_or_null("Objectives") as IconButton
 	if _obj_btn != null:
 		return
@@ -553,6 +557,27 @@ func _bind_objectives_btn() -> void:
 			_obj_blink = true   # something new: the flag blinks until it is opened
 		_inbox_seen = Inbox.unread())
 	_obj_btn.mouse_exited.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.NORMAL)
+		TooltipManager.hide_tip())
+
+func _bind_log_btn() -> void:
+	_log_btn = _bar.get_node_or_null("NarrativeLog") as IconButton
+	if _log_btn != null:
+		return
+	_log_btn = IconButton.create("", "notes")
+	_log_btn.name = "NarrativeLog"
+	_log_btn.min_size = Vector2(HEIGHT - 1.0, HEIGHT - 1.0)
+	_bar.add_child(_log_btn)
+	var sb := _log_btn.get_theme_stylebox("normal")
+	var icon_px := maxf(10.0, HEIGHT - 1.0 - sb.content_margin_top - sb.content_margin_bottom)
+	(_log_btn.get_node("Row/Icon") as Control).custom_minimum_size = Vector2(icon_px, icon_px)
+	_log_btn.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		Narrative.open_log())
+	_log_btn.mouse_entered.connect(func() -> void:
+		CursorManager.set_state(CursorManager.State.POINTER)
+		TooltipManager.show_tip("Narrative Log", "Everything the story said, and what it did."))
+	_log_btn.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
 
@@ -693,6 +718,18 @@ func _layout_objectives_btn() -> void:
 		_obj_btn.offset_top = 2.0
 		_obj_btn.offset_bottom = HEIGHT + 1.0
 		right -= bw + OBJ_BTN_GAP
+	if _log_btn != null and is_instance_valid(_log_btn):
+		_log_btn.visible = not GameState.narrative_log.is_empty()
+		if _log_btn.visible:
+			_log_btn.anchor_left = 1.0
+			_log_btn.anchor_right = 1.0
+			_log_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+			var lw := maxf(OBJ_BTN_W, _log_btn.get_combined_minimum_size().x)
+			_log_btn.offset_right = right
+			_log_btn.offset_left = right - lw
+			_log_btn.offset_top = 2.0
+			_log_btn.offset_bottom = HEIGHT + 1.0
+			right -= lw + OBJ_BTN_GAP
 	var tag := _bar.get_node("Tag") as Control
 	tag.offset_right = right
 	tag.offset_left = right - 46.0
