@@ -78,7 +78,7 @@ var _sys_p := 0.0                  # 0: the system shown … 1: gone
 var _sys_tween: Tween = null
 var _sys_bbc: BackBufferCopy = null
 var _sys_blur: ColorRect = null
-const GLOBES_FADE := 1.6           # the whole transition (s)
+const GLOBES_FADE := 0.8           # the whole transition (s)
 const SYS_BLUR_RADIUS := 2.0       # the blur's reach at its peak (physical px): a focus pull
 const SYS_BLUR_LOD := 0.75         # …and the mip level it samples from
 

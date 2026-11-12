@@ -11,8 +11,8 @@ extends Control
 ## changes what comes in. The first look comes in the same way (reveal).
 ## Part of NewGamePanel (scenes/ui/NewGamePanel.tscn).
 
-const SWAP_OUT := 0.45
-const SWAP_IN := 0.85
+const SWAP_OUT := 0.225
+const SWAP_IN := 0.425
 const BLUR_SHADER := preload("res://shaders/blur_swap.gdshader")
 const BLUR_SPILL := 60.0   # the blur reaches this far past the square (a globe's blur isn't cut)
 const BRIGHT := 0.85

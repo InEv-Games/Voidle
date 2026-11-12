@@ -28,7 +28,7 @@ const REVEAL_SLOW := 2.0
 const REVEAL_SOUND := &"ui/blink"
 const STEP_OUT := 0.1
 const PREVIEW_DELAY := 1.0
-const PREVIEW_IN := 1.6
+const PREVIEW_IN := 0.8
 
 ## Start worlds: id → [title, icon, text, playable in this build].
 const WORLDS := {
