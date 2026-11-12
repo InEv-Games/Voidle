@@ -24,6 +24,8 @@ const NAME_SIZE := 26   # the name hero over their words: smaller than the page'
 ## Who is still to come (later civilizations): a silhouette, no profile.
 const FUTURE := "__future"
 
+const PORTRAIT_SCALE := 1.07
+
 @onready var _card: Control = $Center/Card
 @onready var _list: VBoxContainer = $Center/Card/Row/ListCard/Scroll/List
 @onready var _detail: Control = $Center/Card/Row/Detail
@@ -44,6 +46,9 @@ var on_closed := Callable()
 static func open(host: Node, for_ministry: String = "chancellery", closed_cb := Callable()) -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = LAYER
+	# runs while the game is paused: LISTEN TO BOLO closes it as her scene
+	# starts and pauses the game, and its closing must not stop half-way
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	host.get_tree().root.add_child(layer)
 	var g := (load(SCENE_PATH) as PackedScene).instantiate() as CompanionGallery
 	g.ministry = for_ministry
@@ -66,7 +71,8 @@ func _ready() -> void:
 	($Dim as Control).gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and (ev as InputEventMouseButton).pressed:
 			_close())
-	# under the words: when they could be appointed, and ASSIGN
+	# under the words: why they can't be appointed yet (or their office); the
+	# buttons stand under the card
 	var info := _bio.get_parent() as VBoxContainer
 	_status = RichTextLabel.new()
 	_status.bbcode_enabled = true
@@ -78,7 +84,11 @@ func _ready() -> void:
 	_assign = IconButton.create("APPOINT AS %s" % _title_of(ministry).to_upper(), "confirm", IconButton.Variant.POSITIVE)
 	_assign.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_assign.pressed.connect(_on_assign)
-	info.add_child(_assign)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override(&"separation", 6)
+	actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	($Center/Card/Row/Detail/Foot as VBoxContainer).add_child(actions)
+	actions.add_child(_assign)
 	_invite = IconButton.create("LISTEN TO BOLO", "notes", IconButton.Variant.DEFAULT)
 	_invite.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_invite.pressed.connect(func() -> void:
@@ -86,7 +96,10 @@ func _ready() -> void:
 		on_closed = Callable()   # not back to Government: the scene plays next
 		_close()   # the scene plays in the panel under this screen
 		Excavations.hear_bolo_invitation())
-	info.add_child(_invite)
+	actions.add_child(_invite)
+	# the portrait a little larger than its room (PORTRAIT_SCALE), about its centre
+	_portrait.resized.connect(func() -> void: _portrait.pivot_offset = _portrait.size * 0.5)
+	_portrait.scale = Vector2.ONE * PORTRAIT_SCALE
 	_build_list()
 	_pick(GameState.active_advisor if GameState.active_advisor != "" else _ids[0])
 	StoryDialog.pop_in(_card)
@@ -163,12 +176,8 @@ func _refresh_assign() -> void:
 	var dim := UIStyle.hex(&"text_subtle")
 	if hard != "":
 		_status.text = "[color=#%s]%s[/color]" % [dim, hard]
-	elif cost > 0.0:
-		var sitting := CompanionDef.find(GameState.minister_of(ministry))
-		var left := GameState.ministry_ready_at(ministry) - GameState.calendar_seconds
-		_status.text = "[color=#%s]%s's term runs %s more: replacing them now costs %s. Free once it ends.[/color]" % [dim,
-			sitting.display_name if sitting != null else "The minister", GameState.calendar_span_text(left),
-			"%s %s" % [UIIcons.bb(Economy.CREDITS, 11, Economy.color_of(Economy.CREDITS)), HUDManager.fmt_credits(cost)]]
+	elif cost > 0.0:   # the price stands on the button: no note
+		_status.visible = false
 	else:
 		_status.text = "[color=#%s]Appointing them ends the current term; they serve at least five years.[/color]" % dim
 
@@ -181,8 +190,8 @@ func _on_assign() -> void:
 	_pick(_picked)
 
 func _process(_delta: float) -> void:
-	if _status != null and _status.visible:
-		_refresh_assign()   # the term's time left counts down while it is open
+	if _status != null:
+		_refresh_assign()   # the term's time left (and the price) counts down while it is open
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
