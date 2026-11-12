@@ -239,6 +239,7 @@ const TREE_FADE_SEC := 1.2
 ## (overlay_zoom_out); closing it puts the view back (overlay_end). Views
 ## without these hooks just get the fade.
 func _open_skill_tree() -> void:
+	LeftPanel.close_dropdowns(get_tree())   # nothing left open under the tree (revision 12.11)
 	var view := get_tree().current_scene
 	var wait := 0.0
 	if view != null and view.has_method("overlay_begin"):
@@ -351,6 +352,7 @@ func _make_explore_button() -> Button:
 var _trade_layer: CanvasLayer = null
 
 func toggle_trade_panel() -> void:
+	LeftPanel.close_dropdowns(get_tree())   # revision 12.11: a dropdown stayed open over Trade
 	# inside the view's left panel when it has one (slides out, swaps, slides in)
 	var lp: LeftPanel = null
 	for n in get_tree().get_nodes_in_group(LeftPanel.GROUP):
@@ -449,6 +451,8 @@ func press_shortcut(which: String) -> bool:
 		return true
 	if which == "tree" and SkillTreeView.is_open:
 		return _try_close_skill_tree()
+	if SkillTreeView.is_open:   # another shortcut's key takes over from the tree (revision 12.11)
+		_try_close_skill_tree()
 	if which == "trade" and TradePanel.is_open:
 		AudioManager.play("click")
 		toggle_trade_panel()
