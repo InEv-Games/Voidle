@@ -12,7 +12,13 @@ uniform float limb_strength = 0.45;
 uniform float fog = 0.0;              // distance haze over the globe (0 near … 1 gone)
 uniform vec3 fog_color : source_color = vec3(0.10, 0.14, 0.25);
 
+// Writing COLOR drops the node's modulate, so its fades never showed. On,
+// the modulate's alpha is put back (its tint is still left out). Off by
+// default: elsewhere a node's alpha was set without it ever showing.
+uniform bool fade_with_modulate = false;
+
 void fragment() {
+	float fade_a = COLOR.a;   // the node's modulate alpha (see fade_with_modulate)
 	vec2 uv = (floor(UV * pixel_count) + 0.5) / pixel_count;
 	vec2 c = uv - 0.5;
 	float d = length(c) / radius;
@@ -29,4 +35,7 @@ void fragment() {
 		a = A;
 	}
 	COLOR = vec4(col, a);
+	if (fade_with_modulate) {
+		COLOR.a *= fade_a;
+	}
 }

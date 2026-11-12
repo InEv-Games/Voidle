@@ -35,7 +35,13 @@ float fbm3s(vec3 p, int oct, int s) {
 	return v;
 }
 
+// Writing COLOR drops the node's modulate, so its fades never showed. On,
+// the modulate's alpha is put back (its tint is still left out). Off by
+// default: elsewhere a node's alpha was set without it ever showing.
+uniform bool fade_with_modulate = false;
+
 void fragment() {
+	float fade_a = COLOR.a;   // the node's modulate alpha (see fade_with_modulate)
 	vec2 uv  = floor(UV * pixel_count) / pixel_count;
 	vec2 c   = uv - vec2(0.5);
 	c.x     *= aspect_ratio;
@@ -75,5 +81,8 @@ void fragment() {
 		surf += color_corona * smoothstep(0.5, 0.0, nz) * 0.35;
 
 		COLOR = vec4(clamp(surf, vec3(0.0), vec3(1.5)), 1.0);
+	}
+	if (fade_with_modulate) {
+		COLOR.a *= fade_a;
 	}
 }

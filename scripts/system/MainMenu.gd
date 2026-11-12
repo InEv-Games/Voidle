@@ -40,7 +40,7 @@ func _ready() -> void:
 ## The whole backdrop (sun, stars, planets, orbits, vignette) in one holder
 ## under the menu, rebuilt from scratch whenever the screen changes shape.
 func _build_backdrop() -> void:
-	for old: Control in [_bg, _vignette]:
+	for old: Node in [_bg, _vignette, _sys_blur, _sys_bbc]:
 		if is_instance_valid(old):
 			remove_child(old)
 			old.queue_free()
@@ -48,6 +48,7 @@ func _build_backdrop() -> void:
 	_star_layers.clear()
 	_stars.clear()
 	_bodies.clear()
+	_globes.clear()
 	_planet_rect = null
 	_bg = Control.new()
 	_bg.name = "Backdrop"
@@ -61,6 +62,62 @@ func _build_backdrop() -> void:
 	_build_planet()
 	_build_system(true)
 	_build_vignette()
+	_build_sys_blur()
+	_apply_sys(_sys_p)   # hidden (New Game open) stays hidden
+
+# ── Planets on / off ─────────────────────────────────────────────────────────
+## The star system of the shot: the sun, the planets and moons (globes, their
+## shading and rings) and their orbits; only the stars stay. New Game
+## (SessionPrep) hides it while it is open: its own preview shows the world
+## being made.
+## It goes (and comes back) through a blur of the whole backdrop, as New Game's
+## preview swaps its looks (shaders/blur_swap.gdshader): the shot blurs, the
+## system fades away inside the blur, and the stars left sharpen again.
+var _globes: Array[CanvasItem] = []
+var _sys_p := 0.0                  # 0: the system shown … 1: gone
+var _sys_tween: Tween = null
+var _sys_bbc: BackBufferCopy = null
+var _sys_blur: ColorRect = null
+const GLOBES_FADE := 1.6           # the whole transition (s)
+const SYS_BLUR_RADIUS := 2.0       # the blur's reach at its peak (physical px): a focus pull
+const SYS_BLUR_LOD := 0.75         # …and the mip level it samples from
+
+func set_planets_shown(on: bool) -> void:
+	if _sys_tween != null:
+		_sys_tween.kill()
+	var to := 0.0 if on else 1.0
+	_sys_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_sys_tween.tween_method(_apply_sys, _sys_p, to, GLOBES_FADE * absf(to - _sys_p))
+
+## The transition at `p`: the blur peaks halfway; the system fades in its middle.
+func _apply_sys(p: float) -> void:
+	_sys_p = p
+	var a := 1.0 - smoothstep(0.05, 0.95, p)   # over nearly all of it: no sharp drop
+	for g: CanvasItem in _globes:
+		if is_instance_valid(g):
+			g.modulate.a = a
+	if _sys_blur != null:
+		var b := sin(PI * p)
+		(_sys_blur.material as ShaderMaterial).set_shader_parameter("progress", b)
+		_sys_blur.visible = b > 0.001
+
+## The blur over the backdrop (and its vignette), under the menu.
+func _build_sys_blur() -> void:
+	_sys_bbc = BackBufferCopy.new()
+	_sys_bbc.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
+	add_child(_sys_bbc)
+	move_child(_sys_bbc, _vignette.get_index() + 1)
+	_sys_blur = ColorRect.new()
+	_sys_blur.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_sys_blur.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/blur_swap.gdshader")
+	mat.set_shader_parameter("max_radius", SYS_BLUR_RADIUS)
+	mat.set_shader_parameter("max_lod", SYS_BLUR_LOD)
+	mat.set_shader_parameter("edge_soft", 0.0001)   # the whole screen: no soft sides
+	_sys_blur.material = mat
+	add_child(_sys_blur)
+	move_child(_sys_blur, _sys_bbc.get_index() + 1)
 
 var _resize_pending := false
 
@@ -332,7 +389,7 @@ static func _depth_t(depth: float) -> float:
 
 ## Soft occlusion over a globe of radius `r` px at `centre` (in `parent`):
 ## limb shading (darkest away from the sun) and its distance haze.
-func _add_ao(parent: Node, centre: Vector2, r: float, light: Vector2, px: float, depth: float = 0.0) -> void:
+func _add_ao(parent: Node, centre: Vector2, r: float, light: Vector2, px: float, depth: float = 0.0) -> ColorRect:
 	var rect := ColorRect.new()
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var side := 2.0 * r + 4.0
@@ -340,12 +397,14 @@ func _add_ao(parent: Node, centre: Vector2, r: float, light: Vector2, px: float,
 	rect.position = centre - rect.size * 0.5
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/menu_body_ao.gdshader")
+	mat.set_shader_parameter("fade_with_modulate", true)   # set_planets_shown fades it
 	mat.set_shader_parameter("radius", r / side)
 	mat.set_shader_parameter("pixel_count", maxf(side / px, 8.0))
 	mat.set_shader_parameter("light", light)
 	mat.set_shader_parameter("fog", DEPTH_FOG * _depth_t(depth))
 	rect.material = mat
 	parent.add_child(rect)
+	return rect
 
 var _bodies: Array = []    # [ShaderMaterial, spin rad/s, rotation]
 
@@ -374,6 +433,7 @@ func _build_sun() -> void:
 	sun.position = _sun_px() - sun.size * 0.5
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/star.gdshader")
+	mat.set_shader_parameter("fade_with_modulate", true)   # set_planets_shown fades it
 	mat.set_shader_parameter("star_radius", 0.20)
 	mat.set_shader_parameter("corona_size", 0.28)
 	mat.set_shader_parameter("pixel_count", maxf(side / 4.25, 32.0))
@@ -381,6 +441,7 @@ func _build_sun() -> void:
 	mat.set_shader_parameter("seed", 911)
 	sun.material = mat
 	_bg.add_child(sun)
+	_globes.append(sun)
 	_add_layer(sun, SUN_DEPTH)
 
 ## A faint ellipse about the sun through `through`, on that body's depth.
@@ -408,6 +469,7 @@ func _build_orbit(through: Vector2, depth: float) -> void:
 	layer.draw.connect(func() -> void: layer.draw_polyline_colors(pts, cols, 1.0))
 	layer.modulate = _depth_tint(depth * 0.5)
 	_bg.add_child(layer)
+	_globes.append(layer)
 	_add_layer(layer, depth)
 
 ## One body: a holder at its depth with the ring's far half, the globe, and
@@ -428,6 +490,7 @@ func _build_body(spec: Array, centre: Vector2) -> void:
 	holder.modulate = _depth_tint(float(spec[4])) * Color(PLANET_BRIGHTNESS, PLANET_BRIGHTNESS, PLANET_BRIGHTNESS)
 	_bg.add_child(holder)
 	_add_layer(holder, float(spec[4]))
+	_globes.append(holder)   # (the globe, its shading and ring are inside)
 
 	var ringed := bool(spec[6])
 	if ringed:
@@ -473,6 +536,7 @@ func _draw_ring(on: CanvasItem, r: float, near: bool) -> void:
 func _body_material(data: PlanetData, side: float, light: Vector3) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load(PlanetData.get_shader_path(data.planet_type)) as Shader
+	mat.set_shader_parameter("fade_with_modulate", true)   # set_planets_shown fades it
 	mat.set_shader_parameter("planet_radius", GLOBE_FILL)
 	mat.set_shader_parameter("pixel_count", maxf(side / 4.25, 20.0))
 	mat.set_shader_parameter("seed", data.seed)
@@ -536,6 +600,7 @@ func _build_planet() -> void:
 	var shader := load(PlanetData.get_shader_path(data.planet_type)) as Shader
 	var mat    := ShaderMaterial.new()
 	mat.shader  = shader
+	mat.set_shader_parameter("fade_with_modulate", true)   # set_planets_shown fades it
 
 	var sz          : float = clamp(float(data.planet_size), 0.2, 2.0)
 	var base_radius : float = clamp(0.42 * sz, 0.10, 0.48)
@@ -563,8 +628,9 @@ func _build_planet() -> void:
 
 	_update_light(mat)
 	_planet_rect.material = mat
-	_add_ao(_bg, _planet_rect.position + _planet_rect.size * 0.5, base_radius * side,
-		Vector2(LIGHT_DIR.x, LIGHT_DIR.y).normalized(), side / pcount)
+	_globes.append(_planet_rect)
+	_globes.append(_add_ao(_bg, _planet_rect.position + _planet_rect.size * 0.5, base_radius * side,
+		Vector2(LIGHT_DIR.x, LIGHT_DIR.y).normalized(), side / pcount))
 
 # ── Menu UI ────────────────────────────────────────────────────────────────
 

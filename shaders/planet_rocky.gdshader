@@ -77,7 +77,13 @@ vec3 rot_x(vec3 p, float a) { float c=cos(a),s=sin(a); return vec3(p.x, p.y*c-p.
 #include "res://shaders/district_territory.gdshaderinc"
 
 
+// Writing COLOR drops the node's modulate, so its fades never showed. On,
+// the modulate's alpha is put back (its tint is still left out). Off by
+// default: elsewhere a node's alpha was set without it ever showing.
+uniform bool fade_with_modulate = false;
+
 void fragment() {
+	float fade_a = COLOR.a;   // the node's modulate alpha (see fade_with_modulate)
 	// Square pixels: same cell size on both axes regardless of the rect aspect.
 	vec2 grid = vec2(pixel_count * aspect_ratio, pixel_count);
 	vec2 uv = floor(UV * grid) / grid;
@@ -217,5 +223,8 @@ void fragment() {
 		}
 
 		COLOR = vec4(clamp(surf, vec3(0.0), vec3(1.0)), 1.0);
+	}
+	if (fade_with_modulate) {
+		COLOR.a *= fade_a;
 	}
 }
