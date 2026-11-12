@@ -93,8 +93,31 @@ func _on_overlay_gone(c: Control) -> void:
 		_place()
 		queue_redraw()
 
+## Closes every open dropdown (a layer marked "left_panel_dropdown": the
+## district types, Trade's mode menu …, and the view's slot dropdown): another
+## panel coming in left them open over it (revision 12.11).
+static func close_dropdowns(tree: SceneTree) -> void:
+	if tree == null:
+		return
+	var holders: Array[Node] = [tree.root]
+	var scene := tree.current_scene
+	if scene != null:
+		holders.append(scene)
+	for h in holders:
+		for ch in h.get_children():
+			if ch is CanvasLayer and ch.has_meta("left_panel_dropdown") and not ch.is_queued_for_deletion():
+				if ch.has_meta("inbox"):
+					continue   # the notifications card closes on its own clicks
+				ch.queue_free()
+	if scene != null:
+		var slot_dd = scene.get("_active_slot_dropdown")
+		if slot_dd != null and is_instance_valid(slot_dd as Node):
+			(slot_dd as Node).queue_free()
+			scene.set("_active_slot_dropdown", null)
+
 ## Swaps the content right away; reveal() inside `change` plays the scramble.
 func _swap(change: Callable) -> void:
+	close_dropdowns(get_tree())   # a dropdown of what was shown goes with it (revision 12.11)
 	change.call()
 	_place()
 	queue_redraw()   # _force_open may have changed the backdrop's opacity
