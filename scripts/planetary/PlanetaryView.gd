@@ -2871,10 +2871,12 @@ func _tuck_panel(snap: bool) -> void:
 	_apply_panel_t(0.0)
 
 ## Placing the Capital begins (playtest: right after the story it was not clear
-## what was going on): the globe eases closer and a title over it says what to
-## do, then fades; the placement hint stays in the objectives card.
+## what was going on): the globe eases closer and a hero at the top of the
+## screen says what to do (coming in as the panels' rows do), then fades; the
+## placement hint stays in the objectives card.
 const LEAD_IN_HOLD := 2.6
 const LEAD_IN_ZOOM := 1.35
+const LEAD_IN_TOP := 64.0   # the hero's top, under the HUD's top bar (px)
 func _play_capital_lead_in() -> void:
 	if planet_renderer == null:
 		return
@@ -2887,13 +2889,16 @@ func _play_capital_lead_in() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 228   # under the news bar (229) and the HUD (230)
 	add_child(layer)
-	var wrapper := CenterContainer.new()
-	wrapper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# along the top, centred across
+	var wrapper := VBoxContainer.new()
+	wrapper.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	wrapper.offset_top = LEAD_IN_TOP
 	wrapper.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(wrapper)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override(&"separation", 6)
 	box.custom_minimum_size.x = 760.0   # the title wraps: it needs a width to wrap in
+	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	wrapper.add_child(box)
 	var hero := HeroHeader.create("Your first City", "CHOOSE THE SITE OF YOUR CAPITAL")
 	box.add_child(hero)
@@ -2904,13 +2909,13 @@ func _play_capital_lead_in() -> void:
 	box.add_child(help)
 	for n: Node in [box, hero, help] + hero.find_children("*", "Control", true, false):
 		(n as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
-		if n is Label:
-			(n as Label).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.modulate.a = 0.0
+	box.visible = false
 	var tw := create_tween()
 	tw.tween_interval(0.25)   # after the zoom has started
-	tw.tween_property(box, "modulate:a", 1.0, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(LEAD_IN_HOLD)
+	tw.tween_callback(func() -> void:   # a hero: its rows come in as the panels' do
+		box.visible = true
+		RowReveal.play(box, 2.0, false, &"ui/blink"))
+	tw.tween_interval(0.45 + LEAD_IN_HOLD)
 	tw.tween_property(box, "modulate:a", 0.0, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(layer.queue_free)
 
