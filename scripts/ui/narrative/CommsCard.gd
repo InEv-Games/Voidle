@@ -148,17 +148,16 @@ func _process(_delta: float) -> void:
 	if _card.visible:
 		_place()
 
-## Between the left panel (when open) and the right edge, centred in that
-## room; its bottom just above the news bar. The bust stands on the card's
+## Between the left panel (when open) and the right edge, or the objectives /
+## tutorial card on the right when one is up, centred in that room (never over
+## either); its bottom just above the news bar. The bust stands on the card's
 ## bottom edge, over its left end, rising above its top.
 func _place() -> void:
 	var vp := get_viewport_rect().size
-	var left := MARGIN
-	for n in get_tree().get_nodes_in_group(LeftPanel.GROUP):
-		var lp := n as Control
-		if lp != null and lp.is_visible_in_tree() and (lp.get_node("Layout") as CanvasItem).visible:
-			left = maxf(left, lp.get_global_rect().end.x + MARGIN)
-	var room := maxf(vp.x - MARGIN - left, 320.0)
+	var span := DialoguePanel.play_room(self, MARGIN)
+	var left := span.x
+	var right := span.y
+	var room := maxf(right - left, 320.0)
 	var w := minf(CARD_W, room)
 	var bottom := vp.y - MARGIN
 	var news := get_tree().get_first_node_in_group(&"news_panel") as Control

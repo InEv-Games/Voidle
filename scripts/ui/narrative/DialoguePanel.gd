@@ -302,18 +302,44 @@ func _process(_delta: float) -> void:
 	if _card.visible:
 		_place()
 
-## Between the left panel (when open) and the right edge, most of that room,
-## centred in it; its bottom just above the news bar. The portrait stands
-## behind, over the card's right side, from the card's bottom up.
+## Where the story's cards stand, as (left, right) x on screen: past the left
+## panel (when open), short of the objectives / tutorial card on the right when
+## one is up (never over either). The CommsCard uses it too.
+static func play_room(ci: CanvasItem, margin: float) -> Vector2:
+	var vp := ci.get_viewport_rect().size
+	var left := margin
+	for n in ci.get_tree().get_nodes_in_group(LeftPanel.GROUP):
+		var lp := n as Control
+		if lp != null and lp.is_visible_in_tree() and (lp.get_node("Layout") as CanvasItem).visible \
+				and not _under_tree(lp):
+			left = maxf(left, lp.get_global_rect().end.x + margin)
+	var right := vp.x - margin
+	for n in ci.get_tree().get_nodes_in_group(ObjectivesCard.GROUP):
+		var oc := n as Control
+		if oc != null and oc.is_visible_in_tree() and oc.modulate.a > 0.01 and not _under_tree(oc):
+			var r := oc.get_global_rect()
+			if r.position.x > left:   # a card on the right side
+				right = minf(right, r.position.x - margin)
+	return Vector2(left, right)
+
+## Hidden under the open Upgrade Tree (a lower canvas layer than its 220): it
+## doesn't push the cards aside, they centre on the screen (revision 12.11).
+const TREE_LAYER := 220
+static func _under_tree(c: Control) -> bool:
+	if not SkillTreeView.is_open:
+		return false
+	var cl := c.get_canvas_layer_node()
+	return cl == null or cl.layer < TREE_LAYER
+
+## In the play room (play_room), most of it, centred in it; its bottom just
+## above the news bar. The portrait stands behind, over the card's right side,
+## from the card's bottom up, and stays inside the card's width.
 func _place() -> void:
 	var vp := get_viewport_rect().size
-	var left := MARGIN
-	for n in get_tree().get_nodes_in_group(LeftPanel.GROUP):
-		var lp := n as Control
-		if lp != null and lp.is_visible_in_tree() and (lp.get_node("Layout") as CanvasItem).visible:
-			left = maxf(left, lp.get_global_rect().end.x + MARGIN)
-	var room := maxf(vp.x - MARGIN - left, MIN_W)
-	var w := clampf(room * ROOM_SHARE, MIN_W, MAX_W)
+	var span := play_room(self, MARGIN)
+	var left := span.x
+	var room := maxf(span.y - span.x, MIN_W)
+	var w := minf(clampf(room * ROOM_SHARE, MIN_W, MAX_W), room)
 	var bottom := vp.y - MARGIN
 	var news := get_tree().get_first_node_in_group(&"news_panel") as Control
 	if news != null and news.is_visible_in_tree():
@@ -329,4 +355,4 @@ func _place() -> void:
 		var ph := minf(PORTRAIT_H, _card.position.y + foot - MARGIN)   # never above the screen
 		var pw := ph * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
 		_portrait.size = Vector2(pw, ph)
-		_portrait.position = Vector2(w * PORTRAIT_X - pw * 0.5, foot - ph)
+		_portrait.position = Vector2(minf(w * PORTRAIT_X - pw * 0.5, w - pw), foot - ph)
