@@ -356,6 +356,12 @@ func _update_blocker() -> void:
 	var news = NewsFeed.get("_bar")
 	if news != null and is_instance_valid(news) and (news as Control).is_visible_in_tree():
 		holes.append((news as Control).get_global_rect())
+	# the globe stays free: turning, zooming, clicking on the planet (12.11)
+	var view := get_tree().current_scene
+	if view != null and view.has_method("_panel_right_edge"):
+		var vp := view.get_viewport().get_visible_rect()
+		var px: float = view.call("_panel_right_edge")
+		holes.append(Rect2(px, 0.0, vp.size.x - px, vp.size.y))
 	if _strict():
 		holes.append(_target.get_global_rect().grow(2.0))
 	elif not (_cur_sub.get("find", []) as Array).is_empty() or String(_cur_sub.get("how", "")) == HOW_PRESS:
@@ -507,7 +513,7 @@ func _subs(step: String) -> Array:
 					"done": placing == DistrictDef.Type.CITY or city != null},
 				{"text": "Pick a spot on the globe and name the City", "find": [], "how": HOW_PLACE,
 					"done": city != null},
-				{"text": "Wait for it to be built", "find": [], "how": HOW_WAIT,
+				{"text": "", "find": [], "how": HOW_WAIT, "hidden": true,
 					"done": city != null and not city.constructing}]
 		"guide_district":
 			return _district_subs(pd, city_name, city_word, DistrictDef.Type.RESIDENTIAL, "Residential District", placing)
@@ -638,7 +644,7 @@ func _district_subs(pd: PlanetData, city_name: String, city_word: String, type: 
 		{"text": "Choose %s" % dname, "find": [dname.to_upper()], "how": HOW_PRESS,
 			"done": placing == type or have},
 		{"text": "Place it within the City's reach", "find": [], "how": HOW_PLACE, "done": have},
-		{"text": "Wait for it to be built", "find": [], "how": HOW_WAIT, "done": _has_district(pd, type, true)}]
+		{"text": "", "find": [], "how": HOW_WAIT, "hidden": true, "done": _has_district(pd, type, true)}]
 
 const STEP_BUILDINGS := {"Low-rise Housing": "low_rise_housing", "Market": "commercial",
 	"Solar Array": "solar_panel", "Field Lab": "field_observatory"}
@@ -659,7 +665,7 @@ func _building_subs(pd: PlanetData, pp: PlanetProgress, type: int, bname: String
 			"how": HOW_PRESS, "done": on_page or have},
 		{"text": "Press an EMPTY SLOT", "find": ["EMPTY SLOT"] if on_page else [], "how": HOW_PRESS, "done": picking or have},
 		{"text": "Choose %s" % bname, "find": [bname.to_upper()], "how": HOW_PRESS, "done": have},
-		{"text": "Wait for it to be built", "find": [], "how": HOW_WAIT, "done": _has_building(pd, pp, type, true)}]
+		{"text": "", "find": [], "how": HOW_WAIT, "hidden": true, "done": _has_building(pd, pp, type, true)}]
 
 ## The checklist on the card: done ones ticked, the current one bright with its "how".
 func _refresh_checks(subs: Array) -> void:
@@ -668,6 +674,8 @@ func _refresh_checks(subs: Array) -> void:
 	var lines: Array[String] = []
 	for i in subs.size():
 		var s: Dictionary = subs[i]
+		if s.get("hidden", false):
+			continue   # a wait for construction: kept as a step, not shown
 		if i <= _progress:
 			lines.append("%s [color=#%s]%s[/color]" % [UIIcons.bb("confirm", 10, UIStyle.color(&"good")), dim, s["text"]])
 		elif i == _progress + 1:
