@@ -666,6 +666,37 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and _kb_id != "" \
 			and (event as InputEventMouseMotion).relative.length_squared() > 4.0:
 		_kb_clear()
+	var mb := event as InputEventMouseButton
+	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and _closes_tree(mb.global_position):
+		_close_from_outside.call_deferred()   # after the press: the button still does its own thing
+
+## A click on the HUD above the tree (a shortcut, a resource chip, Trade…)
+## closes the tree, not just its Close button (revision 12.11). Not the Upgrade
+## Tree button itself (it toggles the tree) and not while the game is paused.
+func _closes_tree(at: Vector2) -> bool:
+	if get_tree().paused or not is_visible_in_tree():
+		return false
+	var hit := get_viewport().gui_get_hovered_control()
+	if hit == null or is_ancestor_of(hit) or not hit.get_global_rect().has_point(at):
+		return false
+	var hud := get_node_or_null("/root/HUDManager")
+	var top: Variant = hud.get("_top_layer") if hud != null else null
+	if top == null or not is_instance_valid(top) or hit.get_canvas_layer_node() != top:
+		return false
+	var skill_btns: Variant = hud.get("_skill_btns")
+	var n: Node = hit
+	while n != null and n != top:
+		if skill_btns is Array and (skill_btns as Array).has(n):
+			return false
+		n = n.get_parent()
+	return true
+
+func _close_from_outside() -> void:
+	if not is_inside_tree() or not SkillTreeView.is_open:
+		return
+	var hud := get_node_or_null("/root/HUDManager")
+	if hud != null and hud.has_method("_try_close_skill_tree"):
+		hud.call("_try_close_skill_tree")
 
 func _unhandled_input(event: InputEvent) -> void:
 	var jb := event as InputEventJoypadButton   # the pad: D-pad moves, A researches, B closes
