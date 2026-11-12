@@ -1,0 +1,67 @@
+[gd_scene format=3 uid="uid://uom5i2j5mjwu"]
+
+[ext_resource type="Script" uid="uid://dgmsylgkvbxft" path="res://scripts/ui/narrative/CommsCard.gd" id="1_script"]
+
+[node name="CommsCard" type="Control" unique_id=1974942680]
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_script")
+
+[node name="Card" type="Control" parent="." unique_id=720859867]
+anchors_preset = 0
+mouse_filter = 2
+
+[node name="Box" type="PanelContainer" parent="Card" unique_id=1459236750]
+custom_minimum_size = Vector2(0, 84)
+layout_mode = 0
+theme_type_variation = &"PopupCard"
+
+[node name="Row" type="HBoxContainer" parent="Card/Box" unique_id=44153556]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Pad" type="Control" parent="Card/Box/Row" unique_id=321156886]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="VSeparator" type="VSeparator" parent="Card/Box/Row" unique_id=1564530562]
+layout_mode = 2
+
+[node name="Col" type="VBoxContainer" parent="Card/Box/Row" unique_id=1638994476]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 2
+
+[node name="Speaker" type="Label" parent="Card/Box/Row/Col" unique_id=1304648370]
+layout_mode = 2
+theme_type_variation = &"HeaderLabel"
+text = "SPEAKER"
+
+[node name="Body" type="RichTextLabel" parent="Card/Box/Row/Col" unique_id=191658367]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"PopupBody"
+theme_override_font_sizes/normal_font_size = 12
+bbcode_enabled = true
+text = "The line."
+fit_content = true
+scroll_active = false
+
+[node name="Face" type="Control" parent="Card" unique_id=1075490894]
+clip_contents = true
+anchors_preset = 0
+mouse_filter = 2
+
+[node name="Portrait" type="TextureRect" parent="Card/Face" unique_id=765916468]
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1

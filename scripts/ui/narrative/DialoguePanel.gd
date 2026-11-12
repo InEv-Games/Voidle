@@ -71,7 +71,13 @@ func set_skippable(on: bool) -> void:
 	if _skip != null:
 		_skip.visible = on
 
+var _hiding: Tween = null   # the card fading out (a scene ended)
+
 func show_panel() -> void:
+	if _hiding != null:   # a scene ended and the next one starts at once: it stays up
+		_hiding.kill()
+		_hiding = null
+		_card.modulate.a = 1.0
 	if _card.visible:
 		return
 	_card.visible = true
@@ -82,9 +88,12 @@ func hide_panel() -> void:
 	_kill_typing()
 	if not _card.visible:
 		return
-	var tw := _card.create_tween()
-	tw.tween_property(_card, "modulate:a", 0.0, 0.12)
-	tw.tween_callback(func() -> void:
+	if _hiding != null:
+		return
+	_hiding = _card.create_tween()
+	_hiding.tween_property(_card, "modulate:a", 0.0, 0.12)
+	_hiding.tween_callback(func() -> void:
+		_hiding = null
 		_card.visible = false
 		_card.modulate.a = 1.0)
 

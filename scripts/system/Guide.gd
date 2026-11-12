@@ -232,8 +232,10 @@ func _show_step(step: String) -> void:
 	_hero.title = String(TITLES[step]).to_upper()
 	_card.tip_title = String(TITLES[step])
 	var def := CompanionDef.find(_advisor())
-	_desc.text = "[color=#%s]%s[/color]\n%s" % [UIStyle.hex(&"text_subtle"),
-		def.display_name if def != null else "", _line_text(step)]
+	# the advisor says the step in the CommsCard (Narrative, below); the card only
+	# holds the step: its title, what is left and the reward (no line said twice)
+	_desc.text = ""
+	_desc.visible = false
 	_reward.text = _reward_bb(step)
 	_reward.visible = _reward.text != ""
 	_skip.visible = false
@@ -433,6 +435,7 @@ func _process_checklist(delta: float) -> void:
 		_hero.title = "FIRST STEPS"
 		_card.tip_title = "First steps"
 		_desc.text = "[color=#%s]Do them in any order; each one pays when it is done.[/color]" % UIStyle.hex(&"text_subtle")
+		_desc.visible = true
 		_reward.visible = false
 		_skip.visible = true
 		_subs_text = ""
@@ -594,6 +597,10 @@ func _grant_missing(key: String, cost: Dictionary) -> void:
 		else:
 			Economy.add(id, ceilf(float(short[id])))
 	NewsFeed.post("Your advisor finds what the next step needs.", NewsFeed.Kind.EVENT, "", "", {}, false)
+	var adv_def := CompanionDef.find(_advisor())
+	Narrative.say(adv_def.display_name if adv_def != null else "Mother Superior",
+		"I found what the next step needs. Take it, and keep going.")
+	Narrative.log_event("Your advisor found what the next step needs: %s." % Narrative.amounts_text(short))
 
 func _district_subs(pd: PlanetData, city_name: String, city_word: String, type: int, dname: String, placing: int) -> Array:
 	var have := _has_district(pd, type)

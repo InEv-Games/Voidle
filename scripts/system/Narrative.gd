@@ -1,6 +1,7 @@
-## Narrative — autoload. Plays the story's VSM graphs (docs/design/narrative) in
-## the bottom dialogue panel (DialoguePanel), one at a time, and keeps the
-## Narrative Log.
+## Narrative — autoload. Plays the story's VSM graphs (docs/design/narrative)
+## one at a time and keeps the Narrative Log. Story scenes play in the bottom
+## dialogue panel (DialoguePanel); short ones ("main": false: the objectives'
+## advisor) and notices (say) in the small CommsCard, the game running on.
 ##
 ##   Narrative.play("res://resources/narrative/opening.tres", "intro",
 ##       {"id": "opening_intro", "on_done": func(exit_name): ...})
@@ -47,6 +48,10 @@ var _mgr: VSMManager = null
 var _layer: CanvasLayer = null
 var _blocker: Control = null
 var _panel: DialoguePanel = null
+var _comms: CommsCard = null    # the short scenes' small card (they don't stop the game)
+var _on_comms := false          # the scene on screen is in the CommsCard
+var _last_line := ["", ""]      # [speaker, text] on screen (a short scene's answers move it to the panel)
+var _say_n := 0
 var _was_paused := false
 
 func _ready() -> void:
@@ -215,30 +220,60 @@ func _ensure_ui(main: bool) -> void:
 		_layer.add_child(_blocker)
 		_panel = DialoguePanel.create()
 		_layer.add_child(_panel)
-		_panel.advance_requested.connect(func() -> void:
-			if _mgr != null:
-				_mgr.advance()
-			elif not _current.is_empty() and not (_current.get("lines", []) as Array).is_empty():
-				_line_i += 1
-				if _line_i < (_current["lines"] as Array).size():
-					_show_plain_line()
-				else:
-					_end_scene("", true))
+		_panel.advance_requested.connect(_advance)
 		_panel.choice_made.connect(_on_choice_made)
 		_panel.log_requested.connect(open_log)
 		_panel.skip_requested.connect(func() -> void:
 			if not _current.is_empty() and bool(_current.get("skippable", false)):
 				_end_scene("", true))
+	if _comms == null or not is_instance_valid(_comms):
+		_comms = CommsCard.create()
+		_layer.add_child(_comms)
+		_comms.advance_requested.connect(_advance)
 	_blocker.visible = main
-	_panel.show_panel()
-	_panel.set_skippable(bool(_current.get("skippable", false)))
+	_on_comms = not main
+	if main:   # a story scene: the dialogue panel
+		_comms.hide_panel()
+		_panel.show_panel()
+		_panel.set_skippable(bool(_current.get("skippable", false)))
+	else:      # a short one (the objectives' advisor, a notice): the small card
+		_panel.hide_panel()
+		_comms.show_panel()
+
+## CONTINUE, a click on the card: the next line, or the scene's end.
+func _advance() -> void:
+	if _mgr != null:
+		_mgr.advance()
+	elif not _current.is_empty() and not (_current.get("lines", []) as Array).is_empty():
+		_line_i += 1
+		if _line_i < (_current["lines"] as Array).size():
+			_show_plain_line()
+		else:
+			_end_scene("", true)
 
 func _on_line(speaker: String, text: String) -> void:
 	_log("line", speaker, text)
-	_panel.show_line(speaker, text, portrait_for(speaker))
+	_last_line = [speaker, text]
+	if _on_comms:
+		_comms.show_line(speaker, text, portrait_for(speaker))
+	else:
+		_panel.show_line(speaker, text, portrait_for(speaker))
 
 func _on_choices(texts: Array[String]) -> void:
+	if _on_comms:   # the small card takes no answers: the panel does, with the line they answer
+		_on_comms = false
+		_comms.hide_panel()
+		_panel.show_panel()
+		_panel.show_line(String(_last_line[0]), String(_last_line[1]), portrait_for(String(_last_line[0])))
 	_panel.show_choices(texts)
+
+## Someone speaks in the middle of play, as a notice: `text` in the CommsCard,
+## the game running on (a short scene of one line). With an `id` it is said
+## once in a game (GameState.completed_scenes); without, every time.
+func say(speaker: String, text: String, id := "") -> bool:
+	_say_n += 1
+	return play("", "say", {"id": id if id != "" else "say:%d:%d" % [Time.get_ticks_msec(), _say_n],
+		"main": false, "once": id != "", "lines": [[speaker, text]]})
 
 func _on_choice_made(index: int, text: String) -> void:
 	_log("choice", "Player", text)
@@ -253,6 +288,9 @@ func _end_scene(exit_name: String, completed: bool) -> void:
 		get_tree().paused = _was_paused
 	if _panel != null and is_instance_valid(_panel):
 		_panel.hide_panel()
+	if _comms != null and is_instance_valid(_comms):
+		_comms.hide_panel()
+	_on_comms = false
 	if _blocker != null and is_instance_valid(_blocker):
 		_blocker.visible = false
 	if completed and bool(item.get("once", true)):
