@@ -56,9 +56,9 @@ const STEPS := 3
 func _ready() -> void:
 	_hero_close = $Center/Box/Head/Close
 	_hero_close.pressed.connect(close)
-	($Dim as Control).gui_input.connect(func(e: InputEvent) -> void:
-		if dismissable and e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
-			close())
+	# a click on the dim background no longer closes it (revision 12.11: the
+	# choices were lost by a stray click); the ✕ and Esc still do. The Dim
+	# still takes the click, so nothing behind it reacts.
 	(_hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF   # one line
 	_choice = {"world": "terran", "moon": "rocky", "civ": "c0", "boon": "",
 		"tutorial": not SettingsManager.tutorial_ever_done, "seed": SessionPrep.SEED_MIN,
