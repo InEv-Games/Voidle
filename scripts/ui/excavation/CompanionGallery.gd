@@ -79,6 +79,7 @@ func _ready() -> void:
 	_status.bbcode_enabled = true
 	_status.fit_content = true
 	_status.scroll_active = false
+	_status.clip_contents = false
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.add_theme_font_size_override(&"normal_font_size", 11)
 	info.add_child(_status)
@@ -151,7 +152,7 @@ func _pick(id: String) -> void:
 	_portrait.modulate = Color.WHITE if met else Color(0.25, 0.28, 0.36)
 	_name.caption = def.role if met else ("Not met yet" if def != null else "Still to come")
 	_name.title = def.display_name.to_upper() if met else "???"
-	_bonus.text = def.bonus_bb(13) if def != null else ""
+	_bonus.text = def.bonus_bb(11) if def != null else ""
 	_bonus.visible = met
 	_bio.text = def.bio if met else (def.hint if def != null else "Others will join you in the civilizations ahead.")
 	_refresh_assign()

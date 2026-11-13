@@ -107,6 +107,7 @@ theme_override_constants/separation = 4
 
 [node name="Bonus" type="RichTextLabel" parent="Center/Card/Row/Detail/Foot/BioCard/Info"]
 layout_mode = 2
+clip_contents = false
 mouse_filter = 2
 theme_override_font_sizes/normal_font_size = 11
 bbcode_enabled = true
@@ -115,6 +116,7 @@ scroll_active = false
 
 [node name="Bio" type="RichTextLabel" parent="Center/Card/Row/Detail/Foot/BioCard/Info"]
 layout_mode = 2
+clip_contents = false
 mouse_filter = 2
 theme_type_variation = &"PopupBody"
 theme_override_font_sizes/normal_font_size = 11

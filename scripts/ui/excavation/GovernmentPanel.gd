@@ -174,6 +174,7 @@ static func _text(bb: String) -> RichTextLabel:
 	r.bbcode_enabled = true
 	r.fit_content = true
 	r.scroll_active = false
+	r.clip_contents = false
 	r.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	r.theme_type_variation = &"PopupBody"
 	r.add_theme_font_size_override(&"normal_font_size", 11)
