@@ -144,6 +144,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _page != Page.RETURN:   # the dig is paid: its story plays out
 				_close()
 
+## Where the pad's focus lands when the card opens (LeftPanel): the main step
+## (EXCAVATE / CONTINUE …), else the first answer, else LATER.
+func pad_default_focus() -> Control:
+	if _next.is_visible_in_tree() and not _next.disabled:
+		return _next
+	for c in _choices.get_children():
+		if c is BaseButton and (c as Control).is_visible_in_tree():
+			return c
+	return _later if _later.is_visible_in_tree() else null
+
 func _dig_progress() -> float:
 	return 1.0 - Excavations.time_left(site) / maxf(Excavations.dig_length(site), 1.0)
 

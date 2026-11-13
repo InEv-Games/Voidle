@@ -594,6 +594,12 @@ func _hud_bar_height() -> float:
 var _nav_active := false
 var _nav_focus: Control = null
 var _nav_last_root_id: int = 0
+## The popup the keys last saw open; a new one (a ruin's story card, a modal …)
+## takes the focus at once for keys / pad play, no first press needed.
+var _auto_root_id: int = 0
+## Whether the panel itself had the keys before the popup took them: when the
+## popup goes, the keys go back where they were (the globe keeps A).
+var _auto_prev_active := true
 var _saved_focus_by_root: Dictionary = {}   # root instance_id -> WeakRef(Control)
 ## Where the focus was (root id, screen centre): when the panel rebuilds (a
 ## building added with →) the focus goes to what stands there now, not the top.
@@ -775,6 +781,7 @@ func _tick_nav(delta: float) -> void:
 		_stick_dir = Vector2i.ZERO
 		_stick_timer = 0.0
 
+	_auto_focus_popup()
 	if not _nav_active:
 		return
 	var root := _active_nav_root()
@@ -941,6 +948,44 @@ func _toggle_panel() -> bool:
 	_self_slide_tw = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_self_slide_tw.tween_method(set_slide, slide_t, 1.0 if now_open else 0.0, 0.9)
 	return true
+
+## A popup / card just opened over the panel while playing on keys or pad:
+## light its default button (its `pad_default_focus()`, else the first one).
+## Retried each frame until the popup has something to focus (cards fade in).
+func _auto_focus_popup() -> void:
+	var root := _active_nav_root()
+	# full-screen cards only: menus and dropdowns light their own first row
+	var is_popup := root is ModalPopup or root is StoryDialog or root is CompanionGallery
+	var rid := root.get_instance_id() if is_popup else 0
+	if rid == _auto_root_id:
+		return
+	if not is_popup:
+		if _auto_root_id != 0 and not _auto_prev_active:
+			_clear_nav_focus()
+		_auto_root_id = 0
+		_auto_prev_active = true
+		return
+	if not CursorManager.keys_mode:
+		if _auto_root_id == 0:
+			_auto_prev_active = true   # the mouse opened it: leave it to the mouse
+		_auto_root_id = rid
+		return
+	var items := _nav_items(root)
+	if items.is_empty():
+		return   # not built yet: try again next frame
+	if _auto_root_id == 0:
+		_auto_prev_active = _nav_active
+	_auto_root_id = rid
+	var pick: Control = null
+	if root.has_method("pad_default_focus"):
+		var d = root.call("pad_default_focus")
+		if d is Control and items.has(d as Control):
+			pick = d as Control
+	if pick == null:
+		pick = items[0]
+	_nav_active = true
+	_nav_last_root_id = rid
+	_set_nav_focus(pick, false)
 
 func _handle_nav_dir(dir: Vector2) -> bool:
 	var scene := get_tree().current_scene

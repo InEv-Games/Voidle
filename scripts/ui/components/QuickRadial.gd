@@ -196,9 +196,10 @@ func _draw() -> void:
 	var sub := "Stick to aim"
 	if hovered >= 0:
 		title = String(items[hovered]["label"])
-		sub = "A / release" if bool(items[hovered]["enabled"]) else "Locked"
+		sub = "" if bool(items[hovered]["enabled"]) else "Locked"
 	_draw_centered(font, title, center + Vector2(0, -2), fs + 4, Color(text_bright, f), ri * 1.4)
-	_draw_centered(font, sub, center + Vector2(0, fs + 6), fs - 2, Color(text_c, 0.85 * f), ri * 1.4)
+	if sub != "":
+		_draw_centered(font, sub, center + Vector2(0, fs + 6), fs - 2, Color(text_c, 0.85 * f), ri * 1.4)
 
 func _draw_centered(font: Font, s: String, at: Vector2, fsz: int, col: Color, max_w: float) -> void:
 	var sz := font.get_string_size(s, HORIZONTAL_ALIGNMENT_CENTER, -1, fsz)

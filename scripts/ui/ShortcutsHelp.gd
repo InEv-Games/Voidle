@@ -18,7 +18,7 @@ const ROWS := [
 	["1 – 5, 0", "LB / RB (globe)", "Cycle surface lenses (LB + RB: normal)"],
 	["Shift + 1 – 9", "Select + LB", "Switch between home world and moons"],
 	["Alt / Ctrl / H", "R3", "Cycle inspect overlay / clean globe"],
-	["X / B", "LB / RB (panel)", "Remove one / add one (hold: Fill / Max)"],
+	["X / B", "LB / RB (panel)", "Remove one / add one (hold Shift / Ctrl or LT / RT: Fill / Max)"],
 	["F", "Y", "Buy what is missing and build (on a build row)"],
 	["U", "Select + Y", "Upgrade Tree"],
 	["T", "Select + X", "Trade"],

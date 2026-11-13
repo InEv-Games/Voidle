@@ -1739,8 +1739,11 @@ func _tick_key_spin(delta: float) -> void:
 			var sp := get_node_or_null("SidePanel") as LeftPanel
 			if sp != null and sp._nav_active and sp._active_nav_root() == sp.get_node_or_null("Layout"):
 				sp._clear_nav_focus()
-		var lt := 0.0 if PadScheme.sticks_captured() else Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
-		var rt := 0.0 if PadScheme.sticks_captured() else Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
+		# with the side panel focused the triggers are bulk-buy sizes, not zoom
+		var sp_z := get_node_or_null("SidePanel") as LeftPanel
+		var trig_free := not PadScheme.sticks_captured() and not (sp_z != null and sp_z._nav_active)
+		var lt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT) if trig_free else 0.0
+		var rt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT) if trig_free else 0.0
 		# Q zooms out, E in (like LT / RT)
 		if Input.is_physical_key_pressed(KEY_Q):
 			lt = 1.0
@@ -9938,16 +9941,27 @@ func _change_row(icon: String, before: float, after: float) -> String:
 ## Click sizes for buying buildings (playtest 07.11: ×5 was the same as "all"
 ## in practice, districts rarely have 5 free slots):
 ##   ONE   a plain click
-##   FILL  Shift / LB: every free slot the building fits, only if all of them
-##         can be paid (nothing is bought otherwise)
-##   MAX   Ctrl / Cmd / RB: as many as the resources pay for
+##   FILL  Shift / hold LT: every free slot the building fits, only if all of
+##         them can be paid (nothing is bought otherwise)
+##   MAX   Ctrl / Cmd / hold RT: as many as the resources pay for
+## The pad's sizes sit on the triggers, not the shoulders: LB / RB step a
+## building card (remove one / add one), so RB alone must add just one.
 enum Bulk { ONE, FILL, MAX }
 const BULK_LABELS := ["one", "Shift fill the slots", "Ctrl/Cmd as many as you can pay"]
+const BULK_LABELS_PAD := ["one", "LT fill the slots", "RT as many as you can pay"]
+
+## A trigger held down on any pad (bulk-buy size while the panel has focus).
+static func _joy_trigger(right: bool) -> bool:
+	var ax := JOY_AXIS_TRIGGER_RIGHT if right else JOY_AXIS_TRIGGER_LEFT
+	for d in Input.get_connected_joypads():
+		if Input.get_joy_axis(d, ax) > 0.5:
+			return true
+	return false
 
 static func _bulk_mode() -> int:
-	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META) or TradePanel._joy_shoulder(true):
+	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META) or _joy_trigger(true):
 		return Bulk.MAX
-	if Input.is_key_pressed(KEY_SHIFT) or TradePanel._joy_shoulder(false):
+	if Input.is_key_pressed(KEY_SHIFT) or _joy_trigger(false):
 		return Bulk.FILL
 	return Bulk.ONE
 
@@ -9974,9 +9988,11 @@ static func _bulk_preview(pp: PlanetProgress, def: BuildingDef, poi: POIData) ->
 ## "one  //  Shift fill the slots  //  Ctrl/Cmd …", the size in force lit.
 func _bulk_options_bb() -> String:
 	var mode := _bulk_mode()
+	var labels: Array = BULK_LABELS_PAD if CursorManager.keys_mode and not Input.get_connected_joypads().is_empty() \
+		else BULK_LABELS
 	var opts: Array[String] = []
-	for i in BULK_LABELS.size():
-		opts.append(_bb(BULK_LABELS[i], "#e8ecf6" if i == mode else BB_DIM))
+	for i in labels.size():
+		opts.append(_bb(labels[i], "#e8ecf6" if i == mode else BB_DIM))
 	return "  //  ".join(opts)
 
 ## Buys up to `want` of a model in a district with one payment (bulk buy) —

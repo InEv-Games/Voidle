@@ -283,9 +283,11 @@ func _tick_live(delta: float) -> void:
 		_live = Callable()
 		return
 	_live_t += delta
-	# Shift / Ctrl change a tip's click size: refresh at once, not on the beat
+	# Shift / Ctrl (pad: LT / RT) change a tip's click size: refresh at once, not on the beat
 	var mods := int(Input.is_key_pressed(KEY_SHIFT)) | int(Input.is_key_pressed(KEY_CTRL)) << 1 \
-		| int(Input.is_key_pressed(KEY_META)) << 2
+		| int(Input.is_key_pressed(KEY_META)) << 2 \
+		| int(Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT) > 0.5) << 3 \
+		| int(Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT) > 0.5) << 4
 	if mods != _live_mods:
 		_live_mods = mods
 		_live_t = LIVE_SEC
