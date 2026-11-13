@@ -15,7 +15,7 @@ const LAYER := 238   # over the dialogue panel (Narrative.LAYER)
 const PANEL_SCENE := "res://scenes/ui/narrative/NarrativeLog.tscn"
 const SLIDE := 40.0   # it slides in from the right this far (px)
 const SLIDE_IN := 0.22
-const TEXT_SIZE := 12
+const TEXT_SIZE := 13
 
 @onready var _side: Control = $Side
 @onready var _scroll: ScrollContainer = $Side/Col/Scroll

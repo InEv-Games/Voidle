@@ -108,7 +108,7 @@ static func _option(opt: Dictionary, p: ModalPopup, on_pick: Callable, i: int,
 	body.scroll_active = false
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.theme_type_variation = &"PopupBody"
-	body.add_theme_font_size_override(&"normal_font_size", 12)
+	body.add_theme_font_size_override(&"normal_font_size", 13)
 	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.text = String(opt.get("body", ""))
 	inner.add_child(body)

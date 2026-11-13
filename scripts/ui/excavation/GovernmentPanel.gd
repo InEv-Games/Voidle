@@ -177,7 +177,7 @@ static func _text(bb: String) -> RichTextLabel:
 	r.clip_contents = false
 	r.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	r.theme_type_variation = &"PopupBody"
-	r.add_theme_font_size_override(&"normal_font_size", 11)
+	r.add_theme_font_size_override(&"normal_font_size", 12)
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	r.text = bb
 	return r

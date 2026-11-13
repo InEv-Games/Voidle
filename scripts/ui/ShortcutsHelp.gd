@@ -52,8 +52,8 @@ static func open(host: Node) -> void:
 	t.scroll_active = false
 	t.autowrap_mode = TextServer.AUTOWRAP_OFF
 	t.theme_type_variation = &"PopupBody"
-	t.add_theme_font_size_override(&"normal_font_size", 11)
-	t.add_theme_font_size_override(&"bold_font_size", 11)
+	t.add_theme_font_size_override(&"normal_font_size", 12)
+	t.add_theme_font_size_override(&"bold_font_size", 12)
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	t.text = _table_bb()
 	p.add_content(t)

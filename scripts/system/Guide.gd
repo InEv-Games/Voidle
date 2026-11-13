@@ -870,15 +870,15 @@ func _ensure_card() -> void:
 	add_child(_card)
 	_hero = HeroHeader.create("", "", ObjectivesCard.HERO_SIZE)
 	_card.content.add_child(_hero)
-	_desc = _rich(11)
+	_desc = _rich(12)
 	_card.content.add_child(_desc)
-	_checks = _rich(11)
+	_checks = _rich(12)
 	_card.content.add_child(_checks)
 	_reward_rule = HSeparator.new()
 	_reward_rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_reward_rule.visible = false
 	_card.content.add_child(_reward_rule)
-	_reward = _rich(11)
+	_reward = _rich(12)
 	_card.content.add_child(_reward)
 	# the optional checklist can be skipped: every reward not paid yet comes at once (11.11)
 	_skip = IconButton.create("SKIP TUTORIAL", "flag", IconButton.Variant.DEFAULT)
