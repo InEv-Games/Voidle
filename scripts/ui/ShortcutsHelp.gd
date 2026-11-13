@@ -28,7 +28,7 @@ const ROWS := [
 	["N", "Select + ↓", "Browse the news"],
 	["Alt + ← / →", "Select + ← / →", "Back / forward in view history"],
 	["L", "Y (dialogue)", "Narrative Log (in a story line)"],
-	["?", "Select + Start", "This list (tap Select: Quick Hub)"],
+	["?", "Select + Start", "This list (tap Select: Quick Hub / wheel on planet)"],
 	["Esc", "Start", "Pause menu"],
 	["Cmd/Ctrl + Shift + C", "", "Developer console"],
 ]

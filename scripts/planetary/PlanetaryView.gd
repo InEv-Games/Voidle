@@ -1725,8 +1725,8 @@ func _tick_key_spin(delta: float) -> void:
 		# any key or right-stick turn aims with the centre cursor: Enter / A then picks what is
 		# under it (a district, a City, an excavation site …), and in placing
 		# places there (10.11: keyboard/controller play); the mouse moving ends it
-		var rx := 0.0 if PadScheme.chord_held else Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
-		var ry := 0.0 if PadScheme.chord_held else Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+		var rx := 0.0 if PadScheme.sticks_captured() else Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+		var ry := 0.0 if PadScheme.sticks_captured() else Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
 		if absf(rx) > 0.15:
 			dir.x += rx
 			_using_right_stick = true
@@ -1739,8 +1739,8 @@ func _tick_key_spin(delta: float) -> void:
 			var sp := get_node_or_null("SidePanel") as LeftPanel
 			if sp != null and sp._nav_active and sp._active_nav_root() == sp.get_node_or_null("Layout"):
 				sp._clear_nav_focus()
-		var lt := 0.0 if PadScheme.chord_held else Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
-		var rt := 0.0 if PadScheme.chord_held else Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
+		var lt := 0.0 if PadScheme.sticks_captured() else Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
+		var rt := 0.0 if PadScheme.sticks_captured() else Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
 		# Q zooms out, E in (like LT / RT)
 		if Input.is_physical_key_pressed(KEY_Q):
 			lt = 1.0
@@ -5937,6 +5937,12 @@ func _lens_menu_input(event: InputEvent) -> bool:
 			_set_lens_menu(false)   # the click still goes through
 	return false
 
+## Centre of the controller Quick Command wheel (PadScheme): the planet.
+func pad_radial_center() -> Vector2:
+	if planet_renderer != null and is_instance_valid(planet_renderer):
+		return planet_renderer.get_global_rect().get_center()
+	return get_viewport().get_visible_rect().size * 0.5
+
 ## Cycles between the home world and its moons (controller Select + LB).
 func cycle_celestial_body(step: int = 1) -> bool:
 	if _placing_def != null or _naming_open or GameState.showcase_mode:
@@ -5944,6 +5950,10 @@ func cycle_celestial_body(step: int = 1) -> bool:
 		return false
 	var home := GameState.get_home_planet()
 	if home == null:
+		return false
+	if not GameState.can_view_moon():   # the Moon opens with the Lunar Program
+		AudioManager.play("denied")
+		_show_unlock_toast("Moon locked", "Unlock the Lunar Program to visit the Moon.")
 		return false
 	var bodies: Array = [home]
 	bodies.append_array(home.moons)

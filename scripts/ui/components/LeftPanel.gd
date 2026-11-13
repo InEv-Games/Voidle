@@ -746,7 +746,7 @@ func _collect_focusables(n: Node, out: Array[Control]) -> void:
 		_collect_focusables(c, out)
 
 func _tick_nav(delta: float) -> void:
-	if PadScheme.chord_held:
+	if PadScheme.sticks_captured():
 		return
 	if _nav_blocked():
 		if _nav_active:
