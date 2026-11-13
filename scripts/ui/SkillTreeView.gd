@@ -699,7 +699,9 @@ func _close_from_outside() -> void:
 		hud.call("_try_close_skill_tree")
 
 func _unhandled_input(event: InputEvent) -> void:
-	var jb := event as InputEventJoypadButton   # the pad: D-pad moves, A researches, B closes
+	if PadScheme.chord_held:
+		return
+	var jb := event as InputEventJoypadButton   # the pad: D-pad/L-stick moves, LB/RB branches, LT/RT zooms, A researches, B closes
 	if jb != null and jb.pressed:
 		var jk := KEY_NONE
 		match jb.button_index:
@@ -708,8 +710,25 @@ func _unhandled_input(event: InputEvent) -> void:
 			JOY_BUTTON_DPAD_LEFT: jk = KEY_LEFT
 			JOY_BUTTON_DPAD_RIGHT: jk = KEY_RIGHT
 			JOY_BUTTON_A: jk = KEY_ENTER
-			JOY_BUTTON_LEFT_SHOULDER: jk = KEY_Q
-			JOY_BUTTON_RIGHT_SHOULDER: jk = KEY_E
+			JOY_BUTTON_LEFT_SHOULDER:
+				get_viewport().set_input_as_handled()
+				_kb_jump_branch(-1)
+				return
+			JOY_BUTTON_RIGHT_SHOULDER:
+				get_viewport().set_input_as_handled()
+				_kb_jump_branch(1)
+				return
+			JOY_BUTTON_RIGHT_STICK:
+				get_viewport().set_input_as_handled()
+				var root_id := "root" if _ui_nodes.has("root") else _kb_start()
+				if root_id != "":
+					_kb_light(root_id)
+					var rc := _kb_card()
+					if rc != null:
+						_pos_t += get_viewport_rect().get_center() - rc.get_global_rect().get_center()
+						_pan_vel = Vector2.ZERO
+					AudioManager.play("click")
+				return
 			JOY_BUTTON_B:
 				get_viewport().set_input_as_handled()
 				_close_btn.pressed.emit()
@@ -913,7 +932,126 @@ func _on_skill_unlocked(_id: String) -> void:
 	_connections_draw.queue_redraw()
 	_bg.queue_redraw()
 
+var _stick_dir := Vector2i.ZERO
+var _stick_timer := 0.0
+
+## Jumps between technology branches (lines) around the tree with LB / RB.
+func _kb_jump_branch(step: int) -> void:
+	var st: Node = get_node_or_null("/root/SkillTree")
+	if st == null:
+		return
+	var nodes: Dictionary = st.get("nodes")
+	var center_g := _center_ctrl.global_position
+	var by_line: Dictionary = {}   # line -> { angle, buy_id, buy_d, any_id, any_d }
+	for id: String in _ui_nodes:
+		if id == "root":
+			continue
+		var c := _ui_nodes[id] as Control
+		if c == null or not is_instance_valid(c) or not c.is_visible_in_tree():
+			continue
+		var nd = nodes.get(id)
+		var line := String(nd.line) if nd != null and "line" in nd else ""
+		if line == "":
+			continue
+		var off := c.get_global_rect().get_center() - center_g
+		var d2 := off.length_squared()
+		var can_buy := bool(st.call("can_purchase", id))
+		if not by_line.has(line):
+			by_line[line] = {
+				"line": line,
+				"angle": off.angle(),
+				"buy_id": id if can_buy else "",
+				"buy_d": d2 if can_buy else INF,
+				"any_id": id,
+				"any_d": d2,
+			}
+		else:
+			var b: Dictionary = by_line[line]
+			if d2 < float(b["any_d"]):
+				b["any_id"] = id
+				b["any_d"] = d2
+				b["angle"] = off.angle()
+			if can_buy and d2 < float(b["buy_d"]):
+				b["buy_id"] = id
+				b["buy_d"] = d2
+	if by_line.is_empty():
+		return
+	var branches: Array = by_line.values()
+	branches.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["angle"]) < float(b["angle"]))
+	var cur_line := ""
+	if _kb_id != "" and nodes.has(_kb_id):
+		var cur_nd = nodes[_kb_id]
+		cur_line = String(cur_nd.line) if cur_nd != null and "line" in cur_nd else ""
+	var cur_idx := -1
+	for i in branches.size():
+		if String(branches[i]["line"]) == cur_line:
+			cur_idx = i
+			break
+	var next_idx := (0 if step > 0 else branches.size() - 1) if cur_idx < 0 \
+		else posmod(cur_idx + step, branches.size())
+	var pick: Dictionary = branches[next_idx]
+	var target_id := String(pick["buy_id"]) if String(pick["buy_id"]) != "" else String(pick["any_id"])
+	if target_id == "":
+		return
+	AudioManager.play("hover")
+	_kb_light(target_id)
+	var tc := _kb_card()
+	if tc != null:
+		_pos_t += get_viewport_rect().get_center() - tc.get_global_rect().get_center()
+		_pan_vel = Vector2.ZERO
+
+func _tick_pad(delta: float) -> void:
+	if PadScheme.chord_held or get_tree().paused:
+		_stick_dir = Vector2i.ZERO
+		return
+	# Left stick steps between nodes like D-pad
+	var lx := Input.get_joy_axis(0, JOY_AXIS_LEFT_X)
+	var ly := Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)
+	var ndir := Vector2i.ZERO
+	if absf(lx) >= 0.45 or absf(ly) >= 0.45:
+		if absf(ly) >= absf(lx):
+			ndir = Vector2i(0, 1 if ly > 0.0 else -1)
+		else:
+			ndir = Vector2i(1 if lx > 0.0 else -1, 0)
+	if ndir != Vector2i.ZERO:
+		var fire := false
+		if ndir != _stick_dir:
+			_stick_dir = ndir
+			_stick_timer = 0.26
+			fire = true
+		else:
+			_stick_timer -= delta
+			if _stick_timer <= 0.0:
+				_stick_timer = 0.11
+				fire = true
+		if fire:
+			var next := _kb_start() if _kb_card() == null else _kb_step(Vector2(ndir.x, ndir.y))
+			if next != "" and next != _kb_id:
+				AudioManager.play("hover")
+				_kb_light(next)
+	else:
+		_stick_dir = Vector2i.ZERO
+		_stick_timer = 0.0
+
+	# Right stick freely pans the tree canvas
+	var rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+	var ry := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+	if absf(rx) > 0.15 or absf(ry) > 0.15:
+		_pos_t -= Vector2(rx if absf(rx) > 0.15 else 0.0, ry if absf(ry) > 0.15 else 0.0) * 680.0 * delta
+		_pan_vel = Vector2.ZERO
+
+	# LT / RT zooms out / in (consistent with PlanetaryView)
+	var lt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
+	var rt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
+	if lt > 0.15 or rt > 0.15:
+		var zdir := (rt if rt > 0.15 else 0.0) - (lt if lt > 0.15 else 0.0)
+		if absf(zdir) > 0.01:
+			var at := _kb_card().get_global_rect().get_center() if _kb_card() != null else get_viewport_rect().get_center()
+			_zoom_at(at, pow(1.8, zdir * delta))
+
 func _process(delta: float) -> void:
+	_tick_pad(delta)
 	_connections_draw.queue_redraw()   # the pulses along owned links move every frame
 	var names_on := _zoom >= NAME_MIN_ZOOM
 	if not _name_labels.is_empty() and _name_labels[0].visible != names_on:

@@ -70,14 +70,35 @@ func _process(delta: float) -> void:
 		return
 	CursorManager.set_state(CursorManager.State.NORMAL)
 
+var _pad_zoom_acc: float = 0.0
+
 func _tick_view(delta: float) -> void:
-	if not SkillTreeView.is_open:
+	if not SkillTreeView.is_open and not PadScheme.chord_held:
 		var rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
 		var ry := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
 		if absf(rx) > 0.15:
 			_view_angle_t -= rx * 1.5 * delta
 		if absf(ry) > 0.15:
 			_orbit_tilt_t = clampf(_orbit_tilt_t + ry * 0.25 * delta, 0.28, 0.50)
+		var lt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
+		var rt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
+		if rt > 0.35 and _hovered_planet != null:
+			_pad_zoom_acc = maxf(_pad_zoom_acc, 0.0) + rt * delta
+			if _pad_zoom_acc >= 0.45:
+				_pad_zoom_acc = 0.0
+				planet_selected.emit(_hovered_planet)
+				return
+		elif lt > 0.35:
+			_pad_zoom_acc = minf(_pad_zoom_acc, 0.0) - lt * delta
+			if _pad_zoom_acc <= -0.55:
+				_pad_zoom_acc = 0.0
+				if not GameState.can_view_galaxy():
+					_show_access_denied_text("Galaxy Nav  LOCKED")
+				else:
+					_go_to_galaxy()
+				return
+		else:
+			_pad_zoom_acc = 0.0
 	if not _dragging and _spin_vel != 0.0:
 		_view_angle_t += _spin_vel * delta
 		_spin_vel *= exp(-delta * SPIN_FRICTION)
@@ -577,6 +598,13 @@ func _update_panel() -> void:
 		var btn := IconButton.create("%d. %s" % [i + 1, pd.planet_name.to_upper()], "moon" if pd.planet_type == PlanetData.Type.MOON else "planet")
 		btn.disabled = not _can_access(pd)
 		btn.pressed.connect(func() -> void: planet_selected.emit(pd))
+		var idx := i
+		btn.mouse_entered.connect(func() -> void:
+			if idx < _orbits.size() and is_instance_valid(_orbits[idx]):
+				_orbits[idx]._on_hover_start())
+		btn.mouse_exited.connect(func() -> void:
+			if idx < _orbits.size() and is_instance_valid(_orbits[idx]) and _active_orbit == _orbits[idx]:
+				_orbits[idx]._on_hover_end())
 		_planet_list.add_child(btn)
 
 	# remove old survey / scan buttons
@@ -725,8 +753,24 @@ func _survey_system(gd: GalaxyData, star_idx: int, cost_cr: float, cost_sci: flo
 
 
 func _input(event: InputEvent) -> void:
-	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()):
+	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()) or PadScheme.chord_held:
 		return
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed:
+		var jb := event as InputEventJoypadButton
+		var sp := get_node_or_null("UICanvas/SidePanel") as LeftPanel
+		var nav_on := sp != null and sp._nav_active
+		if jb.button_index == JOY_BUTTON_B and not nav_on:
+			if GameState.can_view_galaxy():
+				AudioManager.play("click")
+				_go_to_galaxy()
+				get_viewport().set_input_as_handled()
+			return
+		if jb.button_index == JOY_BUTTON_X and not nav_on:
+			_open_context_menu(get_viewport_rect().get_center())
+			if ContextMenu._current != null and is_instance_valid(ContextMenu._current) and sp != null:
+				sp._nav_active = true
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_RIGHT:

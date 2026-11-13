@@ -52,6 +52,9 @@ var _entering:      bool = false
 var _hovered: int   = -1
 var _pulse:   float = 0.0
 var _orbitron: Font
+var _pad_mode: bool = false
+var _stick_dir := Vector2i.ZERO
+var _stick_timer := 0.0
 
 # Right panel widgets
 var _panel_hov_name: Label = null
@@ -236,21 +239,23 @@ func _update_right_panel() -> void:
 			visited, total, _galaxy.links.size()]
 
 func _process(delta: float) -> void:
+	_tick_pad(delta)
 	_tick_camera(delta)
 	_pulse = fposmod(_pulse + delta * 1.8, TAU)
-	var mouse   := get_viewport().get_mouse_position()
-	var new_hov := -1
-	for i in _galaxy.star_count():
-		if not _star_visible(i):
-			continue
-		if _star_screen_pos(i).distance_to(mouse) < _hit_radius(i):
-			new_hov = i
-			break
-	if new_hov != _hovered:
-		_hovered = new_hov
-		if _entry_target != _hovered:
-			_entry_charge = 0
-			_entry_target = -1
+	if not _pad_mode:
+		var mouse   := get_viewport().get_mouse_position()
+		var new_hov := -1
+		for i in _galaxy.star_count():
+			if not _star_visible(i):
+				continue
+			if _star_screen_pos(i).distance_to(mouse) < _hit_radius(i):
+				new_hov = i
+				break
+		if new_hov != _hovered:
+			_hovered = new_hov
+			if _entry_target != _hovered:
+				_entry_charge = 0
+				_entry_target = -1
 	if _hovered != _last_hovered:
 		_last_hovered = _hovered
 		_update_right_panel()
@@ -378,8 +383,77 @@ func _draw_callout(pos: Vector2, label: String, col: Color, r: float, bright: bo
 		Color(col.r, col.g, col.b, 0.90 if bright else 0.50))
 
 func _input(event: InputEvent) -> void:
-	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()) or _entering:
+	if SkillTreeView.is_open or TradePanel.covers(get_viewport().get_mouse_position()) or _entering or PadScheme.chord_held:
 		return
+	if ContextMenu.is_open():
+		return
+
+	if event is InputEventMouseMotion and (event as InputEventMouseMotion).relative.length_squared() > 4.0:
+		_pad_mode = false
+
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed:
+		var jb := event as InputEventJoypadButton
+		match jb.button_index:
+			JOY_BUTTON_DPAD_UP:
+				_step_star(Vector2.UP)
+				get_viewport().set_input_as_handled()
+				return
+			JOY_BUTTON_DPAD_DOWN:
+				_step_star(Vector2.DOWN)
+				get_viewport().set_input_as_handled()
+				return
+			JOY_BUTTON_DPAD_LEFT:
+				_step_star(Vector2.LEFT)
+				get_viewport().set_input_as_handled()
+				return
+			JOY_BUTTON_DPAD_RIGHT:
+				_step_star(Vector2.RIGHT)
+				get_viewport().set_input_as_handled()
+				return
+			JOY_BUTTON_A:
+				if _hovered < 0:
+					_step_star(Vector2.ZERO)
+				else:
+					AudioManager.play("click")
+					_enter_star(_hovered)
+				get_viewport().set_input_as_handled()
+				return
+			JOY_BUTTON_X:
+				if _hovered >= 0:
+					_open_context_menu(_hovered, _star_screen_pos(_hovered))
+					get_viewport().set_input_as_handled()
+				return
+			JOY_BUTTON_B:
+				NavigationManager.back()
+				get_viewport().set_input_as_handled()
+				return
+
+	if event is InputEventKey and (event as InputEventKey).pressed and not (event as InputEventKey).echo:
+		var ke := event as InputEventKey
+		var focus := get_viewport().gui_get_focus_owner()
+		if not (focus is LineEdit or focus is TextEdit) and not ke.alt_pressed and not ke.ctrl_pressed and not ke.meta_pressed:
+			var k := ke.physical_keycode if ke.physical_keycode != KEY_NONE else ke.keycode
+			if k in [KEY_UP, KEY_W]:
+				_step_star(Vector2.UP)
+				get_viewport().set_input_as_handled()
+				return
+			elif k in [KEY_DOWN, KEY_S]:
+				_step_star(Vector2.DOWN)
+				get_viewport().set_input_as_handled()
+				return
+			elif k in [KEY_LEFT, KEY_A]:
+				_step_star(Vector2.LEFT)
+				get_viewport().set_input_as_handled()
+				return
+			elif k in [KEY_RIGHT, KEY_D]:
+				_step_star(Vector2.RIGHT)
+				get_viewport().set_input_as_handled()
+				return
+			elif k in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and _hovered >= 0:
+				AudioManager.play("click")
+				_enter_star(_hovered)
+				get_viewport().set_input_as_handled()
+				return
 
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -487,6 +561,107 @@ func _charge_entry(amount: int) -> void:
 func _reset_charge() -> void:
 	_entry_charge = 0
 	_entry_target = -1
+
+func _tick_pad(delta: float) -> void:
+	if SkillTreeView.is_open or _entering or PadScheme.chord_held or get_tree().paused or ContextMenu.is_open():
+		_stick_dir = Vector2i.ZERO
+		return
+	# Left stick steps between visible stars
+	var lx := Input.get_joy_axis(0, JOY_AXIS_LEFT_X)
+	var ly := Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)
+	var ndir := Vector2i.ZERO
+	if absf(lx) >= 0.45 or absf(ly) >= 0.45:
+		if absf(ly) >= absf(lx):
+			ndir = Vector2i(0, 1 if ly > 0.0 else -1)
+		else:
+			ndir = Vector2i(1 if lx > 0.0 else -1, 0)
+	if ndir != Vector2i.ZERO:
+		var fire := false
+		if ndir != _stick_dir:
+			_stick_dir = ndir
+			_stick_timer = 0.26
+			fire = true
+		else:
+			_stick_timer -= delta
+			if _stick_timer <= 0.0:
+				_stick_timer = 0.12
+				fire = true
+		if fire:
+			_step_star(Vector2(ndir.x, ndir.y))
+	else:
+		_stick_dir = Vector2i.ZERO
+		_stick_timer = 0.0
+
+	# Right stick rotates & tilts the galaxy disc
+	var rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+	var ry := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+	if absf(rx) > 0.15:
+		_rotation_t = fposmod(_rotation_t - rx * 1.4 * delta, TAU)
+	if absf(ry) > 0.15:
+		_tilt_t = clampf(_tilt_t + ry * 0.45 * delta, TILT_MIN, TILT_MAX)
+
+	# LT / RT zooms out / in around hovered star or map center
+	var lt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
+	var rt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
+	if lt > 0.15 or rt > 0.15:
+		var zdir := (rt if rt > 0.15 else 0.0) - (lt if lt > 0.15 else 0.0)
+		if absf(zdir) > 0.01:
+			var view_c := Vector2(size.x * (0.5 if GameState.showcase_mode else 0.35), size.y * 0.5)
+			var anchor := _star_screen_pos(_hovered) if _hovered >= 0 else view_c
+			_zoom_at(anchor, pow(1.8, zdir * delta))
+
+func _step_star(dir: Vector2) -> void:
+	if _galaxy == null:
+		return
+	_pad_mode = true
+	var view_w := size.x * (1.0 if GameState.showcase_mode else 0.70)
+	var view_c := Vector2(view_w * 0.5, size.y * 0.5)
+	if _hovered < 0 or dir == Vector2.ZERO:
+		var start := _galaxy.home_idx if (_galaxy.home_idx >= 0 and _star_visible(_galaxy.home_idx)) else -1
+		if start < 0:
+			var best_d := INF
+			for i in _galaxy.star_count():
+				if not _star_visible(i):
+					continue
+				var d := _star_screen_pos(i).distance_squared_to(view_c)
+				if d < best_d:
+					best_d = d
+					start = i
+		if start >= 0:
+			_hovered = start
+			AudioManager.play("hover")
+			_ensure_star_in_view(start, view_w, view_c)
+		return
+
+	var from := _star_screen_pos(_hovered)
+	var best := -1
+	var best_score := INF
+	for i in _galaxy.star_count():
+		if i == _hovered or not _star_visible(i):
+			continue
+		var d := _star_screen_pos(i) - from
+		var along := d.dot(dir)
+		if along <= 4.0:
+			continue
+		var side := absf(d.cross(dir))
+		if side > along * 1.8:
+			continue
+		var score := along + side * 2.0
+		if score < best_score:
+			best_score = score
+			best = i
+	if best >= 0:
+		_hovered = best
+		_reset_charge()
+		AudioManager.play("hover")
+		_ensure_star_in_view(best, view_w, view_c)
+
+func _ensure_star_in_view(star_idx: int, view_w: float, view_c: Vector2) -> void:
+	var at := _star_screen_pos(star_idx)
+	var safe := Rect2(Vector2(80.0, 80.0), Vector2(maxf(view_w - 160.0, 60.0), maxf(size.y - 160.0, 60.0)))
+	if not safe.has_point(at):
+		_offset_t += view_c - at
+		_pan_vel = Vector2.ZERO
 
 func _navigate_to(star_idx: int) -> void:
 	# don't auto-unlock — player must survey the system first

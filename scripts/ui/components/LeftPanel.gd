@@ -746,6 +746,8 @@ func _collect_focusables(n: Node, out: Array[Control]) -> void:
 		_collect_focusables(c, out)
 
 func _tick_nav(delta: float) -> void:
+	if PadScheme.chord_held:
+		return
 	if _nav_blocked():
 		if _nav_active:
 			_clear_nav_focus()
@@ -867,6 +869,8 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 			return
 	elif event is InputEventJoypadButton:
+		if PadScheme.chord_held:
+			return
 		var jb := event as InputEventJoypadButton
 		if not jb.pressed:
 			return

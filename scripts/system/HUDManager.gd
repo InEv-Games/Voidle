@@ -384,11 +384,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	var jb := event as InputEventJoypadButton
-	if jb != null and jb.pressed and jb.button_index == JOY_BUTTON_BACK:   # pad Back/Select: the shortcuts menu
-		var sc := get_tree().current_scene
-		if sc != null and not sc.scene_file_path.ends_with("MainMenu.tscn") and not get_tree().paused:
-			get_viewport().set_input_as_handled()
-			ShortcutsHelp.toggle(self)
+	if PadScheme.chord_held:
 		return
 	var pad_start := jb != null and jb.pressed and jb.button_index == JOY_BUTTON_START   # pad Start: as Esc
 	if pad_start or event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:

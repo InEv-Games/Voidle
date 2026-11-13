@@ -223,8 +223,13 @@ func _process(_delta: float) -> void:
 		_refresh_assign()   # the term's time left (and the price) counts down while it is open
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
+	if PadScheme.chord_held:
+		return
+	if (event is InputEventKey and (event as InputEventKey).pressed and (event as InputEventKey).keycode == KEY_ESCAPE) \
+			or (event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+				and (event as InputEventJoypadButton).button_index == JOY_BUTTON_B):
 		get_viewport().set_input_as_handled()
+		AudioManager.play("click")
 		_close()
 
 func _close() -> void:

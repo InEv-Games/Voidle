@@ -23,6 +23,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
 		get_viewport().set_input_as_handled()
 		_close()
+	elif event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed:
+		var jb := event as InputEventJoypadButton
+		if jb.button_index == JOY_BUTTON_B:
+			get_viewport().set_input_as_handled()
+			AudioManager.play("click", 0.0)
+			_close()
+		elif jb.button_index == JOY_BUTTON_A and _begin != null and not _begin.disabled:
+			get_viewport().set_input_as_handled()
+			_begin.pressed.emit()
 
 func _close() -> void:
 	var layer := get_parent()

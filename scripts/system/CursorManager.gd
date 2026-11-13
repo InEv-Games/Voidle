@@ -83,6 +83,12 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed:
 		_set_keys_mode(true)
 		return
+	if event is InputEventJoypadMotion:
+		var jm := event as InputEventJoypadMotion
+		if jm.axis in [JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y, JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y] \
+				and absf(jm.axis_value) > 0.3:
+			_set_keys_mode(true)
+		return
 	var k := event as InputEventKey
 	if k == null or not k.pressed or k.ctrl_pressed or k.meta_pressed or k.alt_pressed:
 		return

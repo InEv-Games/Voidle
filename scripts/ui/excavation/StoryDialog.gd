@@ -107,6 +107,29 @@ func _process(_delta: float) -> void:
 		_time.text = Excavations.time_text(Excavations.time_left(site))
 
 func _unhandled_input(event: InputEvent) -> void:
+	if PadScheme.chord_held:
+		return
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed:
+		var jb := event as InputEventJoypadButton
+		match jb.button_index:
+			JOY_BUTTON_A:
+				get_viewport().set_input_as_handled()
+				if _typing != null:
+					_skip_typing()
+				elif _next.visible and not _next.disabled:
+					_on_next()
+				return
+			JOY_BUTTON_B:
+				get_viewport().set_input_as_handled()
+				if _page != Page.RETURN:   # the dig is paid: its story plays out
+					AudioManager.play("click")
+					_close()
+				return
+			JOY_BUTTON_Y:
+				get_viewport().set_input_as_handled()
+				AudioManager.play("click")
+				Narrative.open_log()
+				return
 	if not (event is InputEventKey and event.pressed):
 		return
 	match (event as InputEventKey).keycode:

@@ -111,9 +111,15 @@ func add_content(c: Control) -> void:
 	content().visible = true
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
+	if PadScheme.chord_held:
+		return
+	var is_back: bool = (event is InputEventKey and (event as InputEventKey).pressed and (event as InputEventKey).keycode == KEY_ESCAPE) \
+		or (event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+			and (event as InputEventJoypadButton).button_index == JOY_BUTTON_B)
+	if is_back:
 		get_viewport().set_input_as_handled()
 		if dismissable:
+			AudioManager.play("click")
 			close()
 
 func close() -> void:

@@ -132,3 +132,35 @@ static func _scene_title(id: String) -> String:
 	if site != null:
 		return site.display_name
 	return id.replace("_", " ").capitalize()
+
+func _process(delta: float) -> void:
+	if _scroll == null or PadScheme.chord_held:
+		return
+	var sy := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+	var ly := Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)
+	var v := sy if absf(sy) > absf(ly) else ly
+	if absf(v) > 0.2:
+		_scroll.scroll_vertical += int(round(v * 520.0 * delta))
+
+func _unhandled_input(event: InputEvent) -> void:
+	if PadScheme.chord_held:
+		return
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed:
+		var jb := event as InputEventJoypadButton
+		match jb.button_index:
+			JOY_BUTTON_Y, JOY_BUTTON_B:
+				get_viewport().set_input_as_handled()
+				AudioManager.play("click")
+				close()
+				return
+			JOY_BUTTON_DPAD_UP:
+				if _scroll != null:
+					_scroll.scroll_vertical = maxi(0, _scroll.scroll_vertical - 64)
+				get_viewport().set_input_as_handled()
+				return
+			JOY_BUTTON_DPAD_DOWN:
+				if _scroll != null:
+					_scroll.scroll_vertical += 64
+				get_viewport().set_input_as_handled()
+				return
+	super._unhandled_input(event)

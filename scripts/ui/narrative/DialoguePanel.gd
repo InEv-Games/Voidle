@@ -180,9 +180,9 @@ func _on_card_input(ev: InputEvent) -> void:
 		accept_event()
 
 func _unhandled_input(ev: InputEvent) -> void:
-	if not _card.visible:
+	if not _card.visible or PadScheme.chord_held:
 		return
-	var jb := ev as InputEventJoypadButton   # the pad: D-pad ↑ / ↓ lights, A takes / goes on
+	var jb := ev as InputEventJoypadButton   # the pad: D-pad / L-stick ↑ / ↓ lights, A takes / goes on, Y opens Log
 	if jb != null and jb.pressed:
 		var jk := KEY_NONE
 		match jb.button_index:
@@ -192,6 +192,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 			JOY_BUTTON_DPAD_RIGHT: jk = KEY_RIGHT
 			JOY_BUTTON_A: jk = KEY_ENTER
 			JOY_BUTTON_B: jk = KEY_ESCAPE
+			JOY_BUTTON_Y: jk = KEY_L
 		if jk != KEY_NONE:
 			var fake := InputEventKey.new()
 			fake.keycode = jk
@@ -306,9 +307,48 @@ func _done_typing() -> void:
 	if _has_choices:
 		create_tween().tween_property(_choices, "modulate:a", 1.0, 0.18)
 
-func _process(_delta: float) -> void:
+var _stick_dir := Vector2i.ZERO
+var _stick_timer := 0.0
+
+func _process(delta: float) -> void:
 	if _card.visible:
 		_place()
+		_tick_stick(delta)
+
+func _tick_stick(delta: float) -> void:
+	if PadScheme.chord_held or (Narrative._log_popup != null and is_instance_valid(Narrative._log_popup)):
+		_stick_dir = Vector2i.ZERO
+		return
+	var lx := Input.get_joy_axis(0, JOY_AXIS_LEFT_X)
+	var ly := Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)
+	var ndir := Vector2i.ZERO
+	if absf(lx) >= 0.45 or absf(ly) >= 0.45:
+		if absf(ly) >= absf(lx):
+			ndir = Vector2i(0, 1 if ly > 0.0 else -1)
+		else:
+			ndir = Vector2i(1 if lx > 0.0 else -1, 0)
+	if ndir != Vector2i.ZERO:
+		var fire := false
+		if ndir != _stick_dir:
+			_stick_dir = ndir
+			_stick_timer = 0.26
+			fire = true
+		else:
+			_stick_timer -= delta
+			if _stick_timer <= 0.0:
+				_stick_timer = 0.12
+				fire = true
+		if fire:
+			var fake := InputEventKey.new()
+			fake.pressed = true
+			if ndir.y != 0:
+				fake.keycode = KEY_DOWN if ndir.y > 0 else KEY_UP
+			else:
+				fake.keycode = KEY_RIGHT if ndir.x > 0 else KEY_LEFT
+			_unhandled_input(fake)
+	else:
+		_stick_dir = Vector2i.ZERO
+		_stick_timer = 0.0
 
 ## Where the story's cards stand, as (left, right) x on screen: past the left
 ## panel (when open), short of the objectives / tutorial card on the right when

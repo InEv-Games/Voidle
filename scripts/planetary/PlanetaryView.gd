@@ -1177,22 +1177,42 @@ func _try_force_buy() -> bool:
 	return true
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventJoypadButton and PadScheme.chord_held:
+		return
 	if event is InputEventMouseMotion:
 		if (event as InputEventMouseMotion).relative.length_squared() > 4.0:
 			_using_right_stick = false
 			if _world_cursor_active:
 				_set_world_cursor(false)
-	# R3 (Right Stick Press) toggles the World Center Cursor for controller/keyboard planet selection
+	# R3 (Right Stick Press) cycles Map Inspection Mode: Normal -> Overview (Alt+Ctrl) -> Clean (H)
 	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
 			and (event as InputEventJoypadButton).button_index == JOY_BUTTON_RIGHT_STICK \
 			and _key_spin_allowed() and not GameState.showcase_mode:
 		AudioManager.play("click")
-		_set_world_cursor(not _world_cursor_active)
+		if not _world_cursor_active and _pad_inspect == PadInspect.NORMAL:
+			_set_world_cursor(true)
+		else:
+			_pad_inspect = (_pad_inspect + 1) % 3
+			if _pad_inspect != PadInspect.CLEAN and not _world_cursor_active:
+				_set_world_cursor(true)
 		get_viewport().set_input_as_handled()
 		return
 	if _lens_menu_input(event):
 		get_viewport().set_input_as_handled()
 		return
+	# LB / RB in Globe or District Placement mode (when LeftPanel / Trade don't own shoulders): cycle Surface Lenses
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+			and ((event as InputEventJoypadButton).button_index == JOY_BUTTON_LEFT_SHOULDER \
+				or (event as InputEventJoypadButton).button_index == JOY_BUTTON_RIGHT_SHOULDER) \
+			and _key_spin_allowed() and not GameState.showcase_mode and not TradePanel.is_open:
+		var sp_sh := get_node_or_null("SidePanel") as LeftPanel
+		var nav_sh := sp_sh != null and sp_sh._nav_active
+		if not nav_sh:
+			var jb_sh := event as InputEventJoypadButton
+			var step_sh := 1 if jb_sh.button_index == JOY_BUTTON_RIGHT_SHOULDER else -1
+			if _cycle_lens_pad(jb_sh.device, step_sh):
+				get_viewport().set_input_as_handled()
+				return
 	var force_pressed := (event is InputEventKey and (event as InputEventKey).pressed \
 			and not (event as InputEventKey).echo and (event as InputEventKey).keycode == KEY_F) \
 		or (event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
@@ -1281,6 +1301,32 @@ func _input(event: InputEvent) -> void:
 				_on_right_click(center)
 				if ContextMenu._current != null and is_instance_valid(ContextMenu._current) and sp != null:
 					sp._nav_active = true
+				get_viewport().set_input_as_handled()
+				return
+	# Pad B in Globe mode (when LeftPanel has no focus): unwind radial menu, active lens, inspect mode, or world cursor
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+			and (event as InputEventJoypadButton).button_index == JOY_BUTTON_B \
+			and _placing_def == null and not _naming_open and _key_spin_allowed():
+		var sp_b := get_node_or_null("SidePanel") as LeftPanel
+		if sp_b == null or not sp_b._nav_active:
+			if _radial_menu != null:
+				_close_radial_menu()
+				AudioManager.play("click")
+				get_viewport().set_input_as_handled()
+				return
+			if _role != "":
+				_set_role("")
+				AudioManager.play("click")
+				get_viewport().set_input_as_handled()
+				return
+			if _pad_inspect != PadInspect.NORMAL:
+				_pad_inspect = PadInspect.NORMAL
+				AudioManager.play("click")
+				get_viewport().set_input_as_handled()
+				return
+			if _world_cursor_active:
+				_set_world_cursor(false)
+				AudioManager.play("click")
 				get_viewport().set_input_as_handled()
 				return
 	# ESC closes radial menu if open
@@ -1611,9 +1657,11 @@ static func _hidden_by(v: Vector3, b: Dictionary) -> bool:
 ## and LT/RT zoom out / in; the arrow keys are LeftPanel's UI navigation.
 const KEY_SPIN_SPEED := 1.6   # rad/s at the widest zoom
 const KEY_SPIN_EASE  := 5.0   # 1/s — how fast the turn reaches / leaves full speed
+enum PadInspect { NORMAL, OVERVIEW, CLEAN }
 var _key_spin_vel := Vector2.ZERO   # (spin, tilt) rad/s
 var _using_right_stick := false
 var _world_cursor_active := false
+var _pad_inspect: int = PadInspect.NORMAL
 
 func _set_world_cursor(on: bool) -> void:
 	_world_cursor_active = on
@@ -1669,25 +1717,25 @@ func _tick_key_spin(delta: float) -> void:
 				dir.y += 1.0
 			if Input.is_physical_key_pressed(KEY_DOWN):
 				dir.y -= 1.0
-		# any key turn aims with the centre cursor: Enter then picks what is
+		# any key or right-stick turn aims with the centre cursor: Enter / A then picks what is
 		# under it (a district, a City, an excavation site …), and in placing
-		# places there (10.11: keyboard-only play); the mouse moving ends it
-		if dir != Vector2.ZERO and not _world_cursor_active and not GameState.showcase_mode:
-			_set_world_cursor(true)
-		var rx := Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
-		var ry := Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+		# places there (10.11: keyboard/controller play); the mouse moving ends it
+		var rx := 0.0 if PadScheme.chord_held else Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+		var ry := 0.0 if PadScheme.chord_held else Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
 		if absf(rx) > 0.15:
 			dir.x += rx
 			_using_right_stick = true
 		if absf(ry) > 0.15:
 			dir.y -= ry
 			_using_right_stick = true
+		if dir != Vector2.ZERO and not _world_cursor_active and not GameState.showcase_mode:
+			_set_world_cursor(true)
 		if dir != Vector2.ZERO and _world_cursor_active:
 			var sp := get_node_or_null("SidePanel") as LeftPanel
 			if sp != null and sp._nav_active and sp._active_nav_root() == sp.get_node_or_null("Layout"):
 				sp._clear_nav_focus()
-		var lt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
-		var rt := Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
+		var lt := 0.0 if PadScheme.chord_held else Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT)
+		var rt := 0.0 if PadScheme.chord_held else Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT)
 		# Q zooms out, E in (like LT / RT)
 		if Input.is_physical_key_pressed(KEY_Q):
 			lt = 1.0
@@ -5275,21 +5323,21 @@ func _process(delta: float) -> void:
 			if vc != Vector3.ZERO and (_shader_view_n == Vector3.ZERO or vc.dot(_shader_view_n) < cos(deg_to_rad(4.0))):
 				_push_shader_districts()
 		pmat.set_shader_parameter("border_alpha", smoothstep(ZOOM_BORDER_START, ZOOM_BORDER_FULL, _zoom))
-	# Holding Alt shows the network overview: every district (any zoom) with an
-	# arc to the City it belongs to. Borders / ranges stay hidden — too busy.
-	var overview := Input.is_key_pressed(KEY_ALT) and current_data != null
+	# Holding Alt (or R3 Overview mode) shows the network overview: every district (any zoom) with an
+	# arc to the City it belongs to.
+	var overview := (Input.is_key_pressed(KEY_ALT) or _pad_inspect == PadInspect.OVERVIEW) and current_data != null
 	poi_layer.show_overlay = overview
-	# Holding Ctrl shows every district's border (any zoom).
-	var all_borders := Input.is_key_pressed(KEY_CTRL) and current_data != null
+	# Holding Ctrl (or R3 Overview mode) shows every district's border (any zoom).
+	var all_borders := (Input.is_key_pressed(KEY_CTRL) or _pad_inspect == PadInspect.OVERVIEW) and current_data != null
 	if pmat != null:
 		pmat.set_shader_parameter("show_all_borders", 1.0 if all_borders else 0.0)
 		if all_borders:
 			pmat.set_shader_parameter("border_alpha", 1.0)
 	# zoomed out only cities show; their districts fade in as you zoom
 	poi_layer.detail = 1.0 if overview else smoothstep(ZOOM_DETAIL_START, ZOOM_DETAIL_FULL, _zoom)
-	# hold H to hide markers + labels and see just the planet and its cities
+	# hold H (or R3 Clean mode) to hide markers + labels and see just the planet and its cities
 	var typing := get_viewport().gui_get_focus_owner() is LineEdit
-	var hide_markers := Input.is_key_pressed(KEY_H) and not typing and not overview
+	var hide_markers := ((Input.is_key_pressed(KEY_H) and not typing) or _pad_inspect == PadInspect.CLEAN) and not overview
 	_marker_vis_t = lerpf(_marker_vis_t, 0.0 if hide_markers else 1.0, 1.0 - exp(-delta * 16.0))
 	poi_layer.marker_vis = _marker_vis_t
 	# roads, sea lanes, ports and ships only once you're close
@@ -5871,6 +5919,11 @@ func _lens_menu_input(event: InputEvent) -> bool:
 	if event is InputEventKey and (event as InputEventKey).pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
 		_set_lens_menu(false)
 		return true
+	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
+			and (event as InputEventJoypadButton).button_index == JOY_BUTTON_B:
+		AudioManager.play("click")
+		_set_lens_menu(false)
+		return true
 	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
 		var at := (event as InputEventMouseButton).global_position
 		var on_menu := is_instance_valid(_lens_menu) and _lens_menu.get_global_rect().has_point(at)
@@ -5878,6 +5931,58 @@ func _lens_menu_input(event: InputEvent) -> bool:
 		if not on_menu and not on_btn:
 			_set_lens_menu(false)   # the click still goes through
 	return false
+
+## Cycles between the home world and its moons (controller Select + LB).
+func cycle_celestial_body(step: int = 1) -> bool:
+	if _placing_def != null or _naming_open or GameState.showcase_mode:
+		AudioManager.play("denied")
+		return false
+	var home := GameState.get_home_planet()
+	if home == null:
+		return false
+	var bodies: Array = [home]
+	bodies.append_array(home.moons)
+	if bodies.size() <= 1:
+		AudioManager.play("error")
+		return false
+	var cur := 0
+	if current_data != null:
+		for k in bodies.size():
+			if (bodies[k] as PlanetData).seed == current_data.seed:
+				cur = k
+				break
+	var next_idx := posmod(cur + step, bodies.size())
+	var pd: PlanetData = bodies[next_idx]
+	AudioManager.play("click")
+	focus_news_location({"seed": pd.seed})
+	return true
+
+## Cycles surface lenses with LB / RB when aiming on the globe (LB + RB together resets to Normal).
+func _cycle_lens_pad(device: int, step: int) -> bool:
+	if current_data == null or not FeatureMap.has_map(current_data.seed):
+		return false
+	if not GameState.is_scanned(current_data.seed):
+		AudioManager.play("error")
+		_show_unlock_toast("Not scanned yet", "Scan this world's surface from orbit to use its lenses.")
+		return true
+	if Input.is_joy_button_pressed(device, JOY_BUTTON_LEFT_SHOULDER) \
+			and Input.is_joy_button_pressed(device, JOY_BUTTON_RIGHT_SHOULDER):
+		if _role != "":
+			AudioManager.play("click")
+			_set_role("")
+			_set_lens_menu(false)
+		return true
+	var cycle: Array[String] = [""]
+	for r_key in FeatureMap.ROLES.keys():
+		cycle.append(String(r_key))
+	var cur := cycle.find(_role)
+	if cur < 0:
+		cur = 0
+	var next_role := cycle[posmod(cur + step, cycle.size())]
+	AudioManager.play("click")
+	_set_role(next_role)
+	_set_lens_menu(false)
+	return true
 
 ## Number keys 1..5 toggle the 5 surface lenses (Energy, Population, Production,
 ## Science, Commercial); 0 or ` returns to Normal.
@@ -5958,7 +6063,8 @@ func _tick_lens_tip() -> void:
 	# a tip always under the mouse got in the way); a lens always explains
 	if _placing_def == null and current_data != null and _is_over_planet_area(mouse) \
 			and not covered and poi_layer._hovered_index < 0 and not TutorialManager.is_narrating() \
-			and GameState.is_scanned(current_data.seed) and (_role != "" or _world_cursor_active or Input.is_key_pressed(KEY_ALT)):
+			and GameState.is_scanned(current_data.seed) \
+			and (_role != "" or _world_cursor_active or Input.is_key_pressed(KEY_ALT) or _pad_inspect == PadInspect.OVERVIEW):
 		hit = _screen_to_lonlat(mouse)
 	if not hit["hit"]:
 		if _lens_tip_cell != "":
