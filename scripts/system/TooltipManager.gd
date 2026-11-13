@@ -37,11 +37,21 @@ var _ignored := false
 ## Optional keyboard / controller focus anchor: when set, the tooltip is placed
 ## beside this control instead of following the mouse cursor.
 var _focus_anchor: Control = null
+## Optional screen-space anchor point (e.g. globe's World Center Cursor).
+var _focus_point := Vector2(-1.0, -1.0)
 
 func set_focus_anchor(c: Control) -> void:
 	_focus_anchor = c
 	if c != null:
+		_focus_point = Vector2(-1.0, -1.0)
 		_unlock()
+
+func set_focus_point(pt: Vector2) -> void:
+	_focus_point = pt
+	_unlock()
+
+func clear_focus_point() -> void:
+	_focus_point = Vector2(-1.0, -1.0)
 
 ## Where a locked tip stays open: the tip itself, a small area where the mouse
 ## rested when it locked, and the corridor between them.
@@ -306,6 +316,10 @@ func _process(delta: float) -> void:
 	_tick_live(delta)
 	var root_now := _panel.get_parent() as Control
 	if _locked:
+		if CursorManager.keys_mode:
+			_unlock()
+			_hide_timer = 0.12
+			return
 		# stays put while the mouse is on it, still where it locked (on the
 		# control it explains) or on the way between the two; closes once the
 		# mouse is elsewhere
@@ -321,10 +335,10 @@ func _process(delta: float) -> void:
 			_hide_timer = 0.12
 		return
 	var use_anchor := _focus_anchor != null and is_instance_valid(_focus_anchor) and _focus_anchor.is_visible_in_tree()
-	# only a resting mouse charges the lock (tips that follow a moving mouse —
-	# the lens, the news — never lock under it)
+	var use_point := not use_anchor and _focus_point.x >= 0.0
+	# only a resting mouse (while actually in mouse mode) charges the lock
 	var m := get_viewport().get_mouse_position()
-	if use_anchor:
+	if use_anchor or use_point or CursorManager.keys_mode:
 		_charge = 0.0
 	else:
 		if m.distance_to(_last_mouse) > 3.0:
@@ -357,6 +371,12 @@ func _process(delta: float) -> void:
 		should_flip = pos.x + pw > vp.x - 4.0
 		if should_flip:
 			pos.x = maxf(4.0, ar.position.x - pw - 12.0)
+		pos.y = clampf(pos.y, 4.0, maxf(4.0, vp.y - ph - 4.0))
+	elif use_point:
+		pos = Vector2(_focus_point.x + 22.0, _focus_point.y - ph * 0.5)
+		should_flip = pos.x + pw > vp.x - 4.0
+		if should_flip:
+			pos.x = maxf(4.0, _focus_point.x - pw - 22.0)
 		pos.y = clampf(pos.y, 4.0, maxf(4.0, vp.y - ph - 4.0))
 	else:
 		var mouse := get_viewport().get_mouse_position()

@@ -1670,6 +1670,11 @@ func _set_world_cursor(on: bool) -> void:
 		var sp := get_node_or_null("SidePanel") as LeftPanel
 		if sp != null and sp._nav_active:
 			sp._clear_nav_focus()
+	else:
+		TooltipManager.clear_focus_point()
+		var shown := TooltipManager.shown_title()
+		if shown.ends_with(" LENS") or shown == "GEOGRAPHY":
+			TooltipManager.hide_tip()
 	if poi_layer != null:
 		poi_layer.set_world_cursor_active(on)
 
@@ -6064,16 +6069,22 @@ func _tick_lens_tip() -> void:
 	if _placing_def == null and current_data != null and _is_over_planet_area(mouse) \
 			and not covered and poi_layer._hovered_index < 0 and not TutorialManager.is_narrating() \
 			and GameState.is_scanned(current_data.seed) \
-			and (_role != "" or _world_cursor_active or Input.is_key_pressed(KEY_ALT) or _pad_inspect == PadInspect.OVERVIEW):
+			and (_role != "" or Input.is_key_pressed(KEY_ALT) or _pad_inspect == PadInspect.OVERVIEW):
 		hit = _screen_to_lonlat(mouse)
 	if not hit["hit"]:
 		if _lens_tip_cell != "":
 			_lens_tip_cell = ""
+			if _world_cursor_active:
+				TooltipManager.clear_focus_point()
 			# only our own tip: the mouse may have moved onto a button with its own
 			var shown := TooltipManager.shown_title()
 			if shown.ends_with(" LENS") or shown == "GEOGRAPHY":
 				TooltipManager.hide_tip()
 		return
+	if _world_cursor_active:
+		TooltipManager.set_focus_point(mouse)
+	else:
+		TooltipManager.clear_focus_point()
 	var cell := "%s|%d,%d" % [_role, roundi(rad_to_deg(hit["lon"]) * 2.0), roundi(rad_to_deg(hit["lat"]) * 2.0)]
 	if cell == _lens_tip_cell:
 		return
@@ -9274,7 +9285,7 @@ func _tick_one_rocket(d: Dictionary, delta: float) -> void:
 	var ctr2: Control = d["container"]
 	var mp:   Vector2 = get_viewport().get_mouse_position()
 	var rp:   Vector2 = ctr2.get_global_rect().position + rocket.position
-	var near: bool    = rocket.visible and mp.distance_to(rp) < 12.0
+	var near: bool    = not CursorManager.keys_mode and rocket.visible and mp.distance_to(rp) < 12.0
 	if near and not d["hover_active"]:
 		d["hover_active"] = true
 		CursorManager.set_state(CursorManager.State.POINTER)

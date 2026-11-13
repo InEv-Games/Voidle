@@ -103,8 +103,11 @@ func _input(event: InputEvent) -> void:
 func _set_keys_mode(on: bool) -> void:
 	keys_mode = on
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN if on else Input.MOUSE_MODE_VISIBLE
+	if not on:
+		TooltipManager.clear_focus_point()
 	var anchor = TooltipManager._focus_anchor
 	if on and (anchor == null or not is_instance_valid(anchor)):
+		TooltipManager._unlock()
 		TooltipManager.hide_tip()   # the tip the resting mouse had goes with it
 
 func _connect_theme_signal() -> void:
