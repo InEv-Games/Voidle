@@ -83,8 +83,9 @@ const BOLO_PEOPLE := 17490
 # ── Government (10.11: Companions became Agents, the advisor a minister) ────
 ## Ministries, in the Government panel's order: each holds one Agent, whose
 ## bonus applies while they sit there. The Chancellery is the opening's
-## advisor (active_advisor); the others open in later civilizations (none in
-## the demo), but their slots are already there.
+## advisor (active_advisor); Industry, Science and Trade open when the
+## tutorial is over (playtest 12.11: they stood empty all demo long), from the
+## start in later games (Guide.side_open; _open_ministries).
 const MINISTRIES := [
 	{"id": "chancellery", "name": "Chancellery", "title": "Chancellor"},
 	{"id": "industry", "name": "Ministry of Industry", "title": "Minister of Industry"},
@@ -138,6 +139,22 @@ func active_agents() -> Array[String]:
 		if a != "" and ministry_unlocked(m["id"]):
 			out.append(a)
 	return out
+
+## Industry, Science and Trade open once the tutorial is over.
+func _open_ministries() -> void:
+	if ministries_unlocked.size() >= MINISTRIES.size() or onboarding_stage != "done" or not Guide.side_open():
+		return
+	var opened: Array[String] = []
+	for m: Dictionary in MINISTRIES:
+		if not ministries_unlocked.has(m["id"]):
+			ministries_unlocked.append(m["id"])
+			opened.append(String(m["name"]))
+	if not opened.is_empty() and not showcase_mode:
+		NewsFeed.post("The Government grows: %s open. Seat your Agents there." % ", ".join(opened), NewsFeed.Kind.EVENT)
+	# both ship caretakers can serve: the one not chosen at the opening joins the
+	# Agents now (the player met them both in the opening)
+	for ai: String in ["mother_superior", "high_father"]:
+		unlock_advisor(ai)
 
 func ministry_ready_at(ministry_id: String) -> float:
 	return advisor_ready_at if ministry_id == CHANCELLERY else float(minister_ready_at.get(ministry_id, 0.0))
@@ -570,6 +587,7 @@ func _ready() -> void:
 	_bootstrap_world()
 
 func _process(delta: float) -> void:
+	_open_ministries()
 	if not get_tree().paused:
 		play_seconds += delta
 		Excavations.tick()
@@ -1002,6 +1020,42 @@ var _offline_measured: bool = false
 static func offline_progress_enabled() -> bool:
 	return Balance.cfg.offline_progress_enabled
 
+## Time away played back (playtest 12.11): the economy's own cycle code runs
+## for the time away × offline_speed (capped), in steps, at once; the calendar,
+## digs and expeditions run with it. Returns { "sim": seconds played,
+## "capped": bool, "months": colony months, "gains": { resource id: change } }.
+const OFFLINE_STEP := 1.0
+func run_offline() -> Dictionary:
+	var c: BalanceConfig = Balance.cfg
+	var real := minf(offline_seconds, c.offline_max_real_sec)
+	var sim := real * c.offline_speed
+	var out := {"sim": 0.0, "capped": offline_seconds > c.offline_max_real_sec, "months": 0, "gains": {}}
+	if not offline_progress_enabled() or sim < OFFLINE_STEP:
+		return out
+	var ids: Array[String] = [Economy.CREDITS, Economy.SCIENCE, Economy.GOODS, Economy.FUEL, Economy.RARE]
+	for r: Dictionary in Economy.RAW_TABLE:
+		ids.append(String(r["id"]))
+	var before := {}
+	for id: String in ids:
+		before[id] = Economy.payable_amount(id)
+	var cal0 := calendar_seconds
+	var left := sim
+	while left > 0.0:
+		var step := minf(OFFLINE_STEP, left)
+		left -= step
+		ProductionManager._process(step)
+		play_seconds += step
+		Excavations.tick()
+		if onboarding_stage == "done":
+			calendar_seconds += step
+	for id: String in ids:
+		var d := Economy.payable_amount(id) - float(before[id])
+		if absf(d) >= 0.5:
+			out["gains"][id] = d
+	out["sim"] = sim
+	out["months"] = int((calendar_seconds - cal0) / MONTH_SEC)
+	return out
+
 ## World generation version. 2: planets have continentality. Saves without the
 ## field are 1 and keep their old terrain.
 const WORLD_GEN := 2
@@ -1142,20 +1196,13 @@ func rocket_block() -> String:
 	if st != "":
 		return "The rocket is already %s" % ("on its way" if st == "in_transit" else st if st != "arrived" else "there")
 	if playable_content_type > 0 or demo_completed:
-		return "Civilization 0 is complete"
+		return "Civilization Type 0 is complete"
 	if not get_node("/root/SkillTree").is_unlocked("advanced_planet_rocket"):
 		return "Research Advanced Planetary Rocket"
-	# any finished Spaceport will do (decision 31.10); the Moon is still on the
-	# way: Advanced Planetary Rocket needs a Moon Production district and 100
-	# Moonstone mined there. An older save's Lunar Spaceport counts too.
-	var has_port := false
-	for pp: PlanetProgress in _planet_progress.values():
-		if pp.is_colonized and (has_finished_building(pp.planet_seed, "spaceport") \
-				or has_finished_building(pp.planet_seed, "lunar_spaceport")):
-			has_port = true
-			break
-	if not has_port:
-		return "Build a Spaceport"
+	# playtest 12.11 (K48): the rocket leaves from the home world's Spaceport; the
+	# Moon's part is the Moonstone (Advanced Planetary Rocket needs 100 mined there)
+	if not has_finished_building(home_planet_seed, "spaceport"):
+		return "Build a Spaceport on your home world"
 	return Economy.cost_block(ROCKET_COST)
 
 func start_rocket(target_seed: int = -1) -> bool:
@@ -1188,6 +1235,13 @@ func rocket_target_block(target_seed: int) -> String:
 		if pd.seed == target_seed:
 			return "" if pd.planet_type != PlanetData.Type.ASTEROID else "Pick a planet"
 	return "Pick a planet of your home system"
+
+## The rocket is on the ground with no target yet (the Solar System view
+## offers each planet it can reach on a click).
+func rocket_picking() -> bool:
+	var rs := expedition_state("rocket")
+	return (rs == "preparing" or rs == "ready") \
+		and rocket_target_block(int(expedition("rocket").get("target_seed", -1))) != ""
 
 ## Sets (or changes) the rocket's target while it is still on the ground.
 func set_rocket_target(target_seed: int) -> bool:

@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "low_gravity_exchange"
+display_name = "Low-Gravity Exchange"
+description = "Moon-only. Cargo leaves the Moon cheaply, so its market pays more than any on your home world."
+allowed_poi_types = Array[int]([8])
+allowed_planet_types = Array[int]([6])
+base_cost = 360.0
+min_planet_lv = 1
+max_per_district = 0
+max_per_planet = 0
+construct_duration = 12.0
+tick_duration = 20.0
+energy_per_tick = -12.0
+outputs = {"credits": 240.0}
+inputs = {"goods": 6.0}
+planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 750
+tier = 3
+cost_tier = 2
+min_civilization = 0
+required_features = Array[String]([])
+unlocked_by_default = true

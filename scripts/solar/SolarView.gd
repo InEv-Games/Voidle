@@ -157,10 +157,18 @@ func _draw_rocket_fx() -> void:
 			var flown := t1 <= k
 			_rocket_fx.draw_line(_rocket_path_at(a, b, t0), _rocket_path_at(a, b, t1),
 				Color(ROCKET_COL, 0.85 if flown else 0.30), 2.0 if flown else 1.0, true)
+	if target == null:   # rings on every world it can go to
+		var t := Time.get_ticks_msec() / 1000.0
+		for n: PlanetOrbitNode in _orbits:
+			if is_instance_valid(n) and n.planet_data != null and GameState.rocket_target_block(n.planet_data.seed) == "":
+				var kk := fposmod(t * 0.6 + float(n.planet_data.seed % 7) * 0.13, 1.0)
+				var r := float(PlanetOrbitNode.SIZE) * 0.5 * n.scale.x
+				_rocket_fx.draw_arc(n.position, r * (1.1 + kk * 0.8), 0.0, TAU, 48, Color(ROCKET_COL, (1.0 - kk) * 0.7), 1.5, true)
+				_rocket_fx.draw_arc(n.position, r * 1.1, 0.0, TAU, 48, Color(ROCKET_COL, 0.45), 1.0, true)
 	if st != "in_transit" or target == null:
 		var txt := "Final rocket: preparing…" if st == "preparing" else "Final rocket: ready"
 		if target == null:
-			txt += "  //  right-click a planet to set its target"
+			txt += "  //  click a ringed planet to send it there"
 		_rocket_fx.draw_string(font, a + Vector2(16, -22), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ROCKET_COL)
 		return
 	# the rocket: a small dart along the path with a flickering flame
@@ -274,7 +282,31 @@ func _can_access(pd: PlanetData) -> bool:
 			return false
 	return true
 
+## The final rocket waits for its target (K49, playtest 12.11): a left click on
+## a planet offers to send it there instead of opening the planet
+## (GameState.rocket_picking).
+func _offer_rocket_target(pd: PlanetData) -> void:
+	var kind: String = String(PlanetData.Type.keys()[pd.planet_type]).capitalize()
+	var p := ModalPopup.open(self, "Send the Rocket", "rocket",
+		"Send the final rocket to %s?" % pd.planet_name)
+	p.add_row("World", kind)
+	p.add_row("Flight", "%d min" % int(round(GameState.ROCKET_FLIGHT_SEC / 60.0)))
+	p.add_row("On arrival", "Civilization Type 0 complete", InfoRow.Tone.GOOD)
+	var ok := p.confirm_button()
+	ok.label_text = "SEND ROCKET"
+	ok.icon_name = "rocket"
+	ok.variant = IconButton.Variant.POSITIVE
+	ok.pressed.connect(func() -> void:
+		p.close()
+		if GameState.set_rocket_target(pd.seed):
+			AudioManager.play("click")
+		else:
+			AudioManager.play("error"))
+
 func _on_planet_selected(pd: PlanetData) -> void:
+	if GameState.rocket_picking() and GameState.rocket_target_block(pd.seed) == "":
+		_offer_rocket_target(pd)
+		return
 	if not _can_access(pd):
 		print("[SolarView] Access denied to planet/moon: ", pd.planet_name)
 		_show_access_denied_text()
@@ -312,7 +344,7 @@ func _planet_commands(pd: PlanetData) -> Array:
 			func() -> void: GameState.set_rocket_target(pd.seed),
 			func() -> String: return "Already the target" if current else GameState.rocket_target_block(pd.seed),
 			{"icon": "▲", "color": Color(1.0, 0.85, 0.5),
-			 "tooltip": "The rocket leaves the Moon for this planet once it is ready. Arriving completes Civilization 0."}))
+			 "tooltip": "The rocket leaves your home world for this planet once it is ready. Arriving completes Civilization Type 0."}))
 	return out
 
 func _system_commands(_sd: SolarData) -> Array:

@@ -289,16 +289,16 @@ const QUESTS := [
 	{"id": "moon_mining", "title": "Lunar Mining", "desc": "Build a Production district on the Moon (300 credits, 30 Ferrite). It finds the Moon's mineral; your extraction buildings mine Moonstone there.",
 		"reward_credits": 800.0, "reward_science": 0.0, "reward_text": "+800 credits",
 		"sub_steps": [{"type": "event", "target": "moon_production"}]},
-	{"id": "lunar_materials", "title": "Lunar Materials", "desc": "Research Lunar Materials.",
+	{"id": "lunar_materials", "title": "Lunar Materials", "desc": "Research Lunar Materials: it opens the Moon's own Tier 3 buildings.",
 		"reward_credits": 1500.0, "reward_science": 300.0, "reward_text": "+1500 credits  +300 sci",
 		"sub_steps": [{"type": "skill", "target": "lunar_materials"}]},
 	{"id": "moonstone_100", "title": "100 Local Moonstone", "desc": "Mine 100 Moonstone on the Moon. Bought Moonstone doesn't count.",
 		"reward_credits": 2000.0, "reward_science": 300.0, "reward_text": "+2000 credits  +300 sci",
 		"sub_steps": [{"type": "event", "target": "moon_moonstone_100"}]},
-	{"id": "advanced_rocket", "title": "Advanced Rocket", "desc": "Research Advanced Planetary Rocket, then prepare the rocket from your home world's or the Moon's page (any Spaceport launches it).",
+	{"id": "advanced_rocket", "title": "Advanced Rocket", "desc": "Research Advanced Planetary Rocket, then prepare the rocket on your home world's page. It launches from your home Spaceport.",
 		"reward_credits": 3000.0, "reward_science": 0.0, "reward_text": "+3000 credits",
 		"sub_steps": [{"type": "skill", "target": "advanced_planet_rocket"}, {"type": "event", "target": "rocket_started"}]},
-	{"id": "civilization_1", "title": "Reach Civilization 1", "desc": "Right-click a planet in the Solar System view to set the rocket's target. Its arrival completes Civilization 0.",
+	{"id": "civilization_1", "title": "Reach Civilization Type 1", "desc": "Right-click a planet in the Solar System view to set the rocket's target. Its arrival completes Civilization Type 0.",
 		"sub_steps": [{"type": "event", "target": "demo_completed"}]},
 ]
 
@@ -1152,7 +1152,7 @@ func _build_quest_ui() -> void:
 		else:
 			_dismiss_quest_panel())
 	skip_btn.mouse_entered.connect(func() -> void:
-		TooltipManager.show_tip("Skip tutorial", "Skip the tutorial objectives; the road to Civilization 1 stays.", ""))
+		TooltipManager.show_tip("Skip tutorial", "Skip the tutorial objectives; the road to Civilization Type 1 stays.", ""))
 	skip_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	hdr.add_child(skip_btn)
 
@@ -1221,9 +1221,9 @@ func _show_quest_step(idx: int) -> void:
 			dot.text = "○"; dot.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 			ql.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
 	_reward_lbl.text = ("Reward: " + String(q.get("reward_text", ""))) if GRANTS_ENABLED and q.has("reward_text") \
-		else "Main goal: reach Civilization 1"
+		else "Main goal: reach Civilization Type 1"
 	if idx >= TUTORIAL_QUEST_COUNT and GRANTS_ENABLED and q.has("reward_text"):
-		_reward_lbl.text += "   //   Main goal: Civilization 1"
+		_reward_lbl.text += "   //   Main goal: Civilization Type 1"
 	# keep the list short: the previous one, the current one and the next four
 	for i in _tracker_items.size():
 		var row := (_tracker_items[i]["dot"] as Label).get_parent() as Control

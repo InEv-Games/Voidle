@@ -8,7 +8,7 @@ script = ExtResource("1_fy28g")
 site_id = "moon_sealed_hatch"
 ruin_id = "moon_echo_crater"
 display_name = "The Sealed Hatch"
-teaser = "Your crews have found a hatch, and a camp beside it."
+teaser = "The cuts in the crater wall end at a sealed hatch."
 cost = {
 "credits": 2000.0
 }

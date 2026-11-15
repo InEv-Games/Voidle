@@ -38,6 +38,29 @@ static func subtree(pd: PlanetData, poi: POIData) -> Array[POIData]:
 static func _shell_paid(poi: POIData) -> float:
 	return maxf(poi.paid_credits, 0.0)
 
+## What a removed shell is worth for its refund (playtest 12.11): what placing it
+## again would cost now, when that is more than was paid. District prices grow
+## with each one in the City, so the first one built (cheap) used to give back
+## a fraction of what rebuilding it asks. `gone_before` = shells of the same City
+## (or Cities on the planet) already removed in this operation. A shell that
+## was free (the first City, the INDUSTRY head start) stays free.
+static func _shell_value(pd: PlanetData, p: POIData, gone_before := 0) -> float:
+	var paid := _shell_paid(p)
+	if paid <= 0.0 or p.is_orbital():
+		return paid
+	var again := 0.0
+	if p.is_city():
+		var cities := -gone_before
+		for q: POIData in pd.custom_pois:
+			if q.is_city() and not q.is_orbital():
+				cities += 1
+		if cities >= 2:
+			again = roundf(Balance.geometric(Balance.cfg.city_base_cost, Balance.cfg.city_cost_growth, cities - 2))
+	elif p.parent_city != "":
+		var n := DistrictDef.districts_in_city(pd, p.parent_city) - gone_before
+		again = roundf(Balance.geometric(Balance.cfg.district_base_cost, Balance.cfg.district_cost_growth, maxi(n - 1, 0)))
+	return maxf(paid, again)
+
 static func _levels_paid(pp: PlanetProgress, poi: POIData) -> float:
 	var v := float(pp.level_paid.get(poi.label, 0.0))
 	if poi.is_city():
@@ -138,8 +161,14 @@ static func preview(kind: String, pd: PlanetData, poi: POIData) -> Dictionary:
 			var def := BuildingDef.find(b.get("building_id", ""))
 			if def != null and def.outputs.has(Economy.POPULATION) and not gone.has(p):
 				housing += float(def.outputs[Economy.POPULATION]) * float(b.get("amount", 1))
-	for p: POIData in gone:
-		paid += _shell_paid(p) + (_levels_paid(pp, p) if p != poi or kind == "demolish" else 0.0)
+	var gone_in := {}   # City label (or "" for Cities) → shells already counted
+	var order := gone.duplicate()
+	order.reverse()   # children first, as the operation removes them
+	for p: POIData in order:
+		var key := "" if p.is_city() else p.parent_city
+		paid += _shell_value(pd, p, int(gone_in.get(key, 0))) \
+			+ (_levels_paid(pp, p) if p != poi or kind == "demolish" else 0.0)
+		gone_in[key] = int(gone_in.get(key, 0)) + 1
 		_sum_into(mats, p.paid_materials, rate)
 		housing += float(Economy.district_housing(pd, pp, p))
 	var lines: Array[String] = []
@@ -156,7 +185,7 @@ static func preview(kind: String, pd: PlanetData, poi: POIData) -> Dictionary:
 		lines.append("Housing lost: about %s" % Economy.fmt(housing))
 	var back := {Economy.CREDITS: paid * rate}
 	back.merge(mats)
-	lines.append("Refund: %s (%d%% of what was paid)" % [Economy.cost_text(back), int(round(rate * 100.0))])
+	lines.append("Refund: %s (%d%%)" % [Economy.cost_text(back), int(round(rate * 100.0))])
 	return {"refund": paid * rate, "materials": mats, "districts": gone, "buildings": n_buildings,
 		"housing": housing, "text": "\n".join(lines)}
 
@@ -241,7 +270,7 @@ static func _drop_buildings(pp: PlanetProgress, label: String) -> float:
 ## Removes one district (its buildings, levels and shell); returns its refund (not paid yet).
 static func _remove_district(pd: PlanetData, pp: PlanetProgress, p: POIData) -> float:
 	var refund := _drop_buildings(pp, p.label)
-	refund += (_shell_paid(p) + _levels_paid(pp, p)) * refund_rate()
+	refund += (_shell_value(pd, p) + _levels_paid(pp, p)) * refund_rate()
 	_give(PlanetProgress.scale_mats(p.paid_materials, refund_rate()))
 	pp.level_paid.erase(p.label)
 	pp.level_paid.erase("city:" + p.label)

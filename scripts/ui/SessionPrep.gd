@@ -46,17 +46,18 @@ const MOONS := {
 const MOON_ORDER := ["rocky", "icy", "twin"]
 ## Civilizations: id → [title, icon, text, open].
 const CIVS := {
-	"c0": ["CIVILIZATION 0", "city", "One world and its moon: grow a colony up to its final rocket.", true],
-	"c1": ["CIVILIZATION 1", "explore", "Launch the final rocket to unlock: the whole star system is yours to settle.", false],
-	"c2": ["CIVILIZATION 2", "map", "The stars beyond: a galaxy to cross. Comes after Civilization 1.", false],
-	"c3": ["CIVILIZATION 3", "map", "The whole galaxy under one hand. Comes after Civilization 2.", false],
-	"c4": ["CIVILIZATION 4", "map", "Past your galaxy: its neighbours. Comes after Civilization 3.", false],
-	"c5": ["CIVILIZATION 5", "map", "Clusters of galaxies bound into one reach. Comes after Civilization 4.", false],
-	"c6": ["CIVILIZATION 6", "map", "Out to the edge of what can be seen. Comes after Civilization 5.", false],
-	"c7": ["CIVILIZATION 7", "map", "What lies past it, no one aboard I-330 can say. Comes after Civilization 6.", false],
+	"c0": ["TYPE 0", "city", "One world and its moon: grow a colony up to its final rocket.", true],
+	"c1": ["TYPE 1", "explore", "Launch the final rocket to unlock: the whole star system is yours to settle.", false],
+	"c2": ["TYPE 2", "map", "The stars beyond: a galaxy to cross. Comes after Civilization Type 1.", false],
+	"c3": ["TYPE 3", "map", "The whole galaxy under one hand. Comes after Civilization Type 2.", false],
+	"c4": ["TYPE 4", "map", "Past your galaxy: its neighbours. Comes after Civilization Type 3.", false],
+	"c5": ["TYPE 5", "map", "Clusters of galaxies bound into one reach. Comes after Civilization Type 4.", false],
+	"c6": ["TYPE 6", "map", "Out to the edge of what can be seen. Comes after Civilization Type 5.", false],
+	"c7": ["TYPE 7", "map", "What lies past it, no one aboard I-330 can say. Comes after Civilization Type 6.", false],
 }
-## The civilization slider's stops, 0 to 7 (NewGamePanel's first step).
-const CIV_ORDER := ["c0", "c1", "c2", "c3", "c4", "c5", "c6", "c7"]
+## The civilization slider's stops, 0 to 6 (NewGamePanel's first step). Type 7
+## is a spoiler (playtest 12.11): it stays out of the slider for now.
+const CIV_ORDER := ["c0", "c1", "c2", "c3", "c4", "c5", "c6"]
 
 ## Head starts: id → [title, icon, what it gives].
 const BOONS := {

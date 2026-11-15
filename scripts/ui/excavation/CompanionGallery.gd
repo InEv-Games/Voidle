@@ -21,8 +21,11 @@ extends Control
 const SCENE_PATH := "res://scenes/ui/excavation/CompanionGallery.tscn"
 const LAYER := 235
 const NAME_SIZE := 26   # the name hero over their words: smaller than the page's
-## Who is still to come (later civilizations): a silhouette, no profile.
+## Who is still to come (later civilizations): a silhouette, no profile. Ids
+## FUTURE + n; enough of them that UNMET_SHOWN unmet Agents stand in the list
+## (playtest 12.11: 10–12 silhouettes, none giving away who they are).
 const FUTURE := "__future"
+const UNMET_SHOWN := 11
 
 const PORTRAIT_SCALE := 1.07
 
@@ -118,17 +121,21 @@ func _build_list() -> void:
 		c.queue_free()
 	_items.clear()
 	_ids.clear()
+	var unmet := 0
 	var sitting := CompanionDef.find(GameState.minister_of(ministry))
 	var hero := $Center/Card/Hero as HeroHeader
 	hero.title = "AGENTS"
 	hero.caption = "%s: %s" % [_title_of(ministry), sitting.display_name] if sitting != null else "%s: vacant" % _title_of(ministry)
 	for def: CompanionDef in CompanionDef.all():
 		var met := GameState.unlocked_advisors.has(def.companion_id)
+		if not met:
+			unmet += 1
 		var office := GameState.ministry_of(def.companion_id)
 		var it := ListItem.create(def.display_name.to_upper() if met else "???", "population" if met else "unknown",
 			_title_of(office).to_upper() if office != "" else "", [], ("%s  //  Lv %d" % [def.role, GameState.agent_level(def.companion_id)]) if met else "Not met yet")
 		_add_item(it, def.companion_id)
-	_add_item(ListItem.create("???", "unknown", "", [], "Later civilizations"), FUTURE)
+	for n in maxi(UNMET_SHOWN - unmet, 1):
+		_add_item(ListItem.create("???", "unknown", "", [], "Not met yet"), FUTURE + str(n))
 
 func _add_item(it: ListItem, id: String) -> void:
 	it.pressed.connect(func() -> void:
@@ -142,15 +149,16 @@ func _pick(id: String) -> void:
 	_picked = id
 	for n in _items.size():
 		_items[n].selected = _ids[n] == id
-	var def := CompanionDef.find(id) if id != FUTURE else null
+	var def := CompanionDef.find(id) if not id.begins_with(FUTURE) else null
 	var met := def != null and GameState.unlocked_advisors.has(id)
 	var tex: Texture2D = def.portrait if def != null else load(CompanionDef.FALLBACK_PORTRAIT) as Texture2D
 	_portrait.texture = tex
 	_portrait.visible = tex != null
 	_portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if tex != null and tex.get_width() <= 512 \
 		else CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	_portrait.modulate = Color.WHITE if met else Color(0.25, 0.28, 0.36)
-	_name.caption = def.role if met else ("Not met yet" if def != null else "Still to come")
+	# not met: a black silhouette, nothing of who they are (playtest 12.11)
+	_portrait.modulate = Color.WHITE if met else Color(0, 0, 0, 1)
+	_name.caption = def.role if met else "Not met yet"
 	_name.title = def.display_name.to_upper() if met else "???"
 	_bonus.text = def.bonus_bb(11) if def != null else ""
 	_bonus.visible = met
@@ -162,7 +170,7 @@ func _pick(id: String) -> void:
 ## ACTIVE, or ASSIGN with why it can't be done yet (the term's time left …).
 func _refresh_assign() -> void:
 	_invite.visible = _picked == "bolo" and Excavations.bolo_invitation_ready()
-	var def := CompanionDef.find(_picked) if _picked != FUTURE else null
+	var def := CompanionDef.find(_picked) if not _picked.begins_with(FUTURE) else null
 	var met := def != null and GameState.unlocked_advisors.has(_picked)
 	if not met:
 		_status.visible = false
@@ -190,7 +198,7 @@ func _refresh_assign() -> void:
 ## APPOINT's tip: the ministry's minister now → the picked Agent, the bonus
 ## that ends and the one that starts, and what it costs.
 func _appoint_tip() -> String:
-	var def := CompanionDef.find(_picked) if _picked != FUTURE else null
+	var def := CompanionDef.find(_picked) if not _picked.begins_with(FUTURE) else null
 	if def == null:
 		return ""
 	var dim := UIStyle.hex(&"text_subtle")
@@ -211,7 +219,7 @@ func _appoint_tip() -> String:
 	return "\n".join(lines)
 
 func _on_assign() -> void:
-	if _picked == FUTURE or not GameState.appoint_now(_picked, ministry):
+	if _picked.begins_with(FUTURE) or not GameState.appoint_now(_picked, ministry):
 		AudioManager.play("error")
 		return
 	AudioManager.play("click")

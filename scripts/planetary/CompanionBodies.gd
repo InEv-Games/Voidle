@@ -210,7 +210,34 @@ func radius_of(pd: PlanetData) -> float:
 	var i := bodies.find(pd)
 	return _sizes[i] * 0.40 if i >= 0 else 0.0
 
+## Rings a body for `sec` seconds (the Moon coming into reach, K44).
+var _hl: PlanetData = null
+var _hl_left := 0.0
+
+func highlight(pd: PlanetData, sec: float) -> void:
+	_hl = pd
+	_hl_left = sec
+
+func _draw() -> void:
+	if _hl == null or _hl_left <= 0.0:
+		return
+	var i := bodies.find(_hl)
+	if i < 0 or i >= _views.size() or not _views[i].visible:
+		return
+	var v := _views[i]
+	var c := v.position + v.size * 0.5
+	var r := _sizes[i] * 0.40
+	var t := Time.get_ticks_msec() / 1000.0
+	var fade_out := clampf(_hl_left, 0.0, 1.0)
+	for j in 2:
+		var k := fposmod(t * 0.7 + float(j) * 0.5, 1.0)
+		draw_arc(c, r * (1.05 + k * 0.6), 0.0, TAU, 64, Color(0.80, 0.86, 1.0, (1.0 - k) * 0.85 * fade_out), 2.0, true)
+	draw_arc(c, r * 1.05, 0.0, TAU, 64, Color(0.80, 0.86, 1.0, 0.6 * fade_out), 1.5, true)
+
 func _process(delta: float) -> void:
+	if _hl_left > 0.0:
+		_hl_left -= delta
+		queue_redraw()
 	modulate.a = clampf(fade * 1.6, 0.0, 1.0)
 	visible = fade > 0.01 and not bodies.is_empty()
 	# slide in from beyond the corner as the view zooms out

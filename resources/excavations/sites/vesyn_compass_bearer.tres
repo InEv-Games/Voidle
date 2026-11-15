@@ -8,7 +8,7 @@ script = ExtResource("1_f8r2j")
 site_id = "vesyn_compass_bearer"
 ruin_id = "vesyn_buried_hall"
 display_name = "The Compass Bearer"
-teaser = "Someone else is digging here, and they don't work for you."
+teaser = "A metal pointer is visible at the far end of a narrow passage."
 cost = {
 "credits": 800.0
 }

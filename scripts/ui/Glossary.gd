@@ -48,7 +48,7 @@ static func entry(id: String) -> Array:
 		"workers":
 			return ["Workers", "People put to work by districts, district levels and buildings. They need housing."]
 		"cycle":
-			return ["Cycle", "Output comes in at the end of each cycle. Research shortens it."]
+			return ["Cycle", "Output comes in at the end of each cycle: one colony month, unless research shortens it."]
 		"storage":
 			return ["Storage", "Most goods have a cap shared by every world. Storage buildings raise it; what doesn't fit is lost unless Trade automation sells it."]
 		"trade":
@@ -96,7 +96,7 @@ static func _building_entry(bid: String) -> Array:
 	for id: String in b.inputs:
 		flow.append(_res(id, float(b.inputs[id]), "−"))
 	if not flow.is_empty():
-		var lead := ("%s [color=#%s]%s[/color]   " % [UIIcons.bb("cycle", 11, UIStyle.color(&"text_muted")),
+		var lead := ("%s [color=#%s]%s[/color]   " % [UIIcons.bb("calendar", 11, UIStyle.color(&"text_muted")),
 			UIStyle.hex(&"text_muted"), ProductionManager.cycle_text(ProductionManager.building_cycle_sec(b))]) if stock else ""
 		lines.append("")
 		lines.append(lead + "   ".join(flow))
@@ -136,9 +136,9 @@ static func _source_entry(rid: String, label: String) -> Array:
 	keys.sort_custom(func(a, b) -> bool: return absf(float(units[a])) > absf(float(units[b])))
 	var lines: Array[String] = []
 	for k in keys.slice(0, 12):
-		var v := float(units[k])
-		lines.append("[color=#%s]%s%s /s[/color]  %s" % [UIStyle.hex(&"good") if v >= 0.0 else UIStyle.hex(&"bad"), "+" if v >= 0.0 else "−",
-			BuildingDef._num(snappedf(absf(v), 0.01)), k])
+		var v := float(units[k]) * GameState.MONTH_SEC   # per colony month (12.11)
+		lines.append("[color=#%s]%s%s /mo[/color]  %s" % [UIStyle.hex(&"good") if v >= 0.0 else UIStyle.hex(&"bad"), "+" if v >= 0.0 else "−",
+			BuildingDef._num(snappedf(absf(v), 0.1)), k])
 	if keys.size() > 12:
 		lines.append("[color=#%s]… and %d more[/color]" % [UIStyle.hex(&"text_muted"), keys.size() - 12])
 	return [label, "\n".join(lines)]

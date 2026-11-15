@@ -296,6 +296,11 @@ static func role_texture(planet_seed: int, role: String) -> ImageTexture:
 			var cell: Array = by_mask[mv]
 			var b: float = cell[0]
 			var col: Color = cell[1]
+			# two helping features on one cell: a checker of both colours, so
+			# overlapping ones (Tundra under Glacier …) both show (playtest 12.11)
+			var col2: Color = cell[2]
+			if col2.a > 0.0 and (x + y) % 2 == 1:
+				col = col2
 			if b >= ROLE_STRONG:
 				img.set_pixel(x, y, Color(col, 0.85))
 			elif b >= ROLE_GOOD and (x + y) % 2 == 0:   # dotted, so the levels differ by more than colour
@@ -313,9 +318,9 @@ const FEATURE_COLORS := {
 	"terrain_lakeside":   Color(0.45, 0.92, 0.92),
 	"terrain_river":      Color(0.35, 0.50, 1.00),
 	"terrain_desert":     Color(1.00, 0.86, 0.35),
-	"terrain_tundra":     Color(0.78, 0.92, 0.80),
+	"terrain_tundra":     Color(0.30, 0.72, 0.58),   # 12.11: a pale mint read as Glacier
 	"terrain_glacier":    Color(0.92, 0.97, 1.00),
-	"terrain_volcanic":   Color(1.00, 0.35, 0.22),
+	"terrain_volcanic":   Color(1.00, 0.24, 0.12),
 	"terrain_geothermal": Color(1.00, 0.62, 0.18),
 	"terrain_ruins":      Color(0.85, 0.55, 0.98),
 	"terrain_crater":     Color(0.72, 0.72, 0.80),
@@ -332,13 +337,17 @@ static func _role_cell(site: Dictionary, fam: String, tint: Color) -> Array:
 	var table: Dictionary = Balance.cfg.terrain_bonuses
 	var best := 0.0
 	var col := tint
+	var second := Color(0, 0, 0, 0)   # the next helping feature's colour (none: transparent)
 	for fid: String in CATALOGUE:
 		if site.has(fid):
 			var w := float(table.get(fid, {}).get(fam, 0.0))
 			if w > best:
+				second = col if best > 0.0 else Color(0, 0, 0, 0)
 				best = w
 				col = feature_color(fid)
-	return [bonus_for(site, fam), col]
+			elif w > 0.0 and second.a <= 0.0:
+				second = feature_color(fid)
+	return [bonus_for(site, fam), col, second]
 
 ## The features that help a role, with their lens colours: [[name, colour], …].
 static func role_legend(role: String) -> Array:
@@ -634,15 +643,11 @@ static func _place_lakes(data: PlanetData, height: PackedFloat32Array, land: Pac
 			if dist[j] > dist[i] + 1:
 				dist[j] = dist[i] + 1
 				q.append(j)
-	# never under a district already standing (older saves): its cell and around
-	var taken := {}
-	for poi: POIData in data.custom_pois:
-		if poi.is_orbital():
-			continue
-		var pc := _index(deg_to_rad(poi.lon_deg), deg_to_rad(poi.lat_deg))
-		taken[pc] = true
-		for j in _neighbours8(pc):
-			taken[j] = true
+	# Lakes come from the seed alone (playtest 12.11). They used to keep clear
+	# of the districts standing when the map was built, so every new district
+	# reshaped them on the next load: a Commercial district lost its Lakeside
+	# (and its Lakeside Market could no longer be built). A district from an
+	# older save may now stand at a lake's edge; it keeps working.
 	var cand: Array[int] = []
 	var reach := 0
 	for i in n:
@@ -681,7 +686,7 @@ static func _place_lakes(data: PlanetData, height: PackedFloat32Array, land: Pac
 			for dx in range(-span, span + 1):
 				var x := posmod(cx + dx, WIDTH)
 				var i := y * WIDTH + x
-				if land[i] == 0 or dist[i] < 2 or taken.has(i):
+				if land[i] == 0 or dist[i] < 2:
 					continue
 				var ll := _cell_lonlat(x, y)
 				var edge := r * (0.8 + 0.4 * (_n3(wob, ll.x, ll.y) * 0.5 + 0.5))

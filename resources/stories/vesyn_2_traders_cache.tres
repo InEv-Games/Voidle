@@ -106,7 +106,7 @@ actions = Array[ExtResource("3_34kxg")]([SubResource("Resource_8v5op"), SubResou
 
 [sub_resource type="Resource" id="Resource_ahbxr"]
 script = ExtResource("6_quw2l")
-text = "The crate is out. It carries a trader's mark, fresh paint over old metal. Its owner clearly means to come back."
+text = "The crew lifts the crate out. A trader's mark shows through the flaking paint."
 exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_mls3g"), SubResource("Resource_7w268"), SubResource("Resource_frs4w")])
 id = 5
 graph_position = Vector2(460, 340)
@@ -117,7 +117,7 @@ target_id = 9
 
 [sub_resource type="Resource" id="Resource_kf4ye"]
 script = ExtResource("6_quw2l")
-text = "Trade goods, well packed. Whoever owned this will notice."
+text = "Trade goods, well packed. Cloth still separates the pieces."
 exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_m2kat")])
 id = 6
 graph_position = Vector2(840, 340)
@@ -128,7 +128,7 @@ target_id = 9
 
 [sub_resource type="Resource" id="Resource_8redg"]
 script = ExtResource("6_quw2l")
-text = "You seal it back up. By morning, the note is gone. The crate is still there."
+text = "You tuck the note under the handle before the crew lowers the crate back into place."
 exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_bgjjo")])
 id = 7
 graph_position = Vector2(840, 580)
@@ -139,7 +139,7 @@ target_id = 9
 
 [sub_resource type="Resource" id="Resource_osdpf"]
 script = ExtResource("6_quw2l")
-text = "The buyer knows the mark at once: a trader named Vale. They pay you well to pass along a message."
+text = "The buyer recognises the mark from another crate. They pay for a copy and leave the original with your surveyors."
 exits = Array[ExtResource("2_8eiah")]([SubResource("Resource_3jyiw")])
 id = 8
 graph_position = Vector2(840, 820)

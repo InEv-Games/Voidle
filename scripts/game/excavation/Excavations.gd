@@ -108,8 +108,8 @@ static func build_speed() -> float:
 ## excavation of each chain on it, once the world is scanned.
 static func sites_on(pd: PlanetData) -> Array:
 	var out: Array = []
-	if pd == null or not GameState.is_scanned(pd.seed):
-		return out
+	if pd == null or not GameState.is_scanned(pd.seed) or not Guide.side_open():
+		return out   # no dig on the map before the tutorial is over (playtest 12.11)
 	for w: ExcavationWorldDef in ExcavationWorldDef.all():
 		var world := w.planet()
 		if world == null or world.seed != pd.seed:
@@ -295,7 +295,8 @@ static func finish(s: ExcavationSiteDef, blackboard: Dictionary) -> Dictionary:
 	var extra: Dictionary = blackboard.get(BB_GRANTS, {})
 	for id: String in extra:
 		grants[id] = float(grants.get(id, 0.0)) + float(extra[id])
-	for id: String in grants:
+	for id: String in grants:   # ×Balance (12.11: unseen beforehand, worth it when it comes)
+		grants[id] = roundf(float(grants[id]) * Balance.cfg.excavation_reward_mult)
 		Economy.add(id, float(grants[id]))
 	for flag in blackboard.get(BB_FLAGS, []):
 		GameState.story_flags[String(flag)] = true
@@ -328,6 +329,8 @@ static func _after_story(s: ExcavationSiteDef) -> void:
 		GameState.story_flags["bolo_invitation_told"] = true
 		Inbox.post("story:bolo", "story", "population", "Bolo has news",
 			"All five surveys are done. Bolo is waiting to talk to you about her people.", {"companions": true})
+	if s.site_id == RIM_ECHO:
+		meet_burkai()
 	if s.site_id != FIRST_RUIN:
 		return
 	if GameState.bolo_intro_route == "":
@@ -367,6 +370,78 @@ static func hear_bolo_invitation() -> void:
 			Economy.invalidate_bonus_cache()
 			NewsFeed.post("Bolo's people come up from below: the first carts reach the survey camp.",
 				NewsFeed.Kind.EVENT)})
+
+# ── The Moon's signal, Burkai and the first planet (SCENES.md; B13) ────────
+# Lines in resources/narrative/story_scenes.csv (Narrative.scene_lines).
+const RIM_ECHO := "moon_rim_echo"
+
+## After Bolo is met: her one talk about the Moon's signal waits in the
+## notifications (STORY) until it is heard.
+static func lunar_signal_open() -> bool:
+	return GameState.story_flags.has("bolo_lunar_signal") and not Narrative.has_played("bolo_lunar_signal")
+
+static func hear_lunar_signal() -> void:
+	Narrative.play("", "bolo_lunar_signal", {"id": "bolo_lunar_signal", "now": true,
+		"lines": Narrative.scene_lines("bolo_lunar_signal"),
+		"on_done": func(_exit: String) -> void:
+			var moon := GameState.home_moon()   # the crater, when the Moon can be reached
+			if moon != null and GameState.get_planet(moon.seed) != null and GameState.get_planet(moon.seed).is_colonized:
+				NewsFeed.go_to({"seed": moon.seed})})
+
+## The Rim Echo's result: Bolo's measurements and Burkai at the crater
+## (meet_burkai). The charge or the quiet way (moon_loud) picks his first line.
+## At its end Burkai joins and the immortality is known; the mission talk follows.
+static func meet_burkai() -> void:
+	var how := "loud" if GameState.story_flags.has("moon_loud") else "quiet"
+	Narrative.play("", "meet_burkai", {"id": "meet_burkai", "lines": Narrative.scene_lines("meet_burkai", [how]),
+		"on_done": func(_exit: String) -> void:
+			GameState.story_flags["immortality_revealed"] = true
+			GameState.unlock_advisor("burkai")
+			mission_after_reveal()})
+
+## Once after Burkai: the Facilitator takes on the expansion. Which words
+## depend on where the rocket is (not arrived / a world with a surface / a gas
+## giant); Bolo's comparison comes first if the arrival scene went without it.
+static func mission_after_reveal() -> void:
+	var br: Array = []
+	if GameState.story_flags.get("arrival_branch", "") == "raw" and not GameState.story_flags.has("arrival_signal_comparison"):
+		br.append("comparison")
+		GameState.story_flags["arrival_signal_comparison"] = true
+	if GameState.expedition_state("rocket") != "arrived":
+		br.append("pending")
+	else:
+		var tpd := GameState.get_planet_data(int(GameState.expedition("rocket").get("target_seed", -1)))
+		br.append("gas" if tpd != null and tpd.planet_type == PlanetData.Type.GAS_GIANT else "surface")
+	Narrative.play("", "mission_after_reveal", {"id": "mission_after_reveal", "lines": Narrative.scene_lines("mission_after_reveal", br)})
+
+## After Advanced Planetary Rocket, until the rocket leaves: an optional read
+## in the notifications (STORY).
+static func briefing_open() -> bool:
+	if not SkillTree.is_unlocked("advanced_planet_rocket") or Narrative.has_played("expedition_briefing") or GameState.demo_completed:
+		return false
+	var st := GameState.expedition_state("rocket")
+	return st == "" or st == "preparing" or st == "ready"
+
+static func read_briefing() -> void:
+	var br := "moon" if GameState.story_flags.has("immortality_revealed") else "raw"
+	Narrative.play("", "expedition_briefing", {"id": "expedition_briefing", "now": true,
+		"lines": Narrative.scene_lines("expedition_briefing", [br])})
+
+## The rocket has reached its world: the arrival scene, then `after` (the
+## demo's end card). Its branch is kept (a reload replays the same one).
+static func play_arrival(after: Callable) -> void:
+	if Narrative.has_played("planetary_arrival"):
+		after.call()
+		return
+	if not GameState.story_flags.has("arrival_branch"):
+		GameState.story_flags["arrival_branch"] = "moon" if GameState.story_flags.has("immortality_revealed") else "raw"
+	var br := String(GameState.story_flags["arrival_branch"])
+	if br == "moon":
+		GameState.story_flags["arrival_signal_comparison"] = true
+	if not Narrative.play("", "planetary_arrival", {"id": "planetary_arrival", "pause": false,
+			"lines": Narrative.scene_lines("planetary_arrival", [br]),
+			"on_done": func(_exit: String) -> void: after.call()}):
+		after.call()
 
 ## All five of the home world's digs are done and Bolo is met: her people's
 ## offer waits in Companions (bolo_surface_invitation) until it is accepted.

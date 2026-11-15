@@ -189,7 +189,7 @@ var version: int = 0
 func _init() -> void:
 	for s: String in DEFAULT_SKILLS:
 		skill_levels[s] = 1
-	_add_node("root", "Civilization 0", "The heart of your civilization. In later civilizations this centre stands for the tree before it.",
+	_add_node("root", "Civilization Type 0", "The heart of your civilization. In later civilizations this centre stands for the tree before it.",
 		0.0, Vector2.ZERO, [], 1, "Starting technologies", 1, NodeShape.CIRCLE)
 
 	# Every family leaves the centre as its own line, in its own colour, and
@@ -202,7 +202,7 @@ func _init() -> void:
 	# decisions of 29.10 (§9–§16): Tier 0 models need no research; Capital
 	# supports need none either.
 	_line = "exploration"
-	_n("rocketry", "Rocketry", "Heavy-lift launch technology. Build a Spaceport in a Capital District, on Earth, the Moon and every world.",
+	_n("rocketry", "Rocketry", "Heavy-lift launch technology. Build a Spaceport in your Capital District.",
 		900.0, _at("root", -90, 1.7), ["root"], "common", "Unlocks Spaceport",
 		{"grants": ["spaceport"], "requires": ["fuel_processing"], "common": true})
 	_n("orbital_assembly", "Orbital Assembly", "Assemble an Orbit from Spaceport launches: its Orbit City and five kinds of support district, each +10% to the whole planet. The road to the Moon goes through orbit.",
@@ -211,17 +211,21 @@ func _init() -> void:
 	_n("lunar_program", "Lunar Program", "A lander that carries settlers to the Moon. It needs your Orbit first. Pick the Moon in the Local System view. Earth buildings work there too; three Moon-only buildings use its Craters, Caves and Ion storm regions.",
 		1200.0, _at("orbital_assembly", -90, 4.6), ["orbital_assembly"], "common", "Unlocks the Moon lander",
 		{"events": ["orbit_station"], "common": true, "shape": NodeShape.CIRCLE})
-	_n("lunar_materials", "Lunar Materials", "Learn to build with what the Moon gives, the step before the final rocket. Any of your Spaceports can launch it.",
-		1200.0, _at("lunar_program", -90, 2.3), ["lunar_program"], "common", "On the road to the final rocket",
-		{"events": ["moon_production"], "common": true})
-	_n("advanced_planet_rocket", "Advanced Planetary Rocket", "The rocket that leaves the Moon for a new world.",
+	# 12.11 (K48): the Moon's one task on the road is Moonstone; its own Tier 3
+	# buildings make it worth settling
+	_n("lunar_materials", "Lunar Materials", "Learn to build with what the Moon gives: three Moon-only Tier 3 buildings, and the step before the final rocket.",
+		1200.0, _at("lunar_program", -90, 2.3), ["lunar_program"], "common", "Unlocks Helium-3 Reactor, Lunar Deep Bore and Low-Gravity Exchange (Moon only)",
+		{"grants": ["helium3_reactor", "lunar_deep_bore", "low_gravity_exchange"], "common": true})
+	_n("advanced_planet_rocket", "Advanced Planetary Rocket", "The rocket that takes you from your home world to a new planet. It needs the mineral mined on the Moon.",
 		2000.0, _at("lunar_materials", -90, 1.3), ["lunar_materials"], "common", "Unlocks the final rocket",
 		{"requires": ["rare_processing"], "events": ["moon_moonstone_100"], "common": true, "shape": NodeShape.CIRCLE})
 
 	# ── Industry (left): Goods → Fuel → Rare on the line, extraction above ──
 	_line = "industry"
+	# 12.11: the one start node not given at once, so the tutorial's research
+	# step took it for free; it costs Science like any research
 	_n("start_production", "Mining Operations", "Production Districts. Surface Quarry, Ore Sorting Workshop and Warehouse need no research.",
-		0.0, _at("root", 180, 1.6), ["root"], "production", "Unlocks Production Districts",
+		50.0, _at("root", 180, 1.6), ["root"], "production", "Unlocks Production Districts",
 		{"common": true})
 	_n("processing_basics", "Basic Processing", "Factories that turn Ferrite into Goods.",
 		100.0, _at("start_production", 180, 1.2), ["start_production"], "processing", "Unlocks Goods Factory",
@@ -330,7 +334,7 @@ func _init() -> void:
 		{"grants": ["desert_habitat"]})
 	_n("crater_living", "Crater Habitats", "Moon only: sheltered homes under a crater wall.",
 		900.0, _at("coastal_density", 60, 1.15), ["high_rise", "coastal_density", "desert_living"], "population", "Unlocks Crater Habitat (Moon only)",
-		{"grants": ["crater_habitat"]})
+		{"grants": ["crater_habitat"], "requires": ["high_rise"]})   # 12.11: never before High-Rise
 	_n("civic_enterprise", "Civic Enterprise", "People without a job start small businesses.",
 		150.0, _at("neighborhood_building", 80, 1.15), ["neighborhood_building"], "population", "Idle population earns Credits",
 		{})
@@ -368,7 +372,7 @@ func _init() -> void:
 		300.0, _at("trade_access", 60, 1.0), ["trade_access"], "trade", "Standing orders and overflow sales",
 		{})
 	_n("force_buy", "Force Buy", "Short of a few materials? Buy exactly what a build is missing, paid in Credits, in one go.",
-		300.0, _at("trade_automation", 30, 1.0), ["trade_automation"], "trade", "Force-buy a build's missing materials (F on a build-list row)",
+		300.0, _at("trade_automation", 30, 1.0), ["trade_automation"], "trade", "Force-buy a build's missing materials (click the build-list row, or F)",
 		{})
 	_n("harbor_trade", "Volcanic Trade", "Markets in volcanic stone. The district must stand on a Volcanic Field.",
 		350.0, _at("trade_networks", 45, 1.15), ["local_business", "lakeside_trade", "glacier_trade"], "trade", "Unlocks Volcanic Market",
@@ -429,14 +433,14 @@ func _init() -> void:
 	# ── Planning (up-right): proximity, distance and terrain ──────────────────
 	_line = "planning"
 	_n("cluster_planning", "Cluster Planning", "Districts that stand together work together.",
-		200.0, _at("root", -45, 1.6), ["root"], "proximity", "Proximity and centre bonuses ×1.1 per level",
+		200.0, _at("root", -45, 1.6), ["root"], "proximity", "Same-kind neighbour bonus ×1.1 per level",
 		{"max": 3, "shape": NodeShape.DIAMOND})
 	_n("independent_centers", "Independent Centres", "Remote districts learn to stand on their own.",
-		200.0, _at("cluster_planning", -45, 1.05), ["cluster_planning"], "distance", "+10 points to a distance bonus per level",
+		200.0, _at("cluster_planning", -45, 1.05), ["cluster_planning"], "distance", "+0.1x to a distance bonus per level",
 		{"max": 3, "shape": NodeShape.DIAMOND})
 	_n("cross_networks", "Mixed Networks", "Science and trade, housing and science, energy and industry help each other.",
 		450.0, _at("independent_centers", 0, 1.15), ["independent_centers"], "proximity",
-		"Linked families support each other: very near +5%, near +2.5%", {})
+		"Linked families count as neighbours at half: +0.125x each", {})
 
 	# ── Small passives, terrain specialisations and bridges ──────────────────
 	# Small diamonds hang off the node they relate to (PoE-style minors).
@@ -478,7 +482,7 @@ func _init() -> void:
 		"rare_processing", "mountain_optics", 157.5, "science", "+3% Raw output, +3% Science",
 		{"bonus": {"mine_output": 0.03, "science": 0.03}})
 	_bridge("smart_homes", "Smart Districts", "Districts that plan their power together.", 250.0,
-		"geothermal_power", "cross_networks", -22.5, "proximity", "Proximity and centre bonuses +3%, −2% energy use",
+		"geothermal_power", "cross_networks", -22.5, "proximity", "Same-kind neighbour bonus ×1.03, −2% energy use",
 		{"bonus": {"proximity": 0.03, "energy_consume": -0.02}})
 
 	_line = "exploration"
@@ -487,11 +491,11 @@ func _init() -> void:
 	# Civilization 0's tree shows the next tree's door at its top; double-click
 	# opens it. Every later tree has the previous tree as its centre node
 	# (KARARLAR §8): double-click goes down into it, and buying it is the buyout.
-	_n("civilization_1_root", "Civilization 1", "The next civilization. Reached by the final rocket. Double-click to look at its research.",
-		0.0, _at("advanced_planet_rocket", -90, 1.5), ["advanced_planet_rocket"], "common", "Civilization 1 research",
+	_n("civilization_1_root", "Civilization Type 1", "The next civilization. Reached by the final rocket. Double-click to look at its research.",
+		0.0, _at("advanced_planet_rocket", -90, 1.5), ["advanced_planet_rocket"], "common", "Civilization Type 1 research",
 		{"act2": true, "min_civ": 1, "legacy": false, "shape": NodeShape.CIRCLE})
-	_n(LEGACY_NODE_1, "Civilization 0", "Everything researched in Civilization 0. Double-click to open that tree. Buying it researches every missing node and level there at once.",
-		0.0, Vector2.ZERO, [], "common", "Buyout: all missing Civilization 0 research",
+	_n(LEGACY_NODE_1, "Civilization Type 0", "Everything researched in Civilization Type 0. Double-click to open that tree. Buying it researches every missing node and level there at once.",
+		0.0, Vector2.ZERO, [], "common", "Buyout: all missing Civilization Type 0 research",
 		{"min_civ": 1, "civ": 1, "legacy": false, "common": true, "shape": NodeShape.CIRCLE})
 	var fams := [["energy", "Energy", Vector2(2, 0)], ["production", "Production", Vector2(-2, 0)],
 		["science", "Science", Vector2(-1.4, 1.8)], ["residential", "Residential", Vector2(1.4, 1.8)],
@@ -501,11 +505,11 @@ func _init() -> void:
 	for f: Array in fams:
 		_line = fam_line[f[0]]
 		_n("research_t1_subtype_" + String(f[0]), "%s City Roles" % String(f[1]),
-			"Civilization 1: special districts of %s Cities." % String(f[1]),
+			"Civilization Type 1: special districts of %s Cities." % String(f[1]),
 			500.0, f[2], [LEGACY_NODE_1], String(f[0]), "Unlocks %s special district types" % String(f[1]),
 			{"max": 3, "min_civ": 1, "civ": 1, "shape": NodeShape.HEXAGON})
 	_line = "exploration"
-	_n("orbital_storage", "Orbital Storage", "Civilization 1: fuel tanks in orbit.",
+	_n("orbital_storage", "Orbital Storage", "Civilization Type 1: fuel tanks in orbit.",
 		600.0, Vector2(0, -3.2), ["research_t1_subtype_commercial"], "orbital", "Orbital Fuel Tank",
 		{"act2": true, "min_civ": 1, "civ": 1, "legacy": false})
 
@@ -600,7 +604,7 @@ func gate_block(id: String) -> String:
 		return ""
 	var missing: Array[String] = []
 	if node.min_civilization > GameState.playable_content_type:
-		missing.append("Civilization %d content (not playable in the demo)" % node.min_civilization)
+		missing.append("Civilization Type %d content (not playable in the demo)" % node.min_civilization)
 	for s: String in node.requires:
 		if not is_unlocked(s):
 			var other: SkillNode = nodes.get(s, null)
@@ -820,7 +824,7 @@ func buyout_missing(civ: int) -> int:
 
 func buyout_block(civ: int) -> String:
 	if GameState.playable_content_type < civ + 1:
-		return "Preview only: Civilization %d isn't playable in the demo" % (civ + 1)
+		return "Preview only: Civilization Type %d isn't playable in the demo" % (civ + 1)
 	if buyout_missing(civ) == 0:
 		return "Nothing missing"
 	if GameState.science_points < buyout_cost(civ):
@@ -941,9 +945,9 @@ func effect_text(id: String) -> String:
 		return ""
 	match id:
 		"civic_enterprise":
-			return "+%s Credits / min per 1,000 idle population" % Economy.fmt(Balance.cfg.idle_pop_credits_per_1000)
+			return "+%s %s / month per 1,000 idle population" % [Economy.fmt(Balance.cfg.idle_pop_credits_per_1000 * GameState.MONTH_SEC / 60.0), UIIcons.bb("credits")]
 		"free_research":
-			return "+%s Science / min per 1,000 idle population" % Economy.fmt(Balance.cfg.idle_pop_science_per_1000)
+			return "+%s %s / month per 1,000 idle population" % [Economy.fmt(Balance.cfg.idle_pop_science_per_1000 * GameState.MONTH_SEC / 60.0), UIIcons.bb("science")]
 	return node.effect_desc
 
 # ── Save / load ──────────────────────────────────────────────────────────────

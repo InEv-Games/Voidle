@@ -7,8 +7,8 @@ extends RefCounted
 ## end), the ministries side by side under it, each its minister standing large
 ## with, over their lower part, the ministry's name, the minister's card and
 ## under it REPLACE / APPOINT.
-## Only the Chancellery is open (the opening's advisor sits there); the others
-## stay locked through the demo but show what is to come. A slot's APPOINT /
+## The Chancellery is open from the start (the opening's advisor sits there);
+## Industry, Science and Trade open when the tutorial is over. A slot's APPOINT /
 ## REPLACE opens AGENTS for that ministry; AGENTS at the bottom browses them all.
 ## C (or the pad's shortcuts menu, or the Agents button by the left panel) opens it.
 
@@ -117,7 +117,7 @@ static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Arra
 	card.add_child(inner)
 	var dim := UIStyle.hex(&"text_subtle")
 	if not open_slot:
-		inner.add_child(_text("[color=#%s]Locked. Opens in a later civilization.[/color]" % dim))
+		inner.add_child(_text("[color=#%s]Locked. Opens when the tutorial is over.[/color]" % dim))
 		col.modulate = Color(0.6, 0.62, 0.7, 0.85)
 	elif def == null:
 		inner.add_child(_text("[color=#%s]Vacant: appoint one of your Agents.[/color]" % dim))

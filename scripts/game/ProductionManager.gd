@@ -118,6 +118,8 @@ signal city_leveled(planet_seed: int, city_label: String, level: int, unlocked_p
 ## A timed upgrade on `planet_seed` ran out: the planet, a City, the Orbit or a
 ## district reached its next level (city_leveled also fires for a City).
 signal upgrade_finished(planet_seed: int)
+## A world reached a new planet level (its banner and globe pulse, K46).
+signal planet_leveled(planet_seed: int, level: int)
 
 ## Returns 0.0–1.0: global energy coverage ratio. < 1.0 = energy crisis.
 func get_energy_ratio(_planet_seed: int = 0) -> float:
@@ -170,6 +172,7 @@ func _tick_all(delta: float) -> void:
 					NewsFeed.post_planet_level(planet_seed, pp.level)
 					GameState.planet_progress_changed.emit(planet_seed)
 					upgrade_finished.emit(planet_seed)
+					planet_leveled.emit(planet_seed, pp.level)
 
 			# City level-ups
 			for clabel in pp.city_upgrading.keys():
@@ -238,6 +241,14 @@ func _tick_all(delta: float) -> void:
 		var pending_merges: Array[Dictionary] = []
 		var completed_buildings: Array[Dictionary] = []
 
+		# Districts still going up: their buildings wait (an Orbit district's
+		# prefab buildings used to finish, with their sound, before it — 12.11)
+		var shells_up := {}
+		if pd != null:
+			for spoi: POIData in pd.custom_pois:
+				if spoi.constructing:
+					shells_up[spoi.label] = true
+
 		# Iterate with explicit index so identical-content entries get unique keys
 		for i in pp.buildings.size():
 			var entry: Dictionary = pp.buildings[i]
@@ -254,6 +265,8 @@ func _tick_all(delta: float) -> void:
 			# ── Construction phase ────────────────────────────────────────────
 			# (runs before the zero-tick skip — passive buildings still get built)
 			if entry.get("constructing", false):
+				if shells_up.has(poi_label):
+					continue
 				var ck: String = "construct:" + key
 				var cdur: float = def.construct_duration if def.construct_duration > 0.0 else maxf(def.tick_duration, 1.0)
 				var cp: float  = _construct.get(ck, 0.0) + delta / cdur
@@ -364,14 +377,13 @@ func district_cycle_sec(ddef: DistrictDef) -> float:
 	return ddef.base_tick / maxf(float(get_node("/root/SkillTree").get_global_speed_mult()), 0.0001)
 
 ## How a cycle is written everywhere (playtest 31.10: amounts are per cycle,
-## the cycle stands once beside them): "20s", "7.5s", "1m 05s".
+## the cycle stands once beside them). In colony months since playtest 12.11
+## (GameState.MONTH_SEC = 20 s): "1 mo", "0.75 mo", "2.25 mo".
 static func cycle_text(sec: float) -> String:
-	if sec >= 60.0:
-		@warning_ignore("integer_division")
-		return "%dm %02ds" % [int(sec) / 60, int(round(sec)) % 60]
-	if sec < 10.0 and absf(sec - roundf(sec)) > 0.05:
-		return "%.1fs" % sec
-	return "%ds" % roundi(sec)
+	var m := snappedf(sec / GameState.MONTH_SEC, 0.05)
+	if absf(m - roundf(m)) < 0.001:
+		return "%d mo" % roundi(m)
+	return "%s mo" % String.num(m, 2)
 
 func district_build_speed() -> float:
 	return Excavations.build_speed()

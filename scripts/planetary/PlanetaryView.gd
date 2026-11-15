@@ -199,6 +199,9 @@ func _ready() -> void:
 	ProductionManager.building_constructed.connect(_on_building_constructed_sfx)
 	ProductionManager.building_progress_changed.connect(_on_district_progress_sfx)
 	ProductionManager.upgrade_finished.connect(_on_upgrade_finished_sfx)
+	ProductionManager.planet_leveled.connect(func(seed_val: int, _lv: int) -> void:
+		if current_data != null and current_data.seed == seed_val:
+			_planet_pulse(Color(1.0, 0.85, 0.5)))
 	tree_exiting.connect(func() -> void: AudioManager.set_activity(false, false))
 	_build_panel_toggle()
 	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - _panel_edge_frac(1.0)))
@@ -1493,8 +1496,15 @@ func _tick_companions() -> void:
 	if _companions == null or not is_instance_valid(_companions):
 		return
 	_companions.light_angle = planet_renderer.light_angle
+	# the overlay's small zoom-out (and its way back) isn't the player zooming
+	# out to the system: the Moon flashed up top-right after buying the Lunar
+	# Program and closing the Upgrade Tree (playtest 12.11)
+	if _overlay_zoom_hold and _overlay_restore.is_empty() and absf(_zoom - _zoom_target) < 0.01:
+		_overlay_zoom_hold = false
 	if _switching_body:
 		pass   # the switch animation drives the fade
+	elif _overlay_zoom_hold:
+		_companions.fade = 0.0
 	elif _system_zoom_ok():
 		_companions.fade = clampf((ZOOM_MIN - _zoom) / (ZOOM_MIN - ZOOM_SYSTEM), 0.0, 1.0)
 	else:
@@ -2193,7 +2203,7 @@ func _ensure_objectives() -> void:
 		return
 	_objectives = ObjectivesCard.new()
 	_objectives.tip_title = "Final rocket"
-	_objectives.content.add_child(HeroHeader.create("Objective  //  Civilization 1", "FINAL ROCKET",
+	_objectives.content.add_child(HeroHeader.create("Objective  //  Civilization Type 1", "FINAL ROCKET",
 		ObjectivesCard.HERO_SIZE))
 	var pd := GameState.get_planet_data(GameState.home_planet_seed)
 	_add_rocket_section(_objectives.content, pd if pd != null else current_data, false)
@@ -2243,7 +2253,7 @@ func _add_rocket_section(page: Control, data: PlanetData, with_head := true) -> 
 		var ex := GameState.expedition("rocket")
 		var st := String(ex.get("state", ""))
 		var tgt := int(ex.get("target_seed", -1))
-		var tname := "none: right-click a planet in the Solar System view"
+		var tname := "none yet: pick it in the Solar System view"
 		var tpd: PlanetData = GameState.get_planet_data(tgt) if tgt >= 0 else null
 		if tpd != null:
 			tname = tpd.planet_name
@@ -2262,7 +2272,7 @@ func _add_rocket_section(page: Control, data: PlanetData, with_head := true) -> 
 			"preparing", "ready":
 				lines.append("Target  " + tname)
 				if st == "ready":
-					lines.append(_bb("Ready: pick its target in the Solar System view (right-click a planet).", BB_WARN))
+					lines.append(_bb("Ready: pick its world in the Solar System view (click a ringed planet).", BB_WARN))
 				else:
 					lines.append("Preparing… pick the target meanwhile.")
 				# a way to the Solar System view (playtest 30.10: there was none here)
@@ -2275,7 +2285,7 @@ func _add_rocket_section(page: Control, data: PlanetData, with_head := true) -> 
 				btn.visible = true
 				btn.disabled = true
 			"arrived":
-				lines.append(_bb("Arrived at %s. Civilization 1 reached." % tname, "#8ef59a"))
+				lines.append(_bb("Arrived at %s. Civilization Type 1 reached." % tname, "#8ef59a"))
 				btn.visible = false
 		info.text = "\n".join(lines)
 	refresh.call()
@@ -2416,6 +2426,60 @@ func _tick_spaceport_focus() -> void:
 	_focus_on_site(pad2.lon_deg, pad2.lat_deg, 0.6)
 	_set_zoom_target(maxf(_zoom_target, 1.8), Vector2.INF)
 	_open_capital(pad2)
+
+# ── Big moments on the globe (playtest 12.11 K44/K46) ───────────────────────
+
+## Rings run out from the globe and it brightens for a moment (a planet level up).
+func _planet_pulse(col: Color) -> void:
+	var cont := planet_renderer.get_parent() as Control
+	if cont == null:
+		return
+	var fx := Control.new()
+	fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cont.add_child(fx)
+	var st := {"t": 0.0}
+	fx.draw.connect(func() -> void:
+		var c := planet_renderer.global_position + planet_renderer.size * 0.5 - fx.get_global_rect().position
+		var r0: float = planet_renderer._planet_radius_px
+		for i in 3:
+			var k := clampf((float(st["t"]) - float(i) * 0.22) / 1.3, 0.0, 1.0)
+			if k > 0.0 and k < 1.0:
+				fx.draw_arc(c, r0 * (1.0 + ease(k, 0.5) * 0.7), 0.0, TAU, 96, Color(col, (1.0 - k) * 0.8), 3.0 * (1.0 - k) + 1.0, true))
+	var tw := fx.create_tween()
+	tw.tween_method(func(v: float) -> void:
+		st["t"] = v
+		fx.queue_redraw(), 0.0, 2.0, 2.0)
+	tw.tween_callback(fx.queue_free)
+	var glow := planet_renderer.create_tween()
+	planet_renderer.self_modulate = Color(1.45, 1.35, 1.15)
+	glow.tween_property(planet_renderer, "self_modulate", Color.WHITE, 1.2).set_trans(Tween.TRANS_SINE)
+
+## The Moon just came into reach: once the Upgrade Tree is closed and the view
+## is the home world, back away to show it in its corner and ring it.
+func _tick_moon_reveal() -> void:
+	if not GameState.has_meta("moon_reveal_pending") or SkillTreeView.is_open or _overlay_zoom_hold \
+			or _switching_body or current_data == null or current_data.seed != GameState.home_planet_seed:
+		return
+	GameState.remove_meta("moon_reveal_pending")
+	await get_tree().create_timer(0.6).timeout
+	reveal_moon()
+
+func reveal_moon() -> void:
+	var moon := GameState.home_moon()
+	if moon == null or current_data == null:
+		return
+	if current_data.seed != GameState.home_planet_seed and current_data.seed != moon.seed:
+		NewsFeed.go_to({"seed": moon.seed})
+		return
+	if current_data.seed == moon.seed:
+		_show_planet_overview()
+		return
+	if not _system_zoom_ok():
+		_setup_companions(current_data)
+	_set_zoom_target(ZOOM_SYSTEM, Vector2.INF)
+	if _companions != null and is_instance_valid(_companions):
+		_companions.highlight(moon, 8.0)
 
 # ── Moon lander: orbit, departure and camera follow ──────────────────────────
 
@@ -2640,6 +2704,7 @@ func _try_follow_lander(at: Vector2) -> bool:
 			if hit != null:
 				_cam_follow_ship_id = hit.ship_id
 				_cam_follow_lander = false
+				_cam_follow_anim = {}
 				planet_renderer.stop_motion()
 				AudioManager.play("click")
 				_show_unlock_toast("Following %s" % hit.ship_name, "Drag the planet to release the camera.")
@@ -2647,16 +2712,49 @@ func _try_follow_lander(at: Vector2) -> bool:
 		return false
 	_cam_follow_ship_id = ""
 	_cam_follow_lander = true
+	_cam_follow_anim = {}
 	planet_renderer.stop_motion()
 	AudioManager.play("click")
 	_show_unlock_toast("Following the lander", "Drag the planet to release the camera.")
 	return true
 
+## Playtest 12.11 (K45): the camera follows a launch on its own, from the pad
+## to its orbit; dragging the globe lets go. The lander keeps its own follow.
+var _cam_follow_anim: Dictionary = {}
+
+func _auto_follow_launch(anim_d: Dictionary, ship_type: String) -> void:
+	if current_data == null or int(anim_d.get("planet_seed", -1)) != current_data.seed:
+		return
+	planet_renderer.stop_motion()
+	if ship_type == "lander":
+		_cam_follow_ship_id = ""
+		_cam_follow_lander = true
+		_cam_follow_anim = {}
+		return
+	if _cam_follow_lander:
+		return   # the lander's flight comes first
+	_cam_follow_ship_id = ""
+	_cam_follow_anim = anim_d
+
+## Follows the launch in _cam_follow_anim; false when there is none (any more).
+func _tick_follow_launch(delta: float) -> bool:
+	if _cam_follow_anim.is_empty():
+		return false
+	var d := _cam_follow_anim
+	if planet_renderer._dragging or bool(d.get("_finished", false)) or not is_instance_valid(d.get("rocket")) \
+			or current_data == null or int(d.get("planet_seed", -1)) != current_data.seed:
+		_cam_follow_anim = {}
+		return false
+	_follow_step(float(d["poi_lon"]) + float(d["lon_sweep"]), float(d["poi_lat"]) + float(d["lat_sweep"]), delta)
+	return true
+
 func _tick_cam_follow(delta: float) -> void:
 	if planet_renderer._dragging and _focus_tween != null and _focus_tween.is_valid():
 		_focus_tween.kill()   # the player took the camera
-	if _cam_follow_ship_id == "" and not _cam_follow_lander:
+	if _cam_follow_ship_id == "" and not _cam_follow_lander and _cam_follow_anim.is_empty():
 		_follow_vel = Vector2.ZERO   # a new follow starts from rest
+	if _tick_follow_launch(delta):
+		return
 	if _cam_follow_ship_id != "":
 		_tick_follow_ship(delta)
 		return
@@ -4512,9 +4610,12 @@ func _build_trait_slots(data: PlanetData) -> Control:
 				var def := TraitDef.find(tid)
 				label = def.display_name if def != null else tid
 				if def != null:
+					# the frame is the trait's rarity; say so (playtest 12.11 read
+					# a green one as "still highlighted")
 					col = def.rarity_color()
 					tip_title = label
-					tip = "%s\n\n%s" % [def.description, PlanetTags.effect_bb(tid)]
+					tip = "%s\n\n%s\n\n%s" % [_bb(def.rarity_name() + " trait", "#" + col.to_html(false)),
+						def.description, PlanetTags.effect_bb(tid)]
 			PlanetTags.Slot.PICKING:
 				label = "+ Choose a trait"
 				col = UIStyle.color(&"good")
@@ -4534,7 +4635,7 @@ func _build_trait_slots(data: PlanetData) -> Control:
 						AudioManager.play("error")
 			PlanetTags.Slot.LOCKED:
 				var need: int = Balance.cfg.trait_slot_levels[i]
-				label = "Unexplored"   # the requirement is in its tip (playtest 31.10)
+				label = "Unexplored"   # the requirement is in its tip (playtest 31.10); shown as an icon
 				tip = _bb("Requires planet level %d" % need, BB_BAD) + "\nThen pay to pick one of three traits."
 				foot = _full_cost_bb(PlanetTags.slot_cost(i), 0, data, pp)
 			PlanetTags.Slot.UNKNOWN:
@@ -4543,6 +4644,17 @@ func _build_trait_slots(data: PlanetData) -> Control:
 					else "This world's first trait."
 		var b := Button.new()
 		b.text = label
+		# a closed slot is an icon, its words in the tip (playtest 12.11: the
+		# Moon's first look was three text boxes)
+		if st == PlanetTags.Slot.LOCKED or st == PlanetTags.Slot.UNKNOWN:
+			b.text = ""
+			b.icon = UIIcons.get_icon("explore" if st == PlanetTags.Slot.LOCKED else "unknown")
+			b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			b.add_theme_constant_override("icon_max_width", 14)
+			for ic_state: String in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color", "icon_disabled_color"]:
+				b.add_theme_color_override(ic_state, col)
+			if tip_title == "Trait slot %d" % (i + 1):
+				tip_title = label.trim_prefix("? ")
 		b.focus_mode = Control.FOCUS_NONE
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.clip_text = true
@@ -5240,6 +5352,7 @@ func _process(delta: float) -> void:
 		_show_build_row_tip()   # Shift / Ctrl change how many a click buys
 	_poll_slot_dropdown(delta)
 	_tick_spaceport_focus()
+	_tick_moon_reveal()
 	_tick_surface_scan(delta)
 	_tick_lander_watch()
 	_tick_departure_fx(delta)
@@ -6139,6 +6252,7 @@ func overlay_begin() -> float:
 	return 0.0
 
 var _overlay_zoom_tw: Tween = null
+var _overlay_zoom_hold := false   # companions stay hidden until the zoom is back
 
 ## As the overlay fades in: a small, slow zoom-out over `sec` (eased in and
 ## out; past ZOOM_MIN is fine, briefly).
@@ -6146,6 +6260,7 @@ func overlay_zoom_out(sec: float) -> void:
 	if _overlay_zoom_tw != null and _overlay_zoom_tw.is_valid():
 		_overlay_zoom_tw.kill()
 	_zoom_anchor = Vector2.INF
+	_overlay_zoom_hold = _zoom_target >= ZOOM_MIN   # only when it wasn't showing them already
 	_overlay_zoom_tw = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_overlay_zoom_tw.tween_method(func(z: float) -> void:
 		_zoom_target = z
@@ -6315,6 +6430,7 @@ func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void
 	poi_layer.deselect_all()
 	CursorManager.set_state(CursorManager.State.NORMAL)
 	_show_place_hint(def)
+	_suggest_guide_site(def, parent)
 	# show where this district type thrives; the lens the player had comes back after
 	var lens := _placement_lens(def)
 	if lens != "" and GameState.is_scanned(current_data.seed) and _role != lens:
@@ -6666,23 +6782,20 @@ func _feature_lines(site: Dictionary) -> Array:
 static func _feature_step_text(share: float) -> String:
 	return Economy.mult_text(1.0 + FeatureMap.step_bonus(share))
 
-## Location bonus as text lines (Location.breakdown): the total, then each part;
-## `detailed` also names every contributing district.
+## Location bonus as text lines (Location.breakdown), in x (playtest 12.11);
+## `detailed` also names every same-kind neighbour.
 func _location_lines(loc: Dictionary, detailed: bool = false) -> Array[String]:
 	var out: Array[String] = []
-	var total: float = float(loc["mult"]) - 1.0
-	out.append("Location  +%d%%" % int(round(total * 100.0)))
-	var city: POIData = loc.get("city", null)
-	var from_km: float = float(loc["nearest_km"])
-	if city != null and from_km != INF:
-		out.append("  +%s%%  distance from %s: %s (%s of its %s reach)" % [_pct(float(loc["distance"])),
-			city.shown_name(), _km_text(from_km), Location.band_label(loc["band"]).to_lower(), _km_text(float(loc.get("reach_km", 0.0)))])
+	out.append("Location  %s" % Economy.mult_text(float(loc["mult"])))
+	var near: POIData = loc.get("nearest", null)
+	if near != null and float(loc["distance"]) > 0.0:
+		out.append("  %s  %s distance: %s to %s" % [Economy.mult_delta_text(float(loc["distance"])),
+			Location.band_label(loc["band"]), _km_text(float(loc["nearest_km"])), near.shown_name()])
 	if float(loc["proximity"]) > 0.0:
-		out.append("  +%s%%  same-type (and linked) districts nearby" % _pct(float(loc["proximity"])) \
-			if SkillTree.is_unlocked("cross_networks") else "  +%s%%  same-type districts nearby" % _pct(float(loc["proximity"])))
+		out.append("  %s  same-kind neighbours" % Economy.mult_delta_text(float(loc["proximity"])))
 	if detailed:
 		for src: Dictionary in loc["sources"]:
-			out.append("      +%s%%  %s  // %s%s" % [_pct(float(src["share"])), (src["poi"] as POIData).shown_name(),
+			out.append("      %s  %s  // %s%s" % [Economy.mult_delta_text(float(src["share"])), (src["poi"] as POIData).shown_name(),
 				_km_text(float(src["km"])), "  (linked)" if src["kind"] == "cross" else ""])
 	return out
 
@@ -6760,49 +6873,48 @@ func _res_name_bb(id: String) -> String:
 	var nm := "Raw" if id == Economy.RAW else (PlanetTags.resource_label(id).capitalize() if id == Economy.POPULATION else Economy.display_name(id))
 	return UIIcons.bb(id, 11, col) + " " + _bb(nm, col)
 
-## The location bonus as [left, right] rows: the total, then each part in
-## two words with what it adds (playtest 31.10: no long sentences).
+## The location bonus as [left, right] rows (playtest 12.11): nothing at all
+## when the spot gives none (a City, or close to another place); else the
+## distance tier with how far the nearest place is, the same-kind neighbours,
+## and the total, all as multipliers.
 func _location_rows(loc: Dictionary) -> Array:
 	var rows: Array = []
-	var total := float(loc["mult"]) - 1.0
-	var good := UIStyle.color(&"good")
-	var city: POIData = loc.get("city", null)
-	if city == null:   # a City itself: it is the centre
-		rows.append([UIIcons.bb("explore", 11, GEO_KEY_COL) + " Location", _bb("none for a City", BB_DIM)])
+	var total := float(loc["mult"])
+	if loc.get("city", null) == null or total <= 1.005:
 		return rows
-	# playtest 07.11: two parts, each saying what moves it; nothing that never
-	# changes. Distance from its City always shows (with how to get more).
+	var good := UIStyle.color(&"good")
+	var key := Color(0.78, 0.82, 0.92)
 	var dv := float(loc["distance"])
-	var band_txt := Location.band_label(loc["band"]).to_lower()
-	rows.append([_bb("Distance from %s (%s)" % [city.shown_name(), band_txt], Color(0.78, 0.82, 0.92)),
-		_bb("+%s%%" % _pct(dv), good) if dv > 0.0 else _bb("farther out: up to +%s%%" % _pct(Location.band_bonus(Location.Band.VERY_FAR)), BB_DIM)])
+	var near: POIData = loc.get("nearest", null)
+	if dv > 0.0:
+		var where := ("%s to %s" % [_km_text(float(loc["nearest_km"])), near.shown_name()]) if near != null else "nothing near"
+		rows.append([_bb("%s distance" % Location.band_label(loc["band"]), key) + _bb("  %s" % where, BB_DIM),
+			_bb(Economy.mult_text(1.0 + dv), good)])
 	var pv := float(loc["proximity"])
 	if pv > 0.0:
-		rows.append([_bb("Same-kind neighbours", Color(0.78, 0.82, 0.92)), _bb("+%s%%" % _pct(pv), good)])
-	# revision 12.11: its total last, at the rows' size (only the card's
-	# overall Total is large)
+		var n: int = (loc.get("sources", []) as Array).size()
+		rows.append([_bb("Same-kind neighbours", key) + _bb("  %d" % n, BB_DIM), _bb(Economy.mult_delta_text(pv), good)])
 	rows.append([UIIcons.bb("explore", 11, GEO_KEY_COL) + " " + _bb("Location total", Color(0.90, 0.94, 1.0)),
-		_bb("[b]+%s%%[/b]" % _pct(snappedf(total, 0.01)), good) if total > 0.005 else _bb("none here", BB_DIM)])
+		_bb("[b]%s[/b]" % Economy.mult_text(total), good)])
 	return rows
 
-## How placing `probe` raises the location bonus of the districts already
-## there (same-kind neighbours), as rows ("Residences  +10%"). Placing never
-## lowers one any more (playtest 07.11); only the ones that gain.
+## What placing `probe` does to the location of the districts already there
+## (playtest 12.11): a same-kind neighbour gains, a district that stood far
+## from everything loses its distance tier. Rows "Residences  +0.25x" / "−1x".
 func _neighbour_effect_rows(probe: POIData) -> Array:
 	var rows: Array = []
 	for p: POIData in current_data.custom_pois:
-		if p.constructing or p.is_orbital():
+		if p.constructing or p.is_orbital() or p.is_city():
 			continue
 		var before := Location.mult(current_data, p)
 		var after := float(Location.breakdown_with(current_data, p, probe)["mult"])
 		var d := after - before
-		if d < 0.005:
+		if absf(d) < 0.005:
 			continue
-		rows.append(["      " + _bb(p.shown_name(), Color(0.78, 0.82, 0.92)),
-			_bb(("+%s%%" if d > 0.0 else "−%s%%") % _pct(snappedf(absf(d), 0.01)),
-				UIStyle.color(&"good") if d > 0.0 else Color.html(BB_BAD))])
+		rows.append([_bb(p.shown_name(), Color(0.78, 0.82, 0.92)),
+			_bb(Economy.mult_delta_text(d), UIStyle.color(&"good") if d > 0.0 else Color.html(BB_BAD))])
 	if not rows.is_empty():
-		rows.push_front([UIIcons.bb("district", 11, GEO_KEY_COL) + " Neighbours gain", ""])
+		rows.push_front([UIIcons.bb("district", 11, GEO_KEY_COL) + " " + _bb("Effect on neighbours", Color(0.90, 0.94, 1.0)), ""])
 	return rows
 
 ## Rows as tooltip lines: "left   right".
@@ -6891,8 +7003,18 @@ func _placement_card(def: DistrictDef, chk: Dictionary, sys: Dictionary, site_na
 		# revision 12.11: the geography, the location with its total; the
 		# overall Total sits above the cost
 		card.append(_geo_rows(probe.site_features, def.base_outputs, false))
-		card.append(_location_rows(Location.breakdown(current_data, probe)))
+		var loc_rows := _location_rows(Location.breakdown(current_data, probe))
+		if not loc_rows.is_empty():   # no bonus here: no section (playtest 12.11)
+			card.append(loc_rows)
 	if def.is_system_anchor():   # a City: what its reach holds for later districts
+		# what the yields at the bottom go by (playtest 12.11 asked why they
+		# change from spot to spot): the land right under the City multiplies
+		# its own output; a City takes no location bonus
+		if not def.base_outputs.is_empty():
+			var under: Array = [[UIIcons.bb("capital", 11, GEO_KEY_COL) + " " + _bb("The land under it", Color(0.90, 0.94, 1.0)),
+				_bb("multiplies the City's own output", BB_DIM)]]
+			under.append_array(_geo_rows(probe.site_features, def.base_outputs, false))
+			card.append(under)
 		card.append(_reach_rows(lon, lat))
 	var nb_rows := _neighbour_effect_rows(probe)
 	if not nb_rows.is_empty():
@@ -6942,6 +7064,12 @@ func _reach_summary(lon: float, lat: float, cache := true) -> Dictionary:
 	var counts := {}
 	var land := 0
 	var total := 0
+	var water := 0
+	# a point with no feature is open ground, not water, on a world without seas
+	# (playtest 12.11: the Moon read "Mostly water"); seas are checked for real,
+	# only on the shown path (cache) since the suggestion scan calls this a lot
+	var seas := PlanetData.get_shader_type(current_data.planet_type) not in \
+		[PlanetData.ShaderType.MOON, PlanetData.ShaderType.ASTEROID, PlanetData.ShaderType.GAS]
 	for ring: Array in REACH_RINGS:
 		var d := r * float(ring[0])
 		var n := int(ring[1])
@@ -6952,6 +7080,8 @@ func _reach_summary(lon: float, lat: float, cache := true) -> Dictionary:
 			var m := FeatureMap.mask_at(current_data.seed, plon, plat)
 			total += 1
 			if m == 0:
+				if cache and seas and TerrainSampler.is_water(TerrainSampler.sample(current_data, plon, plat)["terrain"]):
+					water += 1
 				continue
 			land += 1
 			for f in FeatureMap.IDS.size():
@@ -6964,12 +7094,100 @@ func _reach_summary(lon: float, lat: float, cache := true) -> Dictionary:
 		if int(counts[fid]) >= 2:
 			for fam: String in table.get(fid, {}):
 				fams[fam] = true
-	var out := {"counts": counts, "land": land, "total": total, "families": fams.keys()}
+	var out := {"counts": counts, "land": land, "total": total, "water": water, "families": fams.keys()}
 	if cache:
 		if _reach_cache.size() > 512:
 			_reach_cache.clear()
 		_reach_cache[key] = out
 	return out
+
+# ── Tutorial district spots (playtest 12.11) ────────────────────────────────
+## The guided tutorial suggests where each of its districts goes. The spots
+## are planned together for every kind it will ask for, so the Residential
+## District placed first doesn't take the Energy District's best ground: the
+## kind whose best spot gains most picks first, and planned spots keep a
+## district's spacing apart. Districts already standing are left out and the
+## rest planned again (the player may build elsewhere).
+const GUIDE_KINDS := [DistrictDef.Type.GENERATOR, DistrictDef.Type.MINING, DistrictDef.Type.SCIENCE,
+	DistrictDef.Type.COMMERCIAL, DistrictDef.Type.RESIDENTIAL]
+var _guide_plan_key := ""
+var _guide_plan: Dictionary = {}   # DistrictDef.Type → {lon, lat, r} (radians)
+
+func _suggest_guide_site(def: DistrictDef, parent: POIData) -> void:
+	if parent == null or current_data == null or def.is_system_anchor() or def.is_orbital \
+			or not Guide.is_active() or Guide.checklist_mode() or not GUIDE_KINDS.has(def.id):
+		return
+	var plan := _guide_sites(parent)
+	if plan.has(def.id):
+		poi_layer.suggested_sites = [plan[def.id]]
+
+func _guide_sites(city: POIData) -> Dictionary:
+	var key := "%d:%s:%d" % [current_data.seed, city.label, current_data.custom_pois.size()]
+	if key == _guide_plan_key:
+		return _guide_plan
+	_guide_plan_key = key
+	_guide_plan = {}
+	var kinds: Array = []
+	for t: int in GUIDE_KINDS:
+		if not Guide._has_district(current_data, t):
+			kinds.append(t)
+	if kinds.is_empty():
+		return _guide_plan
+	# candidate spots on rings around the City, inside its reach
+	var reach := _city_reach_rad(city.label)
+	var clon := deg_to_rad(city.lon_deg)
+	var clat := deg_to_rad(city.lat_deg)
+	var cands: Array = []   # [lon, lat, {kind: score}]
+	for ring in [0.3, 0.45, 0.6, 0.75, 0.9]:
+		var d: float = reach * float(ring)
+		var n := 24
+		for k in n:
+			var ang := TAU * float(k) / float(n) + float(ring) * 0.7
+			var lat := clampf(clat + sin(ang) * d, -PI * 0.5, PI * 0.5)
+			var lon := clon + cos(ang) * d / maxf(cos(clat), 0.2)
+			if not bool(_placement_system_check(DistrictDef.find(kinds[0] as DistrictDef.Type), lon, lat)["ok"]):
+				continue
+			var site := FeatureMap.shares(current_data, lon, lat)
+			var scores := {}
+			for t: int in kinds:
+				var dd := DistrictDef.find(t as DistrictDef.Type)
+				if dd == null or dd.base_outputs.is_empty():
+					continue
+				if not bool(TerrainSampler.check_site(current_data, dd, lon, lat)["ok"]):
+					continue
+				var fam := FeatureMap.family_of(String(dd.base_outputs.keys()[0]))
+				scores[t] = 1.0 + FeatureMap.bonus_for(site, fam) - 0.05 * float(ring)   # nearer wins a tie
+			if not scores.is_empty():
+				cands.append([lon, lat, scores])
+	# the kind whose best spot gains most chooses first
+	var best_of := {}
+	for t: int in kinds:
+		var b := 0.0
+		for c: Array in cands:
+			b = maxf(b, float((c[2] as Dictionary).get(t, 0.0)))
+		best_of[t] = b
+	kinds.sort_custom(func(x: int, y: int) -> bool: return float(best_of[x]) > float(best_of[y]))
+	var gap := deg_to_rad(TerrainSampler.min_spacing_deg(current_data)) * 1.05
+	var taken: Array = []
+	for t: int in kinds:
+		var pick: Array = []
+		var pick_s := -1.0
+		for c: Array in cands:
+			var sc := float((c[2] as Dictionary).get(t, -1.0))
+			if sc <= pick_s:
+				continue
+			var free := true
+			for o: Array in taken:
+				if TerrainSampler.angular_distance(float(c[0]), float(c[1]), float(o[0]), float(o[1])) < gap:
+					free = false
+					break
+			if free:
+				pick = c
+				pick_s = sc
+		if not pick.is_empty():
+			taken.append(pick)
+			_guide_plan[t] = {"lon": float(pick[0]), "lat": float(pick[1]), "r": gap * 0.45}
+	return _guide_plan
 
 ## Up to SUGGEST_COUNT good spots for the first City, far enough apart: scored
 ## by how many district kinds the land in reach helps, then how much of it is
@@ -7017,7 +7235,7 @@ func _reach_rows(lon: float, lat: float) -> Array:
 	var rows: Array = []
 	var nf: int = (sm["families"] as Array).size()
 	var col := _scale_color(nf, REACH_FAMILIES.size())
-	var land := maxi(int(sm["land"]), 1)
+	var land := maxi(int(sm["total"]) - int(sm.get("water", 0)), 1)   # open ground counts as land
 	var feats: Array = []
 	for fid: String in sm["counts"]:
 		if FeatureMap.helped_families(fid) != "" and int(sm["counts"][fid]) >= 2:
@@ -7029,8 +7247,7 @@ func _reach_rows(lon: float, lat: float) -> Array:
 			_bb(FeatureMap.helped_families(fid), Color(0.78, 0.82, 0.92))])
 	if feats.is_empty():
 		rows.append([_bb("Nothing that helps a district", BB_DIM), ""])
-	var water := int(sm["total"]) - int(sm["land"])
-	if water * 2 > int(sm["total"]):
+	if int(sm.get("water", 0)) * 2 > int(sm["total"]):
 		rows.append([_bb("Mostly water: little room for districts", BB_BAD), ""])
 	rows.append([])
 	rows.append([UIIcons.bb("explore", 11, GEO_KEY_COL) + " " + _bb("Within reach", Color(0.90, 0.94, 1.0)),
@@ -7135,6 +7352,11 @@ func _on_planet_clicked(_screen_pos: Vector2) -> void:
 		return
 	if _orbital_layer != null and is_instance_valid(_orbital_layer):
 		_orbital_layer.deselect()
+	# Trade over the panel steps aside first, so the planet panel shows instead
+	# of rebuilding under it (playtest 12.11), as picking a district does
+	var sp := get_node_or_null("SidePanel") as LeftPanel
+	if sp != null and sp.overlay() is TradePanel:
+		_reveal_panel()
 	if current_data != null:
 		_go_up_one_level()
 
@@ -7471,7 +7693,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 		elif not GameState.can_play_on(data.seed):
 			# post-demo inspection: other worlds can be looked at, not settled
 			var note := Label.new()
-			note.text = "Settling new worlds is Civilization 1 content, not playable in the demo. Earth and its Moon are yours."
+			note.text = "Settling new worlds is Civilization Type 1 content, not playable in the demo. Earth and its Moon are yours."
 			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			note.theme_type_variation = &"SubLabel"
 			planet_page.add_child(note)
@@ -7945,7 +8167,7 @@ func _district_cycle_text(pp: PlanetProgress, poi: POIData) -> String:
 ## every row of per-cycle flows (playtest 31.10): "⟳ 20s  +9 −18" reads as
 ## "each cycle", apart from the one-time cost on the right.
 static func _cycle_bb(sec: float) -> String:
-	return UIIcons.bb("cycle", 11, Color(BB_DIM)) + _bb(" " + ProductionManager.cycle_text(sec), BB_DIM)
+	return UIIcons.bb("calendar", 11, Color(BB_DIM)) + _bb(" " + ProductionManager.cycle_text(sec), BB_DIM)
 
 ## ListItem stats for a district's own income, per cycle: "credits:+30", "energy:+6" …
 func _income_stats(pp: PlanetProgress, poi: POIData) -> PackedStringArray:
@@ -8544,9 +8766,23 @@ func _res_chip_tip(id: String, v: float, who: String) -> String:
 			return "+%s housing%s. Housing raises the max population." % [Economy.fmt(v), by]
 	return "+%s per cycle%s." % [Economy.fmt(v) if absf(v) >= 1000.0 else BuildingDef._num(snappedf(v, 0.1)), by]
 
+## Workers set aside for this district's buildings still under construction
+## (the panel leaves them out until the building is done, playtest 12.11).
+func _constructing_workers(pp: PlanetProgress, poi: POIData) -> int:
+	var n := 0
+	for e: Dictionary in pp.buildings_in_district(poi.label):
+		if e.get("constructing", false):
+			var bdef := BuildingDef.find(e.get("building_id", ""))
+			if bdef != null:
+				n += bdef.pop_use() * int(e.get("amount", 1))
+	return n
+
 ## A small "[icon] text" chip in a panel row (StatLabel, icon tinted).
 ## With `tip_title`, hovering the chip shows its own tooltip.
-func _mini_chip(icon_id: String, text: String, col: Color, tip_title := "", tip := "") -> HBoxContainer:
+## `text_col` colours the number only (the icon keeps `col`), e.g. a red energy
+## figure beside the yellow energy icon.
+func _mini_chip(icon_id: String, text: String, col: Color, tip_title := "", tip := "",
+		text_col := Color(0, 0, 0, 0)) -> HBoxContainer:
 	var chip := HBoxContainer.new()
 	chip.add_theme_constant_override("separation", 2)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -8565,6 +8801,8 @@ func _mini_chip(icon_id: String, text: String, col: Color, tip_title := "", tip 
 	l.text = text
 	l.theme_type_variation = &"StatLabel"
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if text_col.a > 0.0:
+		l.add_theme_color_override("font_color", text_col)
 	chip.add_child(l)
 	return chip
 
@@ -8596,8 +8834,10 @@ func _build_district_bonus_row(poi: POIData, planet: PlanetData) -> Control:
 	var loc := Location.breakdown(planet, poi)
 	var lm := float(loc["mult"]) - 1.0
 	if lm > 0.005:
-		chips.add_child(_mini_chip("explore", "Location +%s%%" % _pct(snappedf(lm, 0.01)), good, "Location",
-			"What its place adds: the farther from its City, the more; same-kind neighbours add too.\n\n" + "\n".join(_location_simple_lines(loc))))
+		chips.add_child(_mini_chip("explore", "Location %s" % Economy.mult_text(1.0 + lm), good, "Location",
+			"What its place adds: far from every other district and City, up to %s; or each same-kind neighbour close by %s.\n\n" % [
+				Economy.mult_text(Balance.cfg.location_far_mult), Economy.mult_delta_text(Balance.cfg.neighbour_mult)]
+			+ "\n".join(_location_simple_lines(loc))))
 	# the City's Capital supports, the planet's (Orbit, traits) and companions:
 	# applied to everything made here, so the Total shows them (playtest 07.11)
 	var sup := _district_supports(poi, planet)
@@ -8605,7 +8845,14 @@ func _build_district_bonus_row(poi: POIData, planet: PlanetData) -> Control:
 		var best := 0.0
 		for id: String in sup:
 			best = maxf(best, float(sup[id]["all"]))
-		chips.add_child(_mini_chip("capital", "Supports +%s%%" % _pct(snappedf(best, 0.01)), good,
+		# all of it from the advisor in office: say who (playtest 12.11: "+10%
+		# from where?" on the first Commercial District)
+		var only_agents := true
+		for id: String in sup:
+			if float(sup[id]["city"]) > 0.0005 or float(sup[id]["planet"]) > 0.0005:
+				only_agents = false
+		var sup_name := _agents_name() if only_agents else "Supports"
+		chips.add_child(_mini_chip("capital", "%s +%s%%" % [sup_name, _pct(snappedf(best, 0.01))], good,
 			"Supports", _supports_tip(sup)))
 	if chips.get_child_count() == 0:   # no bonus at all: no row
 		row.free()
@@ -8647,14 +8894,28 @@ func _supports_tip(sup: Dictionary) -> String:
 	for id: String in sup:
 		var s: Dictionary = sup[id]
 		var parts: Array[String] = []
-		for k: Array in [["city", "Capital"], ["planet", "Planet"], ["companions", "Agents"]]:
+		for k: Array in [["city", "Capital"], ["planet", "Planet"], ["companions", _agents_name()]]:
 			if float(s[k[0]]) > 0.0005:
 				parts.append("%s +%s%%" % [k[1], _pct(snappedf(float(s[k[0]]), 0.01))])
 		lines.append("%s  %s   %s" % [UIIcons.bb(id, 11, Economy.color_of(id)),
 			_bb("+%s%%" % _pct(snappedf(float(s["all"]), 0.01)), BB_GOOD), _bb("  //  ".join(parts), BB_DIM)])
 	lines.append("")
 	lines.append(_bb("Capital supports come from the City's Capital District, Planet ones from the Orbit and the world's traits.", BB_DIM))
+	var agents := false
+	for id: String in sup:
+		agents = agents or float(sup[id]["companions"]) > 0.0005
+	if agents:
+		lines.append(_bb("%s: the advisor you chose. Their bonus raises this everywhere; see Companions." % _agents_name(), BB_DIM))
 	return "\n".join(lines)
+
+## Who the Agents' share comes from: the advisor in office by name (else "Agents").
+static func _agents_name() -> String:
+	var names: Array[String] = []
+	for a: String in GameState.active_agents():
+		var c := CompanionDef.find(a)
+		if c != null:
+			names.append(c.display_name)
+	return " & ".join(names) if not names.is_empty() else "Agents"
 
 func _refresh_district_energy_lbl() -> void:
 	if not is_instance_valid(_active_district_energy_lbl):
@@ -8949,6 +9210,7 @@ func _play_rocket_animation(planet_seed: int, poi: POIData, on_complete: Callabl
 	anim_ref.append(anim_d)
 	_rocket_anims.append(anim_d)
 	AudioManager.play("rocket", -4.0)
+	_auto_follow_launch(anim_d, ship_type)
 
 	# Make rocket clickable — show a lightweight launch info panel
 	rocket.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
@@ -9746,7 +10008,7 @@ func _show_build_row_tip() -> void:
 		body.append("\n" + _bb("➡ " + String(live[0]), BB_WARN if live[1] else BB_BAD))
 	if c["force"]:
 		var fb := Trade.force_buy_cost(Economy.building_full_cost(pp, def, poi.label, 1))
-		body.append(_bb("Force Buy: %s credits in all  //  press F" % Economy.fmt(fb), BB_GOOD if fb <= GameState.credits else BB_BAD))
+		body.append(_bb("Click to Force Buy: %s credits buys what is missing and builds it  //  or press F" % Economy.fmt(fb), BB_GOOD if fb <= GameState.credits else BB_BAD))
 	# the three click sizes, the one in force lit (as the Market's Buy tip)
 	body.append("\n" + _bulk_options_bb())
 	# bottom row: what it makes and uses │ the cost, for `n`
@@ -9973,9 +10235,11 @@ func _value_chips(values: Dictionary, cycle_sec: float, who: String = "", uses: 
 		stock = stock or (id != Economy.ENERGY and id != Economy.POPULATION)
 	if uses.has("energy") and absf(float(uses["energy"])) >= 0.05:
 		var ev := float(uses["energy"])
+		# yellow icon, red / green figure, like the Total row (playtest 12.11)
 		row.add_child(_mini_chip("energy", ("+" if ev > 0.0 else "−") + BuildingDef._num(snappedf(absf(ev), 0.1)),
-			UIStyle.color(&"good") if ev > 0.0 else UIStyle.color(&"bad"), "Energy",
-			"Energy balance of %s: what it makes minus what it uses." % (who if who != "" else "this")))
+			Economy.color_of(Economy.ENERGY), "Energy",
+			"Energy balance of %s: what it makes minus what it uses." % (who if who != "" else "this"),
+			UIStyle.color(&"good") if ev > 0.0 else UIStyle.color(&"bad")))
 	if int(uses.get("workers", 0)) > 0:
 		row.add_child(_mini_chip("worker", Economy.fmt(float(uses["workers"])), Color(0.85, 0.88, 1.0), "Workers",
 			"People working for %s." % (who if who != "" else "this")))
@@ -9984,7 +10248,7 @@ func _value_chips(values: Dictionary, cycle_sec: float, who: String = "", uses: 
 		cc.add_theme_constant_override("separation", 2)
 		cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var ci := TextureRect.new()
-		ci.texture = UIIcons.get_icon("cycle")
+		ci.texture = UIIcons.get_icon("calendar")
 		ci.self_modulate = Color(0.62, 0.70, 0.82)
 		ci.custom_minimum_size = Vector2(10, 10)
 		ci.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -9998,7 +10262,7 @@ func _value_chips(values: Dictionary, cycle_sec: float, who: String = "", uses: 
 		cl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cc.add_child(cl)
 		row.add_child(cc)
-		_hover_tip(cc, "Cycle", "The amounts beside it come in every %s. Research shortens it." % ProductionManager.cycle_text(cycle_sec))
+		_hover_tip(cc, "Cycle", "The amounts beside it come in every %s (a colony month is 20 s of play). Research shortens it." % ProductionManager.cycle_text(cycle_sec))
 	var m := MarqueeLabel.wrap(row)
 	m.align = 1.0
 	return m
@@ -10063,14 +10327,17 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 	var b_workers := 0
 	var b_energy := 0.0
 	var b_any := false
+	# a building still going up shows nothing yet: its workers, energy and
+	# output all appear together when it is done (playtest 12.11). Its workers
+	# are already set aside (Economy.district_pop_used), the panel just waits.
 	for e: Dictionary in pp.buildings_in_district(poi.label):
 		var bdef := BuildingDef.find(e.get("building_id", ""))
-		if bdef == null:
+		if bdef == null or e.get("constructing", false):
 			continue
 		b_any = true
 		b_workers += bdef.pop_use() * int(e.get("amount", 1))
 		b_energy += ProductionManager.entry_energy(pp, e)
-	var d_workers := maxi(0, Economy.district_pop_used(pp, poi) - b_workers)
+	var d_workers := maxi(0, Economy.district_pop_used(pp, poi) - _constructing_workers(pp, poi) - b_workers)
 	var v := _value_chips(inc, ProductionManager.district_cycle_sec(ddef), "the district itself", {"workers": d_workers})
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(k); row.add_child(v)
@@ -11746,8 +12013,13 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		var ctx := {"title": tip_title, "def": def, "poi": poi, "planet": planet, "pp": pp,
 			"reason": reason, "static_reason": static_reason, "enabled": enabled, "force": can_force, "entry": preview_entry, "pop": pop_need,
 			"row": row_panel}
+		# Force Buy by a click on the row too (playtest 12.11: only F while
+		# hovering, which nobody found); F still works
+		var force_now := func() -> bool:
+			return can_force and Trade.force_buy_cost(Economy.building_full_cost(pp, cap_def, cap_poi.label, 1)) <= GameState.credits \
+				and Economy.free_population(cap_planet, pp) >= cap_def.pop_use()   # never buy for a build that can't go up
 		if static_reason == "":   # enables as credits / slots come (playtest 07.11)
-			_live_enable(row_panel, func() -> bool: return bool(_live_build_reason(ctx)[1]))
+			_live_enable(row_panel, func() -> bool: return bool(_live_build_reason(ctx)[1]) or bool(force_now.call()))
 		row_panel.mouse_entered.connect(func() -> void:
 			AudioManager.play("hover")
 			if not row_panel.disabled and not _is_at_edge():
@@ -11767,6 +12039,9 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		if static_reason == "":
 			row_panel.pressed.connect(func() -> void:
 				if not bool(_live_build_reason(ctx)[1]):
+					if bool(force_now.call()):
+						_force_row = {"poi": cap_poi, "planet": cap_planet, "def": cap_def, "overlay": cap_overlay}
+						_try_force_buy()
 					return
 				if _buy_buildings(cap_poi, cap_planet, cap_def, _bulk_n(pp, cap_def, cap_poi)) > 0:
 					if is_instance_valid(cap_overlay):
@@ -12508,7 +12783,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 
 	# Totals here, one row (playtest 31.10): the energy balance, the people at
 	# work and the housing — district, buildings and (Capital) the City centre
-	var used_here := Economy.district_pop_used(pp, poi)
+	var used_here := Economy.district_pop_used(pp, poi) - _constructing_workers(pp, poi)
 	var housed_here := Economy.district_housing(planet, pp, poi)
 	var tot_row := HBoxContainer.new()
 	var tk := _key_label("production", "Total",

@@ -27,6 +27,20 @@ func _ready() -> void:
 	_keep.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_close())
+	# the demo's end (playtest 12.11 K49): back to the main menu, or keep playing
+	var menu := Button.new()
+	menu.text = "MAIN MENU"
+	menu.focus_mode = Control.FOCUS_NONE
+	menu.custom_minimum_size = Vector2(160, _keep.custom_minimum_size.y)
+	menu.add_theme_font_size_override("font_size", 12)
+	menu.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		GameState.save()
+		_close()
+		HUDManager.set_game_hud(false)
+		SceneTransition.go("res://scenes/MainMenu.tscn", null))
+	_keep.get_parent().add_child(menu)
+	_keep.get_parent().move_child(menu, 0)
 	_rings.draw.connect(_draw_rings)
 	_shade.color.a = 0.0
 	_content.modulate.a = 0.0

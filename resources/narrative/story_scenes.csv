@@ -1,0 +1,31 @@
+scene_id,branch,line_id,speaker,text_en
+bolo_lunar_signal,,lunar_01,Bolo,I compared the raw recording with the chamber's record. Listen to the gap between the pulses. It is the same length in both.
+bolo_lunar_signal,,lunar_02,Bolo,"Your receiver places it in a crater. When you can get a crew there, we should see what has been waiting for an answer."
+meet_burkai,,burkai_01,Narrator,A figure waits in the shadow below the rim. The light from your visor catches the dust on his coat.
+meet_burkai,loud,burkai_loud,Burkai,Dust from the charge is still in the seam. Hold your receiver close. The pulse is there.
+meet_burkai,quiet,burkai_quiet,Burkai,Stand in the shadow. You can see the seam from here.
+meet_burkai,,burkai_02,Burkai,Ece. Hold your light a little lower.
+meet_burkai,,burkai_03,Bolo,How do you know that name?
+meet_burkai,,burkai_04,Burkai,I'm Burkai. Look at the stone while the light is off it.
+meet_burkai,,burkai_05,Narrator,"In the shadow, three shallow cuts come into view. Bolo holds the receiver to the first one. The pulse returns."
+meet_burkai,,burkai_06,Bolo,The record from the chamber starts with these same cuts. Someone put a receiver here.
+meet_burkai,,burkai_07,Burkai,Listen to the gap. There are two replies in it. Put your meter on the third cut.
+meet_burkai,,burkai_08,Narrator,Two traces come up on the meter. A second line follows each one back to its starting point.
+meet_burkai,,burkai_09,Bolo,That's my blood test. The other trace came from an I-330 scanner. Look at the date.
+meet_burkai,,burkai_10,Player,My medical scan from before the handover. The scanner sent it to a receiver on the surface.
+meet_burkai,,burkai_11,Burkai,"The receiver has a copy of your tissue. See where the lines meet? When the tissue changes with age, the signal puts it back the way it was."
+meet_burkai,,burkai_12,Bolo,"I spent years trying to find a fault in my meter. It was giving me the right answer. If the receiver keeps doing this, neither of us will grow old."
+meet_burkai,,burkai_13,Burkai,The gap is closing. Copy the traces while they are here.
+mission_after_reveal,comparison,arrival_signal_comparison,Bolo,I checked the arrival telemetry against our copy from the Moon. The same pause is there. We have two places we can measure it now.
+mission_after_reveal,pending,reveal_pending,Player,The crews we send out may spend their lives away from home. I'll be here to see what they build. Let's give them somewhere to work and a way back.
+mission_after_reveal,surface,reveal_surface,Player,We have readings from another world now. Let's use them to find a landing site. I can be here for the crews who go there and the ones who follow.
+mission_after_reveal,gas,reveal_gas,Player,Use the readings to find a safe orbit. A crew could work from a station there. I'll make sure the next crew can reach it too.
+mission_after_reveal,,reveal_common,Bolo,Leave room for a receiver wherever the crew sets up. I want a clean trace from farther out than the Moon.
+expedition_briefing,,briefing_01,I-330 Flight Control,The next vehicle can reach another planet. Its readings will tell us where we could send a crew if we need a second home.
+expedition_briefing,moon,briefing_moon,Bolo,Leave the receiver on during the crossing. We know what the pulse sounds like at the Moon. I want to hear what changes as we leave it behind.
+expedition_briefing,raw,briefing_raw,I-330 Flight Control,The vehicle will keep a raw receiver log throughout the crossing. We can compare it with our surveys after arrival.
+planetary_arrival,,arrival_01,I-330 Flight Control,Arrival confirmed. The vehicle has reached the selected world. We are receiving its telemetry.
+planetary_arrival,moon,arrival_signal_comparison,Bolo,I checked the arrival telemetry against our copy from the Moon. The same pause is there. We have two places we can measure it now.
+planetary_arrival,raw,arrival_raw,I-330 Archive,The vehicle's receiver has recorded a repeating pulse. Its raw trace has been saved for comparison.
+planetary_arrival,,arrival_02,Unknown Voice,"Receiver at the edge of the survey, give us your bearing."
+planetary_arrival,,arrival_03,I-330 Flight Control,Signal stored. We have a direction for the voice. It came from beyond the selected world.

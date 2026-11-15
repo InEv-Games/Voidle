@@ -62,6 +62,14 @@ func _ready() -> void:
 
 	TutorialManager.highlight_changed.connect(_on_tut_highlight)
 	TutorialManager.highlight_cleared.connect(_on_tut_highlight_clear)
+	ProductionManager.planet_leveled.connect(_on_planet_leveled)
+	GameState.expedition_ready.connect(func(kind: String) -> void:
+		if kind == "rocket" and GameState.rocket_picking():   # K49: say where to pick its world
+			MilestoneBanner.show_banner(get_tree(), "Final rocket", "READY FOR LAUNCH",
+				["%s  Pick the world it flies to: the Solar System view rings every planet it can reach." % UIIcons.bb("rocket", 13, Color(1.0, 0.85, 0.5)),
+				 "%s  Its arrival completes Civilization Type 0." % UIIcons.bb("planet", 13, UIStyle.color(&"good"))],
+				{"action": "PICK ITS WORLD", "action_icon": "rocket", "on_action": func() -> void: NewsFeed.go_to({"solar": true})}))
+	GameState.unlock_changed.connect(_on_unlock_moon)
 
 	# Credits + Science go into a top layer (above SkillTree at 220)
 	var top_layer := CanvasLayer.new()
@@ -98,7 +106,8 @@ func _ready() -> void:
 	top_layer.call_deferred("add_child", sci_panel)
 
 	GameState.credits_changed.connect(_on_credits_changed)
-	GameState.civilization_reached.connect(func(_civ: int) -> void: _show_act1_complete())
+	# the arrival scene first (B13: planetary_arrival), then the demo's end card
+	GameState.civilization_reached.connect(func(_civ: int) -> void: Excavations.play_arrival(_show_act1_complete))
 	GameState.lander_reached_moon.connect(func(_moon_seed: int) -> void: AudioManager.play("building_done"))   # the news bar tells it
 	GameState.expedition_changed.connect(_on_expedition_changed)
 	GameState.science_changed.connect(_on_science_changed)
@@ -303,9 +312,24 @@ func _make_companions_button() -> Button:
 		TooltipManager.hide_tip())
 	return b
 
-## A pill under the top bar while a world has a trait pick waiting.
+## A pill under the top bar while a world has a trait pick waiting, or (K43,
+## playtest 12.11: a new slot went unnoticed) a trait slot it can open now.
 var _trait_btn: IconButton = null
 var _trait_poll := 0.0
+var _trait_mode := ""   # "pick" | "open"
+
+## A colonised world with a trait slot ready to be bought (-1: none).
+static func _trait_slot_seed() -> int:
+	for pp: PlanetProgress in GameState._planet_progress.values():
+		if not pp.is_colonized:
+			continue
+		var pd := GameState.get_planet_data(pp.planet_seed)
+		if pd == null:
+			continue
+		for i in PlanetTags.SLOTS:
+			if PlanetTags.slot_state(pd, i) == PlanetTags.Slot.OPEN_TO_BUY:
+				return pp.planet_seed
+	return -1
 
 func _update_trait_notice(delta: float) -> void:
 	_trait_poll -= delta
@@ -313,23 +337,73 @@ func _update_trait_notice(delta: float) -> void:
 		return
 	_trait_poll = 0.5
 	var seeds := PlanetTags.pending_seeds()
-	var want := visible and not seeds.is_empty() and not TutorialManager.blocks_hud() and not GameOverlays.trait_picker_open()
-	if not want:
+	var mode := "pick" if not seeds.is_empty() else ("open" if _trait_slot_seed() >= 0 else "")
+	var want := visible and mode != "" and not TutorialManager.blocks_hud() and not GameOverlays.trait_picker_open()
+	if not want or mode != _trait_mode:
 		if _trait_btn != null and is_instance_valid(_trait_btn):
 			_trait_btn.queue_free()
 		_trait_btn = null
-		return
+		_trait_mode = ""
+		if not want:
+			return
 	if _trait_btn != null and is_instance_valid(_trait_btn):
 		return
-	_trait_btn = IconButton.create("CHOOSE A PLANET TRAIT", "planet", IconButton.Variant.POSITIVE)
+	_trait_mode = mode
+	if mode == "pick":
+		_trait_btn = IconButton.create("CHOOSE A PLANET TRAIT", "planet", IconButton.Variant.POSITIVE)
+		_trait_btn.pressed.connect(func() -> void:
+			var s := PlanetTags.pending_seeds()
+			if not s.is_empty():
+				GameOverlays.open_trait_picker(self, s[0]))
+	else:
+		_trait_btn = IconButton.create("NEW TRAIT SLOT", "planet", IconButton.Variant.NEUTRAL)
+		_trait_btn.pressed.connect(func() -> void:
+			AudioManager.play("click")
+			var sd := _trait_slot_seed()
+			if sd >= 0:
+				NewsFeed.go_to({"seed": sd}))
+		_trait_btn.mouse_entered.connect(func() -> void:
+			TooltipManager.show_tip("New trait slot", "A world reached the level for another trait. Open the slot on its planet page, then pick one of three."))
+		_trait_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	_trait_btn.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_trait_btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_trait_btn.offset_top = 96.0
-	_trait_btn.pressed.connect(func() -> void:
-		var s := PlanetTags.pending_seeds()
-		if not s.is_empty():
-			GameOverlays.open_trait_picker(self, s[0]))
 	_top_layer.add_child(_trait_btn)
+
+## The Moon comes into reach (K44, playtest 12.11: it went unnoticed): a
+## banner, and the planet view backs away to show it (PlanetaryView).
+func _on_unlock_moon(key: String, on: bool) -> void:
+	if key != "moon_unlocked" or not on or GameState.showcase_mode:
+		return
+	var moon := GameState.home_moon()
+	if moon == null:
+		return
+	MilestoneBanner.show_banner(get_tree(), "Lunar Program", "THE MOON IS IN REACH",
+		["%s  %s waits above your world. Zoom out to see it, click it to open." % [UIIcons.bb("planet", 13, Color(0.80, 0.84, 0.95)), moon.planet_name],
+		 "%s  Prepare the lander there once your Orbit stands." % UIIcons.bb("rocket", 13, Color(1.0, 0.85, 0.5))],
+		{"color": Color(0.80, 0.86, 1.0), "sec": 7.0,
+		 "action": "SHOW THE MOON", "action_icon": "planet", "on_action": func() -> void:
+			var scene := get_tree().current_scene
+			if scene != null and scene.has_method("reveal_moon"):
+				scene.call("reveal_moon")
+			else:
+				NewsFeed.go_to({"seed": moon.seed})})
+	GameState.set_meta("moon_reveal_pending", true)
+
+## Planet level up (K46): a banner that says what the level opened.
+func _on_planet_leveled(planet_seed: int, level: int) -> void:
+	var pd := GameState.get_planet_data(planet_seed)
+	var pp := GameState.get_planet(planet_seed)
+	if pd == null or pp == null:
+		return
+	const PX := 13
+	var rows: Array = []
+	var cities := Leveling.max_cities(pp)
+	rows.append("%s  Room for one more City  (%d → %d)" % [UIIcons.bb("city", PX, UIStyle.color(&"good")), cities - 1, cities])
+	if level in Balance.cfg.trait_slot_levels.slice(1):
+		rows.append("%s  A new trait slot can be opened" % UIIcons.bb("planet", PX, Color(0.95, 0.82, 0.45)))
+	MilestoneBanner.show_banner(get_tree(), "%s  //  Planet" % pd.planet_name, "LEVEL %d" % level, rows,
+		{"action": "OPEN PLANET", "action_icon": "planet", "on_action": func() -> void: NewsFeed.go_to({"seed": planet_seed})})
 
 ## Explore: a read-only look at every map from inside the game, once the
 ## tutorial is done (GameState.start_explore). Hidden until then.
@@ -350,6 +424,11 @@ func _make_explore_button() -> Button:
 	return b
 
 var _trade_layer: CanvasLayer = null
+
+## Opens Trade (nothing when it is open already).
+func open_trade_panel() -> void:
+	if not TradePanel.is_open:
+		toggle_trade_panel()
 
 func toggle_trade_panel() -> void:
 	LeftPanel.close_dropdowns(get_tree())   # revision 12.11: a dropdown stayed open over Trade
@@ -846,9 +925,25 @@ func _maybe_show_offline() -> void:
 		return
 	GameState.offline_pending = false
 	# the hero's caption says how long ("Away for 4 min")
-	var body := "Offline progress is switched on in this profile, but it isn't implemented yet: nothing was produced." \
-		if GameState.offline_progress_enabled() \
-		else "Nothing was produced while the game was closed. Your economy picks up where you left it."
+	var body := "Nothing was produced while the game was closed. Your economy picks up where you left it."
+	if GameState.offline_progress_enabled():
+		# the colony ran on at a tenth of the speed (playtest 12.11)
+		var r := GameState.run_offline()
+		var dim := UIStyle.hex(&"text_subtle")
+		var lines: Array[String] = []
+		lines.append("The colony ran on at %d%% of the speed: %s of play, %d colony month%s." % [
+			roundi(Balance.cfg.offline_speed * 100.0), _duration_text(float(r["sim"])), int(r["months"]),
+			"" if int(r["months"]) == 1 else "s"])
+		if bool(r["capped"]):
+			lines.append("[color=#%s]Only the first %s away count.[/color]" % [dim, _duration_text(Balance.cfg.offline_max_real_sec)])
+		var parts: Array[String] = []
+		var g: Dictionary = r["gains"]
+		for id: String in g:
+			var v := float(g[id])
+			parts.append("%s [color=#%s]%s%s[/color]" % [UIIcons.bb(id, 12, Economy.color_of(id)),
+				UIStyle.hex(&"good") if v >= 0.0 else UIStyle.hex(&"bad"), "+" if v >= 0.0 else "−", Economy.fmt(absf(v))])
+		lines.append("\n" + ("   ".join(parts) if not parts.is_empty() else "[color=#%s]Nothing changed in your stores.[/color]" % dim))
+		body = "\n".join(lines)
 	ConfirmPanel.ask(self, "WELCOME BACK", body, "CONTINUE", Callable(), false) \
 		.use_hero("Away for %s" % _duration_text(GameState.offline_seconds), "WELCOME BACK")
 

@@ -119,6 +119,7 @@ func reset() -> void:
 var _waited := 0.0
 
 func _process(delta: float) -> void:
+	_tick_barks(delta)
 	if not _current.is_empty() or _queue.is_empty():
 		_waited = 0.0
 		return
@@ -254,7 +255,22 @@ func _advance() -> void:
 		else:
 			_end_scene("", true)
 
+## No narrator in the game (playtest 12.11): a line with no speaker is said by
+## the AIs before an advisor is chosen (taking turns), then by that advisor.
+var _ai_turn := 0
+
+func voice(speaker: String) -> String:
+	if speaker != "" and speaker != "Narrator":
+		return speaker
+	if GameState.active_advisor != "":
+		var c := CompanionDef.find(GameState.active_advisor)
+		if c != null:
+			return c.display_name
+	_ai_turn += 1
+	return "Mother Superior" if _ai_turn % 2 == 1 else "High Father"
+
 func _on_line(speaker: String, text: String) -> void:
+	speaker = voice(speaker)
 	_log("line", speaker, text)
 	_last_line = [speaker, text]
 	if _on_comms:
@@ -383,3 +399,177 @@ func open_log() -> void:
 		_log_popup = null
 		return
 	_log_popup = NarrativeLog.show_log(self)
+
+# ── Barks: the advisor's everyday lines (playtest 12.11) ─────────────────────
+# docs/design/narrative/DIALOGUE.md, ADVISORS.md: the advisor in office talks
+# now and then and reacts to what happens. The lines are a CSV the writers
+# edit (id, advisor_id, kind, event_id, repeat, text_en; the copy the game reads
+# is resources/narrative/advisor_barks.csv, kept in step with the one in docs):
+#   idle   / interval  after the tutorial, one every BARK_IDLE_SEC of quiet play
+#   event  / first     once a game, the first time it happens (city_founded,
+#                      building_completed, research_completed, excavation_ready,
+#                      moon_arrived)
+#   event  / pending   home_dig_pending, lunar_dig_pending: a dig waits to be
+#                      started; again every BARK_PENDING_SEC while it waits
+# An event line waits while another line is on screen. Said through say(): the
+# CommsCard and the Narrative Log. Seen: GameState.story_flags "bark:…".
+const BARKS_CSV := "res://resources/narrative/advisor_barks.csv"
+const BARK_IDLE_SEC := 90.0
+const BARK_PENDING_SEC := 300.0
+const BARK_POLL := 1.0
+var _barks: Array = []   # [{id, advisor, kind, event, repeat, text}]
+var _barks_loaded := false
+var _bark_poll := 0.0
+var _bark_quiet := 0.0
+var _bark_pending_t := {}   # event id → seconds since it was last said
+
+func _load_barks() -> void:
+	_barks_loaded = true
+	var f := FileAccess.open(BARKS_CSV, FileAccess.READ)
+	if f == null:
+		push_warning("[Narrative] %s missing: no barks" % BARKS_CSV)
+		return
+	var head := f.get_csv_line()
+	while not f.eof_reached():
+		var row := f.get_csv_line()
+		if row.size() < head.size() or row[0].strip_edges() == "":
+			continue
+		var d := {}
+		for i in head.size():
+			d[head[i].strip_edges()] = row[i].strip_edges()
+		_barks.append({"id": d.get("id", ""), "advisor": d.get("advisor_id", ""), "kind": d.get("kind", ""),
+			"event": d.get("event_id", ""), "repeat": d.get("repeat", ""), "text": d.get("text_en", "")})
+
+func _bark_line(kind: String, event: String) -> Dictionary:
+	for b: Dictionary in _barks:
+		if b["advisor"] == GameState.active_advisor and b["kind"] == kind and b["event"] == event:
+			return b
+	return {}
+
+func _say_bark(b: Dictionary) -> void:
+	var c := CompanionDef.find(String(b["advisor"]))
+	say(c.display_name if c != null else String(b["advisor"]), String(b["text"]))
+	_bark_quiet = 0.0
+
+func _tick_barks(delta: float) -> void:
+	var scene := get_tree().current_scene
+	if scene == null or scene.scene_file_path.ends_with("MainMenu.tscn") or GameState.showcase_mode \
+			or GameState.active_advisor == "" or GameState.onboarding_stage != "done" or get_tree().paused:
+		return
+	var busy := not _current.is_empty() or not _queue.is_empty()
+	if not busy:
+		_bark_quiet += delta
+	for ev: String in _bark_pending_t:
+		_bark_pending_t[ev] = float(_bark_pending_t[ev]) + delta
+	_bark_poll += delta
+	if _bark_poll < BARK_POLL:
+		return
+	_bark_poll = 0.0
+	if not _barks_loaded:
+		_load_barks()
+	if _barks.is_empty() or busy:
+		return
+	# first-time events
+	for ev: String in ["city_founded", "building_completed", "research_completed", "excavation_ready", "moon_arrived"]:
+		if GameState.story_flags.has("bark:" + ev) or not _bark_event_now(ev):
+			continue
+		GameState.story_flags["bark:" + ev] = true
+		var b := _bark_line("event", ev)
+		if not b.is_empty():
+			_say_bark(b)
+			return
+	if not Guide.side_open():
+		return   # reminders and small talk after the tutorial
+	# a dig waiting to be started, now and then
+	for ev: String in ["home_dig_pending", "lunar_dig_pending"]:
+		if not _bark_event_now(ev):
+			_bark_pending_t.erase(ev)
+			continue
+		if not _bark_pending_t.has(ev):
+			_bark_pending_t[ev] = BARK_PENDING_SEC * 0.5   # the first reminder comes sooner
+		if float(_bark_pending_t[ev]) >= BARK_PENDING_SEC:
+			_bark_pending_t[ev] = 0.0
+			var pb := _bark_line("event", ev)
+			if not pb.is_empty():
+				_say_bark(pb)
+				return
+	# small talk, each line in turn
+	if _bark_quiet >= BARK_IDLE_SEC:
+		var idles: Array = []
+		for b: Dictionary in _barks:
+			if b["advisor"] == GameState.active_advisor and b["kind"] == "idle":
+				idles.append(b)
+		if not idles.is_empty():
+			var key := "bark_idle_i:" + GameState.active_advisor
+			var i := int(GameState.story_flags.get(key, 0))
+			GameState.story_flags[key] = i + 1
+			_say_bark(idles[i % idles.size()])
+		_bark_quiet = 0.0
+
+## Whether a bark's event holds now (polled; "first" ones fire once).
+func _bark_event_now(ev: String) -> bool:
+	var home := GameState.get_planet_data(GameState.home_planet_seed)
+	match ev:
+		"city_founded":
+			if home != null:
+				for p: POIData in home.custom_pois:
+					if p.is_city() and not p.is_orbital() and not p.constructing:
+						return true
+		"building_completed":
+			for pp: PlanetProgress in GameState._planet_progress.values():
+				for e: Dictionary in pp.buildings:
+					if not e.get("constructing", false):
+						return true
+		"research_completed":
+			return SessionPrep.researched_beyond_start()
+		"excavation_ready", "home_dig_pending", "lunar_dig_pending":
+			var want := Excavations.Stage.READY if ev == "excavation_ready" else Excavations.Stage.IDLE
+			var moon := GameState.home_moon()
+			for w: ExcavationWorldDef in ExcavationWorldDef.all():
+				var pd := w.planet()
+				if pd == null or not GameState.is_scanned(pd.seed):
+					continue
+				var on_moon := moon != null and pd.seed == moon.seed
+				if (ev == "home_dig_pending" and on_moon) or (ev == "lunar_dig_pending" and not on_moon):
+					continue
+				var s := Excavations.next_site(w)
+				if s != null and Excavations.stage(s) == want:
+					return true
+		"moon_arrived":
+			var m := GameState.home_moon()
+			if m != null:
+				for p: POIData in m.custom_pois:
+					if p.is_city() and not p.is_orbital() and not p.constructing:
+						return true
+	return false
+
+# ── Written scenes with branches (docs/design/narrative/SCENES.md) ───────────
+# The Moon's signal, Burkai, the expedition: their lines are a CSV the writers
+# edit (scene_id, branch, line_id, speaker, text_en). A line with no branch is
+# said on every path; one with a branch only when the game picks that branch.
+const SCENES_CSV := "res://resources/narrative/story_scenes.csv"
+var _scene_rows: Array = []   # [{scene, branch, line, speaker, text}]
+
+## A scene's lines in order, the common ones and those of `branches`:
+## [[speaker, text], …] for play()'s "lines".
+func scene_lines(scene_id: String, branches: Array = []) -> Array:
+	if _scene_rows.is_empty():
+		var f := FileAccess.open(SCENES_CSV, FileAccess.READ)
+		if f == null:
+			push_warning("[Narrative] %s missing" % SCENES_CSV)
+			return []
+		var head := f.get_csv_line()
+		while not f.eof_reached():
+			var row := f.get_csv_line()
+			if row.size() < head.size() or row[0].strip_edges() == "":
+				continue
+			var d := {}
+			for i in head.size():
+				d[head[i].strip_edges()] = row[i].strip_edges()
+			_scene_rows.append({"scene": d.get("scene_id", ""), "branch": d.get("branch", ""),
+				"line": d.get("line_id", ""), "speaker": d.get("speaker", ""), "text": d.get("text_en", "")})
+	var out: Array = []
+	for r: Dictionary in _scene_rows:
+		if r["scene"] == scene_id and (r["branch"] == "" or branches.has(r["branch"])):
+			out.append([String(r["speaker"]), String(r["text"])])
+	return out

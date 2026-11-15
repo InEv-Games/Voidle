@@ -54,7 +54,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.2196, 0.8157, 1, 1)
 theme_override_fonts/font = ExtResource("2_orbitron")
 theme_override_font_sizes/font_size = 34
-text = "CIVILIZATION 0 COMPLETE"
+text = "CIVILIZATION TYPE 0 COMPLETE"
 horizontal_alignment = 1
 
 [node name="Subtitle" type="Label" parent="Center/Content"]
@@ -62,7 +62,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.9176, 0.9686, 1, 1)
 theme_override_fonts/font = ExtResource("2_orbitron")
 theme_override_font_sizes/font_size = 13
-text = "Your rocket reached {planet}. Civilization 1 begins."
+text = "Your rocket reached {planet}. Civilization Type 1 begins."
 horizontal_alignment = 1
 
 [node name="Stats" type="Label" parent="Center/Content"]

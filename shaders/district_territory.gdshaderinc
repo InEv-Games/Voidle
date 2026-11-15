@@ -233,12 +233,17 @@ vec3 apply_features(vec3 surf, vec3 rn, float land, float t) {
 	// desert: warm sand, gentle dune bands
 	float dune = 0.5 + 0.5 * sin(dot(rn, vec3(90.0, 30.0, 60.0)));
 	surf = mix(surf, mix(vec3(0.62, 0.56, 0.42), vec3(0.70, 0.63, 0.47), dune), c.y * 0.7 * k);
-	// tundra: paler, cooler
-	surf = mix(surf, mix(surf, vec3(0.55, 0.58, 0.54), 0.6), c.z * k);
-	// volcanic field: dark basalt, a few faint glowing cracks
-	float crack = smoothstep(0.94, 1.0, feature_hash(floor(rn * 180.0), vec3(7.1, 113.3, 41.9)));
-	surf = mix(surf, vec3(0.20, 0.17, 0.16), c.w * 0.75 * k);
-	surf += vec3(0.8, 0.25, 0.05) * crack * c.w * 0.35 * k;
+	// tundra: olive-khaki ground with frost specks, so it never reads as the
+	// smooth white of a glacier (playtest 12.11: the two looked the same)
+	float frost = step(0.82, feature_hash(floor(rn * 300.0), vec3(23.1, 7.7, 61.3)));
+	vec3 tundra = mix(vec3(0.50, 0.52, 0.38), vec3(0.86, 0.90, 0.92), frost * 0.7);
+	surf = mix(surf, mix(surf, tundra, 0.75), c.z * k);
+	// volcanic field: reddish basalt with glowing cracks, clear at a glance
+	// (playtest 12.11: it hardly showed)
+	float crack = smoothstep(0.86, 1.0, feature_hash(floor(rn * 180.0), vec3(7.1, 113.3, 41.9)));
+	float glow = 0.75 + 0.25 * sin(t * 1.3 + dot(rn, vec3(31.0, 17.0, 23.0)));
+	surf = mix(surf, vec3(0.24, 0.13, 0.11), c.w * 0.85 * k);
+	surf += vec3(1.0, 0.32, 0.06) * crack * c.w * 0.75 * glow * k;
 	// rivers: their own finer texture (FeatureMap.river_texture), smooth lines
 	// with a soft water edge and a greener bank; clear even at the soft strength
 	if (river_on > 0.0 && river_vis > 0.0) {

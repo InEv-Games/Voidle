@@ -194,42 +194,66 @@ static func placement_materials(def: DistrictDef, data: PlanetData) -> Dictionar
 		return mats
 	return {}
 
-## Prefab tiers (playtest 30.10): the player picks which tier of each starter
-## building an Orbit district comes with. A prefab building's ladder, Tier 0
-## up; a tier not researched yet falls back to the highest one that is.
-const PREFAB_LADDERS := {
-	"low_rise_housing":     ["low_rise_housing", "residential", "apartments", "luxury_complex"],
-	"commercial":           ["commercial", "local_trade_center", "trading_post", "commodities_exchange"],
-	"field_observatory":    ["field_observatory", "lab", "advanced_lab", "particle_accelerator"],
-	"solar_panel":          ["solar_panel", "solar_matrix", "fission_reactor", "antimatter_chamber"],
-	"surface_quarry":       ["surface_quarry", "mine", "deep_drill", "mantle_cracker"],
-	"ore_sorting_workshop": ["ore_sorting_workshop", "refinery", "refinery", "refinery"],
-	"warehouse":            ["warehouse", "warehouse", "storage_facility", "storage_facility"],
-}
+## Prefab tiers (playtest 30.10): the player picks which tier of starter
+## buildings an Orbit district comes with. What each tier holds is set in
+## resources/balance/orbit_prefabs.csv (district, tier, building_id, count;
+## playtest 12.11: the old per-building fallback mixed tiers into odd sets).
+## A tier opens once every building in it is researched. A district missing
+## from the table keeps its `prefab` as Tier 0.
+const PREFAB_CSV := "res://resources/balance/orbit_prefabs.csv"
+static var _prefab_table: Dictionary = {}   # type_key → {tier: [[building_id, count], …]}
+static var _prefab_loaded := false
 ## Chosen prefab tier per Orbit district type (DistrictDef.Type → 0..3), set by
 ## the build list's stepper; placement and its price read it.
 static var prefab_tier: Dictionary = {}
 
-## The building a prefab entry becomes at the chosen tier (researched only).
-static func prefab_building(base_id: String, tier: int) -> String:
-	var ladder: Array = PREFAB_LADDERS.get(base_id, [base_id])
-	var avail := BuildingDef.available_buildings()
-	for t in range(clampi(tier, 0, ladder.size() - 1), -1, -1):
-		var bid: String = ladder[t]
-		for b: BuildingDef in avail:
-			if b.building_id == bid:
-				return bid
-	return base_id
+static func _load_prefabs() -> void:
+	_prefab_loaded = true
+	var f := FileAccess.open(PREFAB_CSV, FileAccess.READ)
+	if f == null:
+		push_warning("DistrictDef: %s missing, Orbit prefabs fall back to Tier 0" % PREFAB_CSV)
+		return
+	f.get_csv_line()   # header
+	while not f.eof_reached():
+		var row := f.get_csv_line()
+		if row.size() < 4 or row[0].strip_edges() == "" or row[0].begins_with("#"):
+			continue
+		var key := row[0].strip_edges()
+		var tier := int(row[1])
+		var tiers: Dictionary = _prefab_table.get(key, {})
+		var list: Array = tiers.get(tier, [])
+		list.append([row[2].strip_edges(), maxi(int(row[3]), 1)])
+		tiers[tier] = list
+		_prefab_table[key] = tiers
 
-## Highest tier any prefab building of `def` can take now (0 when nothing more is researched).
+## The buildings of `def`'s prefab at `tier`: [[building_id, count], …].
+static func prefab_rows(def: DistrictDef, tier: int) -> Array:
+	if not _prefab_loaded:
+		_load_prefabs()
+	var tiers: Dictionary = _prefab_table.get(def.type_key(), {})
+	if tiers.has(tier):
+		return tiers[tier]
+	return def.prefab if tier == 0 else []
+
+## Every building of that tier is researched.
+static func prefab_tier_open(def: DistrictDef, tier: int) -> bool:
+	var rows := prefab_rows(def, tier)
+	if rows.is_empty():
+		return false
+	var avail := {}
+	for b: BuildingDef in BuildingDef.available_buildings():
+		avail[b.building_id] = true
+	for row: Array in rows:
+		if not avail.has(String(row[0])):
+			return false
+	return true
+
+## Highest tier `def` can take now (0 when nothing more is researched).
 static func prefab_max_tier(def: DistrictDef) -> int:
-	var best := 0
-	for row: Array in def.prefab:
-		var ladder: Array = PREFAB_LADDERS.get(String(row[0]), [row[0]])
-		for t in ladder.size():
-			if prefab_building(String(row[0]), t) == String(ladder[t]):
-				best = maxi(best, t)
-	return best
+	for t in range(3, 0, -1):
+		if prefab_tier_open(def, t):
+			return t
+	return 0
 
 ## Each prefab building of `def` with its price: [[building_id, {credits, mats…}], …].
 ## Every copy pays the normal repeat price as if built one after another in
@@ -240,9 +264,9 @@ static func prefab_items(def: DistrictDef) -> Array:
 		return out
 	var c: BalanceConfig = Balance.cfg
 	var placed: Array[String] = []
-	var tier := int(prefab_tier.get(int(def.id), 0))
-	for row: Array in def.prefab:
-		var bdef := BuildingDef.find(prefab_building(String(row[0]), tier))
+	var tier := mini(int(prefab_tier.get(int(def.id), 0)), prefab_max_tier(def))
+	for row: Array in prefab_rows(def, tier):
+		var bdef := BuildingDef.find(String(row[0]))
 		if bdef == null:
 			continue
 		for i in int(row[1]):

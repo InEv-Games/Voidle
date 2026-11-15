@@ -672,9 +672,12 @@ func _build_menu() -> void:
 	if not demo:
 		_add_button(root, "QUIT",      _on_quit)
 
-	# Version
+	# Demo note (the version itself sits bottom right, BuildInfo; playtest 12.11
+	# saw it twice when this line also said "v0.1 – Early Access")
+	if not demo:
+		return
 	var ver := Label.new()
-	ver.text = "Demo  –  progress isn't saved" if demo else "v0.1  –  Early Access"
+	ver.text = "Demo  –  progress isn't saved"
 	if _font: ver.add_theme_font_override("font", _font)
 	ver.add_theme_font_size_override("font_size", 8)
 	ver.add_theme_color_override("font_color", UIStyle.color(&"text_muted"))
@@ -1428,7 +1431,7 @@ static func _slot_lines(info: Dictionary, blocked: String) -> Array[String]:
 	var played := "%dh %02dm" % [secs / 3600, (secs / 60) % 60] if secs >= 3600 else "%dm" % (secs / 60)
 	var t: int = int(info.get("saved_at", 0.0)) + Time.get_time_zone_from_system().get("bias", 0) * 60
 	var d := Time.get_datetime_dict_from_unix_time(t)
-	return ["Civilization %d" % int(info.get("civilization_type", 0)), "%s played" % played,
+	return ["Civilization Type %d" % int(info.get("civilization_type", 0)), "%s played" % played,
 		"Saved %02d.%02d  %02d:%02d" % [d["day"], d["month"], d["hour"], d["minute"]]]
 
 func _play_slot(slot: int) -> void:
@@ -1500,7 +1503,7 @@ static func _slot_text(info: Dictionary) -> String:
 	var played := "%dh %02dm" % [secs / 3600, (secs / 60) % 60] if secs >= 3600 else "%dm" % (secs / 60)
 	var t: int = int(info.get("saved_at", 0.0)) + Time.get_time_zone_from_system().get("bias", 0) * 60
 	var d := Time.get_datetime_dict_from_unix_time(t)
-	return "Civ %d  //  %s played  //  %02d.%02d %02d:%02d" % [int(info.get("civilization_type", 0)), played,
+	return "Type %d  //  %s played  //  %02d.%02d %02d:%02d" % [int(info.get("civilization_type", 0)), played,
 		d["day"], d["month"], d["hour"], d["minute"]]
 
 func _on_settings() -> void:

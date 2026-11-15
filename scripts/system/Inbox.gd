@@ -178,6 +178,7 @@ func _process(delta: float) -> void:
 	_add_digs(live)
 	_add_expeditions(live)
 	_add_task(live)
+	_add_story(live)
 	_add_warnings(live)
 	var sig := ""
 	for e: Dictionary in live:
@@ -209,6 +210,8 @@ static func _row(id: String, kind: String, icon: String, title: String, text: St
 	return {"id": id, "kind": kind, "icon": icon, "title": title, "text": text, "act": act}
 
 func _add_digs(out: Array) -> void:
+	if not Guide.side_open():
+		return   # after the tutorial (playtest 12.11)
 	for w: ExcavationWorldDef in ExcavationWorldDef.all():
 		var pd := w.planet()
 		if pd == null or not GameState.is_scanned(pd.seed):
@@ -218,6 +221,9 @@ func _add_digs(out: Array) -> void:
 			continue
 		match Excavations.stage(s):
 			Excavations.Stage.IDLE:
+				# the first ruin is offered once, by its story row (12.11: both showed)
+				if s.site_id == Guide.FIRST_RUIN and not Narrative.has_played("first_ruin_signal"):
+					continue
 				out.append(_row("dig:%s:idle" % s.site_id, "dig", "explore", "Excavation: %s" % s.display_name,
 					"On %s. Open it to start the dig." % pd.planet_name, {"site": s.site_id}))
 			Excavations.Stage.READY:
@@ -253,7 +259,7 @@ func _add_expeditions(out: Array) -> void:
 	elif (rst == "preparing" or rst == "ready") \
 			and GameState.rocket_target_block(int(GameState.expedition("rocket").get("target_seed", -1))) != "":
 		out.append(_row("exp:rocket_target", "expedition", "rocket", "Pick the rocket's target",
-			"In the star system view, right-click a planet to aim the rocket.", {"loc": {"solar": true}}))
+			"In the star system view, click a ringed planet to send the rocket there.", {"loc": {"solar": true}}))
 
 ## The objective in progress once the tutorial is over (TutorialManager's list),
 ## and the final rocket (was its own card, 10.11).
@@ -280,6 +286,22 @@ func _add_task(out: Array) -> void:
 	var q: Dictionary = quests[i]
 	out.append(_row("task:%s" % String(q.get("id", str(i))), "task", "flag", String(q.get("title", "Objective")),
 		String(q.get("desc", ""))))
+
+## The written scenes the player opens when they like (B13): Bolo's talk
+## about the Moon's signal, the expedition briefing.
+func _add_story(out: Array) -> void:
+	if GameState.showcase_mode:
+		return
+	if Excavations.lunar_signal_open():
+		out.append(_row("story:lunar_signal", "story", "explore", "Trace Bolo's signal",
+			"Bolo has compared her recording with the chamber's record.", {"story": "lunar_signal"}))
+	# the Rim Echo done in an older save, or its scene left half-way
+	if Excavations.is_done(Excavations.RIM_ECHO) and not Narrative.has_played("meet_burkai") and not Narrative.is_busy():
+		out.append(_row("story:burkai", "story", "explore", "Someone waits at the crater",
+			"The Rim Echo's pulse has company. Go and meet them.", {"story": "burkai"}))
+	if Excavations.briefing_open():
+		out.append(_row("story:briefing", "story", "rocket", "Read the expedition briefing",
+			"Flight Control on what the rocket to the next world is for.", {"story": "briefing"}))
 
 func _add_warnings(out: Array) -> void:
 	var esp: Vector2 = ProductionManager.get_global_energy_split()

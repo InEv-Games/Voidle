@@ -230,7 +230,15 @@ static func site_mult(terrain: float, location: float) -> float:
 
 ## "1x", "1.5x", "2x" …
 static func mult_text(m: float) -> String:
-	return ("%dx" % int(m)) if is_equal_approx(m, roundf(m)) else ("%.1fx" % m)
+	# two decimals when needed (12.11: neighbours step by 0.25x, "1.8x" for 1.75)
+	var r := snappedf(m, 0.01)
+	return ("%dx" % roundi(r)) if is_equal_approx(r, roundf(r)) else (String.num(r, 2) + "x")
+
+## A change in a multiplier: "+0.25x", "−1x".
+static func mult_delta_text(d: float) -> String:
+	var r := snappedf(absf(d), 0.01)
+	var num := ("%d" % roundi(r)) if is_equal_approx(r, roundf(r)) else String.num(r, 2)
+	return ("+" if d >= 0.0 else "−") + num + "x"
 
 # ── Costs ────────────────────────────────────────────────────────────────────
 ## Buildings already in a district make the next one there dearer

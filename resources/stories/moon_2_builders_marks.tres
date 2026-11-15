@@ -75,7 +75,7 @@ actions = Array[ExtResource("3_hcb7e")]([SubResource("Resource_gv7jg")])
 
 [sub_resource type="Resource" id="Resource_xdjlp"]
 script = ExtResource("6_q16xb")
-text = "The wall is bare now, and the marks run on for a kilometre."
+text = "The crew clears a section of wall. The same cut repeats at equal intervals all the way around the rim."
 exits = Array[ExtResource("2_g1h8r")]([SubResource("Resource_6q3dn"), SubResource("Resource_fi25p")])
 id = 5
 graph_position = Vector2(460, 340)

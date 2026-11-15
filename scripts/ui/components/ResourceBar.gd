@@ -3,7 +3,7 @@
 ## Layout: scenes/ui/components/ResourceBar.tscn — one ResourceChip per
 ## resource, its resource_id and value_width set in the scene. Look: ResourceBar.
 ## Values show the stock only (red at the cap, see Economy.cap) with the steady
-## income per second as a small superscript; refreshed four times a second.
+## income per colony month as a small superscript; refreshed four times a second.
 ## HUDManager puts it on its top layer (HUDManager.credits_panel).
 class_name ResourceBar
 extends Panel
@@ -51,8 +51,9 @@ func _process(delta: float) -> void:
 		_refresh_calendar()
 
 # ── Colony calendar (narrative J-d) ──────────────────────────────────────────
-## "2465" at the bar's end once the handover is over; the month in its tip.
+## "Jan 2465" at the bar's end once the handover is over.
 var _calendar: ResourceChip = null
+const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 func _add_calendar_chip() -> void:
 	_calendar = ResourceChip.create("calendar")
@@ -68,6 +69,7 @@ func _add_calendar_chip() -> void:
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	$Row.add_child(gap)
+	_add_kardashev_chip()
 	_reserve = Control.new()
 	_reserve.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_reserve.item_rect_changed.connect(func() -> void: reserve_moved.emit())
@@ -100,23 +102,45 @@ func _calendar_tip() -> String:
 	var icon := UIStyle.color(&"icon")
 	var dim := UIStyle.hex(&"text_subtle")
 	var next := GameState.MONTH_SEC - fmod(GameState.calendar_seconds, GameState.MONTH_SEC)
-	return "%s  Year [b]%d[/b]\n%s  Month [b]%d[/b] of 12   [color=#%s]next in %d s[/color]\n\n[color=#%s]A colony month passes every %d s of play; a year every %d s.[/color]" % [
+	return "%s  Year [b]%d[/b]\n%s  Month [b]%d[/b] of 12   [color=#%s]next in %d s[/color]\n\n[color=#%s]A colony month passes every %d s of play; a year every %d s. Districts and buildings work in months: one cycle is one month.[/color]" % [
 		UIIcons.bb("year", 13, icon), GameState.calendar_year(),
 		UIIcons.bb("month", 13, icon), GameState.calendar_month(), dim, int(ceil(next)),
 		dim, int(GameState.MONTH_SEC), int(GameState.MONTH_SEC * 12.0)]
 
+## The civilization's Kardashev type by the power it uses (1 energy = 1 MW).
+static func kardashev() -> float:
+	var sp: Vector2 = ProductionManager.get_global_energy_split()
+	return maxf((log(maxf(sp.y, 0.000001) * 1_000_000.0) / log(10.0) - 6.0) / 10.0, 0.0)
+
+# ── Kardashev type (playtest 12.11: out of the energy tooltip, where nobody saw it)
+var _kardashev: ResourceChip = null
+
+func _add_kardashev_chip() -> void:
+	_kardashev = ResourceChip.create("planet")
+	_kardashev.icon_color = Economy.color_of(Economy.ENERGY)
+	_kardashev.mouse_filter = Control.MOUSE_FILTER_STOP
+	_kardashev.mouse_entered.connect(func() -> void:
+		TooltipManager.live(func() -> void:
+			var e: Array = Glossary.entry("kardashev")
+			TooltipManager.show_tip("Type %.3f" % kardashev(), String(e[1]) if e.size() > 1 else "")
+			TooltipManager.set_title_icon("planet")))
+	_kardashev.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	$Row.add_child(_kardashev)
+
 func _refresh_calendar() -> void:
+	if is_instance_valid(_kardashev):
+		_kardashev.visible = GameState.onboarding_stage == "done"
+		if _kardashev.visible:
+			_kardashev.value_text = "Type %.2f" % kardashev()
 	if _calendar == null or not is_instance_valid(_calendar):
 		return
 	_calendar.visible = GameState.onboarding_stage == "done"
 	if _calendar.visible:
-		_calendar.value_text = str(GameState.calendar_year())
+		# the month too (playtest 12.11): "Mar 2497"
+		_calendar.value_text = "%s %d" % [MONTHS[clampi(GameState.calendar_month() - 1, 0, 11)], GameState.calendar_year()]
 
-## Largest value size is the theme's ValueLabel font size (voidle_theme.tres).
-const VALUE_FONT_MIN := 7
-
-## Sets a value label's text. A label with a fixed width shrinks its font until
-## the text fits; the bar's chips have none and grow / shrink with their text.
+## Sets a value label's text. A label with a fixed width widens to fit it;
+## the bar's chips have none and grow / shrink with their text.
 func _set_value(lbl: Label, text: String) -> void:
 	if lbl.text == text:
 		return
@@ -126,10 +150,14 @@ func _set_value(lbl: Label, text: String) -> void:
 	if w <= 0.0:
 		lbl.remove_theme_font_size_override("font_size")
 		return
+	# a value too long for its cell widens the cell (and keeps that width, so
+	# the bar doesn't jump back and forth) instead of shrinking the text: the
+	# population "-4.8K/109K" went small next to its neighbours (playtest 12.11)
 	var fsize := UIStyle.font_size(&"ValueLabel")
-	while fsize > VALUE_FONT_MIN and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x > w:
-		fsize -= 1
-	lbl.add_theme_font_size_override("font_size", fsize)
+	var need := ceilf(font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fsize).x) + 1.0
+	if need > w:
+		lbl.custom_minimum_size.x = need
+	lbl.remove_theme_font_size_override("font_size")
 
 ## ── Incoming resources ──────────────────────────────────────────────────────
 ## A gain shows as "+x" under its cell, floats up into the bar, and the value
@@ -225,11 +253,12 @@ func _spawn_loss(id: String, amount: float, lbl: Label) -> void:
 	tw.parallel().tween_property(chip, "modulate:a", 0.0, 0.7).set_delay(0.25)
 	tw.tween_callback(chip.queue_free)
 
+## Shown per colony month (playtest 12.11: every rate in one unit).
 func _set_rate(id: String, per_s: float) -> void:
 	var chip: ResourceChip = _res_chips.get(id)
 	if not is_instance_valid(chip) or not _rate_lbls.has(id):
 		return
-	var v := snappedf(per_s, 0.1)
+	var v := snappedf(per_s * GameState.MONTH_SEC, 0.1)
 	chip.rate_text = ("+" if v >= 0.0 else "−") + Economy.fmt(absf(v))
 	chip.rate_tone = ResourceChip.Tone.GOOD if v >= 0.0 else ResourceChip.Tone.BAD
 
@@ -324,9 +353,8 @@ func _show_cell_tip(id: String, title: String) -> void:
 			corner = "%s %s   %s %s" % [_ic("bolt", GOOD_HEX), _c("+" + Economy.fmt(sp.x), GOOD_HEX),
 				_ic("factory", BAD_HEX), _c("−" + Economy.fmt(sp.y), BAD_HEX)]
 			detail = _energy_groups_text()
-			# the civilization's type by the power it uses (1 energy = 1 MW)
-			var k := (log(maxf(sp.y, 0.000001) * 1_000_000.0) / log(10.0) - 6.0) / 10.0
-			detail += "\n\n%s  [b]Type %s[/b]" % [Glossary.t("kardashev", "Kardashev scale"), "%.3f" % maxf(k, 0.0)]
+			# the civilization's type by the power it uses (also its own chip, 12.11)
+			detail += "\n\n%s  [b]Type %s[/b]" % [Glossary.t("kardashev", "Kardashev scale"), "%.3f" % kardashev()]
 			if net < 0.0:
 				detail += "\n\n" + _c("Energy %s: buildings that use energy make %d%% of their output." % [
 					Glossary.t("deficit", "deficit"), int(round(pm.get_energy_ratio() * 100.0))], BAD_HEX)
@@ -361,15 +389,15 @@ func _show_cell_tip(id: String, title: String) -> void:
 	if foot != "":
 		TooltipManager.set_footer("[font_size=10]%s[/font_size]" % _c(foot, DIM_HEX), "")
 
-## "+1.2 /s  Market" lines of a resource, largest first, then the net (all worlds).
+## "+24  Market" lines of a resource per colony month, largest first, then the net (all worlds).
 static func breakdown_text(id: String) -> String:
 	var parts: Dictionary = ProductionManager.resource_breakdowns().get(id, {})
 	var keys: Array = parts.keys()
 	keys.sort_custom(func(a, b) -> bool: return absf(float(parts[a])) > absf(float(parts[b])))
-	var lines: Array[String] = [_c("Per second, all worlds", DIM_HEX)]
+	var lines: Array[String] = [_c("Per month, all worlds", DIM_HEX)]
 	var net := 0.0
 	for k in keys:
-		var v := float(parts[k])
+		var v := float(parts[k]) * GameState.MONTH_SEC
 		net += v
 		if lines.size() <= 10:
 			# a line made of several units opens them in a nested tip
@@ -381,7 +409,7 @@ static func breakdown_text(id: String) -> String:
 	if keys.is_empty():
 		lines.append(_c("Nothing makes or uses it yet.", DIM_HEX))
 	else:
-		lines.append(TooltipCard.total_line("Net", _c(("+" if net >= 0.0 else "−") + Economy.fmt(absf(net)) + " /s", GOOD_HEX if net >= 0.0 else BAD_HEX)))
+		lines.append(TooltipCard.total_line("Net", _c(("+" if net >= 0.0 else "−") + Economy.fmt(absf(net)) + " /mo", GOOD_HEX if net >= 0.0 else BAD_HEX)))
 	return "\n".join(lines)
 
 ## Group lines "+32 Solar Arrays" (largest first), each opening its units in a
@@ -469,10 +497,14 @@ func _idle_pop_text() -> String:
 	var out := "\n\n%s across all worlds  %s (%d%%)" % [Glossary.t("idle", "Idle"), Economy.fmt(idle.x),
 		int(round(ProductionManager.idle_ratio() * 100.0))]
 	var r := ProductionManager.idle_income_rates()
+	# per colony month like every other rate, icons not names (playtest 12.11)
+	var mo := GameState.MONTH_SEC
 	if float(r[Economy.CREDITS]) > 0.0:
-		out += "\n  +%s Credits / min  (Civic Enterprise)" % Economy.fmt(float(r[Economy.CREDITS]) * 60.0)
+		out += "\n  +%s %s / month  (Civic Enterprise)" % [Economy.fmt(float(r[Economy.CREDITS]) * mo),
+			_ic("credits", Economy.color_of(Economy.CREDITS).to_html(false))]
 	if float(r[Economy.SCIENCE]) > 0.0:
-		out += "\n  +%s Science / min  (Free Research)" % Economy.fmt(float(r[Economy.SCIENCE]) * 60.0)
+		out += "\n  +%s %s / month  (Free Research)" % [Economy.fmt(float(r[Economy.SCIENCE]) * mo),
+			_ic("science", Economy.color_of(Economy.SCIENCE).to_html(false))]
 	var reserve: float = SkillTree.reserve_mult(ProductionManager.idle_ratio())
 	if reserve > 1.0:
 		out += "\n  +%d%% Raw and processed output  (Production Reserve)" % int(round((reserve - 1.0) * 100.0))
@@ -654,6 +686,19 @@ func _fill_raw_dropdown() -> void:
 					TooltipManager.show_tip("Undiscovered", "A mineral you haven't found yet.")
 			chip.mouse_entered.connect(func() -> void: TooltipManager.live(mineral_tip))
 			chip.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+			# a found mineral opens Trade, like the bar's own chips (playtest 12.11)
+			chip.gui_input.connect(func(e: InputEvent) -> void:
+				var mb := e as InputEventMouseButton
+				if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+					return
+				chip.accept_event()
+				if not Economy.is_mineral_discovered(rid) or not Trade.has_access() or not Guide.allows_shortcut("trade"):
+					AudioManager.play("denied")
+					return
+				AudioManager.play("click")
+				TooltipManager.hide_tip()
+				_close_raw_dropdown()
+				HUDManager.open_trade_panel())
 			_raw_dd_list.add_child(chip)
 			rows.append(chip)
 	var locked_shown := false
@@ -785,7 +830,7 @@ func _dd_step(d: int) -> void:
 
 func _act_on(c: Control) -> void:
 	var id := (c as ResourceChip).resource_id if c is ResourceChip else ""
-	if c == _calendar or id == "":
+	if c == _calendar or c == _kardashev or id == "":
 		AudioManager.play("denied")
 		return
 	if id == Economy.RAW:

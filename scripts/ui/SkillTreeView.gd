@@ -169,7 +169,7 @@ func _centre_close_btn() -> void:
 	_close_btn.offset_right = w * 0.5
 
 func _title_text() -> String:
-	var t := "✦ CIVILIZATION %d RESEARCH ✦" % SkillTreeView._view_civ
+	var t := "✦ CIVILIZATION TYPE %d RESEARCH ✦" % SkillTreeView._view_civ
 	if SkillTreeView._view_civ > GameState.playable_content_type:
 		t += "  (preview)"
 	return t

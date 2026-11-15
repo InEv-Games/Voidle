@@ -10,7 +10,7 @@ extends Control
 ## Narrative drives it.
 ##
 ## Input: the first press (CONTINUE, a click on the card, Space / Enter) finishes
-## the line being typed, the next one goes on. Answers are only taken by a click
+## the line being typed; the next one goes on (a click on the card doesn't). Answers are only taken by a click
 ## on one of them (or Enter on the focused one): holding a key never chooses.
 
 signal advance_requested
@@ -173,10 +173,14 @@ func _on_next() -> void:
 	AudioManager.play("click")
 	advance_requested.emit()
 
+## A click on the card only finishes the line being typed; going on takes
+## CONTINUE (or Space / Enter): playtest 12.11, a click anywhere on the card
+## acted as CONTINUE although CONTINUE looks like the one button for it.
 func _on_card_input(ev: InputEvent) -> void:
 	var mb := ev as InputEventMouseButton
 	if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-		_on_next()
+		if _typing != null:
+			_skip_typing()
 		accept_event()
 
 func _unhandled_input(ev: InputEvent) -> void:

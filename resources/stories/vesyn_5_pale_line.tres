@@ -106,7 +106,7 @@ target_id = 8
 
 [sub_resource type="Resource" id="Resource_urixp"]
 script = ExtResource("8_osycq")
-text = "Every stone of the ruins points the same way: at the Moon. Whoever built this meant to leave."
+text = "The survey follows the stones to the horizon. At moonrise, the bearing passes through the centre of the Moon."
 exits = Array[ExtResource("2_70vgn")]([SubResource("Resource_rdn66")])
 id = 7
 graph_position = Vector2(840, 340)

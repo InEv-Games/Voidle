@@ -234,6 +234,7 @@ func _play(page: Page, entry: String) -> void:
 	_mgr.start(site.story, entry)
 
 func _on_line(speaker: String, text: String) -> void:
+	speaker = Narrative.voice(speaker)   # no narrator: the advisor tells the dig (playtest 12.11)
 	Narrative.log_line(site.site_id, speaker, text)   # the Narrative Log has the digs' stories too
 	_clear_choices()
 	_show_face(_companion_named(speaker))
@@ -292,8 +293,8 @@ func _explain_choice(b: IconButton, exit: VSMExitLink) -> void:
 		elif a is StorySetFlag or a is StoryJoinCompanion:
 			remembered = true
 	var lines: Array[String] = []
-	if not gives.is_empty():
-		lines.append("Adds to what the dig returns:  " + _amounts_bb(gives))
+	if not gives.is_empty():   # not how much: the find is a surprise (playtest 12.11)
+		lines.append("Adds to what the dig returns.")
 	if remembered:
 		lines.append("Later excavations remember this choice.")
 	if lines.is_empty():
@@ -338,7 +339,8 @@ func _show_pay() -> void:
 	var dim := UIStyle.hex(&"text_subtle")
 	var tip: Array[String] = [
 		"[color=#%s]Digging time[/color]  %s" % [dim, Excavations.time_text(Excavations.duration_of(site))],
-		"[color=#%s]Returns at least[/color]  %s" % [dim, _amounts_bb(site.reward)]]
+		# what it returns stays a surprise until the crews are back (playtest 12.11)
+		"[color=#%s]What the crews find comes back when they are done.[/color]" % dim]
 	if near != null:
 		tip.append("[color=#%s]Inside %s's reach: %d%% faster, %d%% cheaper.[/color]" % [
 			UIStyle.hex(&"good"), near.shown_name(), pct_t, pct_c])

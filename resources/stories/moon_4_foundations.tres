@@ -38,11 +38,11 @@ target_id = 4
 
 [sub_resource type="Resource" id="Resource_2i602"]
 script = ExtResource("6_7t12t")
-talker = "Dorian Hale"
+talker = "Survey Lead"
 
 [sub_resource type="Resource" id="Resource_t5py6"]
 script = ExtResource("7_sjfjv")
-text = "There's a second hatch across the plain, built by the same hands. It will open, but not quickly. Bring heavy gear and patience."
+text = "We found another hatch across the plain. Same marks. We will need heavy gear to reach the chamber."
 exits = Array[ExtResource("2_oy4c1")]([SubResource("Resource_c4bvu")])
 id = 3
 graph_position = Vector2(460, 80)
@@ -80,11 +80,11 @@ actions = Array[ExtResource("3_0w7fy")]([SubResource("Resource_dh5gy")])
 
 [sub_resource type="Resource" id="Resource_llwm8"]
 script = ExtResource("6_7t12t")
-talker = "Dorian Hale"
+talker = "Survey Lead"
 
 [sub_resource type="Resource" id="Resource_cou0c"]
 script = ExtResource("7_sjfjv")
-text = "Under the hatch: foundations for a city nobody ever built. The plans are still down here."
+text = "There are plans for a city here. The first section matches the foundations under our feet."
 exits = Array[ExtResource("2_oy4c1")]([SubResource("Resource_vm0jj"), SubResource("Resource_c3bdl")])
 id = 5
 graph_position = Vector2(460, 340)
@@ -118,7 +118,7 @@ target_id = 9
 
 [sub_resource type="Resource" id="Resource_x62ne"]
 script = ExtResource("7_sjfjv")
-text = "The last sheet shows a rust-red, dusty world. The route doesn't stop at the Moon."
+text = "The last sheet contains a series of bearings. One begins here and continues beyond the Moon."
 exits = Array[ExtResource("2_oy4c1")]([SubResource("Resource_3vgka")])
 id = 8
 graph_position = Vector2(1220, 340)
@@ -135,4 +135,4 @@ next_free_id = 10
 nodes = Array[ExtResource("1_sbvwy")]([SubResource("Resource_pxy80"), SubResource("Resource_ay7t7"), SubResource("Resource_t5py6"), SubResource("Resource_dorsu"), SubResource("Resource_cou0c"), SubResource("Resource_x3dhy"), SubResource("Resource_75817"), SubResource("Resource_x62ne"), SubResource("Resource_lma7i")])
 occurrences = Array[String](["start", "return"])
 endings = Array[String](["dig", "end"])
-talkers = Array[String](["Dorian Hale"])
+talkers = Array[String](["Survey Lead"])

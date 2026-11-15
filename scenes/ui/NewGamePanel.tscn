@@ -88,9 +88,9 @@ text = "CIVILIZATION"
 [node name="CivSlider" type="HSlider" parent="Center/Box/Pages/Steps/Civ"]
 layout_mode = 2
 focus_mode = 2
-max_value = 7.0
+max_value = 6.0
 rounded = true
-tick_count = 8
+tick_count = 7
 ticks_on_borders = true
 
 [node name="CivScale" type="Control" parent="Center/Box/Pages/Steps/Civ"]
@@ -101,7 +101,7 @@ mouse_filter = 2
 [node name="CivName" type="Label" parent="Center/Box/Pages/Steps/Civ"]
 layout_mode = 2
 theme_type_variation = &"HeaderLabel"
-text = "CIVILIZATION 0"
+text = "TYPE 0"
 
 [node name="CivInfo" type="RichTextLabel" parent="Center/Box/Pages/Steps/Civ"]
 custom_minimum_size = Vector2(420, 0)

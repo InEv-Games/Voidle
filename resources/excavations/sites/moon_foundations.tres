@@ -8,7 +8,7 @@ script = ExtResource("1_2mk62")
 site_id = "moon_foundations"
 ruin_id = "moon_second_hatch"
 display_name = "The Foundations"
-teaser = "Dorian has found a second hatch. He says you should see this."
+teaser = "The survey crews found a second hatch across the plain."
 cost = {
 "credits": 3000.0
 }

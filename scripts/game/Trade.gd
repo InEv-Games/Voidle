@@ -174,7 +174,7 @@ static func has_automation() -> bool:
 ## The Market's rows, in order (playtest 07.11): Science, the raw minerals,
 ## then what is made from them (Goods, Fuel, Rare). Minerals of the current
 ## civilization show even before they are found (a locked, unnamed row that
-## says how to find them), like Fuel and Rare before their research.
+## says how to find them), like Goods, Fuel and Rare before any is made.
 static func products() -> Array[String]:
 	var out: Array[String] = [Economy.SCIENCE]
 	for r: Dictionary in Economy.RAW_TABLE:
@@ -203,14 +203,21 @@ static func product_block(id: String) -> String:
 		var bodies: Array = Economy.raw_info(id).get("bodies", [])
 		return "Found by a Production district on the Moon" if bodies == [6] \
 			else "Found by a Production district"
-	match id:
-		Economy.GOODS:
-			return "" if SkillTree.is_unlocked("processing_basics") else "Research Basic Processing"
-		Economy.FUEL:
-			return "" if SkillTree.is_unlocked("fuel_processing") else "Research Fuel Processing"
-		Economy.RARE:
-			return "" if SkillTree.is_unlocked("rare_processing") else "Research Rare Processing"
+	if id in [Economy.GOODS, Economy.FUEL, Economy.RARE]:
+		return "" if made(id) else "Opens once you make some"
 	return ""
+
+## A processed product opens for trade once the player has some (playtest
+## 12.11: Goods can be made before Basic Processing, and still couldn't be
+## traded; the research no longer decides it). Remembered for the game:
+## GameState.story_flags "made:<id>".
+static func made(id: String) -> bool:
+	if GameState.story_flags.has("made:" + id):
+		return true
+	if Economy.amount(id) > 0.0 or ProductionManager.breakdown_total(id) > 0.0:
+		GameState.story_flags["made:" + id] = true
+		return true
+	return false
 
 static func can_trade(id: String) -> bool:
 	return product_block(id) == ""

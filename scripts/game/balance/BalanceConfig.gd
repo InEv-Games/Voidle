@@ -105,9 +105,27 @@ extends Resource
 ## Orbit level credits = City level credits × this.
 @export var orbit_level_credit_mult: float = 1.2
 
+@export_group("Excavations")
+## Everything a dig returns (its own reward and what the story adds) ×this.
+## Playtest 12.11: the returns are no longer shown before the dig, so they must
+## feel worth it when they come (×1.5 ≈ 2.5–3.5× the credits paid, at market prices).
+@export var excavation_reward_mult: float = 1.5
+
 @export_group("Location")
 ## Surface radius of a planet_size 1.0 world, in km (Location.radius_km).
 @export var planet_radius_km: float = 6000.0
+## Location tiers (playtest 12.11), by the distance to the NEAREST other
+## district or City on the world (any City), in km: closer than near_km gives
+## nothing, up to far_km ×location_mid_mult, beyond it ×location_far_mult.
+## Districts stand at least ~420 km apart (TerrainSampler.MIN_SPACING_DEG on a
+## 6000 km world) and a Lv1 City reaches ~1300 km, so all three can be had.
+@export var location_near_km: float = 600.0
+@export var location_far_km: float = 900.0
+@export var location_mid_mult: float = 1.5
+@export var location_far_mult: float = 2.0
+## Each same-kind district closer than location_near_km adds this (×, added).
+@export var neighbour_mult: float = 0.25
+## (Older relative bands below: kept for saved profiles, no longer used.)
 ## Distance bands as fractions of the district's City reach
 ## (TerrainSampler.city_reach_deg): ≤ very near, ≤ near, ≤ mid, < far, then very
 ## far. Relative, so the whole range fits inside the area a City may build in —
@@ -197,4 +215,9 @@ extends Resource
 
 @export_group("Offline")
 ## Kill switch for offline gains (KARARLAR §4). Off: only the time away is shown.
-@export var offline_progress_enabled: bool = false
+## On since playtest 12.11 (docs/design/narrative/ADVISORS.md: always on).
+@export var offline_progress_enabled: bool = true
+## The game runs on at this speed while closed, for at most offline_max_real_sec
+## of real time (24 h → 2 h 24 min of play, 36 colony years).
+@export var offline_speed: float = 0.1
+@export var offline_max_real_sec: float = 86400.0

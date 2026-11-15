@@ -12,10 +12,12 @@
 ##   guide_commerce    a Commercial District with a building (Market)
 ##   guide_energy      an Energy District with a building (Solar Array)
 ##   guide_science     a Science District with a building (Field Lab)
-##   guide_research    something researched in the Upgrade Tree
-##   guide_level       a district levelled up
-##   guide_city_level  the City levelled up
+##   guide_research    Mining Operations researched (it opens Production Districts)
+##   guide_production  a Production District with a building (Surface Quarry)
+##   guide_trade       Trade Access researched and the Trade panel opened
 ##   guide_done        the last line; the tutorial is over
+## (12.11: the district and City level-ups went: the Capital had to level up
+## first for no reason; production and trade were never shown.)
 ## Beside the step the card offers what the story may add on the side: the
 ## ship's record after the Capital, the first ruin's signal once the City stands.
 ## Played once (SettingsManager.tutorial_ever_done, set when it ends), later
@@ -31,7 +33,10 @@ const RECORDS := "res://resources/narrative/ship_records.tres"
 ## (10.11: no "Open the Capital District" step any more: it sent the player
 ## into the Capital and the next step straight back out to add a district.)
 const STEPS := ["guide_city", "guide_district", "guide_building", "guide_commerce",
-	"guide_energy", "guide_science", "guide_research", "guide_level", "guide_city_level", "guide_done"]
+	"guide_energy", "guide_science", "guide_research", "guide_production", "guide_trade", "guide_done"]
+## What the research steps research.
+const RESEARCH_NODE := "start_production"
+const TRADE_NODE := "trade_access"
 const TITLES := {
 	"guide_city": "Found your first City",
 	"guide_district": "Place a Residential District",
@@ -39,9 +44,9 @@ const TITLES := {
 	"guide_commerce": "Open a Market",
 	"guide_energy": "Power the City",
 	"guide_science": "Start the research",
-	"guide_research": "Research a technology",
-	"guide_level": "Level up a district",
-	"guide_city_level": "Level up the City",
+	"guide_research": "Research Mining Operations",
+	"guide_production": "Start mining",
+	"guide_trade": "Open Trade",
 	"guide_done": "Continue developing your City",
 }
 ## Paid when the step is done (resource id → amount; shown as icons).
@@ -52,8 +57,8 @@ const REWARDS := {
 	"guide_energy": {"credits": 300.0},
 	"guide_science": {"science": 50.0},
 	"guide_research": {"science": 50.0},
-	"guide_level": {"credits": 400.0},
-	"guide_city_level": {"credits": 600.0},
+	"guide_production": {"credits": 400.0},
+	"guide_trade": {"credits": 600.0},
 }
 ## The steps the tutorial graph has no line for: said as plain lines, by advisor.
 const LINES := {
@@ -73,14 +78,14 @@ const LINES := {
 		"mother_superior": "Curious minds are worth more than anything we carried here. Give them a Science District and a Field Lab.",
 		"high_father": "Research needs a Science District. Fit a Field Lab to start the work."},
 	"guide_research": {
-		"mother_superior": "What the lab learns, we can use. Open the Upgrade Tree and choose something to research.",
-		"high_father": "Open the Upgrade Tree. Spend what the lab produces on your first technology."},
-	"guide_level": {
-		"mother_superior": "A district can grow. Open one and level it up; it will give more.",
-		"high_father": "Open a district and press LEVEL UP. Higher levels raise its output."},
-	"guide_city_level": {
-		"mother_superior": "The City itself can grow too, and make room for more districts.",
-		"high_father": "Level up the City from its panel. Each City level opens more district slots."},
+		"mother_superior": "What the lab learns, we can use. Open the Upgrade Tree and research Mining Operations: the ground under us is waiting.",
+		"high_father": "Open the Upgrade Tree. Spend the lab's Science on Mining Operations; it opens Production Districts."},
+	"guide_production": {
+		"mother_superior": "This world has minerals to give. Place a Production District and dig a Surface Quarry.",
+		"high_father": "Add a Production District and fit a Surface Quarry. Ferrite is what we build with from here on."},
+	"guide_trade": {
+		"mother_superior": "What we mine, others will want. Research Trade Access, then open Trade and see what the market pays.",
+		"high_father": "Research Trade Access in the Upgrade Tree, then press TRADE. Buy what you lack, sell what you have too much of."},
 }
 const FIRST_RUIN := "vesyn_toppled_stones"
 ## The guided run keeps the player on its step (10.11): over the game's UI
@@ -130,6 +135,12 @@ func _ready() -> void:
 ## The Capital District panel opened (PlanetaryView).
 func note_capital_opened() -> void:
 	_capital_opened = true
+
+## What the story offers on the side (digs, the ship record, their
+## notifications) waits until the tutorial is over (playtest 12.11: a dig at
+## the very start confused). Later games (the optional checklist): at once.
+func side_open() -> bool:
+	return GameState.tutorial_step == "done" or checklist_mode()
 
 ## The tutorial is running.
 func is_active() -> bool:
@@ -267,6 +278,14 @@ func _finish() -> void:
 	if _card != null and is_instance_valid(_card):
 		_card.active = false
 	NewsFeed.post("Tutorial complete. The City is yours to grow.", NewsFeed.Kind.EVENT)
+	_side_opened()
+
+## The digs show now (side_open): their marks on the open world, the notifications.
+func _side_opened() -> void:
+	var scene := get_tree().current_scene
+	if scene != null and scene.has_method("_refresh_excavation_sites"):
+		scene.call("_refresh_excavation_sites")
+	_refresh_extras()
 
 func _reward_bb(step: String) -> String:
 	var r: Dictionary = REWARDS.get(step, {})
@@ -326,7 +345,9 @@ func blocks_panel_keys() -> bool:
 func allows_shortcut(which: String) -> bool:
 	if not blocking():
 		return true
-	return which == "tree" and GameState.tutorial_step == "guide_research"
+	var step := GameState.tutorial_step
+	return (which == "tree" and (step == "guide_research" or step == "guide_trade")) \
+		or (which == "trade" and step == "guide_trade")
 
 func _update_blocker() -> void:
 	var on := blocking() and not _free_now()
@@ -422,6 +443,7 @@ func skip_tutorial() -> void:
 		_card.active = false
 	AudioManager.play("building_done")
 	NewsFeed.post("First steps skipped: their rewards are yours.", NewsFeed.Kind.EVENT)
+	_side_opened()
 
 ## Settings → Reset Tutorial: the guided run again, from the step this game
 ## is at (done steps pass at once, their rewards aren't paid twice).
@@ -485,6 +507,7 @@ func _process_checklist(delta: float) -> void:
 		if _card != null and is_instance_valid(_card):
 			_card.active = false
 		NewsFeed.post("All first steps done. The City is yours to grow.", NewsFeed.Kind.EVENT)
+		_side_opened()
 
 func _reward_icons(step: String) -> String:
 	var r: Dictionary = REWARDS.get(step, {})
@@ -529,60 +552,16 @@ func _subs(step: String) -> Array:
 			return _district_subs(pd, city_name, city_word, DistrictDef.Type.SCIENCE, "Science District", placing) \
 				+ _building_subs(pd, pp, DistrictDef.Type.SCIENCE, "Field Lab")
 		"guide_research":
-			var researched := SessionPrep.researched_beyond_start()
-			return [
-				{"text": "Press UPGRADE TREE", "find": ["UPGRADE TREE"], "how": "Click it  //  keys: U",
-					"done": SkillTreeView.is_open or researched},
-				{"text": "Pick a lit node and research it", "find": [],
-					"how": "Click a node  //  keys: arrows to it, Enter", "done": researched}]
-		"guide_level":
-			# levels spread out from the Capital (KARARLAR §9): a district goes up
-			# only once a road-linked neighbour is there, and the Capital District
-			# goes first (11.11: the step asked for a district that couldn't)
-			var scene := get_tree().current_scene
-			var page = scene.get("_active_district_poi") if scene != null else null
-			var levelled := _any_district_level(pd, pp) >= 2
-			var cand: POIData = null
-			var any_up := false
-			for p: POIData in pd.custom_pois:
-				if p.is_city() or p.is_orbital() or p.constructing:
-					continue
-				if pp.is_district_upgrading(p.label):
-					any_up = true
-				elif cand == null and Leveling.district_level_block(pd, pp, p) == "":
-					cand = p
-			var subs_l: Array = []
-			var cap_lv := int(pp.district_levels.get(city.label, 1)) if city != null else 1
-			var cap_up := city != null and pp.is_district_upgrading(city.label)
-			if city != null and not levelled and not any_up and (cand == null or cap_lv >= 2 or cap_up):
-				var on_cap: bool = page != null and is_instance_valid(page) and page == city
-				var cap_name := city.capital_shown_name()
-				if on_cap and cap_lv < 2 and not cap_up:
-					_grant_missing("district_lv:" + city.label, {Economy.CREDITS: Leveling.district_level_credits(cap_lv + 1)})
-				subs_l.append({"text": "Open the Capital District, %s" % cap_name, "find": [cap_name.to_upper()],
-					"how": HOW_PRESS, "done": on_cap or cap_lv >= 2 or cap_up})
-				subs_l.append({"text": "Press LEVEL UP: levels spread out from the Capital", "find": ["LEVEL UP"] if on_cap else [],
-					"how": HOW_PRESS, "done": cap_lv >= 2 or cap_up})
-				subs_l.append({"text": "Wait for it to level up", "find": [], "how": HOW_WAIT, "done": cap_lv >= 2})
-			var on_cand: bool = cand != null and page != null and is_instance_valid(page) and page == cand
-			if on_cand and not levelled:
-				var dlv := int(pp.district_levels.get(cand.label, 1))
-				_grant_missing("district_lv:" + cand.label, {Economy.CREDITS: Leveling.district_level_credits(dlv + 1)})
-			var cname := cand.shown_name() if cand != null else "a district linked to the Capital"
-			subs_l.append({"text": "Open %s" % cname, "find": [cand.shown_name().to_upper()] if cand != null else [],
-				"how": HOW_PRESS, "done": on_cand or levelled or any_up})
-			subs_l.append({"text": "Press LEVEL UP", "find": ["LEVEL UP"] if on_cand else [], "how": HOW_PRESS,
-				"done": levelled or any_up})
-			subs_l.append({"text": "Wait for it to level up", "find": [], "how": HOW_WAIT, "done": levelled})
-			return subs_l
-		"guide_city_level":
-			var lv := Leveling.city_level(pp, city) if city != null else 1
-			if city != null and lv < 2 and Leveling.city_level_block(pd, pp, city) == "":
-				_grant_missing("city_lv%d" % (lv + 1), {Economy.CREDITS: Leveling.city_level_credits(lv + 1)})
-			return [
-				{"text": "Open %s" % city_word, "find": [city_name], "how": HOW_PRESS,
-					"done": _visible("CITY LV") or lv >= 2},
-				{"text": "Press CITY LV", "find": ["CITY LV"], "how": HOW_PRESS, "done": lv >= 2}]
+			return _research_subs(RESEARCH_NODE, "Mining Operations")
+		"guide_production":
+			return _district_subs(pd, city_name, city_word, DistrictDef.Type.MINING, "Production District", placing) \
+				+ _building_subs(pd, pp, DistrictDef.Type.MINING, "Surface Quarry")
+		"guide_trade":
+			var traded: bool = TradePanel.is_open or GameState.story_flags.has("guide_trade_seen")
+			if TradePanel.is_open:
+				GameState.story_flags["guide_trade_seen"] = true
+			return _research_subs(TRADE_NODE, "Trade Access", traded) + [
+				{"text": "Press TRADE", "find": ["TRADE"], "how": "Click it  //  keys: T", "done": traded}]
 	return [{"text": TITLES[step], "find": [], "how": "", "done": false}]
 
 ## The guided run never stalls on a price (11.11: no credits left for the
@@ -610,6 +589,18 @@ func _grant_missing(key: String, cost: Dictionary) -> void:
 	Narrative.say(adv_def.display_name if adv_def != null else "Mother Superior",
 		"I found what the next step needs. Take it, and keep going.")
 	Narrative.log_event("Your advisor found what the next step needs: %s." % Narrative.amounts_text(short))
+
+## Open the Upgrade Tree and research `node` (what it costs and the player
+## lacks is granted: the guided run never stalls). `later`: a step after it is done.
+func _research_subs(node: String, nname: String, later := false) -> Array:
+	var have := SkillTree.is_unlocked(node)
+	if not have:
+		_grant_missing("research:" + node, {Economy.SCIENCE: SkillTree.get_next_cost(node)})
+	return [
+		{"text": "Press UPGRADE TREE", "find": ["UPGRADE TREE"], "how": "Click it  //  keys: U",
+			"done": SkillTreeView.is_open or have or later},
+		{"text": "Research %s" % nname, "find": [],
+			"how": "Click the lit node  //  keys: arrows to it, Enter", "done": have or later}]
 
 func _district_subs(pd: PlanetData, city_name: String, city_word: String, type: int, dname: String, placing: int) -> Array:
 	var have := _has_district(pd, type)
@@ -647,7 +638,7 @@ func _district_subs(pd: PlanetData, city_name: String, city_word: String, type: 
 		{"text": "", "find": [], "how": HOW_WAIT, "hidden": true, "done": _has_district(pd, type, true)}]
 
 const STEP_BUILDINGS := {"Low-rise Housing": "low_rise_housing", "Market": "commercial",
-	"Solar Array": "solar_panel", "Field Lab": "field_observatory"}
+	"Solar Array": "solar_panel", "Field Lab": "field_observatory", "Surface Quarry": "surface_quarry"}
 
 func _building_subs(pd: PlanetData, pp: PlanetProgress, type: int, bname: String) -> Array:
 	var host := _district_of(pd, type)
@@ -727,14 +718,6 @@ static func _has_building(pd: PlanetData, pp: PlanetProgress, type: int, built :
 		if dd != null and dd.id == type:
 			return true
 	return false
-
-static func _any_district_level(pd: PlanetData, pp: PlanetProgress) -> int:
-	var best := 1
-	for p: POIData in pd.custom_pois:
-		if p.is_orbital() or p.is_city() or p.constructing:
-			continue
-		best = maxi(best, int(pp.district_levels.get(p.label, 1)))
-	return best
 
 static func _poi(pd: PlanetData, label: String) -> POIData:
 	for p: POIData in pd.custom_pois:
@@ -899,15 +882,12 @@ static func _rich(px: int) -> RichTextLabel:
 	return r
 
 # ── On the side (optional) ───────────────────────────────────────────────────
-## The ship's record once the Capital has been seen; the first ruin's signal once
-## the City stands. Each goes when it has been read / the site was opened.
+## The ship's record and the first ruin's signal, once the tutorial is over. Each goes when it has been read / the site was opened.
 ## (Also run by Inbox each second: after the tutorial this card's loop stops.)
 func _refresh_extras() -> void:
 	# 10.11: the side stories are notifications now (Inbox), not card buttons
-	var i := STEPS.find(GameState.tutorial_step)
-	var past_city := i > STEPS.find("guide_city") or checklist_mode() or GameState.tutorial_step == "done"
-	if not past_city or blocking():
-		return   # not while a guided step is on (they'd lead away from it)
+	if not side_open():
+		return   # after the tutorial (playtest 12.11)
 	if not Narrative.has_played("archive_lazarus") and not Inbox.has("story:record") \
 			and not GameState.story_flags.has("inbox_told:record"):
 		GameState.story_flags["inbox_told:record"] = true
@@ -922,6 +902,15 @@ func _refresh_extras() -> void:
 ## A side story from the notifications panel: the ship record, or the first
 ## ruin's signal and then its excavation card.
 func play_side_story(which: String) -> void:
+	if which == "lunar_signal":
+		Excavations.hear_lunar_signal()
+		return
+	if which == "burkai":
+		Excavations.meet_burkai()
+		return
+	if which == "briefing":
+		Excavations.read_briefing()
+		return
 	if which == "record":
 		Narrative.play(RECORDS, "archive_lazarus", {"id": "archive_lazarus", "now": true})
 		Inbox.remove("story:record")

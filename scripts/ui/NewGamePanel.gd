@@ -6,7 +6,7 @@ extends ModalPopup
 ## preview (NewGamePreview: the home world of the seed, turning, with its moon)
 ## large and without a background above, the hero (and its ✕) right under it,
 ## and under the hero one panel in three steps:
-##   1 Civ    CIVILIZATION on a slider, 0 to 7 (only 0 is played for now;
+##   1 Civ    CIVILIZATION on a slider, 0 to 6 (only 0 is played for now;
 ##            the others show their scale, locked)                     (NEXT)
 ##   2 Start  START WORLD, MOON and what the option is           (BACK, NEXT)
 ##   3 Rest   HEAD START, and the world's name and seed (typed or RANDOM)
@@ -199,9 +199,11 @@ func _build_civ() -> void:
 
 # ── Step 2: the start ────────────────────────────────────────────────────────
 
-func _info_of(defs: Dictionary, id: String, open_now: bool) -> String:
+## A closed start option reads like any other on hover (playtest 12.11: a
+## LOCKED tag up front kept players from clicking); "Locked." once clicked.
+func _info_of(defs: Dictionary, id: String, open_now: bool, clicked := true) -> String:
 	var dim := UIStyle.hex(&"text_subtle")
-	if open_now:
+	if open_now or not clicked:
 		return "[color=#%s]%s[/color]" % [dim, String(defs[id][2])]
 	if defs == SessionPrep.WORLDS and SettingsManager.unlocked_starts.has(id):
 		return "[color=#%s]Unlocked. Starting here comes in a later build.[/color]" % dim
@@ -220,12 +222,11 @@ func _add_row(row: HBoxContainer, key: String, defs: Dictionary, order: Array, l
 	for id: String in order:
 		var d: Array = defs[id]
 		var open_now := bool(d[3]) and (defs != SessionPrep.WORLDS or SessionPrep._world_open(id))
-		var b := IconButton.create(String(d[0]), String(d[1]), IconButton.Variant.DEFAULT,
-			"" if open_now else "LOCKED")
+		var b := IconButton.create(String(d[0]), String(d[1]), IconButton.Variant.DEFAULT)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		if not open_now:
-			b.modulate = Color(1, 1, 1, 0.55)
-		b.mouse_entered.connect(func() -> void: _info.text = _info_of(defs, id, open_now))
+			b.modulate = Color(1, 1, 1, 0.8)
+		b.mouse_entered.connect(func() -> void: _info.text = _info_of(defs, id, open_now, false))
 		b.mouse_exited.connect(_chosen_info)
 		b.pressed.connect(func() -> void:
 			_info.text = _info_of(defs, id, open_now)

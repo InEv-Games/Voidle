@@ -38,11 +38,11 @@ target_id = 4
 
 [sub_resource type="Resource" id="Resource_caob3"]
 script = ExtResource("6_7f8my")
-talker = "Sera Vale"
+talker = "Bolo"
 
 [sub_resource type="Resource" id="Resource_kavdo"]
 script = ExtResource("7_ssqyv")
-text = "There's another ruin on my route, and a door in it that isn't a tomb's. Give me a crew and some time and I'll tell you what it really is."
+text = "The bearing passes another ruin. The door has a ledger mark over the lintel. Bring a crew if you want to see what they kept behind it."
 exits = Array[ExtResource("2_f3r3h")]([SubResource("Resource_g7xnb")])
 id = 3
 graph_position = Vector2(460, 80)
@@ -81,11 +81,11 @@ actions = Array[ExtResource("3_ox24b")]([SubResource("Resource_6irvo")])
 
 [sub_resource type="Resource" id="Resource_5x1t6"]
 script = ExtResource("6_7f8my")
-talker = "Sera Vale"
+talker = "Bolo"
 
 [sub_resource type="Resource" id="Resource_4h3tk"]
 script = ExtResource("7_ssqyv")
-text = "It's an accounts office. Someone ran a trade route from here, straight into the sky."
+text = "An accounts office. There is a route number beside each entry. Some of them run straight into the sky."
 exits = Array[ExtResource("2_f3r3h")]([SubResource("Resource_cfqup"), SubResource("Resource_gvcf6")])
 id = 5
 graph_position = Vector2(460, 340)
@@ -125,4 +125,4 @@ next_free_id = 9
 nodes = Array[ExtResource("1_2t2pi")]([SubResource("Resource_7v6ja"), SubResource("Resource_kub4a"), SubResource("Resource_kavdo"), SubResource("Resource_17w3g"), SubResource("Resource_4h3tk"), SubResource("Resource_63mkx"), SubResource("Resource_egnlk"), SubResource("Resource_3avcx")])
 occurrences = Array[String](["start", "return"])
 endings = Array[String](["dig", "end"])
-talkers = Array[String](["Sera Vale"])
+talkers = Array[String](["Bolo"])

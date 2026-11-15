@@ -183,8 +183,8 @@ func _connect_sources() -> void:
 			"Open the Moon, scan its surface (free) and pick where the first City lands.", "Lander in orbit",
 			{"seed": moon_seed, "lander": true}))
 	GameState.civilization_reached.connect(func(civ: int) -> void:
-		post("The rocket arrives. Historians already call it the dawn of Civilization %d." % civ, Kind.EVENT,
-			"Civilization 0 is complete.", "Civilization %d" % civ))
+		post("The rocket arrives. Historians already call it the dawn of Civilization Type %d." % civ, Kind.EVENT,
+			"Civilization Type 0 is complete.", "Civilization Type %d" % civ))
 
 func _flush_build_batch() -> void:
 	for k: String in _build_batch:

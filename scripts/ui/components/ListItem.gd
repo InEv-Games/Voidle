@@ -176,7 +176,7 @@ func _build_cycle_box() -> void:
 	_cycle_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_cycle_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var ic := TextureRect.new()
-	ic.texture = UIIcons.get_icon("cycle")
+	ic.texture = UIIcons.get_icon("calendar")   # one cycle = one colony month (12.11)
 	ic.custom_minimum_size = Vector2(9, 9)
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
