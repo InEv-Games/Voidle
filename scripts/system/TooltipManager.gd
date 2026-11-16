@@ -37,17 +37,28 @@ var _ignored := false
 ## Optional keyboard / controller focus anchor: when set, the tooltip is placed
 ## beside this control instead of following the mouse cursor.
 var _focus_anchor: Control = null
+## Optional screen-space anchor point (e.g. globe's World Center Cursor).
+var _focus_point := Vector2(-1.0, -1.0)
 
 func set_focus_anchor(c: Control) -> void:
 	_focus_anchor = c
 	if c != null:
+		_focus_point = Vector2(-1.0, -1.0)
 		_unlock()
 
+func set_focus_point(pt: Vector2) -> void:
+	_focus_point = pt
+	_unlock()
+
+func clear_focus_point() -> void:
+	_focus_point = Vector2(-1.0, -1.0)
+
 ## Keys play (CursorManager.keys_mode, the mouse hidden): the resting mouse means
-## nothing, so a tip shows only beside a focus anchor or by the globe's centre
-## cursor (`world_point`, set by PlanetaryView while it aims with it). Anything
-## the hidden mouse would start is refused, and nothing locks (playtest 16.11:
-## ground tips kept showing, stray tips floated and a locked one blocked input).
+## nothing, so a tip shows only beside a focus anchor, a focus point, or by the
+## globe's centre cursor (`world_point`, set by PlanetaryView while it aims with
+## it). Anything the hidden mouse would start is refused, and nothing locks
+## (playtest 16.11: ground tips kept showing, stray tips floated and a locked
+## one blocked input).
 var world_point: Variant = null   # Vector2 or null
 
 func set_world_point(p: Variant) -> void:
@@ -57,7 +68,7 @@ func _anchor_ok() -> bool:
 	return _focus_anchor != null and is_instance_valid(_focus_anchor) and _focus_anchor.is_visible_in_tree()
 
 func _keys_blocked() -> bool:
-	return CursorManager.keys_mode and not _anchor_ok() and world_point == null
+	return CursorManager.keys_mode and not _anchor_ok() and _focus_point.x < 0.0 and world_point == null
 
 ## Called as keys play starts: whatever the mouse had open goes, locked or not.
 func drop_mouse_tip() -> void:
@@ -296,9 +307,11 @@ func _tick_live(delta: float) -> void:
 		_live = Callable()
 		return
 	_live_t += delta
-	# Shift / Ctrl change a tip's click size: refresh at once, not on the beat
+	# Shift / Ctrl (pad: LT / RT) change a tip's click size: refresh at once, not on the beat
 	var mods := int(Input.is_key_pressed(KEY_SHIFT)) | int(Input.is_key_pressed(KEY_CTRL)) << 1 \
-		| int(Input.is_key_pressed(KEY_META)) << 2
+		| int(Input.is_key_pressed(KEY_META)) << 2 \
+		| int(Input.get_joy_axis(0, JOY_AXIS_TRIGGER_LEFT) > 0.5) << 3 \
+		| int(Input.get_joy_axis(0, JOY_AXIS_TRIGGER_RIGHT) > 0.5) << 4
 	if mods != _live_mods:
 		_live_mods = mods
 		_live_t = LIVE_SEC
@@ -333,6 +346,10 @@ func _process(delta: float) -> void:
 	_tick_live(delta)
 	var root_now := _panel.get_parent() as Control
 	if _locked:
+		if CursorManager.keys_mode:
+			_unlock()
+			_hide_timer = 0.12
+			return
 		# stays put while the mouse is on it, still where it locked (on the
 		# control it explains) or on the way between the two; closes once the
 		# mouse is elsewhere
@@ -348,12 +365,13 @@ func _process(delta: float) -> void:
 			_hide_timer = 0.12
 		return
 	var use_anchor := _anchor_ok()
-	# keys play by the globe's centre cursor: the tip goes by that point
-	var key_point: bool = not use_anchor and CursorManager.keys_mode and world_point != null
-	# only a resting mouse charges the lock (tips that follow a moving mouse —
-	# the lens, the news — never lock under it); a hidden one never does
+	var use_point := not use_anchor and _focus_point.x >= 0.0
+	# keys play by the globe's centre cursor: a tip with no point of its own
+	# goes by that point, not the hidden mouse
+	var key_point: bool = not use_anchor and not use_point and CursorManager.keys_mode and world_point != null
+	# only a resting mouse (while actually in mouse mode) charges the lock
 	var m: Vector2 = world_point if key_point else get_viewport().get_mouse_position()
-	if use_anchor or CursorManager.keys_mode:
+	if use_anchor or use_point or CursorManager.keys_mode:
 		_charge = 0.0
 	else:
 		if m.distance_to(_last_mouse) > 3.0:
@@ -386,6 +404,12 @@ func _process(delta: float) -> void:
 		should_flip = pos.x + pw > vp.x - 4.0
 		if should_flip:
 			pos.x = maxf(4.0, ar.position.x - pw - 12.0)
+		pos.y = clampf(pos.y, 4.0, maxf(4.0, vp.y - ph - 4.0))
+	elif use_point:
+		pos = Vector2(_focus_point.x + 22.0, _focus_point.y - ph * 0.5)
+		should_flip = pos.x + pw > vp.x - 4.0
+		if should_flip:
+			pos.x = maxf(4.0, _focus_point.x - pw - 22.0)
 		pos.y = clampf(pos.y, 4.0, maxf(4.0, vp.y - ph - 4.0))
 	else:
 		var mouse := m

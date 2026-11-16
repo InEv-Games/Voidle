@@ -122,6 +122,7 @@ func _row(c: GameCommand) -> Control:
 		AudioManager.play("click")
 		close()
 		c.execute())
+	_buttons.append(btn)
 	return btn
 
 func _label(txt: String, size: int, col: Color) -> Label:
@@ -142,7 +143,41 @@ func _padded(c: Control) -> MarginContainer:
 	m.add_child(c)
 	return m
 
+var _buttons: Array[BaseButton] = []
+var _lit_idx: int = -1
+
 func _input(event: InputEvent) -> void:
+	if PadScheme.chord_held:
+		return
 	if event is InputEventKey and event.pressed and (event as InputEventKey).keycode == KEY_ESCAPE:
 		close()
 		get_viewport().set_input_as_handled()
+		return
+	# Fallback pad navigation when no LeftPanel is in the scene (e.g. GalaxyView)
+	if get_tree().get_first_node_in_group(&"left_panel") == null and event is InputEventJoypadButton \
+			and (event as InputEventJoypadButton).pressed:
+		var jb := event as InputEventJoypadButton
+		match jb.button_index:
+			JOY_BUTTON_B:
+				AudioManager.play("click")
+				close()
+				get_viewport().set_input_as_handled()
+			JOY_BUTTON_DPAD_UP, JOY_BUTTON_DPAD_DOWN:
+				if not _buttons.is_empty():
+					var step := -1 if jb.button_index == JOY_BUTTON_DPAD_UP else 1
+					_lit_idx = (0 if step > 0 else _buttons.size() - 1) if _lit_idx < 0 \
+						else posmod(_lit_idx + step, _buttons.size())
+					for i in _buttons.size():
+						if is_instance_valid(_buttons[i]):
+							if i == _lit_idx:
+								_buttons[i].mouse_entered.emit()
+							else:
+								_buttons[i].mouse_exited.emit()
+					AudioManager.play("hover")
+				get_viewport().set_input_as_handled()
+			JOY_BUTTON_A:
+				if not _buttons.is_empty():
+					var idx := maxi(_lit_idx, 0)
+					if is_instance_valid(_buttons[idx]):
+						_buttons[idx].pressed.emit()
+				get_viewport().set_input_as_handled()

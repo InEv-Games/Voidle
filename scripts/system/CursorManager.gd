@@ -83,6 +83,12 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed:
 		_set_keys_mode(true)
 		return
+	if event is InputEventJoypadMotion:
+		var jm := event as InputEventJoypadMotion
+		if jm.axis in [JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y, JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y] \
+				and absf(jm.axis_value) > 0.3:
+			_set_keys_mode(true)
+		return
 	var k := event as InputEventKey
 	if k == null or not k.pressed or k.ctrl_pressed or k.meta_pressed or k.alt_pressed:
 		return
@@ -97,7 +103,9 @@ func _input(event: InputEvent) -> void:
 func _set_keys_mode(on: bool) -> void:
 	keys_mode = on
 	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN if on else Input.MOUSE_MODE_VISIBLE
-	if on:
+	if not on:
+		TooltipManager.clear_focus_point()
+	else:
 		TooltipManager.drop_mouse_tip()   # the tip the resting mouse had goes with it, locked or not
 
 func _connect_theme_signal() -> void:

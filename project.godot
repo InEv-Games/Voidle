@@ -49,6 +49,7 @@ Narrative="*res://scripts/system/Narrative.gd"
 Guide="*res://scripts/system/Guide.gd"
 Inbox="*res://scripts/system/Inbox.gd"
 ScreenFX="*res://scripts/system/ScreenFX.gd"
+PadScheme="*res://scripts/system/PadScheme.gd"
 
 [debug]
 
