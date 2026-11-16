@@ -458,7 +458,13 @@ func start_explore() -> void:
 	if showcase_mode:
 		return
 	enter_showcase()
-	SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
+	# from the near to the far (playtest 16.11): our own system first, the
+	# galaxy one step out from there
+	var sd = get_home_solar()
+	if sd != null:
+		SceneTransition.go("res://scenes/solar/SolarView.tscn", sd)
+	else:
+		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
 
 ## Back from the tour to the home world.
 func end_explore() -> void:

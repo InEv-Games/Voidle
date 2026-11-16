@@ -294,7 +294,7 @@ func _init() -> void:
 		150.0, _at("start_energy", 40, 1.25), ["start_energy"], "energy", "Unlocks Tidal Generator",
 		{"grants": ["tidal_generator"]})
 	_n("geothermal_power", "Geothermal Power", "Tap the planet's heat. The district must stand on a Volcanic Field or Geothermal Rift.",
-		450.0, _at("tidal_power", 0, 1.2), ["solar_matrix", "wind_power", "tidal_power"], "energy", "Unlocks Geothermal Plant",
+		450.0, _at("tidal_power", 0, 1.2), ["tidal_power", "solar_matrix", "wind_power"], "energy", "Unlocks Geothermal Plant",
 		{"grants": ["geothermal_plant"]})
 	_n("solar_efficiency", "Photovoltaics", "Better solar cells.",
 		150.0, _at("solar_matrix", -60, 1.05), ["solar_matrix"], "energy", "+10% Solar output per level",
@@ -360,25 +360,25 @@ func _init() -> void:
 		150.0, _at("start_commercial", 120, 1.35), ["start_commercial"], "trade", "Unlocks Lakeside Market",
 		{"grants": ["lakeside_market"]})
 	_n("glacier_trade", "Ice Trade", "Trade in glacier ice. The district must stand on a Glacier.",
-		150.0, _at("lakeside_trade", 100, 1.1), ["start_commercial"], "trade", "Unlocks Glacier Exchange",
+		150.0, _at("start_commercial", 105, 2.3), ["start_commercial"], "trade", "Unlocks Glacier Exchange",
 		{"grants": ["glacier_exchange"]})
 	_n("trade_networks", "Trade Networks", "Trade Hubs link your Cities' markets.",
-		350.0, _at("trade_access", 90, 1.3), ["local_business", "lakeside_trade", "glacier_trade"], "trade", "Unlocks Trade Hub",
+		350.0, _at("local_business", 75, 1.45), ["local_business", "lakeside_trade", "glacier_trade"], "trade", "Unlocks Trade Hub",
 		{"grants": ["trading_post"]})
 	_n("commodity_markets", "Commodity Markets", "Exchanges that trade Goods in bulk.",
 		900.0, _at("trade_networks", 90, 1.2), ["trade_networks"], "trade", "Unlocks Commodity Exchange",
 		{"grants": ["commodities_exchange"], "access": ["rare"], "shape": NodeShape.CIRCLE})
 	_n("trade_automation", "Trade Automation", "Standing orders: sell above a reserve, buy up to a target stock. Storage overflow is sold instead of lost.",
-		300.0, _at("trade_access", 60, 1.0), ["trade_access"], "trade", "Standing orders and overflow sales",
+		300.0, _at("trade_access", 90, 1.0), ["trade_access"], "trade", "Standing orders and overflow sales",
 		{})
 	_n("force_buy", "Force Buy", "Short of a few materials? Buy exactly what a build is missing, paid in Credits, in one go.",
-		300.0, _at("trade_automation", 30, 1.0), ["trade_automation"], "trade", "Force-buy a build's missing materials (click the build-list row, or F)",
+		300.0, _at("trade_automation", 90, 1.0), ["trade_automation"], "trade", "Force-buy a build's missing materials (click the build-list row, or F)",
 		{})
 	_n("harbor_trade", "Volcanic Trade", "Markets in volcanic stone. The district must stand on a Volcanic Field.",
-		350.0, _at("trade_networks", 45, 1.15), ["local_business", "lakeside_trade", "glacier_trade"], "trade", "Unlocks Volcanic Market",
+		350.0, _at("trade_networks", 40, 1.35), ["local_business", "lakeside_trade", "glacier_trade"], "trade", "Unlocks Volcanic Market",
 		{"grants": ["volcanic_market"]})
 	_n("trade_efficiency", "Trade Efficiency", "Lower tariffs, more business.",
-		150.0, _at("trade_networks", 135, 1.05), ["trade_networks"], "trade", "+10% produced Credits per level",
+		150.0, _at("trade_networks", -130, 0.9), ["trade_networks"], "trade", "+10% produced Credits per level",
 		{"max": 3, "shape": NodeShape.DIAMOND})
 
 	# ── Science (down-left) ──────────────────────────────────────────────────
@@ -408,7 +408,7 @@ func _init() -> void:
 		350.0, _at("advanced_research", 180, 1.2), ["field_research", "mountain_optics", "forest_research"], "science", "Unlocks Desert Research Station",
 		{"grants": ["desert_research_station"]})
 	_n("ion_research", "Ion Research", "Moon only: study the ion storms where they rage.",
-		900.0, _at("desert_research", 150, 1.15), ["advanced_research", "desert_research"], "science", "Unlocks Ion Research Lab (Moon only)",
+		900.0, _at("desert_research", 150, 1.15), ["desert_research", "advanced_research"], "science", "Unlocks Ion Research Lab (Moon only)",
 		{"grants": ["ion_research_lab"]})
 
 	# ── Administration (up-left) ─────────────────────────────────────────────
@@ -454,7 +454,7 @@ func _init() -> void:
 		"science", {"science": 0.05}, "+5% Science")
 	_minor("market_stalls", "Market Stalls", "Small traders fill every corner.", 100.0, "local_business", 40, 1.0,
 		"trade", {"credits": 0.05}, "+5% produced Credits")
-	_minor("zoning", "Zoning", "Room for everyone, by plan.", 150.0, "high_rise", 20, 0.9,
+	_minor("zoning", "Zoning", "Room for everyone, by plan.", 150.0, "high_rise", 70, 0.9,
 		"population", {"housing": 0.05}, "+5% housing from buildings")
 	_minor("district_charter", "District Charter", "The planet may hold one more district.", 500.0, "construction_management", -130, 1.0,
 		"public", {"max_districts": 1.0}, "+1 district slot on every planet")
@@ -482,7 +482,7 @@ func _init() -> void:
 		"rare_processing", "mountain_optics", 157.5, "science", "+3% Raw output, +3% Science",
 		{"bonus": {"mine_output": 0.03, "science": 0.03}})
 	_bridge("smart_homes", "Smart Districts", "Districts that plan their power together.", 250.0,
-		"geothermal_power", "cross_networks", -22.5, "proximity", "Same-kind neighbour bonus ×1.03, −2% energy use",
+		"fusion_power", "cross_networks", -22.5, "proximity", "Same-kind neighbour bonus ×1.03, −2% energy use",
 		{"bonus": {"proximity": 0.03, "energy_consume": -0.02}})
 
 	_line = "exploration"
@@ -519,18 +519,18 @@ var _line := "exploration"
 ## Where each terrain specialisation hangs: [host node, angle°, step].
 const GEO_HOSTS := {
 	"terrain_desert":     ["desert_research", 120.0, 1.0],
-	"terrain_geothermal": ["geothermal_power", 60.0, 1.0],
+	"terrain_geothermal": ["geothermal_power", 60.0, 0.9],
 	"terrain_volcanic":   ["geothermal_power", 0.0, 1.0],
 	"terrain_mountain":   ["mountain_optics", -150.0, 1.0],
-	"terrain_ruins":      ["glacier_trade", 180.0, 1.0],
-	"terrain_glacier":    ["glacier_trade", 120.0, 1.0],
+	"terrain_ruins":      ["glacier_trade", 170.0, 1.0],
+	"terrain_glacier":    ["glacier_trade", 110.0, 1.35],
 	"terrain_seacoast":   ["tidal_power", -30.0, 1.0],
-	"terrain_lakeside":   ["lakeside_trade", 170.0, 1.0],
+	"terrain_lakeside":   ["lakeside_trade", 160.0, 1.0],
 	"terrain_river":      ["river_extraction", -160.0, 1.0],
-	"terrain_forest":     ["forest_research", 80.0, 1.0],
+	"terrain_forest":     ["forest_research", -40.0, 0.9],
 	"terrain_tundra":     ["particle_physics", 90.0, 1.1],
 	"terrain_crater":     ["crater_living", 45.0, 1.0],
-	"terrain_caves":      ["cavern_refining", 20.0, 1.0],
+	"terrain_caves":      ["cavern_refining", -80.0, 1.0],
 	"terrain_ion_storm":  ["ion_research", 135.0, 1.0],
 }
 

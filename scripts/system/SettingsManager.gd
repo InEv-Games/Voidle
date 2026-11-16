@@ -46,6 +46,13 @@ var _applied_theme_key := ""
 ## ProMotion screen, and in the background it only has to keep ticking.
 const FPS_FOCUSED := 60
 const FPS_BACKGROUND := 12
+## Hands off (16.11, the Mac warmed up while the game sat idle): after
+## IDLE_AFTER_SEC with no input the focused cap drops to FPS_IDLE; any key,
+## click or mouse move brings 60 back at once.
+const FPS_IDLE := 30
+const IDLE_AFTER_SEC := 30.0
+var _focused := true
+var _idle_t := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -57,9 +64,37 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			_focused = false
 			Engine.max_fps = FPS_BACKGROUND
 		NOTIFICATION_APPLICATION_FOCUS_IN:
+			_focused = true
+			_idle_t = 0.0
 			Engine.max_fps = FPS_FOCUSED
+
+func _input(_event: InputEvent) -> void:
+	_idle_t = 0.0
+	if _focused and Engine.max_fps != FPS_FOCUSED:
+		Engine.max_fps = FPS_FOCUSED
+
+var _last_mouse := Vector2.ZERO
+
+func _process(delta: float) -> void:
+	if not _focused:
+		return
+	# events another node handled never reach _input: a held key or a moved
+	# mouse counts here too
+	var m := get_viewport().get_mouse_position()
+	if Input.is_anything_pressed() or m != _last_mouse:
+		_last_mouse = m
+		_idle_t = 0.0
+		if Engine.max_fps != FPS_FOCUSED:
+			Engine.max_fps = FPS_FOCUSED
+		return
+	if Engine.max_fps == FPS_IDLE:
+		return
+	_idle_t += delta
+	if _idle_t >= IDLE_AFTER_SEC:
+		Engine.max_fps = FPS_IDLE
 
 func _ensure_buses() -> void:
 	for bus_name in ["Music", "UI", "SFX"]:

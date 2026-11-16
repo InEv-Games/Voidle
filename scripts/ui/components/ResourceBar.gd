@@ -160,8 +160,9 @@ func _set_value(lbl: Label, text: String) -> void:
 	lbl.remove_theme_font_size_override("font_size")
 
 ## ── Incoming resources ──────────────────────────────────────────────────────
-## A gain shows as "+x" under its cell, floats up into the bar, and the value
-## then ticks up to the new amount. Spending updates at once.
+## A gain shows as a small "+x" in the monthly rate's place (the rate fades
+## out meanwhile) and the value then ticks up to the new amount. Spending
+## updates at once.
 var _shown: Dictionary = {}     # id -> value currently displayed
 var _target: Dictionary = {}    # id -> value the display is heading to
 var _gain_tw: Dictionary = {}   # id -> Tween
@@ -192,7 +193,7 @@ func _track_stock(id: String) -> void:
 			tw.kill()
 		tw = create_tween()
 		_gain_tw[id] = tw
-		tw.tween_interval(0.55)   # let the "+x" reach the bar first
+		tw.tween_interval(0.3)   # the "+x" shows first, then the value counts up
 		tw.tween_method(func(v: float) -> void:
 			_shown[id] = v
 			if is_instance_valid(lbl):
@@ -214,44 +215,77 @@ func _spawn_gain(id: String, amount: float, lbl: Label) -> void:
 	var chip := Label.new()
 	chip.text = "+" + (HUDManager.fmt_credits(amount) if id == Economy.CREDITS else Economy.fmt(amount))
 	chip.add_theme_font_override("font", FLOAT_FONT)
-	chip.add_theme_font_size_override("font_size", 10)
+	chip.add_theme_font_size_override("font_size", 9)
 	var col := Economy.color_of(id) if id != Economy.RAW else Color(0.85, 0.78, 0.70)
 	chip.add_theme_color_override("font_color", col.lerp(Color.WHITE, 0.25))
 	chip.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	chip.add_theme_constant_override("outline_size", 3)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	get_parent().add_child(chip)
-	var start := lbl.global_position + Vector2(2.0, lbl.size.y + 14.0)
-	chip.position = start
+	chip.reset_size()
+	# inside the box (playtest 16.11: it rose from under the bar, outside it):
+	# in the monthly rate's place, the rate fading out meanwhile
+	var start := _pop_spot(id, chip, lbl)
+	chip.position = start + Vector2(0, 3.0)
 	chip.modulate.a = 0.0
 	var tw := create_tween()
 	tw.tween_property(chip, "modulate:a", 1.0, 0.12)
-	tw.parallel().tween_property(chip, "position:y", start.y - 4.0, 0.12)
-	tw.tween_interval(0.2)
-	tw.tween_property(chip, "position:y", lbl.global_position.y + 2.0, 0.3) \
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.parallel().tween_property(chip, "modulate:a", 0.0, 0.3).set_delay(0.1)
+	tw.parallel().tween_property(chip, "position:y", start.y, 0.12)
+	tw.tween_interval(0.45)
+	tw.tween_property(chip, "modulate:a", 0.0, 0.25)
 	tw.tween_callback(chip.queue_free)
+	_dim_rate(id, 0.12 + 0.45 + 0.25)
 
-## A spend shows as a red "−x" that drops out of the value and fades.
+## A spend shows as a red "−x" in the same place that sinks a little and fades.
 func _spawn_loss(id: String, amount: float, lbl: Label) -> void:
 	if get_parent() == null:
 		return
 	var chip := Label.new()
 	chip.text = "−" + (HUDManager.fmt_credits(amount) if id == Economy.CREDITS else Economy.fmt(amount))
 	chip.add_theme_font_override("font", FLOAT_FONT)
-	chip.add_theme_font_size_override("font_size", 10)
+	chip.add_theme_font_size_override("font_size", 9)
 	chip.add_theme_color_override("font_color", UIStyle.color(&"bad"))
 	chip.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	chip.add_theme_constant_override("outline_size", 3)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	get_parent().add_child(chip)
-	var start := lbl.global_position + Vector2(2.0, lbl.size.y * 0.5)
+	chip.reset_size()
+	# the same place as a gain, inside the box (playtest 16.11), sinking a little
+	var start := _pop_spot(id, chip, lbl)
 	chip.position = start
 	var tw := create_tween()
-	tw.tween_property(chip, "position:y", start.y + 26.0, 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.parallel().tween_property(chip, "modulate:a", 0.0, 0.7).set_delay(0.25)
+	tw.tween_property(chip, "position:y", start.y + 3.0, 0.6).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(chip, "modulate:a", 0.0, 0.6).set_delay(0.25)
 	tw.tween_callback(chip.queue_free)
+	_dim_rate(id, 0.6)
+
+## Where a "+x" / "−x" sits: over the monthly rate (right-aligned to it, on its
+## line); a box without a rate, its right end beside the value.
+func _pop_spot(id: String, pop: Label, lbl: Label) -> Vector2:
+	var cell: Control = _res_chips.get(id)
+	var box := cell.get_global_rect() if is_instance_valid(cell) else lbl.get_global_rect()
+	var rate: Label = _rate_lbls.get(id)
+	var at := Vector2(box.end.x - pop.size.x - 6.0, box.position.y + (box.size.y - pop.size.y) * 0.5)
+	if is_instance_valid(rate) and rate.visible:
+		var r := rate.get_global_rect()
+		at = Vector2(r.end.x - pop.size.x, r.position.y + (r.size.y - pop.size.y) * 0.5)
+	at.y = clampf(at.y, box.position.y, maxf(box.position.y, box.end.y - pop.size.y - 3.0))   # never past the box
+	return at
+
+## Fades the monthly rate out while a pop-up stands in its place, then back.
+var _rate_tw: Dictionary = {}   # id -> Tween
+func _dim_rate(id: String, sec: float) -> void:
+	var rate: Label = _rate_lbls.get(id)
+	if not is_instance_valid(rate):
+		return
+	var old: Tween = _rate_tw.get(id)
+	if old != null and old.is_valid():
+		old.kill()
+	var tw := create_tween()
+	_rate_tw[id] = tw
+	tw.tween_property(rate, "modulate:a", 0.0, 0.1)
+	tw.tween_interval(maxf(sec - 0.2, 0.0))
+	tw.tween_property(rate, "modulate:a", 1.0, 0.2)
 
 ## Shown per colony month (playtest 12.11: every rate in one unit).
 func _set_rate(id: String, per_s: float) -> void:

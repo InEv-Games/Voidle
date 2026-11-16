@@ -207,6 +207,7 @@ func _ready() -> void:
 	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - _panel_edge_frac(1.0)))
 	tree_exiting.connect(func() -> void: NewsFeed.clear_message(PLACE_MSG))   # placement ends with the view
 	tree_exiting.connect(func() -> void: VAM.stop_snapshot(PLACE_SNAPSHOT, &"placement"))
+	tree_exiting.connect(func() -> void: TooltipManager.set_world_point(null))
 	poi_layer.territory_lookup = _territory_at_screen
 	SettingsManager.night_shadow_changed.connect(func(v: float) -> void:
 		if planet_renderer.material:
@@ -1627,6 +1628,9 @@ var _world_cursor_active := false
 
 func _set_world_cursor(on: bool) -> void:
 	_world_cursor_active = on
+	# keys play: tips go by the centre cursor, not the hidden mouse (16.11)
+	TooltipManager.set_world_point((planet_renderer.global_position + planet_renderer.size * 0.5) \
+		if on and planet_renderer != null else null)
 	if on:
 		_using_right_stick = true
 		var sp := get_node_or_null("SidePanel") as LeftPanel
@@ -1741,6 +1745,8 @@ func _key_spin_block() -> String:
 		return "naming"
 	if Narrative.owns_keys():
 		return "story on screen"   # W / S pick its answers
+	if StoryDialog.is_open(get_tree()):
+		return "excavation open"   # Space / Enter are its own (playtest 16.11)
 	if NewsFeed.browsing:
 		return "browsing news"   # the keys go through the crawl
 	var rb = HUDManager.get("credits_panel")   # untyped: HUDManager ↔ ResourceBar would cycle
@@ -5373,6 +5379,8 @@ func _process(delta: float) -> void:
 	_tick_lander(delta)
 	_tick_companions()
 	_tick_key_spin(delta)
+	if _world_cursor_active and planet_renderer != null:   # the view may resize under it
+		TooltipManager.set_world_point(planet_renderer.global_position + planet_renderer.size * 0.5)
 	if _reveal_ghost != null and is_instance_valid(_reveal_ghost) and not _switching_body:
 		var gr := _globe_rect(_base_radius, _zoom)   # fading stand-in stays on the real globe
 		_reveal_ghost.global_position = gr.position
@@ -7007,14 +7015,8 @@ func _placement_card(def: DistrictDef, chk: Dictionary, sys: Dictionary, site_na
 		if not loc_rows.is_empty():   # no bonus here: no section (playtest 12.11)
 			card.append(loc_rows)
 	if def.is_system_anchor():   # a City: what its reach holds for later districts
-		# what the yields at the bottom go by (playtest 12.11 asked why they
-		# change from spot to spot): the land right under the City multiplies
-		# its own output; a City takes no location bonus
-		if not def.base_outputs.is_empty():
-			var under: Array = [[UIIcons.bb("capital", 11, GEO_KEY_COL) + " " + _bb("The land under it", Color(0.90, 0.94, 1.0)),
-				_bb("multiplies the City's own output", BB_DIM)]]
-			under.append_array(_geo_rows(probe.site_features, def.base_outputs, false))
-			card.append(under)
+		# playtest 16.11: only "Within reach" + the yields; the land-under and
+		# feature-share rows were too much for a first placement
 		card.append(_reach_rows(lon, lat))
 	var nb_rows := _neighbour_effect_rows(probe)
 	if not nb_rows.is_empty():
@@ -7226,30 +7228,17 @@ func _suggest_city_sites(def: DistrictDef) -> Array:
 			out.append({"lon": float(c[1]), "lat": float(c[2]), "r": r})
 	return out
 
-## The reach summary as card rows: a head with how many district kinds the land
-## helps, then the strongest features (share of the land, the kinds they help).
+## The reach summary as one card row: how many district kinds the land helps
+## (plus a warning when the reach is mostly water).
 func _reach_rows(lon: float, lat: float) -> Array:
-	# revision 12.11, as the district card: the features first (names bold),
-	# then under a separator the summary "Within reach  helps N of 5"
 	var sm := _reach_summary(lon, lat)
 	var rows: Array = []
 	var nf: int = (sm["families"] as Array).size()
 	var col := _scale_color(nf, REACH_FAMILIES.size())
-	var land := maxi(int(sm["total"]) - int(sm.get("water", 0)), 1)   # open ground counts as land
-	var feats: Array = []
-	for fid: String in sm["counts"]:
-		if FeatureMap.helped_families(fid) != "" and int(sm["counts"][fid]) >= 2:
-			feats.append(fid)
-	feats.sort_custom(func(x: String, y: String) -> bool: return int(sm["counts"][x]) > int(sm["counts"][y]))
-	for fid: String in feats.slice(0, 4):
-		var pct := roundi(100.0 * float(sm["counts"][fid]) / float(land))
-		rows.append([_bb("[b]%s[/b]" % FeatureMap.feature_name(fid), FeatureMap.feature_color(fid)) + _bb("  %d%%" % maxi(pct, 1), BB_DIM),
-			_bb(FeatureMap.helped_families(fid), Color(0.78, 0.82, 0.92))])
-	if feats.is_empty():
-		rows.append([_bb("Nothing that helps a district", BB_DIM), ""])
+	# playtest 16.11: the feature-share list is gone; the count says enough
 	if int(sm.get("water", 0)) * 2 > int(sm["total"]):
 		rows.append([_bb("Mostly water: little room for districts", BB_BAD), ""])
-	rows.append([])
+		rows.append([])
 	rows.append([UIIcons.bb("explore", 11, GEO_KEY_COL) + " " + _bb("Within reach", Color(0.90, 0.94, 1.0)),
 		_bb("[b]helps %d of %d district kinds[/b]" % [nf, REACH_FAMILIES.size()], col)])
 	return rows
@@ -7454,7 +7443,7 @@ func _show_planet_level_tip(data: PlanetData, pp: PlanetProgress) -> void:
 	for k in cost.keys():
 		can_pay = can_pay and (GameState.credits if str(k) == "credits" else _level_cost_have(str(k))) >= float(cost[k])
 	TooltipManager.show_tip("Planet level up", "\n".join(lines))
-	TooltipManager.set_footer("", "  //  ".join(parts), can_pay)
+	TooltipManager.set_footer("", "   ".join(parts), can_pay)
 
 func _show_level_up_popup(pp: PlanetProgress) -> void:
 	if pp.is_upgrading:
@@ -9925,7 +9914,7 @@ func _cost_bb(credits: float, pop: int, pd: PlanetData, pp: PlanetProgress) -> S
 		var ok := Economy.free_population(pd, pp) >= pop
 		var wcol: Color = Color(0.85, 0.88, 1.0) if ok else Color.html(BB_WARN)
 		parts.append(UIIcons.bb("worker", 11, wcol) + " " + _bb(Economy.fmt(pop), wcol))
-	return "  //  ".join(parts)
+	return "   ".join(parts)
 
 ## Amounts the player gets ({id: amount}) as icons in their own colours (no
 ## "can you pay" red: a refund).
@@ -9938,7 +9927,7 @@ func _gain_bb(amounts: Dictionary) -> String:
 		var col := Economy.color_of(id)
 		parts.append((UIIcons.bb(id, 11, col) + " " + _bb(Economy.fmt(v), col)) if UIIcons.has_icon(id)
 			else _bb("%s %s" % [Economy.fmt(v), Economy.display_name(id)], col))
-	return "  //  ".join(parts) if not parts.is_empty() else _bb("nothing", BB_DIM)
+	return "   ".join(parts) if not parts.is_empty() else _bb("nothing", BB_DIM)
 
 ## Tooltip text for a full cost ({credits, materials…}) plus workers; short
 ## parts in red.
@@ -9953,7 +9942,7 @@ func _full_cost_bb(cost: Dictionary, pop: int, pd: PlanetData, pp: PlanetProgres
 		mats.append((UIIcons.bb(id, 11, mcol) + " " + _bb(Economy.fmt(need), mcol)) if UIIcons.has_icon(id) \
 			else _bb("%s %s" % [Economy.fmt(need), Economy.display_name(id)], mcol))
 	if not mats.is_empty():
-		txt += ("  //  " if txt != "" else "") + "  //  ".join(mats)
+		txt += ("   " if txt != "" else "") + "   ".join(mats)
 	return txt
 
 ## The build-list row under the mouse (its tip follows Shift / Ctrl live).

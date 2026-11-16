@@ -53,8 +53,11 @@ func _build(data: PlanetData) -> void:
 	_mini.material = mat
 	add_child(_mini)
 
-	_mini.mouse_entered.connect(_on_hover_start)
-	_mini.mouse_exited.connect(_on_hover_end)
+	# keys play (16.11): the hidden mouse never hovers; the keys pick instead
+	_mini.mouse_entered.connect(func() -> void:
+		if not CursorManager.keys_mode: _on_hover_start())
+	_mini.mouse_exited.connect(func() -> void:
+		if not CursorManager.keys_mode: _on_hover_end())
 
 func _on_hover_start() -> void:
 	hover_start.emit(moon_data)

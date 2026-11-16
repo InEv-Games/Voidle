@@ -55,10 +55,32 @@ static func pop_out(card: Control, layer: Node) -> void:
 	tw.tween_property(card, "modulate:a", 0.0, 0.1)
 	tw.tween_callback(layer.queue_free)
 
+## The excavation card on screen (not one already closing), or null.
+static func current(tree: SceneTree) -> StoryDialog:
+	for n in tree.get_nodes_in_group(&"story_dialog"):
+		var d := n as StoryDialog
+		if d != null and is_instance_valid(d) and not d._closing:
+			return d
+	return null
+
+## True while an excavation card is open: the globe leaves Space / Enter / WASD
+## to it (playtest 16.11: each Enter on the site opened another card on top).
+static func is_open(tree: SceneTree) -> bool:
+	return current(tree) != null
+
 static func open(host: Node, site_id: String) -> void:
 	var s := Excavations.find_site(site_id)
 	if s == null:
 		return
+	# only one card at a time (playtest 16.11): asking for the one on screen
+	# closes it; asking for another site swaps it in
+	var cur := current(host.get_tree())
+	if cur != null:
+		var same := cur.site == s
+		cur._close()
+		if same:
+			AudioManager.play("click")
+			return
 	NewsFeed.clear_message("excavation_ready_" + site_id)   # its "ready" card has done its job
 	# the camera goes to the site and closes in, so the player sees where it is (10.11)
 	var loc := Excavations._site_loc(site_id)
@@ -132,7 +154,12 @@ func _counter_text() -> String:
 	var total := w.sites.size() if w != null else 1
 	return "Excavation  //  %s %d / %d" % [world.planet_name.to_upper() if world != null else "", at, total]
 
+var _closing := false
+
 func _close() -> void:
+	if _closing:
+		return
+	_closing = true
 	set_process_unhandled_input(false)
 	pop_out(_card, get_parent())
 

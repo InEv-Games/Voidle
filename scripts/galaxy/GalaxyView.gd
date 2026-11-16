@@ -240,12 +240,15 @@ func _process(delta: float) -> void:
 	_pulse = fposmod(_pulse + delta * 1.8, TAU)
 	var mouse   := get_viewport().get_mouse_position()
 	var new_hov := -1
-	for i in _galaxy.star_count():
-		if not _star_visible(i):
-			continue
-		if _star_screen_pos(i).distance_to(mouse) < _hit_radius(i):
-			new_hov = i
-			break
+	if CursorManager.keys_mode and _key_sel >= 0:
+		new_hov = _key_sel   # keys play: the picked star, not the hidden mouse
+	else:
+		for i in _galaxy.star_count():
+			if not _star_visible(i):
+				continue
+			if _star_screen_pos(i).distance_to(mouse) < _hit_radius(i):
+				new_hov = i
+				break
 	if new_hov != _hovered:
 		_hovered = new_hov
 		if _entry_target != _hovered:
@@ -447,6 +450,100 @@ func _input(event: InputEvent) -> void:
 			_last_pan_usec = now
 			_pan_vel = _pan_vel.lerp(mm.relative / dt, 1.0 - exp(-dt / 0.06))   # ~60 ms average
 			get_viewport().set_input_as_handled()
+
+# ── Keys (playtest 16.11: keyboard-only play) ────────────────────────────────
+## WASD / arrows pick the nearest star that way and bring it to the middle,
+## Q / E zoom out / in, Enter or Space opens the picked star's system.
+var _key_sel := -1
+
+func _unhandled_input(event: InputEvent) -> void:
+	var k := event as InputEventKey
+	if k == null or not k.pressed or k.ctrl_pressed or k.meta_pressed or k.alt_pressed:
+		return
+	if SkillTreeView.is_open or _entering or Narrative.owns_keys():
+		return
+	var key := k.physical_keycode if k.physical_keycode != KEY_NONE else k.keycode
+	var dir := Vector2.ZERO
+	match key:
+		KEY_A, KEY_LEFT:  dir = Vector2.LEFT
+		KEY_D, KEY_RIGHT: dir = Vector2.RIGHT
+		KEY_W, KEY_UP:    dir = Vector2.UP
+		KEY_S, KEY_DOWN:  dir = Vector2.DOWN
+		KEY_Q:
+			_key_zoom(1.0 / 1.25)
+		KEY_E:
+			_key_zoom(1.25)
+		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
+			if k.echo:
+				return
+			if _key_sel < 0:
+				_key_pick(Vector2.ZERO)
+			else:
+				_enter_star(_key_sel)
+		_:
+			return
+	if dir != Vector2.ZERO:
+		_key_pick(dir)
+	get_viewport().set_input_as_handled()
+
+## The middle of the map's free area (the right panel takes 30% outside Explore).
+func _view_center() -> Vector2:
+	return Vector2(size.x * (0.5 if GameState.showcase_mode else 0.35), size.y * 0.5)
+
+## Where star `i` lands once the camera has settled (the targets, not the eased values).
+func _star_target_pos(i: int) -> Vector2:
+	var p := _galaxy.positions[i]
+	var rx := p.x * cos(_rotation_t) - p.y * sin(_rotation_t)
+	var ry := p.x * sin(_rotation_t) + p.y * cos(_rotation_t)
+	var h: float = _galaxy.heights[i] * (1.0 - _tilt_t) if i < _galaxy.heights.size() else 0.0
+	return Vector2(rx * _zoom_t, ry * _tilt_t * _zoom_t + h * _zoom_t) + _offset_t
+
+## Picks the next star toward `dir` (ZERO: the first pick — the one under the
+## mouse, else home, else the one nearest the middle) and centres it.
+func _key_pick(dir: Vector2) -> void:
+	if _key_sel < 0 or not _star_visible(_key_sel):
+		_key_sel = _hovered if _hovered >= 0 else -1
+		if _key_sel < 0 and _star_visible(_galaxy.home_idx):
+			_key_sel = _galaxy.home_idx
+		if _key_sel < 0:
+			var best_d := INF
+			for i in _galaxy.star_count():
+				if _star_visible(i) and _star_target_pos(i).distance_to(_view_center()) < best_d:
+					best_d = _star_target_pos(i).distance_to(_view_center())
+					_key_sel = i
+		dir = Vector2.ZERO   # the first press only picks
+	if _key_sel < 0:
+		return
+	if dir != Vector2.ZERO:
+		var from := _star_target_pos(_key_sel)
+		var best := -1
+		var best_score := INF
+		for i in _galaxy.star_count():
+			if i == _key_sel or not _star_visible(i):
+				continue
+			var v := _star_target_pos(i) - from
+			var d := v.length()
+			if d < 1.0:
+				continue
+			var c := v.normalized().dot(dir)
+			if c < 0.45:   # within ~63° of the key's way
+				continue
+			var sc := d * (2.2 - c)   # near and straight ahead first
+			if sc < best_score:
+				best_score = sc
+				best = i
+		if best < 0:
+			AudioManager.play("error")
+			return
+		_key_sel = best
+		AudioManager.play("hover")
+	_reset_charge()
+	_pan_vel = Vector2.ZERO
+	_offset_t += _view_center() - _star_target_pos(_key_sel)
+
+func _key_zoom(factor: float) -> void:
+	var at := _star_target_pos(_key_sel) if _key_sel >= 0 else _view_center()
+	_zoom_at(at, factor)
 
 # ── Right-click actions (CommandRegistry + ContextMenu) ──────────────────────
 

@@ -43,6 +43,29 @@ func set_focus_anchor(c: Control) -> void:
 	if c != null:
 		_unlock()
 
+## Keys play (CursorManager.keys_mode, the mouse hidden): the resting mouse means
+## nothing, so a tip shows only beside a focus anchor or by the globe's centre
+## cursor (`world_point`, set by PlanetaryView while it aims with it). Anything
+## the hidden mouse would start is refused, and nothing locks (playtest 16.11:
+## ground tips kept showing, stray tips floated and a locked one blocked input).
+var world_point: Variant = null   # Vector2 or null
+
+func set_world_point(p: Variant) -> void:
+	world_point = p
+
+func _anchor_ok() -> bool:
+	return _focus_anchor != null and is_instance_valid(_focus_anchor) and _focus_anchor.is_visible_in_tree()
+
+func _keys_blocked() -> bool:
+	return CursorManager.keys_mode and not _anchor_ok() and world_point == null
+
+## Called as keys play starts: whatever the mouse had open goes, locked or not.
+func drop_mouse_tip() -> void:
+	if _anchor_ok():
+		return
+	_unlock()
+	hide_tip()
+
 ## Where a locked tip stays open: the tip itself, a small area where the mouse
 ## rested when it locked, and the corridor between them.
 func _lock_zone() -> Rect2:
@@ -303,6 +326,10 @@ func _process(delta: float) -> void:
 		return
 	if not _visible:
 		return
+	if _keys_blocked():   # keys play began under a mouse tip: it goes
+		_unlock()
+		_hide_timer = 0.05
+		return
 	_tick_live(delta)
 	var root_now := _panel.get_parent() as Control
 	if _locked:
@@ -320,11 +347,13 @@ func _process(delta: float) -> void:
 		if not _lock_zone().has_point(get_viewport().get_mouse_position()) and _since_lock > LOCK_GRACE:
 			_hide_timer = 0.12
 		return
-	var use_anchor := _focus_anchor != null and is_instance_valid(_focus_anchor) and _focus_anchor.is_visible_in_tree()
+	var use_anchor := _anchor_ok()
+	# keys play by the globe's centre cursor: the tip goes by that point
+	var key_point: bool = not use_anchor and CursorManager.keys_mode and world_point != null
 	# only a resting mouse charges the lock (tips that follow a moving mouse —
-	# the lens, the news — never lock under it)
-	var m := get_viewport().get_mouse_position()
-	if use_anchor:
+	# the lens, the news — never lock under it); a hidden one never does
+	var m: Vector2 = world_point if key_point else get_viewport().get_mouse_position()
+	if use_anchor or CursorManager.keys_mode:
 		_charge = 0.0
 	else:
 		if m.distance_to(_last_mouse) > 3.0:
@@ -359,7 +388,7 @@ func _process(delta: float) -> void:
 			pos.x = maxf(4.0, ar.position.x - pw - 12.0)
 		pos.y = clampf(pos.y, 4.0, maxf(4.0, vp.y - ph - 4.0))
 	else:
-		var mouse := get_viewport().get_mouse_position()
+		var mouse := m
 		pos = mouse + Vector2(10, -ph - 8.0)
 		should_flip = pos.x + pw > vp.x
 		if should_flip:
@@ -391,6 +420,9 @@ func show_tip(title: String, body = "", cost = "", sub_body = "") -> void:
 	# tip opens at once. Its own owner may still update it (same title).
 	_ignored = _locked and _visible and title.to_upper() != _panel.title \
 		and (_panel.get_parent() as Control).get_global_rect().grow(6.0).has_point(get_viewport().get_mouse_position())
+	if not _ignored and _keys_blocked():
+		_ignored = true   # keys play: the hidden mouse starts no tip
+		hide_tip()
 	if _ignored:
 		return
 	# a new tip (none on screen, or another one's) plays its entrance;

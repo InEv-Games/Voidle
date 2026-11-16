@@ -135,8 +135,11 @@ func _build() -> void:
 		add_child(_ring_front)
 		_ring_front.draw.connect(_on_ring_front_draw)
 
-	_mini.mouse_entered.connect(_on_hover_start)
-	_mini.mouse_exited.connect(_on_hover_end)
+	# keys play (16.11): the hidden mouse never hovers; the keys pick instead
+	_mini.mouse_entered.connect(func() -> void:
+		if not CursorManager.keys_mode: _on_hover_start())
+	_mini.mouse_exited.connect(func() -> void:
+		if not CursorManager.keys_mode: _on_hover_end())
 
 	_hover_label = Label.new()
 	_hover_label.text    = planet_data.planet_name

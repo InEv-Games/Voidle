@@ -62,6 +62,8 @@ const STAR_PX: Dictionary = {
 func _process(delta: float) -> void:
 	_tick_view(delta)
 	_tick_rocket_fx()
+	if _key_idx >= 0 and not CursorManager.keys_mode:   # the mouse is back: the key pick lets go
+		_key_hover(-1)
 	if _dragging or _right_dragging:
 		CursorManager.set_state(CursorManager.State.GRAB)
 		return
@@ -838,6 +840,71 @@ func _input(event: InputEvent) -> void:
 			_spin_vel = lerpf(_spin_vel, d / dt, 1.0 - exp(-dt / 0.06))   # ~60 ms average
 		get_viewport().set_input_as_handled()
 
+
+# ── Keys (playtest 16.11: keyboard-only play) ────────────────────────────────
+## A / D (← →) pick the previous / next planet out from the star, W / S tilt
+## the view, Enter / Space / E open the picked planet, Q goes out to the galaxy.
+var _key_idx := -1
+
+func _unhandled_input(event: InputEvent) -> void:
+	var k := event as InputEventKey
+	if k == null or not k.pressed or k.ctrl_pressed or k.meta_pressed or k.alt_pressed:
+		return
+	if SkillTreeView.is_open or Narrative.owns_keys() or _orbits.is_empty():
+		return
+	var key := k.physical_keycode if k.physical_keycode != KEY_NONE else k.keycode
+	match key:
+		KEY_A, KEY_LEFT:
+			_key_step(-1)
+		KEY_D, KEY_RIGHT:
+			_key_step(1)
+		KEY_W, KEY_UP:
+			_orbit_tilt_t = clampf(_orbit_tilt_t - 0.03, 0.28, 0.50)
+		KEY_S, KEY_DOWN:
+			_orbit_tilt_t = clampf(_orbit_tilt_t + 0.03, 0.28, 0.50)
+		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E:
+			if k.echo:
+				return
+			if _key_idx < 0:
+				_key_step(0)
+			elif _hovered_planet != null:
+				planet_selected.emit(_hovered_planet)
+		KEY_Q:
+			if k.echo:
+				return
+			if not GameState.can_view_galaxy():
+				_show_access_denied_text("Galaxy Nav  LOCKED")
+			else:
+				_go_to_galaxy()
+		_:
+			return
+	get_viewport().set_input_as_handled()
+
+## Moves the pick `step` planets out (+) or in (−); 0 picks the first one
+## (the home world when it is here).
+func _key_step(step: int) -> void:
+	var n := _orbits.size()
+	var i := _key_idx
+	if i < 0:
+		i = 0
+		for j in n:
+			if _orbits[j].planet_data != null and _orbits[j].planet_data.has_meta("__is_home"):
+				i = j
+		step = 0
+	else:
+		i = clampi(i + step, 0, n - 1)
+		if i == _key_idx:
+			AudioManager.play("error")
+			return
+	_key_hover(i)
+	AudioManager.play("hover")
+
+func _key_hover(i: int) -> void:
+	if _active_orbit != null and is_instance_valid(_active_orbit) and _active_orbit._hover:
+		_active_orbit._on_hover_end()
+	_key_idx = i
+	if i >= 0 and i < _orbits.size():
+		_orbits[i]._on_hover_start()
 
 func _star_center() -> Vector2:
 	return _space.size * Vector2(0.5, 0.52)
