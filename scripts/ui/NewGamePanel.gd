@@ -5,7 +5,9 @@ extends ModalPopup
 ## scenes/ui/NewGamePanel.tscn), laid out as an excavation (StoryDialog): the
 ## preview (NewGamePreview: the home world of the seed, turning, with its moon)
 ## large and without a background above, the hero (and its ✕) right under it,
-## and under the hero one panel in three steps:
+## and at the top of the screen a trail of the steps (CIVILIZATION TYPE › START WORLD ›
+## HEAD START: the ones reached can be pressed to go back to them, the ones
+## ahead wait, dim), then one panel in three steps:
 ##   1 Civ    CIVILIZATION on a slider, 0 to 6 (only 0 is played for now;
 ##            the others show their scale, locked)                     (NEXT)
 ##   2 Start  START WORLD, MOON and what the option is           (BACK, NEXT)
@@ -25,6 +27,7 @@ var begin: Callable
 @onready var _hero: HeroHeader = $Center/Box/Head/Hero
 @onready var _head: Control = $Center/Box/Head
 @onready var _pv: NewGamePreview = $Center/Box/Stage/Preview
+@onready var _crumbs: HBoxContainer = $Crumbs
 @onready var _pages: PanelContainer = $Center/Box/Pages
 @onready var _steps: VBoxContainer = $Center/Box/Pages/Steps
 @onready var _civ: VBoxContainer = $Center/Box/Pages/Steps/Civ
@@ -51,7 +54,11 @@ var _switching := false    # a step is fading out
 var _last_look: Callable   # the preview's look: the option pressed last (the seed may change)
 var _boon_btns := {}
 var _step := 1
+var _reached := 1          # the furthest step opened so far (the trail lets you back to it)
 const STEPS := 3
+## The trail's names, one per step.
+const STEP_NAMES := ["CIVILIZATION TYPE", "START WORLD", "HEAD START"]
+var _crumb_btns: Array[Button] = []
 
 func _ready() -> void:
 	_hero_close = $Center/Box/Head/Close
@@ -150,6 +157,7 @@ func _on_civ(v: float) -> void:
 	if open_now:
 		_choice["civ"] = id
 	_next.disabled = not open_now and _step == 1
+	_paint_crumbs()
 	var n := int(v)
 	_last_look = (func() -> void: _show_choice()) if n == 0 \
 		else (func() -> void: _pv.show_solar(int(_choice["seed"]))) if n == 1 \
@@ -314,18 +322,66 @@ func _build_buttons() -> void:
 		AudioManager.play("click")
 		_go_step(maxi(_step - 1, 1)))
 	_ok.pressed.connect(_on_begin)
+	_build_crumbs()
 	# every step shown (unseen) while the panel measures them, then the first
 	_show_step(1)
 	_start.visible = true
 	_rest.visible = true
 	_head.modulate.a = 0.0
+	_crumbs.modulate.a = 0.0
 	_buttons.modulate.a = 0.0
 	_hold_height(func() -> void:
 		_show_step(1)
 		_head.modulate.a = 1.0
+		_crumbs.modulate.a = 1.0
 		_buttons.modulate.a = 1.0
 		RowReveal.play(_head, SessionPrep.REVEAL_SLOW)
+		RowReveal.play(_crumbs, SessionPrep.REVEAL_SLOW)
 		_reveal(1))
+
+# ── The trail of steps ───────────────────────────────────────────────────────
+
+## One flat button per step, a › between them.
+func _build_crumbs() -> void:
+	for i in STEPS:
+		if i > 0:
+			var sep := Label.new()
+			sep.text = "›"
+			sep.theme_type_variation = &"SubLabel"
+			sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_crumbs.add_child(sep)
+		var b := Button.new()
+		b.text = String(STEP_NAMES[i])
+		b.theme_type_variation = UIStyle.FLAT
+		b.focus_mode = Control.FOCUS_NONE
+		var step := i + 1
+		b.pressed.connect(func() -> void:
+			if step == _step:
+				return
+			AudioManager.play("click")
+			_go_step(step))
+		_crumbs.add_child(b)
+		_crumb_btns.append(b)
+	_paint_crumbs()
+
+## The step shown in the accent; the ones reached pressable; the ones ahead dim
+## (and, on a locked civilization, nothing ahead of step 1 opens).
+func _paint_crumbs() -> void:
+	var held := _step == 1 and _next.disabled
+	for i in _crumb_btns.size():
+		var b := _crumb_btns[i]
+		var step := i + 1
+		var current := step == _step
+		var reachable := step <= _reached and not (held and step > 1)
+		b.disabled = not current and not reachable
+		b.mouse_default_cursor_shape = Control.CURSOR_ARROW if current or b.disabled \
+			else Control.CURSOR_POINTING_HAND
+		if current:
+			for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color"]:
+				b.add_theme_color_override(c, UIStyle.color(&"accent"))
+		else:
+			for c: StringName in [&"font_color", &"font_hover_color", &"font_pressed_color"]:
+				b.remove_theme_color_override(c)
 
 func _page(step: int) -> Control:
 	return [_civ, _start, _rest][clampi(step, 1, STEPS) - 1]
@@ -343,6 +399,8 @@ func _show_step(step: int) -> void:
 	_ok.visible = step == STEPS
 	_next.disabled = step == 1 and _civ_slider.value != SessionPrep.CIV_ORDER.find(String(_choice["civ"]))
 	_hero.caption = "Prepare your colony  //  %d / %d" % [step, STEPS]
+	_reached = maxi(_reached, step)
+	_paint_crumbs()
 
 ## Its rows come in (and the buttons under it).
 func _reveal(step: int) -> void:
