@@ -8158,14 +8158,13 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 			if not poi.constructing:
 				card.stats = _income_stats(pp, poi)
 		elif odef != null and not odef.planet_support.is_empty():
-			var sup: Array[String] = []
+			# its planet-wide boosts as icon chips (+10% per resource), then its size
+			card.badge = "Level %d" % int(pp.district_levels.get(poi.label, 1))
+			var sup := PackedStringArray()
 			for rid: String in odef.planet_support:
-				sup.append("+%d%% %s" % [roundi(float(odef.planet_support[rid]) * 100.0),
-					"raw & processed" if rid in [Economy.RAW, Economy.GOODS, Economy.FUEL, Economy.RARE] else Economy.display_name(rid)])
-				if rid in [Economy.RAW, Economy.GOODS, Economy.FUEL, Economy.RARE]:
-					break
-			card.description = "%s  //  %s planet-wide  //  Lv %d  //  %d building%s" % [odef.display_name, sup[0],
-				int(pp.district_levels.get(poi.label, 1)), total_size, "" if total_size == 1 else "s"]
+				sup.append("%s:+%d%%" % [rid, roundi(float(odef.planet_support[rid]) * 100.0)])
+			sup.append("factory:Size %d" % total_size)
+			card.stats = sup
 		else:
 			card.description = "Station  //  %d module%s" % [total_size, "" if total_size == 1 else "s"]
 	else:
@@ -8214,10 +8213,20 @@ func _build_district_overview_card(poi: POIData, planet: PlanetData, pp: PlanetP
 
 	var cap_poi    := poi
 	var cap_planet := planet
+	# an Orbital's chips (+10% …) say "planet-wide" on hover
+	var support_tip := ""
+	var s_def := ProductionManager.district_def(poi) if poi.is_orbital() and not Leveling.is_orbit_city(planet, poi) else null
+	if s_def != null and not s_def.planet_support.is_empty():
+		var lines := PackedStringArray()
+		for rid: String in s_def.planet_support:
+			lines.append("%s +%d%% %s" % [UIIcons.bb(rid, 12), roundi(float(s_def.planet_support[rid]) * 100.0), Economy.display_name(rid)])
+		support_tip = "Planet-wide boost, across this whole world:\n" + "\n".join(lines)
 	card.mouse_entered.connect(func() -> void:
 		AudioManager.play("hover")
 		if cap_poi.constructing:
 			TooltipManager.show_tip("Constructing", "This District is not fully operational yet.\nBuild time: %.0fs" % cap_poi.construct_duration)
+		elif support_tip != "":
+			TooltipManager.show_tip(card.title, support_tip)
 		CursorManager.set_state(CursorManager.State.POINTER))
 	card.mouse_exited.connect(func() -> void:
 		TooltipManager.hide_tip()
