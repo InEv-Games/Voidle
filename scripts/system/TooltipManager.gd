@@ -295,6 +295,15 @@ func live(build: Callable) -> void:
 	_live_owner = get_viewport().gui_get_hovered_control()
 	_live_t = 0.0
 
+## Stops refreshing this tip and leaves any newer owner's tip alone.
+func hide_live_tip(build: Callable, force := false) -> void:
+	if _live != build:
+		return
+	_live = Callable()
+	if force:
+		_unlock()
+	hide_tip()
+
 func _tick_live(delta: float) -> void:
 	if not _live.is_valid():
 		return

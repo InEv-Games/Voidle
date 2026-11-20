@@ -105,6 +105,14 @@ Başlangıç commit’i `aefcf1a12f219165f1e45c2c24d7c8bc7951d168`. Godot ve tes
 
 Başlangıç commit’i `5eed8c0680bfee5184da6f07ec9c92a3088c6b46`. Godot ve testler çalıştırılmadı.
 
+### Kazı tooltip’i
+
+- [POILayer.gd](../scripts/planetary/POILayer.gd) kazı adını ve durumunu ortak `TooltipManager` kartında gösteriyor. Kazı sürerken kalan süre canlı güncelleniyor. Başlanmamış ve tamamlanan kazılarda kart, işareti açınca oyuncunun ne göreceğini belirtiyor. Haritadaki kazı işareti, ilerleme çubuğu ve kısa süre göstergesi korunuyor.
+- [PlanetaryView.gd](../scripts/planetary/PlanetaryView.gd) tooltip’i haritanın etkileşime açık alanıyla sınırlıyor ve işaretin üzerine gelindiğinde coğrafya tooltip’ini geri çekiyor. Dünya merkez imleci de aynı kartı açıyor.
+- [TooltipManager.gd](../scripts/system/TooltipManager.gd) içindeki `hide_live_tip`, kazı tooltip’inin canlı güncellemesini kendi çağrısı üzerinden kapatıyor. Kazı penceresi açılırken veya görünüm kapanırken kilitli kazı tooltip’i de kapatılabiliyor.
+
+Başlangıç commit’i `185a44ea1d3c890ad0af6f9845ef535ea5fcae2b`. Godot ve testler çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.
@@ -116,6 +124,7 @@ git diff --no-ext-diff aefcf1a12f219165f1e45c2c24d7c8bc7951d168 -- scenes/ui/New
 git diff --no-ext-diff aefcf1a12f219165f1e45c2c24d7c8bc7951d168 -- scripts/system/MainMenu.gd scripts/system/HUDManager.gd
 git diff --no-ext-diff aefcf1a12f219165f1e45c2c24d7c8bc7951d168 -- scripts/game/Location.gd scripts/game/ProductionManager.gd scripts/game/SkillTree.gd scripts/game/balance/BalanceConfig.gd scripts/planetary/TerrainSampler.gd scripts/planetary/PlanetaryView.gd scripts/system/DevConsole.gd
 git diff --no-ext-diff 5eed8c0680bfee5184da6f07ec9c92a3088c6b46 -- scenes/ui/components/LeftPanel.tscn scripts/system/NewsFeed.gd scripts/planetary/PlanetaryView.gd
+git diff --no-ext-diff 185a44ea1d3c890ad0af6f9845ef535ea5fcae2b -- scripts/planetary/POILayer.gd scripts/planetary/PlanetaryView.gd scripts/system/TooltipManager.gd
 ```
 
 İnceleyen AI’a bu dosyayı ve komutların çıktısını ver. Repo erişimi varsa ilgili çağrıları da açabilir. Kullanılacak talimat aşağıda.
@@ -140,6 +149,7 @@ Bu günlüğü bağlam olarak kullan ve Git farkını kaynak kodla karşılaşt�
 9. Rehberin öneri puanında adayın Total değerini ve mevcut district’lerin net Location değişimlerini eşit ağırlıkla topladığını incele.
    Yerleştirme kurallarını karşılayan en iyi örnek noktanın yalnızca harita işaretiyle gösterildiğini kontrol et.
 10. Sol panel açıkken görünür haber metninin ve gezegen alanında başlayan sağ tuş hareketinin ilgili kontrole ulaştığını koddan kontrol et.
+11. Kazı tooltip’inin ortak kartta doğru durumu ve canlı süreyi gösterdiğini, kazı açılınca veya görünüm kapanınca kaldırıldığını incele.
 
 Her bulguda önem derecesini, dosya ve satırı, tetikleyen koşulu ve oyuncuya
 etkisini ver. Oyun içinde doğrulama isteyen ihtimalleri açıkça belirt.

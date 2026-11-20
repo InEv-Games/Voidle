@@ -209,6 +209,7 @@ func _ready() -> void:
 	tree_exiting.connect(func() -> void: VAM.stop_snapshot(PLACE_SNAPSHOT, &"placement"))
 	tree_exiting.connect(func() -> void: TooltipManager.set_world_point(null))
 	poi_layer.territory_lookup = _territory_at_screen
+	poi_layer.excavation_hover_allowed = _can_hover_excavation
 	SettingsManager.night_shadow_changed.connect(func(v: float) -> void:
 		if planet_renderer.material:
 			(planet_renderer.material as ShaderMaterial).set_shader_parameter("night_shadow", v))
@@ -6165,7 +6166,8 @@ func _tick_lens_tip() -> void:
 	# the plain map names its geography only while Alt is held (playtest 31.10:
 	# a tip always under the mouse got in the way); a lens always explains
 	if _placing_def == null and current_data != null and _is_over_planet_area(mouse) \
-			and not covered and poi_layer._hovered_index < 0 and not TutorialManager.is_narrating() \
+			and not covered and poi_layer._hovered_index < 0 and poi_layer._hover_site.is_empty() \
+			and not TutorialManager.is_narrating() \
 			and GameState.is_scanned(current_data.seed) \
 			and (_role != "" or Input.is_key_pressed(KEY_ALT) or _pad_inspect == PadInspect.OVERVIEW):
 		hit = _screen_to_lonlat(mouse)
@@ -6429,6 +6431,11 @@ func _is_over_planet_area(global_pos: Vector2) -> bool:
 	return hovered == null or hovered == planet_renderer or hovered == cont \
 		or hovered.mouse_filter != Control.MOUSE_FILTER_STOP \
 		or not hovered.get_global_rect().has_point(global_pos)
+
+func _can_hover_excavation(at: Vector2) -> bool:
+	return not _switching_body and not SkillTreeView.is_open and not TradePanel.covers(at) \
+		and not StoryDialog.is_open(get_tree()) and not Narrative.is_busy() \
+		and _is_over_planet_area(at)
 
 func _set_zoom_target(z: float, anchor: Vector2) -> void:
 	_zoom_target = clampf(z, ZOOM_SYSTEM if _system_zoom_ok() else ZOOM_MIN, _zoom_max())

@@ -72,7 +72,7 @@ func set_world_cursor_active(on: bool) -> void:
 			update_hover_at(p["center"], true)
 	else:
 		_hover_port = {}
-		_hover_site = {}
+		_set_hover_site({})
 		_hover_wonder = {}
 		hovered_capital = -1
 		_hovered_index = -1
@@ -594,6 +594,8 @@ func _draw_wonders() -> void:
 
 ## Excavation marks (Excavations.sites_on): [{ id, name, lon, lat (radians), done, total, site }].
 var sites: Array = []
+## Screen point -> whether the planet view accepts excavation hover there.
+var excavation_hover_allowed: Callable
 var _hover_site: Dictionary = {}
 const SITE_COL := Color(1.0, 0.80, 0.35)
 const SITE_DIG_COL := Color(0.62, 0.72, 0.88)
@@ -632,11 +634,9 @@ func _draw_sites() -> void:
 			_draw_pixel_glow(sp, block * ((7.0 if calling else 5.0) + 2.0 * pulse), (0.6 if calling else 0.35) * pulse * marker_vis)
 		_draw_pixel_icon(sp, _SITE_ICON, block, Color(col.lightened(0.35) if hov else col, marker_vis), marker_vis)
 		var total: int = r.get("total", 1)
-		var head := block * 3.0   # room above the mark for its hover label
 		if total > 1:
 			var part := 1.0 - Excavations.time_left(s) / maxf(Excavations.dig_length(s), 1.0) if digging else 0.0
 			_draw_site_bar(sp, int(r.get("done", 0)), total, block, part)
-			head = block * 9.0
 		var below := ""
 		if digging:
 			below = Excavations.time_text(Excavations.time_left(s))
@@ -647,13 +647,6 @@ func _draw_sites() -> void:
 			var bp := sp + Vector2(-bw * 0.5, block * 4.0 + SIZE)
 			draw_string_outline(font, bp, below, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, 3, Color(0, 0, 0, marker_vis))
 			draw_string(font, bp, below, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, Color(col, marker_vis))
-		if hov:
-			var text := "%s // %s" % [String(r["name"]).to_upper(), "DIGGING" if digging else "CLICK"]
-			var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE).x
-			var box := Rect2(sp + Vector2(-tw * 0.5 - 5.0, -head - 15.0), Vector2(tw + 10.0, 15.0))
-			draw_rect(box, Color(0.04, 0.07, 0.14, 0.88))
-			draw_rect(box, Color(col, 0.7), false, 1.0)
-			draw_string(font, box.position + Vector2(5.0, 11.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE, col)
 
 ## A notched bar over a mark: one notch per excavation of its ruin, lit if done;
 ## the one being dug fills by `part` (0..1).
@@ -681,6 +674,38 @@ func _site_at(global_pos: Vector2) -> Dictionary:
 		if at != null and (at as Vector2).distance_to(global_pos) <= reach:
 			return r
 	return {}
+
+func _set_hover_site(site: Dictionary, force_close := false) -> void:
+	var changed: bool = _hover_site.get("id", "") != site.get("id", "")
+	_hover_site = site
+	if not changed:
+		return
+	TooltipManager.hide_live_tip(_show_excavation_tip, force_close)
+	if site.is_empty():
+		return
+	AudioManager.play("poi_ping")
+	if not world_cursor_active:
+		CursorManager.set_state(CursorManager.State.POINTER)
+	TooltipManager.live(_show_excavation_tip)
+
+func _show_excavation_tip() -> void:
+	if _hover_site.is_empty():
+		return
+	var site: ExcavationSiteDef = _hover_site["site"]
+	var body: String
+	match Excavations.stage(site):
+		Excavations.Stage.IDLE:
+			body = "Site unexplored\nOpen the site to begin."
+		Excavations.Stage.DIGGING:
+			body = "Digging\n%s  %s remaining" % [UIIcons.bb("calendar", 12),
+				Excavations.time_text(Excavations.time_left(site))]
+		Excavations.Stage.READY:
+			body = "Excavation complete\nOpen the site to see the results."
+		_:
+			TooltipManager.hide_live_tip(_show_excavation_tip)
+			return
+	TooltipManager.show_tip(site.display_name, body)
+	TooltipManager.set_title_icon("explore")
 
 func _wonder_at(global_pos: Vector2) -> Dictionary:
 	if marker_vis < 0.5 or wonders.is_empty():
@@ -1140,12 +1165,21 @@ func _process(_delta: float) -> void:
 		queue_redraw()   # excavation marks pulse (never from _draw: queue_redraw there loops)
 	var p := _get_planet_params()
 	if p.is_empty():
+		_set_hover_site({})
 		return
 	var center: Vector2 = p["center"]
 	var r_px: float     = p["r_px"]
 	update_screen_positions()
 	if world_cursor_active and not placement_mode:
 		update_hover_at(center, true)
+	if not sites.is_empty() or not _hover_site.is_empty():
+		var at := center if world_cursor_active else get_viewport().get_mouse_position()
+		var aiming := world_cursor_active or (not CursorManager.keys_mode \
+			and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) \
+			and not Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT))
+		var allowed := aiming and not placement_mode and is_visible_in_tree() \
+			and excavation_hover_allowed.is_valid() and bool(excavation_hover_allowed.call(at))
+		_set_hover_site(_site_at(at) if allowed else {})
 
 	var keep_texts: Array[Dictionary] = []
 	for ft in _floating_texts:
@@ -1216,6 +1250,10 @@ func spawn_floating_text(lon_deg: float, lat_deg: float, text: String, color: Co
 
 func _ready() -> void:
 	_orbitron = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf")
+
+func _exit_tree() -> void:
+	if not _hover_site.is_empty():
+		TooltipManager.hide_live_tip(_show_excavation_tip, true)
 
 ## Neighbouring districts (same "cluster" id) that crowd together on screen show
 ## one label — the biggest settlement's, with a "+N" count. Zooming in spreads
@@ -1495,14 +1533,6 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func update_hover_at(global_pos: Vector2, allow_territory: bool = true) -> void:
 	_hover_port = _port_at(global_pos)
-	var prev_r: String = _hover_site.get("id", "")
-	_hover_site = _site_at(global_pos)
-	if String(_hover_site.get("id", "")) != prev_r:
-		queue_redraw()
-		if not _hover_site.is_empty():
-			AudioManager.play("poi_ping")
-			if not world_cursor_active:
-				CursorManager.set_state(CursorManager.State.POINTER)
 	var prev_w: String = _hover_wonder.get("name", "")
 	_hover_wonder = _wonder_at(global_pos)
 	if String(_hover_wonder.get("name", "")) != prev_w:
@@ -1536,6 +1566,7 @@ func update_hover_at(global_pos: Vector2, allow_territory: bool = true) -> void:
 func trigger_click_at(global_pos: Vector2) -> bool:
 	var rel := _site_at(global_pos)
 	if not rel.is_empty():
+		_set_hover_site({}, true)
 		AudioManager.play("poi_select")
 		excavation_clicked.emit(String(rel["id"]))
 		return true
