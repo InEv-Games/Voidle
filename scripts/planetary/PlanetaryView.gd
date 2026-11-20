@@ -10492,8 +10492,6 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 		# what the level changes, one icon row each: now → next (+gain), then
 		# the slots; the cost in the bottom-right corner (playtest 31.10).
 		# Built on each refresh: credits, workers and blocks change while it is up.
-		var m_now := DistrictDef.level_mult(lv)
-		var m_next := DistrictDef.level_mult(lv + 1)
 		var tip_fn := func() -> void:
 			var rows: Array[String] = [_bb("Lv %d  →  [b]Lv %d[/b]" % [lv, lv + 1], "#e8ecf6"), ""]
 			var inc := ProductionManager.district_income_shown(pp, poi)
@@ -10501,6 +10499,8 @@ func _build_district_level_row(poi: POIData, planet: PlanetData, pp: PlanetProgr
 				var cur := float(inc[rid])
 				if cur <= 0.0:
 					continue
+				var m_now := DistrictDef.level_mult(lv, poi, rid)
+				var m_next := DistrictDef.level_mult(lv + 1, poi, rid)
 				rows.append(_change_row(rid, cur, cur * m_next / maxf(m_now, 0.0001)))
 			rows.append(_change_row("factory", float(slots_now), float(slots_now + add_slots)))
 			# no "Output ×1 → ×1.5" row: the rows above already show the gain (playtest 07.11)

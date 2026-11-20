@@ -532,8 +532,9 @@ func district_income(pp: PlanetProgress, poi: POIData) -> Dictionary:
 
 func _district_income_now(pp: PlanetProgress, poi: POIData) -> Dictionary:
 	var raw := district_income_raw(GameState.get_planet_data(pp.planet_seed), poi)
-	var lv_m := DistrictDef.level_mult(pp.district_levels.get(poi.label, 1))
+	var level: int = pp.district_levels.get(poi.label, 1)
 	for id: String in raw:
+		var lv_m := DistrictDef.level_mult(level, poi, id)
 		raw[id] = _skill_mods(pp, id, float(raw[id]) * lv_m * Economy.scope_bonus(pp, poi.label, id), "")
 	return raw
 
@@ -864,7 +865,7 @@ func _skill_mods(_pp: PlanetProgress, id: String, v: float, output_tag: String) 
 		Economy.FUEL:
 			v *= st.get_fuel_mult() * st.reserve_mult(idle_ratio())
 		Economy.SCIENCE:
-			v *= st.get_science_mult() * Balance.cfg.science_income_mult
+			v *= st.get_science_mult()
 		Economy.ENERGY:
 			if output_tag == "solar":
 				v *= st.get_solar_mult()
@@ -917,7 +918,7 @@ func idle_income_rates() -> Dictionary:
 	var st := get_node("/root/SkillTree")
 	var k := empire_idle().x / 1000.0 / 60.0
 	return {Economy.CREDITS: k * float(st.idle_credits_per_1000()),
-		Economy.SCIENCE: k * float(st.idle_science_per_1000()) * Balance.cfg.science_income_mult}
+		Economy.SCIENCE: k * float(st.idle_science_per_1000())}
 
 func _tick_idle_income(delta: float) -> void:
 	_idle_timer += delta

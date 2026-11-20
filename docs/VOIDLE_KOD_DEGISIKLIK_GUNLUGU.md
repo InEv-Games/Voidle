@@ -130,6 +130,86 @@ Başlangıç commit’i `81f004ebd39244643ed4006ac478f46e1dc35acc`. Godot ve tes
 
 Başlangıç commit’i `2a47432055cdbccda5f18d91c054658c49a26a4c`. Godot ve testler çalıştırılmadı.
 
+### Science baz üretimi ve Ion Research Lab
+
+- `BalanceConfig.gd` içinden genel Science çarpanı `science_income_mult` kaldırıldı. `ProductionManager.gd` içindeki `_skill_mods` ve `idle_income_rates` bu alanı artık okumuyor.
+- Science District’in aylık baz üretimi Lv 1’de 1 Science. Mevcut district seviye hesabıyla Lv 2’de 1,5 Science. Aylık bina üretimleri Field Lab için 1, Research Lab, Mountain Observatory ve Forest Research Station için 2, Research Institute, Desert Research Station ve Ion Research Lab için 4, Particle Accelerator için 8 Science. Orbital Science paketleri aynı bina tanımlarını kullanıyor. Gezegen bonusundan önce paket çıktıları 3, 6, 12 ve 24 Science.
+- `ion_research_lab.tres` için ilk inşa bedeli 450 Credits, aylık işletme girdisi 3 Goods. Capital District, Orbit City, Free Research ve önceki veya sonraki medeniyetlere ait laboratuvar değerleri, genel çarpan kalkınca mevcut üretimleri korunacak şekilde doğrudan tanımlandı.
+- Ekonomi revizyonu tamamlandığında bütün kaynakların alım ve satım oranları birlikte gözden geçirilecek.
+
+Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve testler çalıştırılmadı.
+
+### Commercial baz üretimi ve Orbital Commercial paketleri
+
+- `commercial_district.tres` aylık baz üretimi Lv 1 için 2 Credits. Mevcut seviye hesabıyla Lv 2 toplam 3 Credits.
+- Aylık baza göre Market 2, Local Trade Center, Lakeside Market ve Glacier Exchange 4, Trade Hub ve Volcanic Market 8, Commodity Exchange ve Low-Gravity Exchange 16 Credits üretiyor.
+- `orbit_prefabs.csv` içindeki Orbital Commercial paketleri yüzeyle aynı bina kimliklerini kullanıyor. Otomatik kurulan üçlü paketlerin aylık baz üretimi gezegen bonusundan önce sırasıyla 6, 12, 24 ve 48 Credits.
+
+Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve testler çalıştırılmadı.
+
+### Bina işletme giderleri ve coğrafya indirimi
+
+- Demo kataloğundaki T0–T3 binalarının işletme giderleri `resources/buildings` tanımlarında maliyet tier’ine göre düzenlendi. T0 için 1 enerji, T1 için 2 enerji ve 1 Goods, T2 için 6 enerji, 3 Goods ve 1 Fuel, T3 için 18 enerji, 9 Goods, 3 Fuel ve 1 Rare Elements. Araziye veya Ay’a özel binalar mevcut `cost_tier` alanıyla bir alt kademenin giderini kullanıyor.
+- Bir modelin ürettiği kaynak kendi tier giderinden çıkarıldı. Örneğin santraller enerji, Goods Factory Goods, Fuel Refinery Fuel ve Rare Metal Refinery Rare Elements tüketmiyor. Ferrite gibi mevcut tarif girdileri korundu.
+- Orbital paketleri doğrudan aynı bina tanımlarını kullanıyor. Spaceport’un gideri, `ProductionManager.gd` içindeki mevcut aktif hazırlık ve soğuma çevrimlerinde tahsil ediliyor.
+
+Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve testler çalıştırılmadı.
+
+## 21 Kasım 2026
+
+### Helium-3 Reactor ve Low-Gravity Exchange giderleri
+
+- `helium3_reactor.tres` ve `low_gravity_exchange.tres` kendi T3 kademelerini kullanıyor. İki model de T3 inşa malzemelerine ve aylık 9 Goods, 3 Fuel, 1 Rare Elements giderine geçti. Low-Gravity Exchange ayrıca 18 enerji tüketiyor. Helium-3 Reactor enerji ürettiği için enerji gideri 0 ve aylık baz üretimi 8 enerji.
+- Coğrafya indirimi için binanın özel bir arazi yerleşim koşulu olmalı. `BuildingDef.gd` içindeki `cost_tier` açıklaması alanın güncel işlevini yansıtacak şekilde düzeltildi.
+
+Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve testler çalıştırılmadı.
+
+### Residential kapasitesi ve Orbital Residential paketleri
+
+- `residential_district.tres` Lv 1 baz kapasitesi 1.000 nüfus. Mevcut district seviye hesabıyla Lv 2 toplam 1.500.
+- Low-rise Housing 1.000, Habitat Block, Mountain Terraces ve Forest Homes 2.000, Apartment Towers, Coastal Apartments ve Desert Habitat 4.000, Luxury Spires ve Crater Habitat 8.000 baz kapasite sağlıyor.
+- `orbit_prefabs.csv` içindeki Orbital Residential paketleri aynı konut tanımlarını kullanıyor. Üçlü paketlerin gezegen bonusu öncesi kapasiteleri 3.000, 6.000, 12.000 ve 24.000 nüfus.
+
+Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve testler çalıştırılmadı.
+
+### Coğrafya şartı olan binaların aylık giderleri
+
+- Energy, Science, Commercial, Residential ve Production gruplarında özel arazi şartı olan 19 aktif bina kendi bina tier’inin aylık enerji ve kaynak giderlerini kullanıyor. `cost_tier` ile seçilen alt tier inşa malzemesi paketleri korundu.
+- Üretilen kaynak binanın kendi girdilerine eklenmiyor. Bu yüzden Wind Turbine ve Tidal Generator yalnızca 1 Goods, Geothermal Plant 3 Goods ve 1 Fuel, Cavern Refinery ise yalnızca 18 enerji ödüyor.
+- Production binalarının yeni çıktı dağılımı ve district’in baz maden üretimi bu denge çalışmasının ayrı tasarım kalemleri.
+
+Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve testler çalıştırılmadı.
+
+### Production District ve üretim binaları
+
+- `mining_district.tres` aylık baz ham maden üretimi Lv 1, Lv 2 ve Lv 3 için sırasıyla 1, 1,5 ve 2. Aynı tanım Ferrite ve Moonstone üreten yüzey district’lerinde kullanılıyor.
+- Surface Quarry, Mine, River Extractor, Deep Drill ve Mantle Cracker aylık bazda sırasıyla 1, 2, 2, 4 ve 8 ham maden üretiyor. Geothermal Drill ayda 4 Goods için 6 enerji, 8 Ferrite ve 1 Fuel, Volcanic Mine ayda 2 Fuel için 6 enerji, 12 Ferrite ve 3 Goods kullanıyor.
+- Deep-Core Refinery, Rare Refining ile açılıyor ve dağ koşulu istiyor. Ay kısıtı kaldırıldı. Aylık 18 enerji, 36 Ferrite, 9 Goods ve 3 Fuel ile 2 Rare Elements üretiyor. Mevcut kayıtlardaki binaların geçerliliği için `lunar_deep_bore` kimliği korundu.
+- Cavern Refinery tek çevrimde 18 enerji gideriyle 8 Goods, 4 Fuel ve 2 Rare Elements üretiyor. Orbital Production paketleri aynı bina tanımlarını kullanıyor.
+
+Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve testler çalıştırılmadı.
+
+### Capital District baz üretimi ve kapasitesi
+
+- `city_district.tres` aylık baz Credits, Science, enerji ve ham maden çıktıları Lv 1’de 1, Lv 2’de 1,5. Ham maden gezegenin madeni keşfedildikten sonra üretiliyor.
+- `DistrictDef.level_mult()` Capital District’in nüfus katkısı için seviye çarpanını 1 döndürüyor. `ProductionManager._district_income_now()` ve `PlanetaryView.gd` içindeki yükseltme tooltip’i aynı hesabı kullanıyor. City’nin 15.000 ve Capital’in 600 katkısıyla baz kapasite 15.600. Lv 1 ve Lv 2 slot sayıları sırasıyla 2 ve 3.
+- Capital District tasarımına dönüldüğünde oyun mekaniklerini açacak yeni binalar ele alınacak.
+
+Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve testler çalıştırılmadı.
+
+### Energy District, santraller ve Orbital Energy
+
+- `generator_district.tres` baz enerji üretimi Lv 1’de 1, Lv 2’de 1,5. Solar Array 1, Solar Matrix, Wind Turbine ve Tidal Generator 2, Geothermal Plant ve Fission Reactor 4, Antimatter Plant ve Helium-3 Reactor 8 baz enerji üretiyor.
+- Helium-3 Reactor ilk kurulum fiyatı 450 Credits. `orbital_energy_district.tres` kendi enerji gideri 0. Orbital Energy paketleri yüzeydeki santral tanımlarını kullanıyor ve gezegen bonusu öncesi 3, 6, 12 veya 24 enerji sağlıyor.
+
+Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve testler çalıştırılmadı.
+
+### Ekonomi revizyonunun Fork’a aktarımı
+
+- Bu çalışma ağacındaki ekonomi revizyonu Science, Commercial, Residential, Production, Capital ve Energy bölümlerini kapsıyor. Bina işletme giderleri kendi tier’ine göre uygulanıyor. Özel arazi şartı inşa malzemesi kademesini düşürüyor. Binanın ürettiği kaynak kendi işletme giderine eklenmiyor.
+- Orbital district paketleri yüzey binalarıyla ortak tanımları kullanıyor. Trade alım ve satım oranları sonraki denge turuna bırakıldı. Capital District için oyun mekaniklerini açan yeni binalar ayrıca tasarlanacak.
+- Fork’a gönderilecek güncel kaynak farkını repo kökünde `git diff --no-ext-diff 71bb565b1adc774576cbb113457ea57da4a8f1dc` ile inceleyebilirsin.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.

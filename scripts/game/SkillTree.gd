@@ -213,9 +213,9 @@ func _init() -> void:
 		{"events": ["orbit_station"], "common": true, "shape": NodeShape.CIRCLE})
 	# 12.11 (K48): the Moon's one task on the road is Moonstone; its own Tier 3
 	# buildings make it worth settling
-	_n("lunar_materials", "Lunar Materials", "Learn to build with what the Moon gives: three Moon-only Tier 3 buildings, and the step before the final rocket.",
-		1200.0, _at("lunar_program", -90, 2.3), ["lunar_program"], "common", "Unlocks Helium-3 Reactor, Lunar Deep Bore and Low-Gravity Exchange (Moon only)",
-		{"grants": ["helium3_reactor", "lunar_deep_bore", "low_gravity_exchange"], "common": true})
+	_n("lunar_materials", "Lunar Materials", "Build the Helium-3 Reactor and Low-Gravity Exchange on the Moon, and take the next step towards the final rocket.",
+		1200.0, _at("lunar_program", -90, 2.3), ["lunar_program"], "common", "Unlocks Helium-3 Reactor and Low-Gravity Exchange (Moon only)",
+		{"grants": ["helium3_reactor", "low_gravity_exchange"], "common": true})
 	_n("advanced_planet_rocket", "Advanced Planetary Rocket", "The rocket that takes you from your home world to a new planet. It needs the mineral mined on the Moon.",
 		2000.0, _at("lunar_materials", -90, 1.3), ["lunar_materials"], "common", "Unlocks the final rocket",
 		{"requires": ["rare_processing"], "events": ["moon_moonstone_100"], "common": true, "shape": NodeShape.CIRCLE})
@@ -245,9 +245,9 @@ func _init() -> void:
 	_n("rare_processing", "Rare Processing", "Extract rare metals from bulk ore.",
 		900.0, _at("fuel_processing", 140, 1.2), ["fuel_processing"], "processing", "Unlocks Rare Metal Forge, Rare access",
 		{"grants": ["molecular_forge"], "common": true})
-	_n("rare_refining", "Rare Refining", "Rare Metals in bulk.",
-		1800.0, _at("rare_processing", 140, 1.15), ["rare_processing"], "processing", "Unlocks Rare Metal Refinery",
-		{"grants": ["rare_element_refinery"]})
+	_n("rare_refining", "Rare Refining", "Rare Metals in bulk. The Deep-Core Refinery needs a Mountain.",
+		1800.0, _at("rare_processing", 140, 1.15), ["rare_processing"], "processing", "Unlocks Rare Metal Refinery and Deep-Core Refinery",
+		{"grants": ["rare_element_refinery", "lunar_deep_bore"]})
 	_n("cavern_refining", "Cavern Refining", "Moon only: a refinery sealed in the Moon's Caves makes Goods, Fuel and Rare Metals together.",
 		900.0, _at("rare_processing", 60, 1.1), ["rare_processing"], "processing", "Unlocks Cavern Refinery (Moon only)",
 		{"grants": ["cavern_refinery"], "requires": ["processing_basics", "dense_fuel"]})
@@ -260,10 +260,10 @@ func _init() -> void:
 	_n("deep_drilling", "Deep Drilling", "Drills that reach through bedrock.",
 		350.0, _at("surface_excavation", -160, 1.15), ["surface_excavation"], "production", "Unlocks Deep Drill",
 		{"grants": ["deep_drill"]})
-	_n("geothermal_drilling", "Geothermal Drilling", "Follow the heat down a rift. The district must stand on a Geothermal Rift.",
+	_n("geothermal_drilling", "Geothermal Drilling", "Use geothermal heat to turn Ferrite into Goods. The district must stand on a Geothermal Rift.",
 		350.0, Vector2(-3.3, -0.62), ["surface_excavation", "river_extraction"], "production", "Unlocks Geothermal Drill",
 		{"grants": ["geothermal_drill"]})
-	_n("volcanic_mining", "Volcanic Mining", "Mine fresh volcanic rock. The district must stand on a Volcanic Field.",
+	_n("volcanic_mining", "Volcanic Mining", "Use volcanic heat to process Ferrite into Fuel. The district must stand on a Volcanic Field.",
 		350.0, Vector2(-2.75, -1.75), ["surface_excavation", "river_extraction"], "production", "Unlocks Volcanic Mine",
 		{"grants": ["volcanic_mine"]})
 	_n("mantle_cracking", "Mantle Cracking", "Crack the mantle for enormous mineral yields.",

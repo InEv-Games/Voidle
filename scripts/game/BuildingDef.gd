@@ -47,9 +47,8 @@ func planet_cap() -> int:
 ## Out of the active catalogue (integration decisions 29.10 §17): never offered
 ## for building, but instances in older saves keep working.
 @export var retired:           bool     = false
-## Tier whose economy (credits, workers, build materials) the model uses; -1 =
-## its own tier. Geographic models pay one tier below their real tier, the
-## Moon's three Tier 3 models pay Tier 2 (§8.1, §19.2).
+## Tier for default build materials and worker costs. A value of -1 uses the
+## building's own tier.
 @export var cost_tier:         int      = -1
 ## Needs a world with an atmosphere (Wind Turbine) / a liquid sea (Tidal Generator).
 @export var requires_atmosphere: bool   = false

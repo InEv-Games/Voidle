@@ -101,7 +101,9 @@ func income_from(key: String) -> Dictionary:
 
 ## District output by level (Balance.cfg): linear 1 + step//(L−1) — +50% per
 ## level in "current" — or geometric growth^(L−1).
-static func level_mult(level: int) -> float:
+static func level_mult(level: int, poi: POIData, resource_id: String) -> float:
+	if resource_id == Economy.POPULATION and poi.is_city():
+		return 1.0
 	var c: BalanceConfig = Balance.cfg
 	var l := float(maxi(level, 1) - 1)
 	if c.level_output_mode == "geometric":

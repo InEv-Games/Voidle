@@ -16,6 +16,6 @@ max_per_planet = 1
 building_ids = Array[String]([])
 name_pool = Array[String](["Alpha Station", "Beta Station", "Orbital Hub", "Outpost Prime", "Helix Platform", "Apex Outpost", "Zenith Base"])
 unlock_skill = "orbital_assembly"
-base_outputs = {"credits": 2.0, "science": 1.0, "population": 600.0, "energy": 1.0, "raw": 2.0}
+base_outputs = {"credits": 2.0, "science": 0.25, "population": 600.0, "energy": 1.0, "raw": 2.0}
 base_tick = 20.0
 is_orbit_city = true

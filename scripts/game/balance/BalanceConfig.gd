@@ -11,9 +11,6 @@ extends Resource
 @export var profile_name: String = "current"
 
 @export_group("Income")
-## Every Science income (districts, buildings, idle population) × this —
-## playtest 30.10: Science came four times too fast; research prices stay.
-@export var science_income_mult: float = 0.25
 ## Planet trait slots (playtest 31.10): the planet level each slot needs and
 ## what opening it costs (the first opens with the world: free). Opening a
 ## slot offers three traits to pick from.
@@ -163,7 +160,7 @@ extends Resource
 @export_group("Idle population")
 ## Per minute per 1,000 idle housing, once Civic Enterprise / Free Research is researched.
 @export var idle_pop_credits_per_1000: float = 10.0
-@export var idle_pop_science_per_1000: float = 2.0
+@export var idle_pop_science_per_1000: float = 0.5
 @export var idle_pop_counts_city_base: bool = true
 ## (not used yet)
 @export var idle_pop_uses_level_mult: bool = false
