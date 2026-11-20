@@ -39,12 +39,13 @@ const NEIGHBOR_GAP_DEG: float = 9.0
 
 ## Radius of a fresh settlement (PlanetaryView grows it with its buildings).
 const SETTLE_BASE_DEG: float = 0.9
+const SETTLE_SIZE_DEG: float = 1.1
+const CAPITAL_SIZE_PER_LEVEL: float = 1.2
 ## A City's reach grows by this for every level its Capital District has.
 const CITY_REACH_PER_LV_DEG: float = 3.0
 
 ## How far beyond its settlements a City's districts may be placed, in degrees
-## (`city_level` = its Capital District's level). The distance bands are
-## fractions of it (Location.band).
+## (`city_level` = its Capital District's level).
 static func city_reach_deg(data: PlanetData, city_level: int) -> float:
 	return (SETTLE_BASE_DEG + NEIGHBOR_GAP_DEG * 1.3 + CITY_REACH_PER_LV_DEG * float(maxi(city_level, 1) - 1)) \
 		* body_scale(data)
@@ -58,6 +59,30 @@ static func body_scale(data: PlanetData) -> float:
 
 static func min_spacing_deg(data: PlanetData) -> float:
 	return MIN_SPACING_DEG * body_scale(data)
+
+## Settlement growth from completed buildings and Capital upgrades.
+static func settlement_size(data: PlanetData, poi: POIData) -> float:
+	var pp := GameState.get_planet(data.seed)
+	if pp == null:
+		return 0.0
+	var total := 0.0
+	if poi.is_city():
+		total = CAPITAL_SIZE_PER_LEVEL * float(int(pp.district_levels.get(poi.label, 1)) - 1 \
+			+ Leveling.city_level(pp, poi) - 1)
+	for b: Dictionary in pp.buildings_in_district(poi.label):
+		if b.get("constructing", false):
+			continue
+		var def := BuildingDef.find(b.get("building_id", ""))
+		var weight := def.settlement_weight() if def != null else 0.5
+		total += weight * float(b.get("amount", 1))
+	return total
+
+static func territory_radius_deg(data: PlanetData, poi: POIData) -> float:
+	var scale := body_scale(data)
+	if poi.constructing:
+		return SETTLE_BASE_DEG * 0.7 * scale
+	return (SETTLE_BASE_DEG + SETTLE_SIZE_DEG * sqrt(settlement_size(data, poi))) * scale
+
 ## How far to look for water when deciding if a land point is coastal.
 const COAST_PROBE_DEG: float = 4.0
 

@@ -2049,7 +2049,7 @@ func _on_ship_arrived_here(ship: ShipData) -> void:
 	if current_data == null or ship.ship_type != "lander":
 		return
 	var dest := _find_body(ship.orbit_seed)
-	if dest != null and dest != current_data:
+	if not GameState.offline_pending and dest != null and dest != current_data:
 		var cc: Vector2 = _companions.center_of(dest)
 		if cc.is_finite():
 			var r: float = _companions.radius_of(dest) / 0.40
@@ -2423,7 +2423,7 @@ func _add_found_settlement_button(page: Control) -> void:
 ## lifts off from the Capital like a station launch, then GameState lets it
 ## lap the planet once and sends it to the Moon.
 func _on_expedition_changed(kind: String) -> void:
-	if kind != "lander" or current_data == null or GameState.showcase_mode:
+	if kind != "lander" or current_data == null or GameState.showcase_mode or GameState.offline_pending:
 		return
 	var ex := GameState.expedition("lander")
 	if String(ex.get("state", "")) != "launching" or bool(ex.get("animating", false)):
@@ -2605,7 +2605,7 @@ func _moon_dir_from(p: Vector2) -> Vector2:
 ## While the home world is on screen, the orbiting lander leaves at the point
 ## of its orbit that heads for the Moon (after at least ~40% of a lap).
 func _tick_lander_watch() -> void:
-	if current_data == null or current_data.seed != GameState.home_planet_seed:
+	if GameState.offline_pending or current_data == null or current_data.seed != GameState.home_planet_seed:
 		return
 	var ship := _home_lander_ship()
 	if ship == null or _orbital_layer == null or not is_instance_valid(_orbital_layer) or not _depart_fx.is_empty():
@@ -3431,10 +3431,7 @@ func _setup_material(data: PlanetData) -> void:
 ## tests) uses every district; only the drawing is capped — to the ones nearest
 ## the middle of the view, refreshed as the globe turns (_push_shader_districts).
 const MAX_TERRITORIES:     int   = 128
-# Settlement radius = BASE + SIZE//√(Σ building weights).
-# A fresh district is a hamlet of a few pixels; housing grows it fastest.
 const SETTLE_BASE_DEG:     float = TerrainSampler.SETTLE_BASE_DEG
-const SETTLE_SIZE_DEG:     float = 1.1
 const TERRITORY_WARP:      float = 0.18   # edge raggedness — same as the shader
 ## Hide district borders while zoomed out (fully visible from ZOOM_BORDER_FULL).
 ## Non-city districts (markers, labels, arcs) fade in between these zoom levels.
@@ -3465,37 +3462,6 @@ const SPOKE_SHARP:   float = 12.0
 const SPOKE_GROWTH:  float = 2.0
 ## Per territory: Array of Vector4(unit tangent xyz in shader-world space, growth w 0..1).
 var _spokes: Array = []
-
-## Settlement growth per Capital District / City level.
-const CAPITAL_SIZE_PER_LEVEL: float = 1.2
-## Σ settlement weights of the finished buildings in a district (the Capital
-## District also grows with its levels).
-func _district_settlement_size(data: PlanetData, district_label: String) -> float:
-	var pp := GameState.get_planet(data.seed)
-	if pp == null:
-		return 0.0
-	var total := 0.0
-	# The Capital District grows from its own buildings and from levelling up
-	# (district + City levels) — not from the districts around it.
-	var me := _find_poi(data, district_label)
-	if me != null and me.is_city():
-		total += CAPITAL_SIZE_PER_LEVEL * float(int(pp.district_levels.get(district_label, 1)) - 1 \
-			+ Leveling.city_level(pp, me) - 1)
-	for b: Dictionary in pp.buildings_in_district(district_label):
-		if b.get("constructing", false):
-			continue
-		var def := BuildingDef.find(b.get("building_id", ""))
-		var w: float = def.settlement_weight() if def != null else 0.5
-		total += w * float(b.get("amount", 1))
-	return total
-
-## Settlement size comes from buildings only — not from level, because level now
-## derives from neighbours, and neighbours from settlement size.
-func _territory_radius_deg(data: PlanetData, pd: POIData) -> float:
-	var k := TerrainSampler.body_scale(data)   # same km size on a small body
-	if pd.constructing:
-		return SETTLE_BASE_DEG * 0.7 * k
-	return (SETTLE_BASE_DEG + SETTLE_SIZE_DEG * sqrt(_district_settlement_size(data, pd.label))) * k
 
 ## Surface districts that count as neighbours of each other (settlements within
 ## NEIGHBOR_GAP_DEG). Returns index pairs into the territory / poi_layer order.
@@ -3619,7 +3585,7 @@ func _wonder_sites(data: PlanetData) -> Array:
 		if not b.has("wonder_lon"):
 			var rng := RandomNumberGenerator.new()
 			rng.seed = hash(String(b.get("uid", def.building_id)))
-			var r := _territory_radius_deg(data, poi)
+			var r := TerrainSampler.territory_radius_deg(data, poi)
 			var ang := rng.randf() * TAU
 			var d := r * rng.randf_range(0.45, 0.85)   # off the marker, inside the border
 			var lat0 := poi.lat_deg
@@ -3639,7 +3605,7 @@ func _upload_territories(data: PlanetData) -> void:
 		if pd.is_orbital():
 			continue
 		var n := _lonlat_to_world(deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg))
-		var r := deg_to_rad(_territory_radius_deg(data, pd))
+		var r := deg_to_rad(TerrainSampler.territory_radius_deg(data, pd))
 		var c: Color = poi_layer._marker_color(pd.type_tag)
 		# Night lights scale with active buildings: none while constructing / empty.
 		var light: float = 0.0 if pd.constructing \
@@ -3995,7 +3961,7 @@ func _add_spoke(i: int, pts: PackedVector2Array, from_end: bool, other: int) -> 
 		return
 	var pd: POIData = _territories[i]["poi"]
 	var other_label: String = (_territories[other]["poi"] as POIData).label if other >= 0 else ""
-	var size_now := _district_settlement_size(current_data, pd.label)
+	var size_now := TerrainSampler.settlement_size(current_data, pd)
 	if not pd.spoke_birth.has(other_label):
 		pd.spoke_birth[other_label] = size_now
 	var grown := clampf((size_now - float(pd.spoke_birth[other_label])) / SPOKE_GROWTH, 0.0, 1.0)
@@ -6815,7 +6781,7 @@ static func _city_count(data: PlanetData) -> int:
 	return n
 
 ## How far beyond its settlements a City's districts may be placed
-## (TerrainSampler.city_reach_deg — the distance bands use it too).
+## (TerrainSampler.city_reach_deg).
 func _city_reach_rad(city_label: String) -> float:
 	var lv := 1
 	if current_data != null:
@@ -6921,16 +6887,18 @@ static func _feature_step_text(share: float) -> String:
 	return Economy.mult_text(1.0 + FeatureMap.step_bonus(share))
 
 ## Location bonus as text lines (Location.breakdown), in x (playtest 12.11);
-## `detailed` also names every same-kind neighbour.
+## `detailed` also names the contributing neighbouring districts.
 func _location_lines(loc: Dictionary, detailed: bool = false) -> Array[String]:
 	var out: Array[String] = []
 	out.append("Location  %s" % Economy.mult_text(float(loc["mult"])))
 	var near: POIData = loc.get("nearest", null)
-	if near != null and float(loc["distance"]) > 0.0:
-		out.append("  %s  %s distance: %s to %s" % [Economy.mult_delta_text(float(loc["distance"])),
+	if near != null:
+		out.append("  %s  %s distance: %s to %s" % [Economy.mult_text(1.0 + float(loc["distance"])),
 			Location.band_label(loc["band"]), _km_text(float(loc["nearest_km"])), near.shown_name()])
 	if float(loc["proximity"]) > 0.0:
-		out.append("  %s  same-kind neighbours" % Economy.mult_delta_text(float(loc["proximity"])))
+		out.append("  %s  nearby districts" % Economy.mult_delta_text(float(loc["proximity"])))
+	if float(loc["centre"]) > 0.0:
+		out.append("  %s  Capital proximity" % Economy.mult_delta_text(float(loc["centre"])))
 	if detailed:
 		for src: Dictionary in loc["sources"]:
 			out.append("      %s  %s  // %s%s" % [Economy.mult_delta_text(float(src["share"])), (src["poi"] as POIData).shown_name(),
@@ -7011,46 +6979,56 @@ func _res_name_bb(id: String) -> String:
 	var nm := "Raw" if id == Economy.RAW else (PlanetTags.resource_label(id).capitalize() if id == Economy.POPULATION else Economy.display_name(id))
 	return UIIcons.bb(id, 11, col) + " " + _bb(nm, col)
 
-## The location bonus as [left, right] rows (playtest 12.11): nothing at all
-## when the spot gives none (a City, or close to another place); else the
-## distance tier with how far the nearest place is, the same-kind neighbours,
-## and the total, all as multipliers.
+## Location rows, including the nearest district even at the 1x tier.
 func _location_rows(loc: Dictionary) -> Array:
 	var rows: Array = []
-	var total := float(loc["mult"])
-	if loc.get("city", null) == null or total <= 1.005:
+	var near: POIData = loc.get("nearest", null)
+	if near == null:
 		return rows
+	var total := float(loc["mult"])
 	var good := UIStyle.color(&"good")
 	var key := Color(0.78, 0.82, 0.92)
 	var dv := float(loc["distance"])
-	var near: POIData = loc.get("nearest", null)
-	if dv > 0.0:
-		var where := ("%s to %s" % [_km_text(float(loc["nearest_km"])), near.shown_name()]) if near != null else "nothing near"
-		rows.append([_bb("%s distance" % Location.band_label(loc["band"]), key) + _bb("  %s" % where, BB_DIM),
-			_bb(Economy.mult_text(1.0 + dv), good)])
+	var where := "%s to %s" % [_km_text(float(loc["nearest_km"])), near.shown_name()]
+	rows.append([_bb("%s distance" % Location.band_label(loc["band"]), key) + _bb("  %s" % where, BB_DIM),
+		_bb(Economy.mult_text(1.0 + dv), good if dv > 0.0 else Color.html(BB_DIM))])
 	var pv := float(loc["proximity"])
 	if pv > 0.0:
 		var n: int = (loc.get("sources", []) as Array).size()
-		rows.append([_bb("Same-kind neighbours", key) + _bb("  %d" % n, BB_DIM), _bb(Economy.mult_delta_text(pv), good)])
+		rows.append([_bb("Nearby districts", key) + _bb("  %d" % n, BB_DIM), _bb(Economy.mult_delta_text(pv), good)])
+	var centre := float(loc["centre"])
+	if centre > 0.0:
+		rows.append([_bb("Capital proximity", key), _bb(Economy.mult_delta_text(centre), good)])
 	rows.append([UIIcons.bb("explore", 11, GEO_KEY_COL) + " " + _bb("Location total", Color(0.90, 0.94, 1.0)),
-		_bb("[b]%s[/b]" % Economy.mult_text(total), good)])
+		_bb("[b]%s[/b]" % Economy.mult_text(total), good if total > 1.005 else Color.html(BB_DIM))])
 	return rows
 
-## What placing `probe` does to the location of the districts already there
-## (playtest 12.11): a same-kind neighbour gains, a district that stood far
-## from everything loses its distance tier. Rows "Residences  +0.25x" / "−1x".
+static func _distance_tier_text(loc: Dictionary) -> String:
+	return "%s %s" % [Location.band_label(loc["band"]), Economy.mult_text(1.0 + float(loc["distance"]))]
+
+## Distance and proximity bonuses can change independently for existing districts.
 func _neighbour_effect_rows(probe: POIData) -> Array:
 	var rows: Array = []
+	var key := Color(0.78, 0.82, 0.92)
+	var good := UIStyle.color(&"good")
+	var bad := Color.html(BB_BAD)
 	for p: POIData in current_data.custom_pois:
 		if p.constructing or p.is_orbital() or p.is_city():
 			continue
-		var before := Location.mult(current_data, p)
-		var after := float(Location.breakdown_with(current_data, p, probe)["mult"])
-		var d := after - before
-		if absf(d) < 0.005:
-			continue
-		rows.append([_bb(p.shown_name(), Color(0.78, 0.82, 0.92)),
-			_bb(Economy.mult_delta_text(d), UIStyle.color(&"good") if d > 0.0 else Color.html(BB_BAD))])
+		var before := Location.breakdown(current_data, p)
+		var after := Location.breakdown_with(current_data, p, probe)
+		if before["band"] != after["band"]:
+			rows.append([_bb("%s  /  Distance" % p.shown_name(), key),
+				_bb("%s → %s" % [_distance_tier_text(before), _distance_tier_text(after)],
+					good if float(after["distance"]) > float(before["distance"]) else bad)])
+		var proximity_change := float(after["proximity"]) - float(before["proximity"])
+		if absf(proximity_change) >= 0.005:
+			rows.append([_bb("%s  /  Neighbours" % p.shown_name(), key),
+				_bb(Economy.mult_delta_text(proximity_change), good if proximity_change > 0.0 else bad)])
+		var capital_change := float(after["centre"]) - float(before["centre"])
+		if absf(capital_change) >= 0.005:
+			rows.append([_bb("%s  /  Capital proximity" % p.shown_name(), key),
+				_bb(Economy.mult_delta_text(capital_change), good if capital_change > 0.0 else bad)])
 	if not rows.is_empty():
 		rows.push_front([UIIcons.bb("district", 11, GEO_KEY_COL) + " " + _bb("Effect on neighbours", Color(0.90, 0.94, 1.0)), ""])
 	return rows
@@ -7137,12 +7115,11 @@ func _placement_card(def: DistrictDef, chk: Dictionary, sys: Dictionary, site_na
 		int(terrain["terrain"]), lon, lat)
 	_last_probe = probe   # the console's `loc`
 	# a City: no per-output bonus rows; "Within reach" below says more (10.11)
-	if not def.base_outputs.is_empty() and not def.is_system_anchor():
-		# revision 12.11: the geography, the location with its total; the
-		# overall Total sits above the cost
-		card.append(_geo_rows(probe.site_features, def.base_outputs, false))
+	if not def.is_system_anchor():
+		if not def.base_outputs.is_empty():
+			card.append(_geo_rows(probe.site_features, def.base_outputs, false))
 		var loc_rows := _location_rows(Location.breakdown(current_data, probe))
-		if not loc_rows.is_empty():   # no bonus here: no section (playtest 12.11)
+		if not loc_rows.is_empty():
 			card.append(loc_rows)
 	if def.is_system_anchor():   # a City: what its reach holds for later districts
 		# playtest 16.11: only "Within reach" + the yields; the land-under and
@@ -7234,92 +7211,64 @@ func _reach_summary(lon: float, lat: float, cache := true) -> Dictionary:
 	return out
 
 # ── Tutorial district spots (playtest 12.11) ────────────────────────────────
-## The guided tutorial suggests where each of its districts goes. The spots
-## are planned together for every kind it will ask for, so the Residential
-## District placed first doesn't take the Energy District's best ground: the
-## kind whose best spot gains most picks first, and planned spots keep a
-## district's spacing apart. Districts already standing are left out and the
-## rest planned again (the player may build elsewhere).
+## The guided tutorial suggests the highest-scoring sampled spot for the district being placed.
 const GUIDE_KINDS := [DistrictDef.Type.GENERATOR, DistrictDef.Type.MINING, DistrictDef.Type.SCIENCE,
 	DistrictDef.Type.COMMERCIAL, DistrictDef.Type.RESIDENTIAL]
-var _guide_plan_key := ""
-var _guide_plan: Dictionary = {}   # DistrictDef.Type → {lon, lat, r} (radians)
 
 func _suggest_guide_site(def: DistrictDef, parent: POIData) -> void:
 	if parent == null or current_data == null or def.is_system_anchor() or def.is_orbital \
 			or not Guide.is_active() or Guide.checklist_mode() or not GUIDE_KINDS.has(def.id):
 		return
-	var plan := _guide_sites(parent)
-	if plan.has(def.id):
-		poi_layer.suggested_sites = [plan[def.id]]
+	if def.base_outputs.is_empty() or Guide._has_district(current_data, def.id):
+		return
 
-func _guide_sites(city: POIData) -> Dictionary:
-	var key := "%d:%s:%d" % [current_data.seed, city.label, current_data.custom_pois.size()]
-	if key == _guide_plan_key:
-		return _guide_plan
-	_guide_plan_key = key
-	_guide_plan = {}
-	var kinds: Array = []
-	for t: int in GUIDE_KINDS:
-		if not Guide._has_district(current_data, t):
-			kinds.append(t)
-	if kinds.is_empty():
-		return _guide_plan
-	# candidate spots on rings around the City, inside its reach
-	var reach := _city_reach_rad(city.label)
-	var clon := deg_to_rad(city.lon_deg)
-	var clat := deg_to_rad(city.lat_deg)
-	var cands: Array = []   # [lon, lat, {kind: score}]
-	for ring in [0.3, 0.45, 0.6, 0.75, 0.9]:
-		var d: float = reach * float(ring)
-		var n := 24
-		for k in n:
-			var ang := TAU * float(k) / float(n) + float(ring) * 0.7
-			var lat := clampf(clat + sin(ang) * d, -PI * 0.5, PI * 0.5)
-			var lon := clon + cos(ang) * d / maxf(cos(clat), 0.2)
-			if not bool(_placement_system_check(DistrictDef.find(kinds[0] as DistrictDef.Type), lon, lat)["ok"]):
-				continue
-			var site := FeatureMap.shares(current_data, lon, lat)
-			var scores := {}
-			for t: int in kinds:
-				var dd := DistrictDef.find(t as DistrictDef.Type)
-				if dd == null or dd.base_outputs.is_empty():
+	var existing_multipliers := {}
+	for poi: POIData in current_data.custom_pois:
+		if not poi.is_city() and not poi.is_orbital():
+			existing_multipliers[poi] = Location.mult(current_data, poi)
+
+	# Guided district types each have one base output, as shown by the card's Total row.
+	var output_id := String(def.base_outputs.keys()[0])
+	var min_angle := deg_to_rad(TerrainSampler.min_spacing_deg(current_data))
+	var best_score := -INF
+	var best_site := {}
+	const DIRECTIONS := 24
+	for ring: Dictionary in poi_layer.placement_rings:
+		var lon := float(ring["lon"])
+		var lat := float(ring["lat"])
+		var centre := _lonlat_to_world(lon, lat)
+		var east := Vector3(cos(lon), 0.0, -sin(lon))
+		var north := east.cross(centre)
+		var max_angle := minf(float(ring["r"]), PI)
+		for fraction: float in [0.05, 0.2, 0.4, 0.6, 0.8, 0.95]:
+			var angle := lerpf(min_angle, max_angle, fraction)
+			var ring_centre := centre * cos(angle)
+			var ring_radius := sin(angle)
+			for k in DIRECTIONS:
+				var bearing := TAU * float(k) / float(DIRECTIONS) + fraction * 0.7
+				var tangent := east * cos(bearing) + north * sin(bearing)
+				var point := ring_centre + tangent * ring_radius
+				var site_lon := atan2(point.x, point.z)
+				var site_lat := asin(clampf(-point.y, -1.0, 1.0))
+				var check := TerrainSampler.check_site(current_data, def, site_lon, site_lat)
+				if not check["ok"] or not _placement_system_check(def, site_lon, site_lat)["ok"]:
 					continue
-				if not bool(TerrainSampler.check_site(current_data, dd, lon, lat)["ok"]):
-					continue
-				var fam := FeatureMap.family_of(String(dd.base_outputs.keys()[0]))
-				scores[t] = 1.0 + FeatureMap.bonus_for(site, fam) - 0.05 * float(ring)   # nearer wins a tie
-			if not scores.is_empty():
-				cands.append([lon, lat, scores])
-	# the kind whose best spot gains most chooses first
-	var best_of := {}
-	for t: int in kinds:
-		var b := 0.0
-		for c: Array in cands:
-			b = maxf(b, float((c[2] as Dictionary).get(t, 0.0)))
-		best_of[t] = b
-	kinds.sort_custom(func(x: int, y: int) -> bool: return float(best_of[x]) > float(best_of[y]))
-	var gap := deg_to_rad(TerrainSampler.min_spacing_deg(current_data)) * 1.05
-	var taken: Array = []
-	for t: int in kinds:
-		var pick: Array = []
-		var pick_s := -1.0
-		for c: Array in cands:
-			var sc := float((c[2] as Dictionary).get(t, -1.0))
-			if sc <= pick_s:
-				continue
-			var free := true
-			for o: Array in taken:
-				if TerrainSampler.angular_distance(float(c[0]), float(c[1]), float(o[0]), float(o[1])) < gap:
-					free = false
-					break
-			if free:
-				pick = c
-				pick_s = sc
-		if not pick.is_empty():
-			taken.append(pick)
-			_guide_plan[t] = {"lon": float(pick[0]), "lat": float(pick[1]), "r": gap * 0.45}
-	return _guide_plan
+				var terrain: Dictionary = check["terrain"]
+				var probe := _site_probe(def, {}, bool(terrain["coastal"]), int(terrain["terrain"]), site_lon, site_lat)
+				var score := _guide_site_score(probe, output_id, existing_multipliers)
+				if score > best_score:
+					best_score = score
+					best_site = {"lon": site_lon, "lat": site_lat, "r": min_angle * 0.47}
+	if not best_site.is_empty():
+		poi_layer.suggested_sites = [best_site]
+
+func _guide_site_score(probe: POIData, output_id: String, existing_multipliers: Dictionary) -> float:
+	var geography := FeatureMap.terrain_mult(current_data, probe, output_id)
+	var score := Economy.site_mult(geography, Location.mult(current_data, probe))
+	for poi: POIData in existing_multipliers:
+		var after := float(Location.breakdown_with(current_data, poi, probe)["mult"])
+		score += after - float(existing_multipliers[poi])
+	return score
 
 ## Up to SUGGEST_COUNT good spots for the first City, far enough apart: scored
 ## by how many district kinds the land in reach helps, then how much of it is
@@ -8960,11 +8909,12 @@ func _build_district_bonus_row(poi: POIData, planet: PlanetData) -> Control:
 		chips.add_child(_mini_chip("map", "Geography %s" % Economy.mult_text(1.0 + geo), good, "Geography",
 			"What the land around it adds:\n\n" + "\n".join(geo_lines)))
 	var loc := Location.breakdown(planet, poi)
-	var lm := float(loc["mult"]) - 1.0
-	if lm > 0.005:
-		chips.add_child(_mini_chip("explore", "Location %s" % Economy.mult_text(1.0 + lm), good, "Location",
-			"What its place adds: far from every other district and City, up to %s; or each same-kind neighbour close by %s.\n\n" % [
-				Economy.mult_text(Balance.cfg.location_far_mult), Economy.mult_delta_text(Balance.cfg.neighbour_mult)]
+	var lm := float(loc["mult"])
+	if loc.get("nearest", null) != null:
+		var near_share := Balance.cfg.neighbour_mult * SkillTree.get_proximity_mult()
+		chips.add_child(_mini_chip("explore", "Location %s" % Economy.mult_text(lm), good if lm > 1.005 else Color.html(BB_DIM), "Location",
+			"In the Near band, each same-kind district adds %s and each Capital District adds %s.\n\n" % [
+				Economy.mult_delta_text(near_share), Economy.mult_delta_text(Balance.cfg.centre_near)]
 			+ "\n".join(_location_simple_lines(loc))))
 	# the City's Capital supports, the planet's (Orbit, traits) and companions:
 	# applied to everything made here, so the Total shows them (playtest 07.11)

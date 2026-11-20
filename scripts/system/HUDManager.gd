@@ -14,6 +14,7 @@ var credits_panel: ResourceBar = null
 var science_panel: PanelContainer = null
 var _top_layer: CanvasLayer = null
 var _pause_overlay: CanvasLayer = null
+var _quit_popup: ModalPopup = null
 
 func set_game_hud(visible_state: bool) -> void:
 	visible = visible_state
@@ -467,6 +468,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var pad_start := jb != null and jb.pressed and jb.button_index == JOY_BUTTON_START   # pad Start: as Esc
 	if pad_start or event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		if is_instance_valid(_quit_popup):
+			get_viewport().set_input_as_handled()
+			_quit_popup.close()
+			return
 		# Don't show pause menu when on the main menu
 		var current_scene := get_tree().current_scene
 		if current_scene == null or current_scene.scene_file_path.ends_with("MainMenu.tscn"):
@@ -627,6 +632,8 @@ func show_pause_menu() -> void:
 		p.add_content(b)
 		return b
 	add.call("RESUME", "confirm", IconButton.Variant.POSITIVE, p.close)
+	if not DemoConfig.get_config().steam_url.is_empty():
+		add.call("WISHLIST ON STEAM", "star", IconButton.Variant.POSITIVE, open_steam_wishlist)
 	add.call("SETTINGS", "settings", IconButton.Variant.DEFAULT, show_settings_popup)
 	if not GameState.demo_build:   # the browser demo doesn't save
 		add.call("SAVE GAME", "save", IconButton.Variant.DEFAULT, func() -> void:
@@ -645,8 +652,66 @@ func show_pause_menu() -> void:
 		SceneTransition.go("res://scenes/MainMenu.tscn", null))
 	if not GameState.demo_build:   # a browser tab has nothing to quit to
 		add.call("QUIT TO DESKTOP", "close", IconButton.Variant.NEGATIVE, func() -> void:
+			show_quit_confirmation(p))
+
+func open_steam_wishlist() -> void:
+	var url := DemoConfig.get_config().steam_url
+	if not url.is_empty():
+		OS.shell_open(url)
+
+func show_quit_confirmation(pause_menu: ModalPopup = null) -> void:
+	if is_instance_valid(_quit_popup):
+		return
+	var body := ""
+	if not DemoConfig.get_config().steam_url.is_empty():
+		body = "If you'd like to play Voidle at launch, add it to your Steam wishlist."
+	var popup := ModalPopup.open(self, "Thanks for playing", "close", body, 300)
+	_quit_popup = popup
+	popup.card.custom_minimum_size.x = 360.0
+	if is_instance_valid(pause_menu):
+		pause_menu.hide()
+		pause_menu.set_process_unhandled_input(false)
+	popup.closed.connect(func() -> void:
+		_quit_popup = null
+		if is_instance_valid(pause_menu):
+			pause_menu.show()
+			pause_menu.set_process_unhandled_input(true))
+
+	if not body.is_empty():
+		var wishlist := IconButton.create("WISHLIST ON STEAM", "star", IconButton.Variant.POSITIVE)
+		wishlist.pressed.connect(open_steam_wishlist)
+		popup.add_content(wishlist)
+
+	var mailing_copy := RichTextLabel.new()
+	mailing_copy.theme_type_variation = &"PopupBody"
+	mailing_copy.fit_content = true
+	mailing_copy.scroll_active = false
+	mailing_copy.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mailing_copy.text = "Voidle is still in development. Join our mailing list if you'd like to take part in playtests and help us improve the game. " \
+		+ "Everyone who takes part in a playtest will receive exclusive in-game gifts."
+	popup.add_content(mailing_copy)
+
+	# The mailing list integration will enable the form and handle submission.
+	var email := LineEdit.new()
+	email.name = "PlaytestEmail"
+	email.placeholder_text = "Email address"
+	email.editable = false
+	email.focus_mode = Control.FOCUS_NONE
+	popup.add_content(email)
+	var send := IconButton.create("SEND", "confirm", IconButton.Variant.POSITIVE)
+	send.name = "PlaytestSend"
+	send.disabled = true
+	popup.add_content(send)
+
+	popup.cancel_button().label_text = "BACK"
+	var quit := popup.confirm_button()
+	quit.label_text = "QUIT"
+	quit.icon_name = "danger"
+	quit.variant = IconButton.Variant.NEGATIVE
+	quit.pressed.connect(func() -> void:
+		if is_instance_valid(pause_menu):
 			GameState.save()
-			get_tree().quit())
+		get_tree().quit())
 
 ## Settings rows for the UI theme: a preset, or the builder (harmony, accent
 ## hue, vividness) with a 60/30/10 preview. Builder changes apply after a
@@ -919,12 +984,11 @@ func _maybe_show_offline() -> void:
 	var scene := get_tree().current_scene
 	if scene == null or scene.scene_file_path.ends_with("MainMenu.tscn"):
 		return
-	GameState.offline_pending = false
+	var r := GameState.run_offline()
 	# the hero's caption says how long ("Away for 4 min")
 	var body := "Nothing was produced while the game was closed. Your economy picks up where you left it."
 	if GameState.offline_progress_enabled():
 		# the colony ran on at a tenth of the speed (playtest 12.11)
-		var r := GameState.run_offline()
 		var dim := UIStyle.hex(&"text_subtle")
 		var lines: Array[String] = []
 		lines.append("The colony ran on at %d%% of the speed: %s of play, %d colony month%s." % [

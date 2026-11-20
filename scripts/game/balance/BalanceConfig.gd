@@ -114,17 +114,15 @@ extends Resource
 @export_group("Location")
 ## Surface radius of a planet_size 1.0 world, in km (Location.radius_km).
 @export var planet_radius_km: float = 6000.0
-## Location tiers (playtest 12.11), by the distance to the NEAREST other
-## district or City on the world (any City), in km: closer than near_km gives
-## nothing, up to far_km ×location_mid_mult, beyond it ×location_far_mult.
-## Districts stand at least ~420 km apart (TerrainSampler.MIN_SPACING_DEG on a
-## 6000 km world) and a Lv1 City reaches ~1300 km, so all three can be had.
+## Legacy distance thresholds kept so existing balance profiles load.
 @export var location_near_km: float = 600.0
 @export var location_far_km: float = 900.0
 @export var location_mid_mult: float = 1.5
 @export var location_far_mult: float = 2.0
-## Each same-kind district closer than location_near_km adds this (×, added).
-@export var neighbour_mult: float = 0.25
+## Base multiplier added by each same-kind district in its Near band.
+@export var neighbour_mult: float = 0.5
+## Multiplier added by each Capital District in its Near band.
+@export var centre_near: float = 0.5
 ## (Older relative bands below: kept for saved profiles, no longer used.)
 ## Distance bands as fractions of the district's City reach
 ## (TerrainSampler.city_reach_deg): ≤ very near, ≤ near, ≤ mid, < far, then very
@@ -141,10 +139,8 @@ extends Resource
 @export var proximity_near: float = 0.05
 ## Total cap on the same-family proximity bonus; 0 = no cap.
 @export var proximity_cap: float = 0.0
-## Each City (its Capital District) very near / near adds this to every family.
-## Unused since playtest 07.11 (Location: no City-centre part); kept so profiles load.
+## Legacy capital threshold kept so existing balance profiles load.
 @export var centre_very_near: float = 0.10
-@export var centre_near: float = 0.05
 
 @export_group("Terrain")
 ## Within this distance of a visible feature's edge a site counts as near it (FeatureMap).

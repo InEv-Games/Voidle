@@ -46,13 +46,13 @@ const MOONS := {
 const MOON_ORDER := ["rocky", "icy", "twin"]
 ## Civilizations: id → [title, icon, text, open].
 const CIVS := {
-	"c0": ["TYPE 0", "city", "One world and its moon: grow a colony up to its final rocket.", true],
-	"c1": ["TYPE 1", "explore", "Launch the final rocket to unlock: the whole star system is yours to settle.", false],
-	"c2": ["TYPE 2", "map", "The stars beyond: a galaxy to cross. Comes after Civilization Type 1.", false],
-	"c3": ["TYPE 3", "map", "The whole galaxy under one hand. Comes after Civilization Type 2.", false],
-	"c4": ["TYPE 4", "map", "Past your galaxy: its neighbours. Comes after Civilization Type 3.", false],
-	"c5": ["TYPE 5", "map", "Clusters of galaxies bound into one reach. Comes after Civilization Type 4.", false],
-	"c6": ["TYPE 6", "map", "Out to the edge of what can be seen. Comes after Civilization Type 5.", false],
+	"c0": ["TYPE 0", "city", "Pre-Planetary Civilization. Build your first colony.", true],
+	"c1": ["TYPE 1", "explore", "Planetary Civilization. Reached when the final rocket arrives.", false],
+	"c2": ["TYPE 2", "map", "Stellar Civilization.", false],
+	"c3": ["TYPE 3", "map", "Galactic Civilization.", false],
+	"c4": ["TYPE 4", "map", "Universal Civilization.", false],
+	"c5": ["TYPE 5", "map", "Multiverse Civilization.", false],
+	"c6": ["TYPE 6", "map", "Interdimensional and Creative Civilization.", false],
 	"c7": ["TYPE 7", "map", "What lies past it, no one aboard I-330 can say. Comes after Civilization Type 6.", false],
 }
 ## The civilization slider's stops, 0 to 6 (NewGamePanel's first step). Type 7

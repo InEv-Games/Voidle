@@ -669,6 +669,8 @@ func _build_menu() -> void:
 		_play_btn = _add_button(root, "PLAY", _on_play)
 
 	_add_button(root, "SETTINGS",  _on_settings)
+	if not DemoConfig.get_config().steam_url.is_empty():
+		_add_button(root, "WISHLIST ON STEAM", HUDManager.open_steam_wishlist, IconButton.Variant.POSITIVE)
 	if not demo:
 		_add_button(root, "QUIT",      _on_quit)
 
@@ -686,11 +688,17 @@ func _build_menu() -> void:
 	root.add_child(vgap)
 	root.add_child(ver)
 
-## Menu item: icon-left Default button (NEW GAME, CONTINUE, SETTINGS, QUIT).
-const MENU_ICONS := {"PLAY": "new", "PLAY DEMO": "new", "SETTINGS": "settings", "QUIT": "close"}
+const MENU_ICONS := {
+	"PLAY": "new",
+	"PLAY DEMO": "new",
+	"SETTINGS": "settings",
+	"WISHLIST ON STEAM": "star",
+	"QUIT": "close",
+}
 
-func _add_button(parent: Control, label: String, cb: Callable) -> Button:
-	var btn := IconButton.create(label, MENU_ICONS.get(label, "unknown"))
+func _add_button(parent: Control, label: String, cb: Callable,
+		variant: IconButton.Variant = IconButton.Variant.DEFAULT) -> Button:
+	var btn := IconButton.create(label, MENU_ICONS.get(label, "unknown"), variant)
 	btn.font_size = 12
 	btn.min_size = Vector2(MENU_BUTTON_W, 36)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -1510,4 +1518,4 @@ func _on_settings() -> void:
 	HUDManager.show_settings_popup()
 
 func _on_quit() -> void:
-	get_tree().quit()
+	HUDManager.show_quit_confirmation()

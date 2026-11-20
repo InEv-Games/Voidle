@@ -398,6 +398,8 @@ var moon_local_moonstone: float = 0.0
 var galaxy_unlocked:   bool = false
 
 # ── Showcase (read-only viewer) ──────────────────────────────────────────────
+const EXPLORE_BUTTON_ENABLED := false
+
 ## Explore mode (internally "showcase"): a read-only look around every map —
 ## galaxy, systems, other planets — from inside the player's own game, once the
 ## tutorial is done (HUD "◎ Explore" button). Gameplay UI is hidden and nothing
@@ -448,12 +450,12 @@ func demo_stats() -> Dictionary:
 			research += 1
 	return {"minutes": int(play_seconds / 60.0), "worlds": worlds, "cities": cities, "research": research}
 
-## Explore opens once the guided tutorial is done and the Moon has a City.
+## The player shortcut requires the guided tutorial and a City on the Moon.
 func explore_available() -> bool:
-	# the wider universe opens once the Moon is settled (playtest 23.10)
-	return TutorialManager.tutorial_finished() and not showcase_mode and SkillTree.event_met("moon_city")
+	return EXPLORE_BUTTON_ENABLED and not showcase_mode \
+		and TutorialManager.tutorial_finished() and SkillTree.event_met("moon_city")
 
-## Leaves the player's world for the read-only map tour (starts at the galaxy).
+## Leaves the player's world for the read-only map tour.
 func start_explore() -> void:
 	if showcase_mode:
 		return
@@ -1010,18 +1012,11 @@ const LANDER_LOOP_SPEED := 0.35
 ## Old saves: the first City on another world ended the old demo. Kept only so
 ## those saves load; nothing reads it any more.
 var act1_complete: bool = false
-## Offline (KARARLAR §4, PLAN M8): the time the game was closed is recorded and
-## shown on return. Gains stay off behind one switch, the balance profile's
-## offline_progress_enabled; when it is ever turned on, the same cycle code
-## must advance the economy — no second offline economy.
+## Time away is measured from the loaded slot's save timestamp.
 const OFFLINE_MIN_SECONDS := 60.0
 var offline_seconds: float = 0.0
-## Set by load_save; the HUD shows the "while you were away" screen once.
+## Hold the slot's original timestamp until the return summary consumes the time away.
 var offline_pending: bool = false
-## Time away is measured once per session, at the first load of the save:
-## later loads (the main menu reads the save, CONTINUE reads it again) see a
-## fresh saved_at and would report nothing.
-var _offline_measured: bool = false
 
 static func offline_progress_enabled() -> bool:
 	return Balance.cfg.offline_progress_enabled
@@ -1036,7 +1031,10 @@ func run_offline() -> Dictionary:
 	var real := minf(offline_seconds, c.offline_max_real_sec)
 	var sim := real * c.offline_speed
 	var out := {"sim": 0.0, "capped": offline_seconds > c.offline_max_real_sec, "months": 0, "gains": {}}
+	if not offline_pending:
+		return out
 	if not offline_progress_enabled() or sim < OFFLINE_STEP:
+		offline_pending = false
 		return out
 	var ids: Array[String] = [Economy.CREDITS, Economy.SCIENCE, Economy.GOODS, Economy.FUEL, Economy.RARE]
 	for r: Dictionary in Economy.RAW_TABLE:
@@ -1045,10 +1043,14 @@ func run_offline() -> Dictionary:
 	for id: String in ids:
 		before[id] = Economy.payable_amount(id)
 	var cal0 := calendar_seconds
+	var moon := home_moon()
+	var lander_target := int(expedition("lander").get("target_seed", moon.seed if moon != null else -1))
 	var left := sim
 	while left > 0.0:
 		var step := minf(OFFLINE_STEP, left)
 		left -= step
+		if lander_target >= 0:
+			ShipManager.advance_lander_travel(lander_target, step)
 		ProductionManager._process(step)
 		play_seconds += step
 		Excavations.tick()
@@ -1060,6 +1062,8 @@ func run_offline() -> Dictionary:
 			out["gains"][id] = d
 	out["sim"] = sim
 	out["months"] = int((calendar_seconds - cal0) / MONTH_SEC)
+	offline_pending = false
+	save()
 	return out
 
 ## World generation version. 2: planets have continentality. Saves without the
@@ -1286,7 +1290,8 @@ func tick_expeditions(delta: float) -> void:
 				# while the home world is on screen, the planet view waits for the
 				# point of the orbit that faces the Moon (depart_lander_now); unseen,
 				# the lander leaves after its lap — and never circles a second time
-				var watched := Time.get_ticks_msec() - int(lander.get("watched_ms", -100000)) < 500
+				var watched := not offline_pending \
+					and Time.get_ticks_msec() - int(lander.get("watched_ms", -100000)) < 500
 				if (float(lander["loop_left"]) <= 0.0 and not watched) or float(lander["loop_left"]) <= -TAU:
 					_depart_lander(ship)
 	var rocket: Dictionary = expeditions.get("rocket", {})
@@ -1514,7 +1519,7 @@ var incompatible_save_version: int = -1
 func save() -> void:
 	if demo_build or incompatible_save_version >= 0:   # exploring changes nothing: saving is safe
 		return
-	if _save_suspended:   # its slot was just deleted: don't write it back
+	if _save_suspended or offline_pending:
 		return
 	if not has_founded_city():   # 10.11: no save file until the first City is placed
 		return
@@ -1722,13 +1727,9 @@ func load_save() -> bool:
 	bolo_intro_route = String(data.get("bolo_intro_route", ""))
 	bolo_people_joined = bool(data.get("bolo_people_joined", false))
 	Excavations.migrate_relics(data.get("relics_found", {}))
-	# time away (KARARLAR §4): only measured and shown — no offline economy yet.
-	# A clock that went backwards counts as no time away (GDD §19.27).
 	var saved_at := float(data.get("saved_at", 0.0))
-	if not _offline_measured:
-		_offline_measured = true
-		offline_seconds = maxf(Time.get_unix_time_from_system() - saved_at, 0.0) if saved_at > 0.0 else 0.0
-		offline_pending = offline_seconds >= OFFLINE_MIN_SECONDS
+	offline_seconds = maxf(Time.get_unix_time_from_system() - saved_at, 0.0) if saved_at > 0.0 else 0.0
+	offline_pending = offline_seconds >= OFFLINE_MIN_SECONDS
 	ProductionManager.load_save_data(data.get("production", {}))
 	credits                  = data.get("credits",              500.0)
 	science_points           = data.get("science_points",       0.0)
@@ -1861,8 +1862,8 @@ func delete_save(remove_file := true, rebuild := true) -> void:
 	world_gen            = WORLD_GEN
 	scanned_bodies       = {}
 	landing_paid         = {}
-	offline_pending      = false   # a new world has no time away
-	_offline_measured    = true
+	offline_seconds      = 0.0
+	offline_pending      = false
 	expeditions          = {}
 	galaxy_unlocked      = false
 	discovered_asteroids = []

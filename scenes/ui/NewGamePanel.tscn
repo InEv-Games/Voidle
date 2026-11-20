@@ -115,14 +115,13 @@ theme_type_variation = &"HeaderLabel"
 text = "TYPE 0"
 
 [node name="CivInfo" type="RichTextLabel" parent="Center/Box/Pages/Steps/Civ"]
-custom_minimum_size = Vector2(420, 0)
+custom_minimum_size = Vector2(420, 72)
 layout_mode = 2
-mouse_filter = 2
+mouse_filter = 1
 theme_type_variation = &"PopupBody"
 theme_override_font_sizes/normal_font_size = 12
 bbcode_enabled = true
-fit_content = true
-scroll_active = false
+scroll_active = true
 autowrap_mode = 3
 
 [node name="Start" type="VBoxContainer" parent="Center/Box/Pages/Steps"]
@@ -148,14 +147,13 @@ layout_mode = 2
 theme_override_constants/separation = 6
 
 [node name="Info" type="RichTextLabel" parent="Center/Box/Pages/Steps/Start"]
-custom_minimum_size = Vector2(420, 0)
+custom_minimum_size = Vector2(420, 72)
 layout_mode = 2
-mouse_filter = 2
+mouse_filter = 1
 theme_type_variation = &"PopupBody"
 theme_override_font_sizes/normal_font_size = 12
 bbcode_enabled = true
-fit_content = true
-scroll_active = false
+scroll_active = true
 autowrap_mode = 3
 
 [node name="Rest" type="VBoxContainer" parent="Center/Box/Pages/Steps"]
@@ -174,14 +172,13 @@ theme_override_constants/v_separation = 6
 columns = 2
 
 [node name="BoonDesc" type="RichTextLabel" parent="Center/Box/Pages/Steps/Rest"]
-custom_minimum_size = Vector2(420, 0)
+custom_minimum_size = Vector2(420, 72)
 layout_mode = 2
-mouse_filter = 2
+mouse_filter = 1
 theme_type_variation = &"PopupBody"
 theme_override_font_sizes/normal_font_size = 12
 bbcode_enabled = true
-fit_content = true
-scroll_active = false
+scroll_active = true
 autowrap_mode = 3
 
 [node name="Rule" type="HSeparator" parent="Center/Box/Pages/Steps/Rest"]

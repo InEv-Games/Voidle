@@ -16,16 +16,26 @@ func _process(delta: float) -> void:
 	for seed_val: int in _ships:
 		for ship: ShipData in _ships[seed_val]:
 			if ship.is_travelling():
-				ship.travel_progress += delta / ship.travel_duration
-				if ship.travel_progress >= 1.0:
-					ship.travel_progress = 1.0
+				if _advance_travel(ship, delta):
 					arrived.append(ship)
 			else:
 				ship.orbit_angle = fmod(ship.orbit_angle + ship.orbit_speed * delta, TAU)
-			ship_changed.emit(ship)
+				ship_changed.emit(ship)
 	for ship: ShipData in arrived:
 		_on_arrived(ship)
 	_tick_traffic(delta)
+
+func _advance_travel(ship: ShipData, delta: float) -> bool:
+	ship.travel_progress = minf(ship.travel_progress + delta / ship.travel_duration, 1.0)
+	var arrived := ship.travel_progress >= 1.0
+	ship_changed.emit(ship)
+	return arrived
+
+## Runs the colony lander's existing flight during offline catch-up.
+func advance_lander_travel(moon_seed: int, delta: float) -> void:
+	var lander := travelling_to(moon_seed, "lander")
+	if lander != null and _advance_travel(lander, delta):
+		_on_arrived(lander)
 
 ## Any ship flying to `dest_seed` (optionally of one type), or null.
 func travelling_to(dest_seed: int, ship_type: String = "") -> ShipData:

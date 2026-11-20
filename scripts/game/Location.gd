@@ -1,53 +1,49 @@
-## Location economy (docs/design/VOIDLE_GDD.md §7): real surface distances in km.
-## Roads, intersections and what lies in between play no part.
-##
-## Since playtest 12.11 a district's location multiplier = tier + neighbours:
-##   tier        by the distance to the nearest other district or City on the
-##               world (every City, not just its own): closer than
-##               location_near_km ×1 (no bonus, not shown), up to
-##               location_far_km ×location_mid_mult, beyond ×location_far_mult.
-##               Independent Centres adds to a tier above ×1.
-##   neighbours  every same-kind district closer than location_near_km adds
-##               neighbour_mult (Cluster Planning scales it; Mixed Networks
-##               lets linked families count at half).
-## The two pull apart on purpose: build a cluster, or build far out.
-## Placing a district next to another can lower that one's tier (the
-## placement card shows it). A City (its Capital District) takes no location
-## bonus: it is the centre, and has the Capital supports.
-## It applies once to the district's base income and to every building in it.
-## Numbers come from Balance.cfg. Results are cached per planet until a
-## district is placed, finished or removed.
+## Location multiplier for a surface district and its buildings.
+## The nearest surface district (including Capital Districts) sets the distance
+## tier. The legal centre-to-centre angle range from that district is split in
+## thirds. Each eligible neighbour in its Near band contributes a proximity bonus.
 class_name Location
 extends RefCounted
 
 ## Distance tiers, nearest first (12.11: three; the old five-band names are gone).
 enum Band { NEAR, MID, FAR }
 
-static var _cache: Dictionary = {}   # seed -> { "sig": String, "mult": {label: Dictionary} }
+static var _cache: Dictionary = {}   # seed -> signature, district breakdowns and radii
 
 ## Surface radius of a body in km (reference world × planet_size).
 static func radius_km(pd: PlanetData) -> float:
 	return Balance.cfg.planet_radius_km * maxf(pd.planet_size, 0.05)
 
 static func distance_km(pd: PlanetData, a: POIData, b: POIData) -> float:
-	return TerrainSampler.angular_distance(deg_to_rad(a.lon_deg), deg_to_rad(a.lat_deg),
-		deg_to_rad(b.lon_deg), deg_to_rad(b.lat_deg)) * radius_km(pd)
+	return _distance_rad(a, b) * radius_km(pd)
 
-## Reach of the City `poi` belongs to (its own, for a City), in km: how far
-## beyond its settlements that City may place districts.
-static func reach_km(pd: PlanetData, poi: POIData) -> float:
-	var city := poi.label if poi.is_city() else poi.parent_city
+static func _distance_rad(a: POIData, b: POIData) -> float:
+	return TerrainSampler.angular_distance(deg_to_rad(a.lon_deg), deg_to_rad(a.lat_deg),
+		deg_to_rad(b.lon_deg), deg_to_rad(b.lat_deg))
+
+static func _city_reach_angle(pd: PlanetData, city: POIData) -> float:
 	var lv := 1
 	var pp := GameState.get_planet(pd.seed)
-	if pp != null and city != "":
-		lv = int(pp.district_levels.get(city, 1))
-	return deg_to_rad(TerrainSampler.city_reach_deg(pd, lv)) * radius_km(pd)
+	if pp != null and city != null:
+		lv = int(pp.district_levels.get(city.label, 1))
+	return deg_to_rad(TerrainSampler.city_reach_deg(pd, lv))
 
-## Tier of a distance in km.
-static func band(km: float, _reach := 0.0) -> Band:
-	var c: BalanceConfig = Balance.cfg
-	if km < c.location_near_km: return Band.NEAR
-	if km <= c.location_far_km: return Band.MID
+static func _territory_angle(pd: PlanetData, poi: POIData) -> float:
+	if poi.label == "":
+		return deg_to_rad(TerrainSampler.territory_radius_deg(pd, poi))
+	var radii: Dictionary = _planet_cache(pd)["radii"]
+	var id := poi.get_instance_id()
+	if not radii.has(id):
+		radii[id] = deg_to_rad(TerrainSampler.territory_radius_deg(pd, poi))
+	return float(radii[id])
+
+## Tier of a centre-to-centre angle in the placement range.
+static func band(angle: float, min_angle: float, max_angle: float) -> Band:
+	var third := (max_angle - min_angle) / 3.0
+	if angle < min_angle + third:
+		return Band.NEAR
+	if angle < min_angle + 2.0 * third:
+		return Band.MID
 	return Band.FAR
 
 static func band_label(b: Band) -> String:
@@ -95,18 +91,13 @@ static func breakdown(pd: PlanetData, poi: POIData) -> Dictionary:
 	if pd == null or poi == null:
 		return {"mult": 1.0, "proximity": 0.0, "centre": 0.0, "distance": 0.0,
 			"nearest_km": INF, "band": Band.FAR, "reach_km": 0.0, "sources": []}
-	# cached per district; the entry must be this very POI: a placement probe
-	# keeps POIData's default label "Site", and one cached probe answered for
-	# every spot hovered after it (10.11: "very far" right by the Capital)
-	if poi.label != "":
-		var cached := _cached(pd, poi.label)
-		if not cached.is_empty() and int(cached.get("poi_id", 0)) == poi.get_instance_id():
-			return cached
-	var out := _compute(pd, poi, null)
-	if poi.label != "":
-		out["poi_id"] = poi.get_instance_id()
-		_store(pd, poi.label, out)
-	return out
+	if poi.label == "":
+		return _compute(pd, poi, null)
+	var breakdowns: Dictionary = _planet_cache(pd)["breakdowns"]
+	var id := poi.get_instance_id()
+	if not breakdowns.has(id):
+		breakdowns[id] = _compute(pd, poi, null)
+	return breakdowns[id]
 
 ## What `poi`'s location would be if `extra` (a district being placed) stood
 ## too — no cache (the placement card's effect on neighbours).
@@ -132,47 +123,60 @@ static func home_city(pd: PlanetData, poi: POIData) -> POIData:
 
 static func _compute(pd: PlanetData, poi: POIData, extra: POIData) -> Dictionary:
 	var c: BalanceConfig = Balance.cfg
-	var reach := reach_km(pd, poi)
-	if poi.is_city():   # the centre itself: no location bonus
+	if poi.is_city() or poi.is_orbital():
 		return {"mult": 1.0, "proximity": 0.0, "centre": 0.0, "distance": 0.0, "nearest_km": INF,
-			"band": Band.NEAR, "reach_km": reach, "sources": [], "city": null, "nearest": null}
-	var cluster: float = SkillTree.get_proximity_mult()
+			"band": Band.NEAR, "reach_km": 0.0, "sources": [], "city": null, "nearest": null}
+	var city := home_city(pd, poi)
+	var reach_angle := _city_reach_angle(pd, city)
+	var min_angle := deg_to_rad(TerrainSampler.min_spacing_deg(pd))
+	var same_kind_share := c.neighbour_mult * SkillTree.get_proximity_mult()
+	var kind := family(poi)
 	var linked: Array = SkillTree.cross_families(output_family(poi))
 	var prox := 0.0
+	var centre := 0.0
 	var sources: Array = []
 	var others: Array = pd.custom_pois
 	if extra != null:
 		others = pd.custom_pois.duplicate()
 		others.append(extra)
 	var nearest: POIData = null
-	var nearest_km := INF
+	var nearest_angle := INF
+	var radius := radius_km(pd)
 	for p: POIData in others:
 		if p == poi or (poi.label != "" and p.label == poi.label) or (p != extra and not _stands(p)):
 			continue
-		var km := distance_km(pd, poi, p)
-		if km < nearest_km:
-			nearest_km = km
+		var angle := _distance_rad(poi, p)
+		if angle < nearest_angle:
+			nearest_angle = angle
 			nearest = p
-		# same-kind neighbours: finished districts (and the one being placed)
-		if p.is_city() or km >= c.location_near_km or (p != extra and not _counts(p)):
+		# Proximity comes from finished districts. The placement preview includes its new district.
+		if p != extra and not _counts(p):
 			continue
-		if family(p) == family(poi):
-			var ps: float = c.neighbour_mult * cluster
-			prox += ps
-			sources.append({"poi": p, "km": km, "share": ps, "kind": "family"})
-		elif linked.has(output_family(p)):   # Mixed Networks: half of a family source
-			var xs: float = c.neighbour_mult * 0.5 * cluster
-			prox += xs
-			sources.append({"poi": p, "km": km, "share": xs, "kind": "cross"})
+		var is_capital := p.is_city()
+		var same_kind := family(p) == kind
+		if not is_capital and not same_kind and not linked.has(output_family(p)):
+			continue
+		if band(angle, min_angle, reach_angle + _territory_angle(pd, p)) != Band.NEAR:
+			continue
+		if is_capital:
+			centre += c.centre_near
+			continue
+		var share := same_kind_share if same_kind else same_kind_share * 0.5
+		prox += share
+		sources.append({"poi": p, "km": angle * radius, "share": share, "kind": "family" if same_kind else "cross"})
 	if c.proximity_cap > 0.0:
 		prox = minf(prox, c.proximity_cap)
-	var nb := band(nearest_km) if nearest_km != INF else Band.FAR
+	var nb := Band.NEAR
+	var max_angle := 0.0
+	if nearest != null:
+		max_angle = reach_angle + _territory_angle(pd, nearest)
+		nb = band(nearest_angle, min_angle, max_angle)
 	var dist := band_bonus(nb)
 	if dist > 0.0:   # Independent Centres never turns near into far
 		dist += SkillTree.get_distance_bonus_add()
-	return {"mult": 1.0 + prox + dist, "proximity": prox, "centre": 0.0,
-		"distance": dist, "nearest_km": nearest_km, "band": nb, "reach_km": reach, "sources": sources,
-		"city": home_city(pd, poi), "nearest": nearest}
+	return {"mult": 1.0 + prox + centre + dist, "proximity": prox, "centre": centre,
+		"distance": dist, "nearest_km": nearest_angle * radius, "band": nb,
+		"reach_km": max_angle * radius, "sources": sources, "city": city, "nearest": nearest}
 
 ## The district's location multiplier (1 = no bonus).
 static func mult(pd: PlanetData, poi: POIData) -> float:
@@ -181,15 +185,16 @@ static func mult(pd: PlanetData, poi: POIData) -> float:
 static func invalidate(planet_seed: int = -1) -> void:
 	if planet_seed < 0:
 		_cache.clear()
+		_sig_memo.clear()
 	else:
 		_cache.erase(planet_seed)
+		_sig_memo.erase(planet_seed)
 
-# Cache: valid while the set of finished surface districts and the Cities'
-# levels (their reach sets the bands) are unchanged.
+# The signature includes everything that can move a centre or change its radius.
 static var _sig_frame := -1
 static var _sig_memo: Dictionary = {}   # planet seed -> signature, this frame
 
-static func _signature(pd: PlanetData) -> String:
+static func _signature(pd: PlanetData) -> int:
 	# asked for every building every frame: worked out once per world per frame
 	var f := Engine.get_process_frames()
 	if f != _sig_frame:
@@ -201,27 +206,24 @@ static func _signature(pd: PlanetData) -> String:
 	_sig_memo[pd.seed] = sig
 	return sig
 
-static func _signature_now(pd: PlanetData) -> String:
-	var built := 0
-	var city_lv := 0
+static func _signature_now(pd: PlanetData) -> int:
+	var state := [pd.get_instance_id(), pd.planet_size, Balance.profile_name, SkillTree.version]
 	var pp := GameState.get_planet(pd.seed)
 	for p: POIData in pd.custom_pois:
-		if _counts(p):
-			built += 1
-		if p.is_city() and pp != null:
-			city_lv = city_lv * 31 + int(pp.district_levels.get(p.label, 1))
-	return "%d|%d|%d|%s|%d" % [pd.custom_pois.size(), built, city_lv, Balance.profile_name, SkillTree.version]
+		if _stands(p):
+			state.append([p.get_instance_id(), p.lon_deg, p.lat_deg, p.parent_city, p.constructing, p.type_tag])
+	if pp != null:
+		state.append(pp.district_levels)
+		state.append(pp.city_levels)
+		for b: Dictionary in pp.buildings:
+			if not b.get("constructing", false):
+				state.append([b.get("district_id", ""), b.get("building_id", ""), b.get("amount", 1)])
+	return hash(state)
 
-static func _cached(pd: PlanetData, label: String) -> Dictionary:
-	var entry: Dictionary = _cache.get(pd.seed, {})
-	if entry.is_empty() or entry["sig"] != _signature(pd):
-		return {}
-	return entry["mult"].get(label, {})
-
-static func _store(pd: PlanetData, label: String, value: Dictionary) -> void:
+static func _planet_cache(pd: PlanetData) -> Dictionary:
 	var sig := _signature(pd)
 	var entry: Dictionary = _cache.get(pd.seed, {})
 	if entry.is_empty() or entry["sig"] != sig:
-		entry = {"sig": sig, "mult": {}}
+		entry = {"sig": sig, "breakdowns": {}, "radii": {}}
 		_cache[pd.seed] = entry
-	entry["mult"][label] = value
+	return entry

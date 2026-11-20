@@ -181,6 +181,8 @@ func _tick_all(delta: float) -> void:
 				if pp.city_upgrading[clabel] >= 1.0:
 					pp.city_upgrading.erase(clabel)
 					pp.city_levels[clabel] = c_next
+					Location.invalidate(planet_seed)
+					_invalidate_income(planet_seed)
 					var opened := not GameState.planet_view_unlocked and c_next >= 2
 					if opened:
 						GameState.planet_view_unlocked = true
@@ -207,6 +209,7 @@ func _tick_all(delta: float) -> void:
 				if pp.district_upgrading[dlabel] >= 1.0:
 					pp.district_upgrading.erase(dlabel)
 					pp.district_levels[dlabel] = target_lv
+					Location.invalidate(planet_seed)
 					GameState.planet_progress_changed.emit(planet_seed)
 					upgrade_finished.emit(planet_seed)
 					break  # dict modified — next frame handles remaining
@@ -227,6 +230,7 @@ func _tick_all(delta: float) -> void:
 							GameState.discover_body_minerals(planet_seed)
 					building_progress_changed.emit(planet_seed, poi.label, poi.construct_progress)
 			if district_changed:
+				Location.invalidate(planet_seed)
 				GameState.planet_progress_changed.emit(planet_seed)
 
 		var energy_ratio: float = _global_energy_ratio
@@ -351,6 +355,9 @@ func _tick_all(delta: float) -> void:
 			entry.erase("merge_into")
 			pp.merge_identical(entry)
 
+		if not completed_buildings.is_empty():
+			Location.invalidate(planet_seed)
+			_invalidate_income(planet_seed)
 		for c in completed_buildings:
 			var c_def := BuildingDef.find(String(c.bid))
 			if c_def != null and c_def.outputs.has(Economy.RAW):

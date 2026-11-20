@@ -52,6 +52,7 @@ var _choice := {}
 var _begun := false        # BEGIN: the game opens, the menu's planets stay away
 var _switching := false    # a step is fading out
 var _last_look: Callable   # the preview's look: the option pressed last (the seed may change)
+var _start_info := ""     # the world or moon description selected by pressing its button
 var _boon_btns := {}
 var _step := 1
 var _reached := 1          # the furthest step opened so far (the trail lets you back to it)
@@ -77,9 +78,6 @@ func _ready() -> void:
 		if not _begun:
 			_menu_planets(true))
 	_pv.reveal(SessionPrep.PREVIEW_DELAY, SessionPrep.PREVIEW_IN)
-	_hold_lines(_info, 2)
-	_hold_lines(_boon_desc, 2)
-	_hold_lines(_civ_info, 2)
 	_build_seed()
 	_build_civ()
 	_build_start()
@@ -144,24 +142,26 @@ func _build_seed() -> void:
 
 # ── Step 1: the civilization ─────────────────────────────────────────────────
 
-## The slider's stop: its name, what it is (locked or not) and its scale in the
-## preview (0: the home world; 1: the seed's star system; 2 and on: its
-## galaxy). Only an open one is chosen; on a locked one NEXT waits.
+## The slider names the current civilization and previews its next target.
+## Only an open one is chosen; on a locked one NEXT waits.
 func _on_civ(v: float) -> void:
-	var id := String(SessionPrep.CIV_ORDER[clampi(int(v), 0, SessionPrep.CIV_ORDER.size() - 1)])
+	var n := clampi(int(v), 0, SessionPrep.CIV_ORDER.size() - 1)
+	var id := String(SessionPrep.CIV_ORDER[n])
 	var d: Array = SessionPrep.CIVS[id]
 	var open_now := bool(d[3])
 	_civ_name.text = String(d[0])
 	_civ_name.modulate = Color.WHITE if open_now else Color(1, 1, 1, 0.55)
-	_civ_info.text = _info_of(SessionPrep.CIVS, id, open_now)
+	_show_description(_civ_info, _info_of(SessionPrep.CIVS, id, open_now))
 	if open_now:
 		_choice["civ"] = id
 	_next.disabled = not open_now and _step == 1
 	_paint_crumbs()
-	var n := int(v)
-	_last_look = (func() -> void: _show_choice()) if n == 0 \
-		else (func() -> void: _pv.show_solar(int(_choice["seed"]))) if n == 1 \
-		else (func() -> void: _pv.show_galaxy(int(_choice["seed"])))
+	_last_look = func() -> void:
+		var home_seed := int(_choice["seed"])
+		match n:
+			0: _show_choice()
+			1: _pv.show_solar(home_seed)
+			_: _pv.show_civilization_target(home_seed, n + 1)
 	_show_last()
 
 ## The stops' numbers: white where the civilization is open, grey where it
@@ -211,14 +211,17 @@ func _build_civ() -> void:
 ## LOCKED tag up front kept players from clicking); "Locked." once clicked.
 func _info_of(defs: Dictionary, id: String, open_now: bool, clicked := true) -> String:
 	var dim := UIStyle.hex(&"text_subtle")
+	var description := "[color=#%s]%s[/color]" % [dim, String(defs[id][2])]
 	if open_now or not clicked:
-		return "[color=#%s]%s[/color]" % [dim, String(defs[id][2])]
+		return description
 	if defs == SessionPrep.WORLDS and SettingsManager.unlocked_starts.has(id):
-		return "[color=#%s]Unlocked. Starting here comes in a later build.[/color]" % dim
-	return "[color=#%s]Locked.[/color]  [color=#%s]%s[/color]" % [UIStyle.hex(&"bad"), dim, String(defs[id][2])]
+		return "[color=#%s]Unlocked. Starting here comes in a later build.[/color]\n%s" % [dim, description]
+	return "[color=#%s]Locked.[/color]  %s" % [UIStyle.hex(&"bad"), description]
 
-func _chosen_info() -> void:
-	_info.text = _info_of(SessionPrep.WORLDS, String(_choice["world"]), true)
+func _show_description(label: RichTextLabel, description: String) -> void:
+	if label.text != description:
+		label.text = description
+		label.scroll_to_line(0)
 
 ## One row of three for a choice; `look` shows an option in the preview (pressed).
 func _add_row(row: HBoxContainer, key: String, defs: Dictionary, order: Array, look: Callable) -> void:
@@ -234,10 +237,12 @@ func _add_row(row: HBoxContainer, key: String, defs: Dictionary, order: Array, l
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		if not open_now:
 			b.modulate = Color(1, 1, 1, 0.8)
-		b.mouse_entered.connect(func() -> void: _info.text = _info_of(defs, id, open_now, false))
-		b.mouse_exited.connect(_chosen_info)
+		b.mouse_entered.connect(func() -> void:
+			_show_description(_info, _info_of(defs, id, open_now, false)))
+		b.mouse_exited.connect(func() -> void: _show_description(_info, _start_info))
 		b.pressed.connect(func() -> void:
-			_info.text = _info_of(defs, id, open_now)
+			_start_info = _info_of(defs, id, open_now)
+			_show_description(_info, _start_info)
 			_last_look = look.bind(id, open_now)
 			_show_last()
 			if not open_now:
@@ -260,13 +265,15 @@ func _build_start() -> void:
 	_add_row($Center/Box/Pages/Steps/Start/MoonRow, "moon", SessionPrep.MOONS, SessionPrep.MOON_ORDER,
 		func(id: String, _o: bool) -> void:
 			_pv.show_home(int(_choice["seed"]), id, true))
-	_chosen_info()
+	_start_info = _info_of(SessionPrep.WORLDS, String(_choice["world"]), true)
+	_show_description(_info, _start_info)
 
 # ── Step 3: the head start ───────────────────────────────────────────────────
 
 func _show_boon(id: String) -> void:
-	_boon_desc.text = "[color=#%s]%s[/color]%s" % [UIStyle.hex(&"text_subtle"), String(SessionPrep.BOONS[id][2]),
+	var description := "[color=#%s]%s[/color]%s" % [UIStyle.hex(&"text_subtle"), String(SessionPrep.BOONS[id][2]),
 		("  " + SessionPrep._bonus_bb()) if id == "" else ""]
+	_show_description(_boon_desc, description)
 
 func _paint_boons() -> void:
 	for id: String in _boon_btns:
@@ -438,8 +445,7 @@ func _on_begin() -> void:
 # ── Measuring ────────────────────────────────────────────────────────────────
 
 ## Holds the steps as tall as the tallest, so switching never moves the hero or
-## the buttons. The panel stays unseen until the fixed-height texts have
-## measured themselves on screen (_hold_lines); then `done` shows the first step.
+## the buttons. The panel stays unseen until the rows finish laying out.
 func _hold_height(done: Callable) -> void:
 	_pages.modulate.a = 0.0
 	for i in 3:
@@ -452,23 +458,3 @@ func _hold_height(done: Callable) -> void:
 	_steps.custom_minimum_size.y = h
 	done.call()
 	_pages.create_tween().tween_property(_pages, "modulate:a", 1.0, 0.15)
-
-## `r` is always `lines` lines tall, so a longer text doesn't resize the window
-## (11.11: hovering a head start made it jump): measured on screen (the theme's
-## real font, with an icon on each line), then held.
-func _hold_lines(r: RichTextLabel, lines: int) -> void:
-	var sample := PackedStringArray()
-	for i in lines:
-		sample.append("Xg %s +0" % UIIcons.bb("credits", 12))
-	var keep := r.text
-	r.text = "\n".join(sample)
-	r.modulate.a = 0.0   # the sample is never seen
-	await get_tree().process_frame
-	if not is_instance_valid(r):
-		return
-	var h := float(r.get_content_height())
-	if r.text == "\n".join(sample):
-		r.text = keep   # (unless it was changed meanwhile)
-	r.custom_minimum_size.y = ceilf(h) + 2.0
-	r.fit_content = false
-	r.modulate.a = 1.0

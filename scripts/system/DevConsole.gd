@@ -743,9 +743,15 @@ func _cmd_loc() -> void:
 	_log_info("spot  lon %.2f  lat %.2f  parent '%s'" % [probe.lon_deg, probe.lat_deg, probe.parent_city])
 	if city != null:
 		_log_info("city  %s ('%s')  lon %.2f  lat %.2f" % [city.shown_name(), city.label, city.lon_deg, city.lat_deg])
-	var reach := float(b["reach_km"])
-	_log_info("km %.0f  reach %.0f  frac %.2f  band %s  distance +%d%%  mult %.2f" % [float(b["nearest_km"]), reach,
-		float(b["nearest_km"]) / maxf(reach, 1.0), Location.band_label(b["band"]), roundi(float(b["distance"]) * 100.0), float(b["mult"])])
+	var nearest: POIData = b.get("nearest", null)
+	if nearest != null:
+		var min_km := deg_to_rad(TerrainSampler.min_spacing_deg(pd)) * Location.radius_km(pd)
+		var max_km := float(b["reach_km"])
+		var distance_km := float(b["nearest_km"])
+		var fraction := (distance_km - min_km) / (max_km - min_km)
+		_log_info("nearest %s  km %.0f  range %.0f-%.0f  frac %.2f  band %s  distance +%d%%  mult %.2f" % [
+			nearest.shown_name(), distance_km, min_km, max_km, fraction, Location.band_label(b["band"]),
+			roundi(float(b["distance"]) * 100.0), float(b["mult"])])
 	var n := 0
 	for p: POIData in pd.custom_pois:
 		if p.is_city():

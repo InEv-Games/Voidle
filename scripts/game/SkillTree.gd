@@ -440,7 +440,7 @@ func _init() -> void:
 		{"max": 3, "shape": NodeShape.DIAMOND})
 	_n("cross_networks", "Mixed Networks", "Science and trade, housing and science, energy and industry help each other.",
 		450.0, _at("independent_centers", 0, 1.15), ["independent_centers"], "proximity",
-		"Linked families count as neighbours at half: +0.125x each", {})
+		"Linked districts in the Near band grant half the same-kind bonus", {})
 
 	# ── Small passives, terrain specialisations and bridges ──────────────────
 	# Small diamonds hang off the node they relate to (PoE-style minors).
