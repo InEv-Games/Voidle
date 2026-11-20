@@ -261,8 +261,7 @@ func _add_expeditions(out: Array) -> void:
 		out.append(_row("exp:rocket_target", "expedition", "rocket", "Pick the rocket's target",
 			"In the star system view, click a ringed planet to send the rocket there.", {"loc": {"solar": true}}))
 
-## The objective in progress once the tutorial is over (TutorialManager's list),
-## and the final rocket (was its own card, 10.11).
+## The final rocket's current prerequisite, when it still needs one.
 func _add_task(out: Array) -> void:
 	if not GameState.showcase_mode and SkillTree.is_unlocked("lunar_program") and GameState.expedition_state("rocket") == "" \
 			and not GameState.demo_completed:
@@ -275,20 +274,6 @@ func _add_task(out: Array) -> void:
 				act = {"loc": {"seed": GameState.home_moon().seed}}
 			out.append(_row("task:final_rocket", "task", "rocket", "Final rocket",
 				"Mined on the Moon: %s / 100.  Next: %s." % [Economy.fmt(minf(GameState.moon_local_moonstone, 100.0)), block], act))
-	if GameState.tutorial_step != "done":
-		return   # the tutorial card shows the step
-	if TutorialManager._quest_done:
-		return
-	var i := TutorialManager._quest_step
-	var quests: Array = TutorialManager.QUESTS
-	if i < 0 or i >= quests.size():
-		return
-	var q: Dictionary = quests[i]
-	var quest_id := String(q.get("id", str(i)))
-	if quest_id == "first_residents":
-		return
-	out.append(_row("task:%s" % quest_id, "task", "flag", String(q.get("title", "Objective")),
-		String(q.get("desc", ""))))
 
 ## The written scenes the player opens when they like (B13): Bolo's talk
 ## about the Moon's signal, the expedition briefing.

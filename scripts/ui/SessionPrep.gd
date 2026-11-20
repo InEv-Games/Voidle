@@ -118,15 +118,6 @@ static func seed_of(text: String) -> int:
 static func _world_open(id: String) -> bool:
 	return bool(WORLDS[id][3]) and (id == "terran" or SettingsManager.unlocked_starts.has(id))
 
-static func _world_text(id: String) -> String:
-	var dim := UIStyle.hex(&"text_subtle")
-	var w: Array = WORLDS[id]
-	if id == "terran":
-		return "[color=#%s]%s[/color]" % [dim, String(w[2])]
-	if SettingsManager.unlocked_starts.has(id):
-		return "[color=#%s]Unlocked. Starting here comes in a later build.[/color]" % dim
-	return "[color=#%s]Locked.[/color]  [color=#%s]%s[/color]" % [UIStyle.hex(&"bad"), dim, String(w[2])]
-
 ## A City stands on `pd`: its kind of world opens as a start (across games).
 static func note_city(pd: PlanetData) -> void:
 	if pd == null:

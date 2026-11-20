@@ -937,7 +937,6 @@ const ROCKET_COST := {"credits": 12000.0, "moonstone": 1200.0, "goods": 30.0, "f
 const ROCKET_PREP_SEC   := 60.0
 const ROCKET_FLIGHT_SEC := 180.0   # a real trip, watched in the star system view (playtest 23.10)
 
-signal act1_completed
 signal expedition_changed(kind: String)
 ## An expedition finished preparing at the Spaceport: the lander lifts off, the
 ## rocket is ready. Once per expedition, unlike expedition_changed.
@@ -1009,8 +1008,7 @@ signal lander_reached_moon(moon_seed: int)
 ## The lander's one lap around the home world before it leaves for the Moon (rad/s).
 const LANDER_LOOP_SPEED := 0.35
 
-## Old saves: the first City on another world ended the old demo. Kept only so
-## those saves load; nothing reads it any more.
+## The old demo-completion flag is preserved when loading and rewriting saves.
 var act1_complete: bool = false
 ## Time away is measured from the loaded slot's save timestamp.
 const OFFLINE_MIN_SECONDS := 60.0
@@ -1373,13 +1371,6 @@ func moon_lander(planet_seed: int) -> ShipData:
 func mark_landed(planet_seed: int) -> void:
 	get_planet(planet_seed).lander_state = 2
 	planet_progress_changed.emit(planet_seed)
-
-func complete_act1() -> void:
-	if act1_complete:
-		return
-	act1_complete = true
-	act1_completed.emit()
-	save()
 
 func finish_colonization(planet_seed: int) -> void:
 	var pp := get_planet(planet_seed)

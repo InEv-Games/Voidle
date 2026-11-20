@@ -121,6 +121,15 @@ Başlangıç commit’i `185a44ea1d3c890ad0af6f9845ef535ea5fcae2b`. Godot ve tes
 
 Başlangıç commit’i `81f004ebd39244643ed4006ac478f46e1dc35acc`. Godot ve testler çalıştırılmadı.
 
+### Eski tasarım kodunun temizliği
+
+- [Inbox.gd](../scripts/system/Inbox.gd) içindeki `_add_task`, artık eski `TutorialManager.QUESTS` listesinden satır üretmiyor. `Final rocket` hedefi kendi koşulları ve mevcut yönlendirmeleriyle geliyor.
+- [MainMenu.gd](../scripts/system/MainMenu.gd) içindeki eski `IntroCard` açma ve gezinme yolları, sahne, script ve UID dosyasıyla birlikte kaldırıldı. [SessionPrep.gd](../scripts/ui/SessionPrep.gd) içinden çağrısız `_world_text`, [PlanetaryView.gd](../scripts/planetary/PlanetaryView.gd) içinden sürekli boş dönen district `Minerals` satırı çıkarıldı.
+- [PlanetProgress.gd](../scripts/game/PlanetProgress.gd), [BuildingDef.gd](../scripts/game/BuildingDef.gd) ve [SkillTree.gd](../scripts/game/SkillTree.gd) içindeki çağrısız bina yükseltme ve maliyet fonksiyonları kaldırıldı. Eski bina kayıtlarındaki `level` değeri yığın birleştirmede hâlâ okunuyor. [GameState.gd](../scripts/game/GameState.gd) içinden eski `complete_act1()` ve sinyali çıkarıldı. `act1_complete` eski kayıttan okunup kayıt yeniden yazılırken korunuyor.
+- [BalanceConfig.gd](../scripts/game/balance/BalanceConfig.gd) içinden kullanılmayan 600/900 km eşikleri ve önceki beş kademe alanları çıkarıldı. Repodaki `.tres` profilleri bu alanları tanımlamıyordu. Eski araştırma kimlikleri, emekli bina tanımları ve relic dönüşümü kayıt uyumluluğunda kullanılmaya devam ediyor.
+
+Başlangıç commit’i `2a47432055cdbccda5f18d91c054658c49a26a4c`. Godot ve testler çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.
@@ -134,6 +143,7 @@ git diff --no-ext-diff aefcf1a12f219165f1e45c2c24d7c8bc7951d168 -- scripts/game/
 git diff --no-ext-diff 5eed8c0680bfee5184da6f07ec9c92a3088c6b46 -- scenes/ui/components/LeftPanel.tscn scripts/system/NewsFeed.gd scripts/planetary/PlanetaryView.gd
 git diff --no-ext-diff 185a44ea1d3c890ad0af6f9845ef535ea5fcae2b -- scripts/planetary/POILayer.gd scripts/planetary/PlanetaryView.gd scripts/system/TooltipManager.gd
 git diff --no-ext-diff 81f004ebd39244643ed4006ac478f46e1dc35acc -- scripts/system/Inbox.gd scripts/ui/components/ResourceBar.gd scripts/system/MainMenu.gd
+git diff --no-ext-diff 2a47432055cdbccda5f18d91c054658c49a26a4c -- scripts/system/Inbox.gd scripts/system/MainMenu.gd scenes/ui/IntroCard.tscn scripts/ui/IntroCard.gd scripts/ui/IntroCard.gd.uid scripts/ui/SessionPrep.gd scripts/planetary/PlanetaryView.gd scripts/game/PlanetProgress.gd scripts/game/BuildingDef.gd scripts/game/SkillTree.gd scripts/game/GameState.gd scripts/game/balance/BalanceConfig.gd
 ```
 
 İnceleyen AI’a bu dosyayı ve komutların çıktısını ver. Repo erişimi varsa ilgili çağrıları da açabilir. Kullanılacak talimat aşağıda.
@@ -160,6 +170,7 @@ Bu günlüğü bağlam olarak kullan ve Git farkını kaynak kodla karşılaşt�
 10. Sol panel açıkken görünür haber metninin ve gezegen alanında başlayan sağ tuş hareketinin ilgili kontrole ulaştığını koddan kontrol et.
 11. Kazı tooltip’inin ortak kartta doğru durumu ve canlı süreyi gösterdiğini, kazı açılınca veya görünüm kapanınca kaldırıldığını incele.
 12. First Residents satırının üretilmediğini ve kayıt silme ile üst bar etiketlerinin medeniyet seviyesini doğru kaynaktan aldığını incele.
+13. Eski tutorial görevleri sökülürken final roketi bildiriminin kaldığını, çıkarılan kodun referanslarının temizlendiğini ve eski kayıt alanlarının hâlâ okunduğunu incele.
 
 Her bulguda önem derecesini, dosya ve satırı, tetikleyen koşulu ve oyuncuya
 etkisini ver. Oyun içinde doğrulama isteyen ihtimalleri açıkça belirt.

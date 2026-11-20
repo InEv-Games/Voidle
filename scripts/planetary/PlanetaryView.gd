@@ -7327,12 +7327,6 @@ func _reach_rows(lon: float, lat: float) -> Array:
 		_bb("[b]helps %d of %d district kinds[/b]" % [nf, REACH_FAMILIES.size()], col)])
 	return rows
 
-## Site mineral shares are gone (playtest 30.10): a world yields its whole
-## mineral set everywhere, so no "Ferrite 70%" anywhere. Kept for callers.
-func _minerals_text(_tags: Dictionary) -> String:
-	return ""
-
-
 func _try_place_district(global_pos: Vector2) -> void:
 	var hit := _screen_to_lonlat(global_pos)
 	if not hit["hit"] or current_data == null:
@@ -12860,22 +12854,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	var slots_used  := pp.slots_used_in_district(poi.label)
 	var slots_total := pp.district_slots(poi)
 
-	root.add_child(HSeparator.new())   # details (minerals, totals, bonuses) set apart top and bottom
-
-	# Minerals at this district's site, as chips
-	var mins_txt := _minerals_text(poi.resource_tags)
-	if mins_txt != "":
-		var min_row := HFlowContainer.new()
-		min_row.add_theme_constant_override("h_separation", 4)
-		min_row.add_theme_constant_override("v_separation", 4)
-		var min_lbl := Label.new()
-		min_lbl.text = "Minerals"
-		min_lbl.theme_type_variation = &"SubLabel"
-		min_row.add_child(min_lbl)
-		for part: String in mins_txt.split("  //  "):
-			min_row.add_child(_info_chip(part, UIStyle.color(&"icon"), "Minerals", "Share of this site's mining output.",
-				UIIcons.get_icon(UIIcons.RAW_PLACEHOLDER)))
-		root.add_child(min_row)
+	root.add_child(HSeparator.new())   # separate totals and bonuses from the header
 
 	# Totals here, one row (playtest 31.10): the energy balance, the people at
 	# work and the housing — district, buildings and (Capital) the City centre

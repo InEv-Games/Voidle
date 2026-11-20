@@ -1000,13 +1000,6 @@ func _input(event: InputEvent) -> void:
 			return
 		if not ke.echo and (k == KEY_ENTER or k == KEY_KP_ENTER or k == KEY_SPACE):
 			if not _nav_active:
-				var intro := _find_intro_card()
-				if intro != null:
-					var begin_btn := intro.get_node_or_null("%BeginButton") as BaseButton
-					if begin_btn != null:
-						begin_btn.pressed.emit()
-						get_viewport().set_input_as_handled()
-						return
 				if _handle_nav_dir(Vector2(0, 1)):
 					get_viewport().set_input_as_handled()
 			elif _activate_focused():
@@ -1033,13 +1026,6 @@ func _input(event: InputEvent) -> void:
 		match jb.button_index:
 			JOY_BUTTON_A:
 				if not _nav_active:
-					var intro := _find_intro_card()
-					if intro != null:
-						var begin_btn := intro.get_node_or_null("%BeginButton") as BaseButton
-						if begin_btn != null:
-							begin_btn.pressed.emit()
-							get_viewport().set_input_as_handled()
-							return
 					if _handle_nav_dir(Vector2(0, 1)):
 						get_viewport().set_input_as_handled()
 				elif _activate_focused():
@@ -1078,23 +1064,10 @@ func _find_top_modal() -> ModalPopup:
 			return ch as ModalPopup
 	return null
 
-func _find_intro_card() -> Control:
-	for i in range(get_child_count() - 1, -1, -1):
-		var ch := get_child(i)
-		if ch is CanvasLayer:
-			for j in range(ch.get_child_count() - 1, -1, -1):
-				var cch := ch.get_child(j)
-				if cch is Control and cch.get_node_or_null("%BeginButton") != null:
-					return cch as Control
-	return null
-
 func _active_nav_root() -> Node:
 	var modal := _find_top_modal()
 	if modal != null:
 		return modal
-	var intro := _find_intro_card()
-	if intro != null:
-		return intro
 	if is_instance_valid(_saves_root) and _saves_root.visible:
 		return _saves_root
 	if is_instance_valid(_menu_root) and _menu_root.visible:
@@ -1354,12 +1327,6 @@ func _handle_nav_back() -> bool:
 			AudioManager.play("click")
 			modal.close()
 		return true
-	var intro := _find_intro_card()
-	if intro != null:
-		AudioManager.play("click")
-		if intro.has_method("_close"):
-			intro.call("_close")
-		return true
 	if is_instance_valid(_saves_root) and _saves_root.visible:
 		_close_saves()
 		return true
@@ -1481,24 +1448,10 @@ func _on_new_game() -> void:
 	AudioManager.play("click", 0.0)
 	SessionPrep.open(self, func() -> void: _show_intro(func() -> void: GameState.delete_save()))
 
-## A new game opens straight on its home world: the story's opening plays there
-## (docs/design/narrative, slice 1; PlanetaryView._run_onboarding). The goal card
-## (scenes/ui/IntroCard.tscn) no longer shows; `start` runs first.
+## A new game opens on its home world, where PlanetaryView runs the opening.
 func _show_intro(start: Callable) -> void:
 	start.call()
 	_enter_game()
-
-## The old goal card before the first scene, kept for reference: unused since
-## the narrative opening (playtest 07.11 J).
-func _show_intro_card(start: Callable) -> void:
-	var layer := CanvasLayer.new()
-	layer.layer = 235
-	add_child(layer)
-	var card: Control = (load("res://scenes/ui/IntroCard.tscn") as PackedScene).instantiate()
-	card.connect("begun", func() -> void:
-		start.call()
-		_enter_game())
-	layer.add_child(card)
 
 ## Save metadata for the delete confirmation, or why a save can't load.
 static func _slot_text(info: Dictionary) -> String:

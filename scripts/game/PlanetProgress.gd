@@ -235,22 +235,6 @@ func stack_building_unchecked(district_label: String, building_id: String, merge
 			return true
 	return false
 
-func upgrade_building(entry: Dictionary) -> bool:
-	var idx := building_real_index(entry)
-	if idx == -1: return false
-	var b := buildings[idx]
-	var def := BuildingDef.find(b.get("building_id", ""))
-	if def == null: return false
-	
-	var cur_lv: int = b.get("level", 1)
-	var amt: int = b.get("amount", 1)
-	var cost := def.get_upgrade_cost(cur_lv, amt)
-	
-	if GameState.spend_credits(cost):
-		b["level"] = cur_lv + 1
-		return true
-	return false
-
 func split_building(entry: Dictionary, split_amount: int) -> bool:
 	var idx := building_real_index(entry)
 	if idx == -1: return false

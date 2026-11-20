@@ -301,18 +301,6 @@ func settlement_weight() -> float:
 @export var logic: BuildingLogic
 @export var unlocked_by_default: bool = true
 
-func get_upgrade_cost(level: int, amount: int) -> float:
-	return (base_cost * pow(1.5, float(level - 1))) * float(amount)
-
-func get_cumulative_upgrade_cost_for_one(target_level: int) -> float:
-	var total := 0.0
-	for l in range(1, target_level):
-		total += get_upgrade_cost(l, 1)
-	return total
-
-func get_build_cost(target_level: int = 1) -> float:
-	return base_cost + get_cumulative_upgrade_cost_for_one(target_level)
-
 # ── Catalogue ─────────────────────────────────────────────────────────────────
 
 static var _cache: Array[BuildingDef] = []

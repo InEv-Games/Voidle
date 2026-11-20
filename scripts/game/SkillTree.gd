@@ -723,10 +723,6 @@ func node_for_building(building_id: String) -> String:
 func nodes_for_building(building_id: String) -> Array:
 	return _grant_of.get(building_id, [])
 
-## Buildings have no levels any more; kept for older callers.
-func get_building_max_level(_building_id: String) -> int:
-	return 1
-
 # ── State ────────────────────────────────────────────────────────────────────
 
 ## Canonical id for an id that may come from the old tree.
