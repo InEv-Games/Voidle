@@ -97,6 +97,14 @@ Başlangıç commit’i `aefcf1a12f219165f1e45c2c24d7c8bc7951d168`. Godot ve tes
 
 Başlangıç commit’i `aefcf1a12f219165f1e45c2c24d7c8bc7951d168`. Godot ve testler çalıştırılmadı.
 
+### Haber şeridi ve gezegende sağ tık
+
+- [NewsFeed.gd](../scripts/system/NewsFeed.gd) içindeki `_update_hover`, farenin hangi kontrolün üzerinde olduğunu arayüzden alıyor. Üzerine gelinen ve tıklanan haber, `_label_at` ile şeridin görünür metin alanından seçiliyor. Tıklama olayın anlık konumunu kullandığı için önceki karede vurgulanan habere bağlı kalmıyor.
+- [LeftPanel.tscn](../scenes/ui/components/LeftPanel.tscn) içindeki dekoratif yerleşim kapsayıcısı ve saydam boşluklar fare girdisini almıyor. Panelin düğmeleri kendi girdilerini almaya devam ediyor.
+- [PlanetaryView.gd](../scripts/planetary/PlanetaryView.gd) sağ tuşa basmayı `_gui_input` üzerinden alıyor. Panelin aldığı sağ tık gezegen hareketi başlatmıyor. Gezegen üzerinde başlayan sürükleme bırakıldığında temizleniyor. Tıklama menüsünün açılması için tuşun gezegen alanında bırakılması gerekiyor.
+
+Başlangıç commit’i `5eed8c0680bfee5184da6f07ec9c92a3088c6b46`. Godot ve testler çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.
@@ -107,6 +115,7 @@ git diff --no-ext-diff aefcf1a12f219165f1e45c2c24d7c8bc7951d168 -- scripts/game/
 git diff --no-ext-diff aefcf1a12f219165f1e45c2c24d7c8bc7951d168 -- scenes/ui/NewGamePanel.tscn scripts/ui/SessionPrep.gd scripts/ui/NewGamePanel.gd scripts/ui/NewGamePreview.gd
 git diff --no-ext-diff aefcf1a12f219165f1e45c2c24d7c8bc7951d168 -- scripts/system/MainMenu.gd scripts/system/HUDManager.gd
 git diff --no-ext-diff aefcf1a12f219165f1e45c2c24d7c8bc7951d168 -- scripts/game/Location.gd scripts/game/ProductionManager.gd scripts/game/SkillTree.gd scripts/game/balance/BalanceConfig.gd scripts/planetary/TerrainSampler.gd scripts/planetary/PlanetaryView.gd scripts/system/DevConsole.gd
+git diff --no-ext-diff 5eed8c0680bfee5184da6f07ec9c92a3088c6b46 -- scenes/ui/components/LeftPanel.tscn scripts/system/NewsFeed.gd scripts/planetary/PlanetaryView.gd
 ```
 
 İnceleyen AI’a bu dosyayı ve komutların çıktısını ver. Repo erişimi varsa ilgili çağrıları da açabilir. Kullanılacak talimat aşağıda.
@@ -130,6 +139,7 @@ Bu günlüğü bağlam olarak kullan ve Git farkını kaynak kodla karşılaşt�
 8. Aynı tür komşuların ayrı ayrı toplandığını, Capital katkısının ayrı kaldığını ve her katkının açısal Near kademesini kullandığını incele.
 9. Rehberin öneri puanında adayın Total değerini ve mevcut district’lerin net Location değişimlerini eşit ağırlıkla topladığını incele.
    Yerleştirme kurallarını karşılayan en iyi örnek noktanın yalnızca harita işaretiyle gösterildiğini kontrol et.
+10. Sol panel açıkken görünür haber metninin ve gezegen alanında başlayan sağ tuş hareketinin ilgili kontrole ulaştığını koddan kontrol et.
 
 Her bulguda önem derecesini, dosya ve satırı, tetikleyen koşulu ve oyuncuya
 etkisini ver. Oyun içinde doğrulama isteyen ihtimalleri açıkça belirt.

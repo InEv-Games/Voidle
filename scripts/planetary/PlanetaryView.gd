@@ -1133,9 +1133,26 @@ func _refresh_solar_btn() -> void:
 	pass   # navigation via right-click only
 
 
-## Right button held: { from, pos, drag, on_planet } ({} when up).
+## A right-button gesture started over the globe: { from, drag }.
 var _rmb: Dictionary = {}
 const RMB_DRAG_PX := 6.0
+
+## GUI dispatch gives panels and their controls first use of the right button.
+func _gui_input(event: InputEvent) -> void:
+	var mb := event as InputEventMouseButton
+	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_RIGHT:
+		return
+	var at := mb.global_position
+	if planet_renderer == null or SkillTreeView.is_open or TradePanel.covers(at) \
+			or _naming_open or not _is_over_planet_area(at):
+		return
+	if _placing_def != null:
+		if not _mandatory_city:
+			_end_district_placement()
+			AudioManager.play("click")
+	else:
+		_rmb = {"from": at, "drag": false}
+	accept_event()
 
 ## A right-click (released without dragging): a ship's radial menu, the
 ## selected ship's planet menu, or the context menu (CommandRegistry).
@@ -1243,7 +1260,7 @@ func _input(event: InputEvent) -> void:
 		if _try_follow_lander((event as InputEventMouseButton).global_position):
 			get_viewport().set_input_as_handled()
 			return
-	# Right-click / ESC / Backspace / Joy B cancels district placement;
+	# ESC / Backspace / Joy B cancels district placement;
 	# Enter / Space / Joy A confirms placement at globe center when using controller/keyboard.
 	if _placing_def != null and not _naming_open:
 		var cancel := false
@@ -1254,9 +1271,6 @@ func _input(event: InputEvent) -> void:
 				cancel = cke.keycode == KEY_ESCAPE or cke.keycode == KEY_BACKSPACE
 				confirm_center = (_using_right_stick or _world_cursor_active) and not Narrative.owns_keys() and (cke.keycode == KEY_ENTER \
 					or cke.keycode == KEY_KP_ENTER or cke.keycode == KEY_SPACE)
-		elif event is InputEventMouseButton:
-			var cmb := event as InputEventMouseButton
-			cancel = cmb.pressed and cmb.button_index == MOUSE_BUTTON_RIGHT
 		elif event is InputEventJoypadButton:
 			var cjb := event as InputEventJoypadButton
 			if cjb.pressed:
@@ -1343,10 +1357,10 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventMouseMotion and not _rmb.is_empty():
 		var mm := event as InputEventMouseMotion
-		if not _rmb["drag"] and _rmb["on_planet"] \
+		if not _rmb["drag"] \
 				and mm.global_position.distance_to(_rmb["from"]) > RMB_DRAG_PX:
 			_rmb["drag"] = true
-			planet_renderer.begin_drag(_rmb["pos"])
+			planet_renderer.begin_drag(_rmb["from"])
 		if _rmb["drag"]:
 			planet_renderer.drag_to(mm.position)
 			get_viewport().set_input_as_handled()
@@ -1354,17 +1368,6 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		# Showcase is read-only: no right-click actions, but right-drag still turns the globe
-		if GameState.showcase_mode and mb.button_index == MOUSE_BUTTON_RIGHT:
-			if mb.pressed:
-				_rmb = {"from": mb.global_position, "pos": mb.position, "drag": false,
-					"on_planet": _is_over_planet_area(mb.global_position)}
-			elif not _rmb.is_empty():
-				if _rmb["drag"]:
-					planet_renderer.end_drag()
-				_rmb = {}
-			get_viewport().set_input_as_handled()
-			return
 		# Tutorial deselect: during generator-district step with panel open,
 		# left-click on planet area closes it so ADD DISTRICT becomes visible.
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT \
@@ -1382,20 +1385,15 @@ func _input(event: InputEvent) -> void:
 			if not dd_rect.has_point(get_viewport().get_mouse_position()):
 				_active_slot_dropdown.queue_free()
 				_active_slot_dropdown = null
-		if mb.button_index == MOUSE_BUTTON_RIGHT:
-			# Right button: dragging turns the globe, a click (no drag) opens the
-			# menu on release (KARARLAR §10). Press only remembers where.
-			if mb.pressed:
-				_rmb = {"from": mb.global_position, "pos": mb.position, "drag": false,
-					"on_planet": _is_over_planet_area(mb.global_position)}
-			elif not _rmb.is_empty():
-				var was_drag: bool = _rmb["drag"]
-				var at: Vector2 = _rmb["from"]
-				_rmb = {}
-				if was_drag:
-					planet_renderer.end_drag()
-				else:
-					_on_right_click(at)
+		# Finish a globe gesture even if the pointer has moved onto a panel.
+		if mb.button_index == MOUSE_BUTTON_RIGHT and not mb.pressed and not _rmb.is_empty():
+			var was_drag: bool = _rmb["drag"]
+			var at: Vector2 = _rmb["from"]
+			_rmb = {}
+			if was_drag:
+				planet_renderer.end_drag()
+			elif not GameState.showcase_mode and _is_over_planet_area(mb.global_position):
+				_on_right_click(at)
 			get_viewport().set_input_as_handled()
 		# Wheel / pinch only zoom. Leaving the planet view on zoom-out is disabled
 		# for now — it will be bound to another control.

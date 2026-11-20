@@ -863,28 +863,28 @@ func _ticker_tip() -> String:
 			("%.2f" % p) if p < 10.0 else Economy.fmt(p), (mv[1] as Color).to_html(false), mv[0]])
 	return "\n".join(lines) + "\n\nOver the last minute. Click to trade."
 
-## Slows the crawl while the mouse is over the bar (not over the left panel
-## covering it), grows the item under it and, after TIP_DELAY, shows its detail.
+## Finds the visible news item at a position in the crawl.
+func _label_at(mouse: Vector2) -> Label:
+	if not _clip.get_global_rect().has_point(mouse):
+		return null
+	for label: Label in _labels:
+		if label.get_global_rect().has_point(mouse):
+			return label
+	return null
+
+## Slows the crawl when the bar owns the hover and highlights the news item under it.
 func _update_hover(delta: float) -> void:
-	var mouse := _bar.get_viewport().get_mouse_position()
-	var over := _bar.get_global_rect().has_point(mouse)
+	var viewport := _bar.get_viewport()
+	var hovered := viewport.gui_get_hovered_control()
+	var over := hovered == _bar or (hovered != null and _bar.is_ancestor_of(hovered))
 	if browsing:
 		if _kb_label == null or not is_instance_valid(_kb_label) or not _labels.has(_kb_label):
 			_kb_label = _first_shown()
 		over = false   # the lit item stands for the mouse
-	if over:
-		for n in get_tree().get_nodes_in_group(LeftPanel.GROUP):
-			var c := n as Control
-			if c != null and c.is_visible_in_tree() and c.get_global_rect().has_point(mouse):
-				over = false
-				break
 	_speed_k = lerpf(_speed_k, HOVER_SPEED_K if (over or browsing) else 1.0, minf(delta * 6.0, 1.0))
 	var hit: Label = _kb_label if browsing else null
 	if over:
-		for l: Label in _labels:
-			if l.get_global_rect().has_point(mouse):
-				hit = l
-				break
+		hit = _label_at(viewport.get_mouse_position())
 	if hit != _hover_label:
 		_clear_hover()
 		_hover_label = hit
@@ -924,9 +924,10 @@ func _on_bar_input(ev: InputEvent) -> void:
 	var mb := ev as InputEventMouseButton
 	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
 		return
-	if _hover_label == null or not is_instance_valid(_hover_label):
+	var hit := _label_at(mb.global_position)
+	if hit == null:
 		return
-	var loc: Dictionary = _hover_label.get_meta("loc", {})
+	var loc: Dictionary = hit.get_meta("loc", {})
 	if loc.is_empty():
 		return
 	AudioManager.play("click")
