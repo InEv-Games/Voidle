@@ -113,6 +113,14 @@ Başlangıç commit’i `5eed8c0680bfee5184da6f07ec9c92a3088c6b46`. Godot ve tes
 
 Başlangıç commit’i `185a44ea1d3c890ad0af6f9845ef535ea5fcae2b`. Godot ve testler çalıştırılmadı.
 
+### First Residents bildirimi ve medeniyet etiketleri
+
+- [Inbox.gd](../scripts/system/Inbox.gd) içindeki `_add_task`, `first_residents` görevinden Notifications satırı üretmiyor. Görev ilerleme akışı `TutorialManager` içinde duruyor.
+- [ResourceBar.gd](../scripts/ui/components/ResourceBar.gd) üst bardaki rozette ulaşılan `GameState.civilization_type` değerini tam sayı olarak gösteriyor. Rozetin tooltip’i mevcut küsüratlı değeri göstermeye devam ediyor.
+- [MainMenu.gd](../scripts/system/MainMenu.gd) içindeki `_slot_text`, silme onayında `Civilization Type 0` biçimini gösteriyor.
+
+Başlangıç commit’i `81f004ebd39244643ed4006ac478f46e1dc35acc`. Godot ve testler çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.
@@ -125,6 +133,7 @@ git diff --no-ext-diff aefcf1a12f219165f1e45c2c24d7c8bc7951d168 -- scripts/syste
 git diff --no-ext-diff aefcf1a12f219165f1e45c2c24d7c8bc7951d168 -- scripts/game/Location.gd scripts/game/ProductionManager.gd scripts/game/SkillTree.gd scripts/game/balance/BalanceConfig.gd scripts/planetary/TerrainSampler.gd scripts/planetary/PlanetaryView.gd scripts/system/DevConsole.gd
 git diff --no-ext-diff 5eed8c0680bfee5184da6f07ec9c92a3088c6b46 -- scenes/ui/components/LeftPanel.tscn scripts/system/NewsFeed.gd scripts/planetary/PlanetaryView.gd
 git diff --no-ext-diff 185a44ea1d3c890ad0af6f9845ef535ea5fcae2b -- scripts/planetary/POILayer.gd scripts/planetary/PlanetaryView.gd scripts/system/TooltipManager.gd
+git diff --no-ext-diff 81f004ebd39244643ed4006ac478f46e1dc35acc -- scripts/system/Inbox.gd scripts/ui/components/ResourceBar.gd scripts/system/MainMenu.gd
 ```
 
 İnceleyen AI’a bu dosyayı ve komutların çıktısını ver. Repo erişimi varsa ilgili çağrıları da açabilir. Kullanılacak talimat aşağıda.
@@ -150,6 +159,7 @@ Bu günlüğü bağlam olarak kullan ve Git farkını kaynak kodla karşılaşt�
    Yerleştirme kurallarını karşılayan en iyi örnek noktanın yalnızca harita işaretiyle gösterildiğini kontrol et.
 10. Sol panel açıkken görünür haber metninin ve gezegen alanında başlayan sağ tuş hareketinin ilgili kontrole ulaştığını koddan kontrol et.
 11. Kazı tooltip’inin ortak kartta doğru durumu ve canlı süreyi gösterdiğini, kazı açılınca veya görünüm kapanınca kaldırıldığını incele.
+12. First Residents satırının üretilmediğini ve kayıt silme ile üst bar etiketlerinin medeniyet seviyesini doğru kaynaktan aldığını incele.
 
 Her bulguda önem derecesini, dosya ve satırı, tetikleyen koşulu ve oyuncuya
 etkisini ver. Oyun içinde doğrulama isteyen ihtimalleri açıkça belirt.

@@ -284,7 +284,10 @@ func _add_task(out: Array) -> void:
 	if i < 0 or i >= quests.size():
 		return
 	var q: Dictionary = quests[i]
-	out.append(_row("task:%s" % String(q.get("id", str(i))), "task", "flag", String(q.get("title", "Objective")),
+	var quest_id := String(q.get("id", str(i)))
+	if quest_id == "first_residents":
+		return
+	out.append(_row("task:%s" % quest_id, "task", "flag", String(q.get("title", "Objective")),
 		String(q.get("desc", ""))))
 
 ## The written scenes the player opens when they like (B13): Bolo's talk

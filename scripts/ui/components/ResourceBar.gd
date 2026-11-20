@@ -131,7 +131,7 @@ func _refresh_calendar() -> void:
 	if is_instance_valid(_kardashev):
 		_kardashev.visible = GameState.onboarding_stage == "done"
 		if _kardashev.visible:
-			_kardashev.value_text = "Type %.2f" % kardashev()
+			_kardashev.value_text = str(GameState.civilization_type)
 	if _calendar == null or not is_instance_valid(_calendar):
 		return
 	_calendar.visible = GameState.onboarding_stage == "done"
