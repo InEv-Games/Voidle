@@ -21,8 +21,8 @@
 ##   orders      (playtest 31.10) one target and a mode per product: off, sell
 ##               until (sell what's above the target), buy until (buy up to it),
 ##               keep at (both, around it). Every 20 s cycle, sales first; an
-##               automatic trade moves the price at most AUTO_MAX_MOVE per cycle
-##               and gets a worse price than a manual one (trade_auto_penalty).
+##               automatic sale and purchase orders each limit their price
+##               movement per cycle and receive a worse price than manual trades.
 ##               Storage overflow is only sold for products set to sell / keep.
 ##   history     the price multiplier of every product every HISTORY_STEP s
 ##               (HISTORY_SIZE samples) for the panel's chart; a big move posts news.
@@ -32,12 +32,12 @@ extends RefCounted
 
 ## Reference credits per unit (§18.3).
 const REFERENCE := {
-	"ferrite": 2.0,
-	"moonstone": 3.5,
-	"science": 5.0,
-	"goods": 22.0,
-	"fuel": 34.0,
-	"rare_elements": 92.0,
+	"ferrite": 3.0,
+	"moonstone": 6.0,
+	"science": 3.0,
+	"goods": 8.0,
+	"fuel": 30.0,
+	"rare_elements": 120.0,
 }
 
 ## Most recent trades kept for the panel.
@@ -50,8 +50,9 @@ const MODE_KEEP := "keep"
 const MODES: Array[String] = [MODE_OFF, MODE_SELL, MODE_BUY, MODE_KEEP]
 ## Keep at: no trade while the stock is within this share of the target.
 const KEEP_BAND := 0.05
-## Most an automatic order may move a price in one cycle (share of the reference).
-const AUTO_MAX_MOVE := 0.05
+## Maximum price movement per order cycle, as a share of the reference.
+const AUTO_SELL_MAX_MOVE := 0.10
+const AUTO_BUY_MAX_MOVE := 0.05
 ## Price history for the chart: a sample every HISTORY_STEP s, HISTORY_SIZE kept.
 const HISTORY_STEP := 5.0
 const HISTORY_SIZE := 72
@@ -361,9 +362,9 @@ static func set_order(id: String, mode: String, target: float) -> String:
 	GameState.trade_changed.emit()
 	return ""
 
-## Units an automatic order may trade this cycle (AUTO_MAX_MOVE of the price).
-static func auto_cap(id: String) -> float:
-	return maxf(depth(id) * AUTO_MAX_MOVE, 1.0)
+## Units an automatic order may trade this cycle at the requested price limit.
+static func auto_cap(id: String, max_move: float = AUTO_BUY_MAX_MOVE) -> float:
+	return maxf(depth(id) * max_move, 1.0)
 
 ## One automation pass (every 20 s cycle): every sale first, then every purchase.
 static func run_orders() -> void:
@@ -378,7 +379,7 @@ static func run_orders() -> void:
 		var t: float = o["target"]
 		var over := stock(id) - t
 		if (o["mode"] == MODE_SELL and over > 0.0) or (o["mode"] == MODE_KEEP and over > maxf(t * KEEP_BAND, 1.0)):
-			sell(id, minf(over, auto_cap(id)), "auto")
+			sell(id, minf(over, auto_cap(id, AUTO_SELL_MAX_MOVE)), "auto")
 	for id: String in ids:
 		var o := order(id)
 		if not can_trade(id):

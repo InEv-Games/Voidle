@@ -210,6 +210,25 @@ Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve tes
 - Orbital district paketleri yüzey binalarıyla ortak tanımları kullanıyor. Trade alım ve satım oranları sonraki denge turuna bırakıldı. Capital District için oyun mekaniklerini açan yeni binalar ayrıca tasarlanacak.
 - Fork’a gönderilecek güncel kaynak farkını repo kökünde `git diff --no-ext-diff 71bb565b1adc774576cbb113457ea57da4a8f1dc` ile inceleyebilirsin.
 
+## 22 Kasım 2026
+
+### Ekonomi takibi ve tasarım sırası
+
+- Trade fiyatları aşağıdaki revizyonda güncellendi. Sıradaki tasarım konusu, yeni mekanikler açan Capital District binaları. Trade karşılaştırmasında aynı üretim tier’indeki binaların aylık çıktıları ve tükettikleri satılabilir girdiler referans fiyatla Credits’e çevriliyor.
+- Upgrade Tree çalışmasında her dal önce kendi içinde ele alınacak, dalların birleşme noktaları daha sonra belirlenecek. Spaceport’un Rare Elements ihtiyacı, Ay’da 100 Moonstone çıkarma koşulu ve final roketinin 1.200 Moonstone ile 12.000 Credits maliyeti bu turda tekrar kontrol edilecek.
+- Ödeme karşılanmayan depolar için kapasiteyi koruyan, üretimi %10 düşüren ve kaynak tooltip’inde nedenini gösteren bir ceza önerildi. Uygulama ayrıntıları tasarımda açık.
+- Standard başlangıç bütçesi ve tutorial atlama ödülü, oyuncunun ödülü aldığı rehber akışıyla birlikte daha sonra değerlendirilecek.
+- Narrative turunda geçici piyasa olayları için ayrı bir CSV hazırlanacak. Olayın etkilediği kaynak, fiyat değişimi, süre ve haber ile Trade tooltip’inde gösterilecek neden birlikte tanımlanacak.
+
+### T1–T3 bina üretimi ve demo Trade fiyatları
+
+- T1 binalarda seçilen baz çıktılar 4 Science, 4 enerji, 12 Credits, 4 ham maden ve 6.000 nüfus kapasitesi. T2’de 20 Science, 28 enerji, 64 Credits, 20 ham maden ve 32.000 nüfus kapasitesi. Geothermal Drill ayda 8 Goods üretiyor.
+- T3 binalarda seçilen baz çıktılar 120 Science, 120 enerji, 320 Credits, 120 ham maden, 3 Rare Elements ve 120.000 nüfus kapasitesi. Ion Research Lab 2.250 çalışan kullanıyor. Cavern Refinery aylık 180 enerji tüketiyor ve 8 Goods, 4 Fuel, 2 Rare Elements üretiyor.
+- Orbital paketler aynı `.tres` bina tanımlarına bağlı olduğu için yeni çıktıları doğrudan alıyor.
+- `Trade.gd` içindeki demo referans fiyatları Science 3, Ferrite 3, Moonstone 6, Goods 8, Fuel 30 ve Rare Elements 120 Credits. `run_orders()` otomatik satış emri için %10, otomatik alış emri için %5 fiyat hareketi sınırı kullanıyor. Bu sınırlar hedef stok emirlerine uygulanıyor.
+
+Başlangıç commit’i `4e24e5f990ed9c05c18fe176936ccecf9fab90e5`. Godot ve testler çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.
