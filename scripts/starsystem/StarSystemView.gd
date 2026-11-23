@@ -21,6 +21,10 @@
 ## other. Zooming out of a planet view lands here the same way, framed on that
 ## world, and eases out to the whole system.
 ##
+## Details (SystemDetails): asteroid clusters on short arcs between orbits and
+## nebula clouds in open space; hovered they light up with a dashed outline and
+## their name, a click picks them (the camera goes to them, the panel shows them).
+##
 ## The side panel is the system's own: its level (StarSystemProgress), what it
 ## allows, and its worlds as rows.
 extends Control
@@ -104,6 +108,20 @@ var _focus_v := Vector2.ZERO
 
 var _hover := -1
 var _selected := -1
+## Side panel slide, as in the planet view: Tab (LeftPanel._toggle_panel calls
+## _set_panel_open on the current scene) or the ‹ › arrow by its stroke.
+const PANEL_SLIDE_SEC := 0.9
+var _panel_open := true
+var _panel_t := 1.0
+var _panel_tween: Tween = null
+var _panel_toggle_btn: Button = null
+## The starfield's material / viewport (Starfield.apply) and its last offset.
+var _sky: Dictionary = {}
+var _sky_off := Vector2.INF
+## Details (SystemDetails.generate) and their nodes: nebula "sprites", "badge".
+var _details: Array[Dictionary] = []
+var _hover_f := -1
+var _sel_f := -1
 var _entering := -1
 var _enter_charge := 0
 var _leaving := false
@@ -119,7 +137,9 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	HUDManager.set_game_hud(not GameState.showcase_mode)
 	CursorManager.set_state(CursorManager.State.NORMAL)
-	Starfield.apply($Background as ColorRect)
+	# a fuller sky than the planet view's, with a little more haze; it drifts
+	# a touch as the system is moved (parallax, _sky_follow)
+	_sky = Starfield.apply($Background as ColorRect, {"density": 0.055, "brightness": 0.85, "nebula": 0.12})
 	_back = Node2D.new()
 	_back.z_index = 0
 	_mid = Node2D.new()
@@ -133,8 +153,11 @@ func _ready() -> void:
 	_mid.draw.connect(_draw_mid)
 	_front.draw.connect(_draw_front)
 	_panel.visible = not GameState.showcase_mode
-	_space.anchor_left = 0.0 if GameState.showcase_mode else LeftPanel.edge_frac()
-	HUDManager.set_view_area_fraction(1.0 - _space.anchor_left)
+	if GameState.showcase_mode:
+		_panel_open = false
+		_panel_t = 0.0
+	_build_panel_toggle()
+	_apply_panel_t(_panel_t)
 	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - LeftPanel.edge_frac()))
 
 	var pending = SceneTransition.pending_data
@@ -165,6 +188,65 @@ func nav_apply(entry: Dictionary) -> bool:
 	return true
 
 
+# ── Side panel slide (same as PlanetaryView) ─────────────────────────────────
+
+func _set_panel_open(open: bool) -> void:
+	if open and GameState.showcase_mode:
+		return
+	_panel_open = open
+	if _panel_tween != null and _panel_tween.is_valid():
+		_panel_tween.kill()
+	_panel_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_panel_tween.tween_method(_apply_panel_t, _panel_t, 1.0 if open else 0.0, PANEL_SLIDE_SEC)
+
+
+## t: 1 open … 0 hidden. The map takes the room the panel leaves.
+func _apply_panel_t(t: float) -> void:
+	_panel_t = t
+	_panel.set_slide(t)
+	_space.anchor_left = LeftPanel.edge_frac(t)
+	_space.anchor_right = 1.0
+	HUDManager.set_view_area_fraction(1.0 - LeftPanel.edge_frac(t))
+	if _panel_toggle_btn != null:
+		_panel_toggle_btn.text = "‹" if _panel_open else "›"
+		_place_panel_toggle()
+
+
+func _build_panel_toggle() -> void:
+	if GameState.showcase_mode:
+		return
+	var btn := Button.new()
+	btn.text = "‹"
+	btn.flat = true
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_font_size_override("font_size", 20)
+	btn.z_index = 201
+	btn.z_as_relative = false
+	btn.mouse_entered.connect(func() -> void: CursorManager.set_state(CursorManager.State.POINTER))
+	btn.mouse_exited.connect(func() -> void: CursorManager.set_state(CursorManager.State.NORMAL))
+	btn.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		_set_panel_open(not _panel_open))
+	add_child(btn)
+	_panel_toggle_btn = btn
+	_panel.resized.connect(_place_panel_toggle)
+
+
+## The arrow sits in the strip left of the panel's stroke, centred vertically.
+func _place_panel_toggle() -> void:
+	if _panel_toggle_btn == null:
+		return
+	var stroke_x := LeftPanel.GAP * get_viewport_rect().size.x
+	_panel_toggle_btn.anchor_left = 0.0
+	_panel_toggle_btn.anchor_right = 0.0
+	_panel_toggle_btn.anchor_top = 0.5
+	_panel_toggle_btn.anchor_bottom = 0.5
+	_panel_toggle_btn.offset_left = maxf(0.0, stroke_x - 24.0)
+	_panel_toggle_btn.offset_right = stroke_x
+	_panel_toggle_btn.offset_top = -28.0
+	_panel_toggle_btn.offset_bottom = 28.0
+
+
 # ── Building the system ──────────────────────────────────────────────────────
 
 func _load(sd: SolarData) -> void:
@@ -179,8 +261,15 @@ func _load(sd: SolarData) -> void:
 	for l in [_halo_near, _halo_far, _light]:
 		if l != null:
 			l.queue_free()
+	for d: Dictionary in _details:
+		for spr: Node in d.get("sprites", []):
+			spr.queue_free()
+		(d["badge"] as Node).queue_free()
+	_details.clear()
 	_hover = -1
 	_selected = -1
+	_hover_f = -1
+	_sel_f = -1
 	if sd == null:
 		return
 	_star = _make_star(sd)
@@ -204,6 +293,13 @@ func _load(sd: SolarData) -> void:
 				rng.randf_range(0.0, TAU) + TAU * float(j) / float(pd.moons.size()), 0.0,
 				maxf(MOON_PX * pow(maxf(m.planet_size, 0.05), MOON_POW), MOON_MIN)))
 	_outer_r = ORBIT_BASE + ORBIT_STEP * float(maxi(sd.planets.size() - 1, 0))
+	var planet_pos: Array[Vector2] = []
+	for i in _bodies.size():
+		if int(_bodies[i]["parent"]) < 0:
+			planet_pos.append(_body_plane(i))
+	_details = SystemDetails.generate(sd, planet_pos, ORBIT_BASE, ORBIT_STEP)
+	for d: Dictionary in _details:
+		_make_detail_nodes(d)
 	_build_panel()
 
 
@@ -310,6 +406,227 @@ func _place_markers() -> void:
 				badge.position = (cell.position + Vector2(cell.size.x + 6.0, (cell.size.y - badge.size.y) * 0.5)).round()
 			else:
 				badge.position = (top - Vector2(badge.size.x * 0.5, badge.size.y + 8.0)).round()
+
+
+# ── Details: asteroid clusters, nebulae ──────────────────────────────────────
+
+## The sky drifts slowly against the system as it is moved (a far layer).
+func _sky_follow() -> void:
+	if _sky.is_empty():
+		return
+	var off := _focus.rotated(_yaw) * _ui() * 0.05
+	if off.distance_to(_sky_off) < 0.5:
+		return
+	_sky_off = off
+	(_sky["mat"] as ShaderMaterial).set_shader_parameter("offset", off)
+	(_sky["vp"] as SubViewport).render_target_update_mode = SubViewport.UPDATE_ONCE
+
+
+func _make_detail_nodes(d: Dictionary) -> void:
+	var sprites: Array[Sprite2D] = []
+	if d["kind"] == "nebula":
+		for b: Dictionary in d["blobs"]:
+			var spr := _halo_sprite(b["col"], float(b["k"]), 3)
+			sprites.append(spr)
+	d["sprites"] = sprites
+	var badge := PanelContainer.new()
+	badge.theme_type_variation = &"Badge"
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.z_as_relative = false
+	badge.z_index = 191
+	var lbl := Label.new()
+	lbl.text = String(d["name"]).to_upper()
+	lbl.theme_type_variation = &"CounterLabel"
+	badge.add_child(lbl)
+	badge.visible = false
+	_space.add_child(badge)
+	d["badge"] = badge
+
+
+## Nebula clouds lie in the plane (squashed by the tilt) and glow brighter while
+## hovered / picked; each detail's name badge sits over it then.
+func _place_details() -> void:
+	var k := _scale()
+	for f in _details.size():
+		var d := _details[f]
+		var lit := f == _hover_f or f == _sel_f
+		if d["kind"] == "nebula":
+			var sprites: Array = d["sprites"]
+			var blobs: Array = d["blobs"]
+			# a volume: each puff stands at its height off the plane (lifted by
+			# how far the view looks down), and keeps most of its roundness
+			var up := sqrt(maxf(0.0, 1.0 - _tilt * _tilt))
+			var squash := lerpf(_tilt, 1.0, 0.6)
+			for bi in sprites.size():
+				var spr: Sprite2D = sprites[bi]
+				var b: Dictionary = blobs[bi]
+				var p := _project(Vector2(d["center"]) + Vector2(b["off"]))
+				spr.position = Vector2(p.x, p.y - float(b["h"]) * k * up)
+				spr.rotation = float(b["rot"]) - _yaw
+				spr.scale = Vector2(float(b["elong"]), squash) * (float(b["r"]) * k / 128.0)
+				spr.modulate = Color(1.7, 1.7, 1.7) if lit else Color.WHITE
+		var badge: PanelContainer = d["badge"]
+		badge.visible = lit
+		if lit:
+			var c := _project(d["center"])
+			var top := Vector2(c.x, INF)
+			if d["kind"] == "nebula":
+				for q: Vector2 in _nebula_contour(d, 8.0):   # over the outline's top
+					top.y = minf(top.y, q.y)
+			else:
+				top.y = c.y - (float(d["w"]) * k * _tilt + 14.0)
+			badge.size = badge.get_combined_minimum_size()
+			badge.position = (top - Vector2(badge.size.x * 0.5, badge.size.y + 6.0)).round()
+
+
+## Asteroid rocks: little pixel squares, each on its own side of the star's
+## depth (so a cluster passes behind / in front of it); lit ones go paler. The
+## hovered / picked detail gets a dashed outline.
+func _draw_details(back_half: bool, canvas: Node2D, star_depth: float) -> void:
+	var k := _scale()
+	for f in _details.size():
+		var d := _details[f]
+		var lit := f == _hover_f or f == _sel_f
+		var col_ol := RING_SEL_COL if f == _sel_f else Color(RING_SEL_COL, 0.6)
+		if d["kind"] == "asteroids":
+			for rk: Dictionary in d["rocks"]:
+				var a: float = rk["a"]
+				var p := _project(Vector2(cos(a), sin(a)) * float(rk["r"]))
+				if ((p.z - star_depth) < 0.0) != back_half:
+					continue
+				var px := clampf(float(rk["s"]) * k, 1.5, 16.0)
+				var shade: float = rk["shade"]
+				var col := Color(0.60 * shade, 0.55 * shade, 0.50 * shade)
+				if lit:
+					col = col.lerp(Color(0.85, 0.95, 1.0), 0.4)
+				var at := (Vector2(p.x, p.y) - Vector2(px, px) * 0.5).round()
+				canvas.draw_rect(Rect2(at - Vector2.ONE, Vector2(px, px) + Vector2(2, 2)), Color(0, 0, 0, 0.55))
+				canvas.draw_rect(Rect2(at, Vector2(px, px)), col)
+			if lit:
+				var arcs := _arc_list(float(d["a"]), float(d["span"]) + 0.12)
+				var w: float = d["w"]
+				_ring(canvas, float(d["r"]) - w * 1.5, col_ol, 1.4, back_half, star_depth, 0.5, arcs)
+				_ring(canvas, float(d["r"]) + w * 1.5, col_ol, 1.4, back_half, star_depth, 0.5, arcs)
+		elif lit and not back_half:
+			# a territory-like outline that follows the cloud's own shape
+			var pts := _nebula_contour(d, 8.0)
+			for e in range(0, pts.size() - 1):
+				if e % 3 != 2:   # dashes
+					canvas.draw_line(pts[e], pts[e + 1], col_ol, 1.6, true)
+
+
+## How far a puff visibly reaches, as a share of its sprite's radius (the
+## radial fade is near zero past this).
+const NEBULA_EXTENT := 0.62
+const CONTOUR_STEPS := 72
+
+## Screen centre of a nebula (its puffs' average, with their heights).
+func _nebula_screen_center(d: Dictionary) -> Vector2:
+	var k := _scale()
+	var up := sqrt(maxf(0.0, 1.0 - _tilt * _tilt))
+	var sum := Vector2.ZERO
+	var blobs: Array = d["blobs"]
+	for b: Dictionary in blobs:
+		var p := _project(Vector2(d["center"]) + Vector2(b["off"]))
+		sum += Vector2(p.x, p.y - float(b["h"]) * k * up)
+	return sum / float(maxi(blobs.size(), 1))
+
+
+## For each direction from the cloud's centre, how far its farthest puff
+## reaches on screen (each puff an ellipse: stretched, turned, squashed as
+## drawn). Smoothed: the outline of the cloud as a whole.
+func _nebula_radial(d: Dictionary, c: Vector2) -> PackedFloat32Array:
+	var k := _scale()
+	var up := sqrt(maxf(0.0, 1.0 - _tilt * _tilt))
+	var squash := lerpf(_tilt, 1.0, 0.6)
+	var ells: Array = []
+	for b: Dictionary in d["blobs"]:
+		var p := _project(Vector2(d["center"]) + Vector2(b["off"]))
+		var r := float(b["r"]) * k * NEBULA_EXTENT
+		ells.append([Vector2(p.x, p.y - float(b["h"]) * k * up) - c,
+			r * float(b["elong"]), r * squash, float(b["rot"]) - _yaw])
+	var out := PackedFloat32Array()
+	out.resize(CONTOUR_STEPS)
+	for s_i in CONTOUR_STEPS:
+		var th := TAU * float(s_i) / float(CONTOUR_STEPS)
+		var u := Vector2(cos(th), sin(th))
+		var best := 0.0
+		for e: Array in ells:
+			# ray c + t·u against the ellipse (centre o, semi-axes ax, ay, turned rot)
+			var o: Vector2 = e[0]
+			var ax: float = e[1]
+			var ay: float = e[2]
+			var ur := u.rotated(-float(e[3]))
+			var orr := o.rotated(-float(e[3]))
+			var A := (ur.x * ur.x) / (ax * ax) + (ur.y * ur.y) / (ay * ay)
+			var B := -2.0 * ((ur.x * orr.x) / (ax * ax) + (ur.y * orr.y) / (ay * ay))
+			var C := (orr.x * orr.x) / (ax * ax) + (orr.y * orr.y) / (ay * ay) - 1.0
+			var disc := B * B - 4.0 * A * C
+			if disc < 0.0:
+				continue
+			var t := (-B + sqrt(disc)) / (2.0 * A)
+			best = maxf(best, t)
+		out[s_i] = best
+	# smooth twice (neighbours) so the outline flows instead of scalloping
+	for pass_i in 2:
+		var sm := PackedFloat32Array()
+		sm.resize(CONTOUR_STEPS)
+		for s_i in CONTOUR_STEPS:
+			sm[s_i] = (out[(s_i - 1 + CONTOUR_STEPS) % CONTOUR_STEPS] + out[s_i] * 2.0 + out[(s_i + 1) % CONTOUR_STEPS]) * 0.25
+		out = sm
+	return out
+
+
+## The cloud's outline as a closed screen polyline, `pad` px outside it.
+func _nebula_contour(d: Dictionary, pad: float) -> PackedVector2Array:
+	var c := _nebula_screen_center(d)
+	var rad := _nebula_radial(d, c)
+	var pts := PackedVector2Array()
+	for s_i in CONTOUR_STEPS + 1:
+		var th := TAU * float(s_i % CONTOUR_STEPS) / float(CONTOUR_STEPS)
+		pts.append(c + Vector2(cos(th), sin(th)) * (rad[s_i % CONTOUR_STEPS] + pad))
+	return pts
+
+
+func _in_contour(lp: Vector2, d: Dictionary) -> bool:
+	var c := _nebula_screen_center(d)
+	var v := lp - c
+	var rad := _nebula_radial(d, c)
+	var idx := int(round(fposmod(atan2(v.y, v.x), TAU) / TAU * float(CONTOUR_STEPS))) % CONTOUR_STEPS
+	return v.length() <= rad[idx]
+
+
+## [from, to] plane-angle pieces of an arc centred on `a`, split at 0 / TAU.
+static func _arc_list(a: float, span: float) -> Array:
+	var a0 := fposmod(a - span * 0.5, TAU)
+	var a1 := a0 + span
+	if a1 <= TAU:
+		return [[a0, a1]]
+	return [[a0, TAU], [0.0, a1 - TAU]]
+
+
+## Which detail is under a screen point (-1: none).
+func _detail_at(lp: Vector2) -> int:
+	var q := _unproject_at(lp, _focus, _zoom, _yaw, _tilt)
+	for f in _details.size():
+		var d := _details[f]
+		if d["kind"] == "asteroids":
+			var diff := wrapf(atan2(q.y, q.x) - float(d["a"]), -PI, PI)
+			if absf(diff) <= float(d["span"]) * 0.5 + 0.06 and absf(q.length() - float(d["r"])) <= float(d["w"]) * 1.6:
+				return f
+		elif _in_contour(lp, d):
+			return f
+	return -1
+
+
+func _select_detail(f: int) -> void:
+	_selected = -1
+	_sel_f = f
+	_enter_charge = 0
+	AudioManager.play("poi_select")
+	_focus_t = _details[f]["center"]
+	_zoom_t = maxf(_zoom_t, 1.8)
+	_build_panel()
 
 
 func _make_light(sd: SolarData) -> void:
@@ -512,6 +829,8 @@ func _process(delta: float) -> void:
 	_place_star()
 	_place_bodies(delta)
 	_place_markers()
+	_place_details()
+	_sky_follow()
 	_back.queue_redraw()
 	_mid.queue_redraw()
 	_front.queue_redraw()
@@ -578,10 +897,14 @@ func _draw_back() -> void:
 	if _solar == null:
 		return
 	_draw_rings(true, _back)   # the star's glow is _halo_* / _light now
+	_draw_details(true, _back, _project(Vector2.ZERO).z)
 
 
 func _draw_mid() -> void:
+	if _solar == null:
+		return
 	_draw_rings(false, _mid)
+	_draw_details(false, _mid, _project(Vector2.ZERO).z)
 
 
 ## Orbit rings, split at the star's depth so the near half passes in front of it.
@@ -620,12 +943,12 @@ func _draw_rings(back_half: bool, canvas: Node2D) -> void:
 ## An orbit-plane circle of radius r. dash > 0: dashed; arcs: only these
 ## [from, to] plane angles (radians). Split at the star's depth (back_half).
 func _ring(canvas: Node2D, r: float, col: Color, w: float, back_half: bool, star_depth: float,
-		dash := 0.0, arcs: Array = []) -> void:
+		dash := 0.0, arcs: Array = [], center := Vector2.ZERO) -> void:
 	var n := 180
-	var prev := _project(Vector2(r, 0.0))
+	var prev := _project(center + Vector2(r, 0.0))
 	for k in range(1, n + 1):
 		var a := TAU * float(k) / float(n)
-		var p := _project(Vector2(cos(a), sin(a)) * r)
+		var p := _project(center + Vector2(cos(a), sin(a)) * r)
 		var draw_it: bool = (((p.z + prev.z) * 0.5 - star_depth) < 0.0) == back_half
 		if draw_it and dash > 0.0:
 			draw_it = k % 4 < 2
@@ -697,10 +1020,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		var h := _body_at(lp)
-		if h != _hover:
-			_hover = h
-			if h >= 0:
+		var hf := _detail_at(lp) if h < 0 else -1
+		if h != _hover or hf != _hover_f:
+			if (h >= 0 and h != _hover) or (hf >= 0 and hf != _hover_f):
 				AudioManager.play("hover")
+			_hover = h
+			_hover_f = hf
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -747,7 +1072,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey:
 		var ke := event as InputEventKey
-		if ke.pressed and not ke.echo and ke.keycode == KEY_ESCAPE and _selected >= 0:
+		if ke.pressed and not ke.echo and ke.keycode == KEY_ESCAPE and (_selected >= 0 or _sel_f >= 0):
 			_select(-1)
 			get_viewport().set_input_as_handled()
 
@@ -771,7 +1096,11 @@ func _body_at(lp: Vector2) -> int:
 func _click(lp: Vector2, double: bool) -> void:
 	var i := _body_at(lp)
 	if i < 0:
-		if _selected >= 0:
+		var f := _detail_at(lp)
+		if f >= 0:
+			if f != _sel_f:
+				_select_detail(f)
+		elif _selected >= 0 or _sel_f >= 0:
 			_select(-1)
 		return
 	var pd: PlanetData = _bodies[i]["pd"]
@@ -786,6 +1115,7 @@ func _click(lp: Vector2, double: bool) -> void:
 
 func _select(i: int) -> void:
 	_selected = i
+	_sel_f = -1
 	_enter_charge = 0
 	if i < 0:
 		_focus_t = Vector2.ZERO
@@ -812,7 +1142,7 @@ func _wheel_in(lp: Vector2) -> void:
 func _wheel_out(lp: Vector2) -> void:
 	_enter_charge = 0
 	if _zoom_t <= ZOOM_MIN + 0.001:
-		if _selected >= 0:
+		if _selected >= 0 or _sel_f >= 0:
 			_select(-1)
 		return
 	_zoom_to(clampf(_zoom_t / ZOOM_STEP, ZOOM_MIN, ZOOM_MAX), lp)
@@ -893,12 +1223,16 @@ func _zoom_to(z: float, lp: Vector2) -> void:
 	_zoom_t = z
 
 
-func _unproject_at(sp: Vector2, focus: Vector2, zoom: float) -> Vector2:
+func _unproject_at(sp: Vector2, focus: Vector2, zoom: float, yaw := INF, tilt := INF) -> Vector2:
+	if yaw == INF:
+		yaw = _yaw_t
+	if tilt == INF:
+		tilt = _tilt_t
 	var k := zoom * _ui() * _fit()
 	var rx := (sp.x - _center().x) / k
-	var ry := (sp.y - _center().y) / (k * _tilt_t)
-	var c := cos(_yaw_t)
-	var sn := sin(_yaw_t)
+	var ry := (sp.y - _center().y) / (k * tilt)
+	var c := cos(yaw)
+	var sn := sin(yaw)
 	return focus + Vector2(rx * c + ry * sn, -rx * sn + ry * c)
 
 
@@ -999,6 +1333,10 @@ func _build_panel() -> void:
 	root.add_child(_info_line("Star", SolarData.get_star_type_name(_solar.star_type)))
 
 	root.add_child(HSeparator.new())
+	if _sel_f >= 0:
+		root.add_child(SectionHeader.create("SELECTED", ""))
+		root.add_child(_detail_row(_sel_f))
+		root.add_child(HSeparator.new())
 	var listed: Array[int] = []
 	for i in _bodies.size():
 		if _listed(_bodies[i]["pd"]):
@@ -1115,6 +1453,22 @@ func _world_row(i: int) -> Control:
 			_begin_enter(i)
 		else:
 			_select(i))
+	return row
+
+
+## The picked detail as a list row (like the worlds): its name, kind, a line.
+func _detail_row(f: int) -> Control:
+	var d := _details[f]
+	var neb: bool = d["kind"] == "nebula"
+	var row := ListItem.create(String(d["name"]).to_upper(), "explore" if neb else "raw",
+		"NEBULA" if neb else "ASTEROIDS", PackedStringArray(),
+		"A cloud of gas and dust in open space." if neb else "A cluster of rocks between two orbits.")
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.selected = true
+	row.icon_color = Color(d["color"]) if neb else Color(0.80, 0.74, 0.66)
+	row.pressed.connect(func() -> void:
+		_focus_t = d["center"]
+		AudioManager.play("click"))
 	return row
 
 

@@ -11,14 +11,19 @@ extends RefCounted
 const SHADER := preload("res://shaders/starfield.gdshader")
 const TWINKLE_FPS := 10.0
 
-static func apply(rect: ColorRect) -> void:
+## `overrides`: shader parameters to set over the defaults (e.g. a fuller sky:
+## {"density": 0.06, "nebula": 0.14}). Returns { mat, vp } so a view can move
+## the field later (set "offset", then vp.render_target_update_mode = UPDATE_ONCE).
+static func apply(rect: ColorRect, overrides: Dictionary = {}) -> Dictionary:
 	if rect == null:
-		return
+		return {}
 	var mat := ShaderMaterial.new()
 	mat.shader = SHADER
 	mat.set_shader_parameter("base_color", rect.color)
 	mat.set_shader_parameter("pixel", 1.0)
 	mat.set_shader_parameter("nebula_scale", 450.0)
+	for k: String in overrides:
+		mat.set_shader_parameter(k, overrides[k])
 	var vp := SubViewport.new()
 	vp.disable_3d = true
 	vp.transparent_bg = false
@@ -48,3 +53,4 @@ static func apply(rect: ColorRect) -> void:
 	t.autostart = true
 	t.timeout.connect(func() -> void: vp.render_target_update_mode = SubViewport.UPDATE_ONCE)
 	rect.add_child(t)
+	return {"mat": mat, "vp": vp}
