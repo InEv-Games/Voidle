@@ -13,11 +13,19 @@
 ## zooming on into it) goes down to its planet view. Zooming out past the
 ## farthest zoom goes up to the Star System, framed on this world.
 ## Every switch is SceneTransition.go_soft with matched sizes, as elsewhere.
+##
+## Man-made things are here as things, not effects: every body's orbitals
+## (its Orbit districts / stations, on the rings the planet view shows) and the
+## ships ShipManager keeps — in orbit, lifting off, and flying between the
+## world and its moons (freighter traffic, the Moon lander, shuttles) — are read
+## from their live state each frame and drawn where they are, in front of or
+## behind each body by depth.
 extends Control
 
 const PLANET_SCENE := "res://scenes/planetary/PlanetaryView.tscn"
 const SYSTEM_SCENE := "res://scenes/starsystem/StarSystemView.tscn"
 const SystemView := preload("res://scripts/starsystem/StarSystemView.gd")
+const PlanetView := preload("res://scripts/planetary/PlanetaryView.gd")   # its ship sprites
 
 const ZOOM_MIN := 0.8
 const ZOOM_MAX := 4.0
@@ -53,6 +61,9 @@ var _solar: SolarData
 var _bodies: Array[Dictionary] = []
 var _back: Node2D
 var _front: Node2D
+## Orbitals and ships: behind every body / in front of every body.
+var _orb_back: Node2D
+var _orb_front: Node2D
 var _sky: Dictionary = {}
 var _outer := 300.0
 ## Towards the sun, on the plane (from the planet).
@@ -60,6 +71,10 @@ var _sun_dir := Vector2(-1, 0)
 ## The look: the sun's glow off towards it, the planet's air glow, the markers.
 var _sun_glow: Sprite2D
 var _air_glow: Sprite2D
+## Orbitals and ships under the mouse: [{ key, name, pos }] as last drawn.
+var _orb_hits: Array[Dictionary] = []
+var _hover_orb := ""
+var _orb_badge: PanelContainer
 ## Flights between bodies (test for now): [{ from, to, t, dur }].
 var _flights: Array[Dictionary] = []
 
@@ -109,6 +124,15 @@ func _ready() -> void:
 		_space.add_child(n)
 	_back.draw.connect(_draw_back)
 	_front.draw.connect(_draw_front)
+	_orb_back = Node2D.new()
+	_orb_back.z_index = 30
+	_orb_front = Node2D.new()
+	_orb_front.z_index = 70
+	for n: Node2D in [_orb_back, _orb_front]:
+		n.z_as_relative = false
+		_space.add_child(n)
+	_orb_back.draw.connect(func() -> void: _draw_orbitals(true, _orb_back))
+	_orb_front.draw.connect(func() -> void: _draw_orbitals(false, _orb_front))
 	_panel.visible = not GameState.showcase_mode
 	if GameState.showcase_mode:
 		_panel_open = false
@@ -223,8 +247,21 @@ func _plane(i: int) -> Vector2:
 	return Vector2.from_angle(float(b["a"])) * float(b["r"])
 
 
+## Bodies keep more of their size than distances do: on screen a body grows
+## as zoom^SIZE_POW while distances grow as zoom. Zoomed out, the worlds come
+## together but stay readable (a symbolic map); zoomed in, the room between
+## them and their orbits opens up. At zoom 1 both agree.
+const SIZE_POW := 0.55
+
 func _px(i: int) -> float:
-	return float(_bodies[i]["rad"]) * 2.0 * _scale()
+	return float(_bodies[i]["rad"]) * 2.0 * _ui() * pow(maxf(_zoom, 0.0001), SIZE_POW)
+
+
+## Body i's radius in plane units at this zoom (its size on screen ÷ the
+## distance scale): what everything hugging a body (its orbits, the ships'
+## parking and capture points) is laid out by, so they stay round it.
+func _rad_eff(i: int) -> float:
+	return float(_bodies[i]["rad"]) * pow(maxf(_zoom, 0.0001), SIZE_POW - 1.0)
 
 
 ## The zoom at which body i is as big as the planet view draws it at `pv_zoom`
@@ -232,7 +269,7 @@ func _px(i: int) -> float:
 func _zoom_for_pv(i: int, pv_zoom: float) -> float:
 	var pd: PlanetData = _bodies[i]["pd"]
 	var diam := 2.0 * clampf(0.42 * clampf(pd.planet_size, 0.2, 2.0), 0.10, 0.48) * _space.size.y * pv_zoom
-	return diam / maxf(float(_bodies[i]["rad"]) * 2.0 * _ui(), 1.0)
+	return pow(diam / maxf(float(_bodies[i]["rad"]) * 2.0 * _ui(), 1.0), 1.0 / SIZE_POW)
 
 
 ## The planet view's zoom that draws body i as big as it is here now.
@@ -271,6 +308,8 @@ func _process(delta: float) -> void:
 	_flights = live
 	_back.queue_redraw()
 	_front.queue_redraw()
+	_orb_back.queue_redraw()
+	_orb_front.queue_redraw()
 	if _entering >= 0 and not _leaving and _zoom >= _zoom_t * 0.96:
 		_hand_over(_entering)
 
@@ -278,6 +317,7 @@ func _process(delta: float) -> void:
 func _place_bodies(delta: float) -> void:
 	var planet_p := _project(Vector2.ZERO)
 	_place_look(planet_p)
+	_place_orb_badge()
 	for i in _bodies.size():
 		var b := _bodies[i]
 		var p := _project(_plane(i))
@@ -294,10 +334,13 @@ func _place_bodies(delta: float) -> void:
 		# so another side of each faces it (+yaw moves the near side the way the
 		# moons in front move)
 		mat.set_shader_parameter("rotation_offset", fposmod(float(b["spin"]) + _yaw, TAU))
-		# lit from where the sun really is (as the Star System lights them)
-		var sp := _project(_plane(i) + _sun_dir * 5000.0)
-		var to_sun := Vector2(sp.x - p.x, sp.y - p.y)
-		mat.set_shader_parameter("light_direction", Vector3(to_sun.x, to_sun.y, to_sun.length() * 0.9).normalized())
+		b["tilt"] = lerpf(float(b.get("tilt", 0.0)), 0.0, 1.0 - exp(-0.8 * delta))   # a planet view's tilt eases out
+		mat.set_shader_parameter("tilt", b["tilt"])
+		# day and night exactly as the planet view has them (its light formula:
+		# the world's clock, its own time offset and its turn), so the same side
+		# is lit on both sides of a zoom
+		mat.set_shader_parameter("light_direction", _pv_light(i))
+		mat.set_shader_parameter("night_shadow", SettingsManager.night_shadow)   # the night darkness setting, live
 		var px_rim := 1.0
 		var col := Color(1, 1, 1, 0.32)
 		if i == _selected:
@@ -352,20 +395,299 @@ func _ring(r: float, col: Color, w: float, dash: bool) -> void:
 
 # ── Flights (rockets / landers between bodies) — tried from the debug popup ──
 
-## Buttons for DebugPopup.
+## Buttons for DebugPopup: real ships (ShipManager), not effects — they are
+## saved, keep flying when the view is left, and arrive.
 func debug_actions() -> Array:
 	var out: Array = []
 	if _bodies.size() > 1:
-		out.append({"name": "Rocket: %s → %s" % [_bodies[0]["pd"].planet_name, _bodies[1]["pd"].planet_name],
-			"call": func() -> void: fly(0, 1)})
-		out.append({"name": "Rocket: %s → %s" % [_bodies[1]["pd"].planet_name, _bodies[0]["pd"].planet_name],
-			"call": func() -> void: fly(1, 0)})
-		out.append({"name": "Three rockets, staggered", "call": func() -> void:
-			fly(0, 1)
-			get_tree().create_timer(0.5).timeout.connect(func() -> void: fly(0, 1))
-			get_tree().create_timer(1.0).timeout.connect(func() -> void: fly(1, 0))})
-	out.append({"name": "Spin the view", "call": func() -> void: _yaw_t += PI * 0.5})
+		var moon: PlanetData = _bodies[1]["pd"]
+		out.append({"name": "Launch a shuttle → %s" % moon.planet_name, "call": func() -> void:
+			_test_launch(_planet.seed, moon.seed)})
+		out.append({"name": "Launch a shuttle → %s" % _planet.planet_name, "call": func() -> void:
+			_test_launch(moon.seed, _planet.seed)})
+		out.append({"name": "Launch three, staggered", "call": func() -> void:
+			_test_launch(_planet.seed, moon.seed)
+			get_tree().create_timer(2.0).timeout.connect(func() -> void: _test_launch(_planet.seed, moon.seed))
+			get_tree().create_timer(4.0).timeout.connect(func() -> void: _test_launch(moon.seed, _planet.seed))})
+	if _bodies.size() > 1:
+		var m: PlanetData = _bodies[1]["pd"]
+		out.append({"name": "Pioneer: %s → %s (opens a route)" % [_planet.planet_name, m.planet_name], "call": func() -> void:
+			ShipManager.send_pioneer(_planet.seed, m.seed)
+			AudioManager.play("click")})
+	out.append({"name": "Remove test shuttles", "call": func() -> void:
+		for b: Dictionary in _bodies:
+			for sh: ShipData in ShipManager.ships_for((b["pd"] as PlanetData).seed):
+				if sh.ship_name.begins_with(TEST_SHIP):
+					ShipManager.remove_ship(sh.orbit_seed, sh.ship_id)})
+	out.append({"name": "Turn the view", "call": func() -> void: _yaw_t += PI * 0.5})
 	return out
+
+
+const TEST_SHIP := "Test Shuttle"
+const TEST_FLIGHT_SEC := 30.0
+
+## A real shuttle: put in orbit round `from`, sent to `to` (ShipManager).
+func _test_launch(from: int, to: int) -> void:
+	var sh := ShipManager.launch(from, "%s %d" % [TEST_SHIP, randi_range(10, 99)])
+	sh.ship_type = "shuttle"
+	sh.orbit_speed = 0.35
+	sh.orbit_inclination = randf_range(-0.25, 0.25)   # a low parking orbit near the plane
+	sh.orbit_radius = 1.12
+	# it circles the parking orbit until the burn window, then goes (Hohmann)
+	ShipManager.dispatch_on_window(sh, to, TEST_FLIGHT_SEC)
+	AudioManager.play("click")
+
+
+# ── Orbitals and ships (live, from the game's own state) ─────────────────────
+
+## Orbit rings are drawn this much wider than to scale (the planet view's
+## orbits hug the globe; here they must read past the disc).
+const ORBIT_SPREAD := 3.0
+const STATION_COL := Color(0.55, 0.95, 1.0)
+const SHIP_COL := Color(0.95, 0.97, 1.0)
+const LANDER_COL := Color(1.0, 0.72, 0.4)
+
+
+func _body_index(seed_val: int) -> int:
+	for i in _bodies.size():
+		if (_bodies[i]["pd"] as PlanetData).seed == seed_val:
+			return i
+	return -1
+
+
+## A point of body i's planet frame (ShipData.orbit_point: y is south) as a
+## screen point and its depth; `r` is the orbit radius in planet radii.
+func _orbit_screen(i: int, v: Vector3) -> Vector3:
+	var rad := _rad_eff(i)
+	var len := v.length()
+	var d := v / maxf(len, 0.0001)
+	var draw_r := rad * (1.0 + (len - 1.0) * ORBIT_SPREAD)
+	var p := _project(_plane(i) + Vector2(d.x, d.z) * draw_r)
+	var up := sqrt(maxf(0.0, 1.0 - _tilt * _tilt))
+	return Vector3(p.x, p.y + d.y * draw_r * _scale() * up, p.z)
+
+
+func _draw_orbitals(back_half: bool, canvas: Node2D) -> void:
+	if _bodies.is_empty():
+		return
+	if back_half:
+		_orb_hits.clear()   # the back canvas draws first each frame
+	for i in _bodies.size():
+		var pd: PlanetData = _bodies[i]["pd"]
+		var center_z := _project(_plane(i)).z
+		# the Orbit's districts / stations: their ring and a small station mark
+		for poi: POIData in pd.custom_pois:
+			if not poi.is_orbital():
+				continue
+			var ang := poi.orbit_angle + poi.orbit_speed * _time
+			var prev := _orbit_screen(i, ShipData.orbit_point(poi.orbit_radius, poi.orbit_inclination, poi.orbit_node, 0.0))
+			for k in range(1, 49):
+				var q := _orbit_screen(i, ShipData.orbit_point(poi.orbit_radius, poi.orbit_inclination, poi.orbit_node, TAU * float(k) / 48.0))
+				if (((q.z + prev.z) * 0.5 - center_z) < 0.0) == back_half:
+					canvas.draw_line(Vector2(prev.x, prev.y), Vector2(q.x, q.y), Color(STATION_COL, 0.18), 1.0, true)
+				prev = q
+			var sp := _orbit_screen(i, ShipData.orbit_point(poi.orbit_radius, poi.orbit_inclination, poi.orbit_node, ang))
+			if ((sp.z - center_z) < 0.0) == back_half:
+				_orb_hits.append({"key": "poi:" + poi.label, "name": poi.shown_name(), "pos": Vector2(sp.x, sp.y),
+					"front": not back_half})
+				var c := Vector2(sp.x, sp.y).round()
+				canvas.draw_rect(Rect2(c - Vector2(3, 3), Vector2(6, 6)), Color(0, 0, 0, 0.7))
+				canvas.draw_rect(Rect2(c - Vector2(2, 2), Vector2(4, 4)), STATION_COL)
+		# ships of this body: in orbit (also lifting off / coming down), or flying
+		for sh: ShipData in ShipManager.ships_for(pd.seed):
+			if sh.traffic_state == "pad" or sh.orbit_radius < 0.999:
+				continue
+			if sh.is_travelling():
+				_draw_transfer(i, sh, back_half, canvas)
+				continue
+			# its parking orbit, faint (brighter while hovered / waiting to burn)
+			var lit := _hover_orb == "ship:" + sh.ship_id
+			var ring_a := 0.30 if lit else (0.16 if sh.pending_dest >= 0 else 0.08)
+			var rp := _orbit_screen(i, ShipData.orbit_point(sh.orbit_radius, sh.orbit_inclination, sh.orbit_node, 0.0))
+			for k in range(1, 41):
+				var rq := _orbit_screen(i, ShipData.orbit_point(sh.orbit_radius, sh.orbit_inclination, sh.orbit_node, TAU * float(k) / 40.0))
+				if (((rq.z + rp.z) * 0.5 - center_z) < 0.0) == back_half:
+					canvas.draw_line(Vector2(rp.x, rp.y), Vector2(rq.x, rq.y), Color(SHIP_COL, ring_a), 1.0, true)
+				rp = rq
+			var sp := _orbit_screen(i, ShipData.orbit_point(sh.orbit_radius, sh.orbit_inclination, sh.orbit_node, sh.orbit_angle))
+			if ((sp.z - center_z) < 0.0) != back_half:
+				continue
+			_orb_hits.append({"key": "ship:" + sh.ship_id, "name": sh.ship_name, "pos": Vector2(sp.x, sp.y),
+				"front": not back_half})
+			var ahead := _orbit_screen(i, ShipData.orbit_point(sh.orbit_radius, sh.orbit_inclination, sh.orbit_node,
+				sh.orbit_angle + 0.05 * signf(sh.orbit_speed if sh.orbit_speed != 0.0 else 1.0)))
+			_draw_ship(canvas, Vector2(sp.x, sp.y), Vector2(ahead.x, ahead.y) - Vector2(sp.x, sp.y), sh)
+
+
+## A ship between two bodies of this system, on a Hohmann transfer: half an
+## ellipse round the planet (its focus) from the leaving body to the one it
+## heads for — the near point at the planet's parking orbit, the far point at
+## the moon's. Where it is on it follows Kepler's law from its real travel
+## progress: fast low down by the planet, slow out by the moon. The whole path
+## is drawn dashed (the way still to go brighter). Its first and last bits
+## blend from / into the parking orbits, so it leaves from where it really was.
+## One going to another planet just climbs out and fades.
+func _draw_transfer(from_i: int, sh: ShipData, back_half: bool, canvas: Node2D) -> void:
+	var to_i := _body_index(sh.dest_seed)
+	var u := clampf(sh.travel_progress, 0.0, 1.0)
+	if to_i < 0:
+		if back_half:
+			return
+		var c := _project(_plane(from_i))
+		var p := _project(_plane(from_i) + (-_sun_dir) * _rad_eff(from_i) * (1.2 + u * 8.0))
+		var a := 1.0 - smoothstep(0.3, 0.6, u)
+		if a > 0.01:
+			_draw_ship(canvas, Vector2(p.x, p.y), Vector2(p.x - c.x, p.y - c.y), sh, a, true)
+		return
+	var tr := _transfer_of(from_i, to_i, sh)
+	_draw_capture_orbit(from_i, to_i, sh, back_half, canvas)
+	# the path (dashed), split at the planet's depth like everything round it
+	var steps := 64
+	var prev := _tproj(tr, 0.0)
+	for k in range(1, steps + 1):
+		var uu := float(k) / float(steps)
+		var pt := _transfer_point(tr, uu)
+		var q := _tproj(tr, uu)
+		if (((q.z + prev.z) * 0.5 - _near_z(pt, from_i, to_i)) < 0.0) == back_half and k % 3 != 0:
+			var ahead := uu > u
+			canvas.draw_line(Vector2(prev.x, prev.y), Vector2(q.x, q.y),
+				Color(LANDER_COL if sh.ship_type == "lander" else SHIP_COL, 0.45 if ahead else 0.15), 1.0, true)
+		prev = q
+	var pos := _transfer_point(tr, u)
+	# blend out of the parking orbit at the start (it was there when it burned)
+	if u < BLEND_U:
+		var park := _orbit_screen(from_i, ShipData.orbit_point(sh.orbit_radius, sh.orbit_inclination, sh.orbit_node, sh.orbit_angle))
+		var pp := _tproj(tr, u)
+		var w := smoothstep(0.0, BLEND_U, u)
+		var blended := Vector2(park.x, park.y).lerp(Vector2(pp.x, pp.y), w)
+		if ((lerpf(park.z, pp.z, w) - _near_z(pos, from_i, to_i)) < 0.0) == back_half:
+			_draw_burn(canvas, sh, blended, _tproj(tr, u + 0.01))
+		return
+	var p3 := _tproj(tr, u)
+	if ((p3.z - _near_z(pos, from_i, to_i)) < 0.0) != back_half:
+		return
+	_draw_burn(canvas, sh, Vector2(p3.x, p3.y), _tproj(tr, minf(u + 0.01, 1.0)))
+
+
+const BLEND_U := 0.06
+
+## The orbit a flying ship will be captured into round its target (the same
+## one ShipManager puts it on: OrbitLayout.capture), dashed, so the transfer's
+## path runs on into it instead of stopping in empty space.
+func _draw_capture_orbit(from_i: int, to_i: int, sh: ShipData, back_half: bool, canvas: Node2D) -> void:
+	var from_pd: PlanetData = _bodies[from_i]["pd"]
+	var to_pd: PlanetData = _bodies[to_i]["pd"]
+	var cap := OrbitLayout.capture(from_pd.seed, to_pd.seed, 1.0 if sh.orbit_speed >= 0.0 else -1.0,
+		OrbitLayout.transfer_inc(sh.ship_id))
+	if cap.is_empty():
+		return
+	var r := float(cap["radius"]) if float(cap["radius"]) > 0.0 else maxf(sh.orbit_radius, 1.06)
+	var inc: float = cap["inc"]
+	var node: float = cap["node"]
+	var center_z := _project(_plane(to_i)).z
+	var col := Color(LANDER_COL if sh.ship_type == "lander" else SHIP_COL, 0.4)
+	var prev := _orbit_screen(to_i, ShipData.orbit_point(r, inc, node, 0.0))
+	for k in range(1, 49):
+		var q := _orbit_screen(to_i, ShipData.orbit_point(r, inc, node, TAU * float(k) / 48.0))
+		if (((q.z + prev.z) * 0.5 - center_z) < 0.0) == back_half and k % 3 != 0:
+			canvas.draw_line(Vector2(prev.x, prev.y), Vector2(q.x, q.y), col, 1.0, true)
+		prev = q
+
+## Depth of whichever of the two bodies a transfer point is nearest: behind
+## that one it goes under it (the moon as much as the planet).
+func _near_z(p: Vector2, a: int, b: int) -> float:
+	var n := a if p.distance_to(_plane(a)) <= p.distance_to(_plane(b)) else b
+	return _project(_plane(n)).z
+
+func _draw_burn(canvas: Node2D, sh: ShipData, p: Vector2, ahead3: Vector3) -> void:
+	_orb_hits.append({"key": "ship:" + sh.ship_id, "name": sh.ship_name, "pos": p, "front": canvas == _orb_front})
+	var burning := sh.travel_progress < 0.12 or sh.travel_progress > 0.9   # the two burns
+	_draw_ship(canvas, p, Vector2(ahead3.x, ahead3.y) - p, sh, 1.0, burning)
+
+
+## How far out a ship captured round body i sits (OrbitLayout.CAPTURE_R, drawn
+## as every orbit here: ORBIT_SPREAD wider than to scale).
+func _capture_off(i: int) -> float:
+	return _rad_eff(i) * (1.0 + (OrbitLayout.CAPTURE_R - 1.0) * ORBIT_SPREAD)
+
+
+## The transfer's ellipse: { focus, start_ang, r_s, r_e, a, e, peri_first }.
+func _transfer_of(from_i: int, to_i: int, sh: ShipData) -> Dictionary:
+	var planet_rad := _rad_eff(0)
+	var park := planet_rad * (1.0 + (maxf(sh.orbit_radius, 1.06) - 1.0) * ORBIT_SPREAD)
+	var dir_s: Vector2
+	var r_s: float
+	var r_e: float
+	if from_i == 0:
+		var to_dir := _plane(to_i).normalized()
+		dir_s = -to_dir                     # burn on the far side
+		r_s = park
+		r_e = _plane(to_i).length() - _capture_off(to_i)
+	else:
+		dir_s = _plane(from_i).normalized()
+		# leaving a moon it burns on its far side from the planet (ShipManager's
+		# window), so the path starts just outside the moon
+		r_s = _plane(from_i).length() + _capture_off(from_i)
+		r_e = park if to_i == 0 else _plane(to_i).length() - _capture_off(to_i)
+	r_e = maxf(r_e, park)
+	var a := (r_s + r_e) * 0.5
+	var e := absf(r_e - r_s) / maxf(r_s + r_e, 0.001)
+	return {"start_ang": dir_s.angle(), "r_s": r_s, "r_e": r_e, "a": a, "e": e, "peri_first": r_s <= r_e,
+		"sense": 1.0 if (sh.orbit_speed >= 0.0) else -1.0, "inc": OrbitLayout.transfer_inc(sh.ship_id)}
+
+
+## Plane point at share u (0..1 of the travel time) along the transfer.
+func _transfer_point(tr: Dictionary, u: float) -> Vector2:
+	var e: float = tr["e"]
+	var a: float = tr["a"]
+	# mean anomaly over half an orbit; from the near point (0→π) or the far one (π→2π)
+	var m := PI * clampf(u, 0.0, 1.0) + (0.0 if tr["peri_first"] else PI)
+	var ea := m
+	for it in 6:   # Kepler: E − e·sin E = M (Newton)
+		ea -= (ea - e * sin(ea) - m) / (1.0 - e * cos(ea))
+	var nu := fposmod(2.0 * atan2(sqrt(1.0 + e) * sin(ea * 0.5), sqrt(1.0 - e) * cos(ea * 0.5)), TAU)
+	if not tr["peri_first"] and nu < PI * 0.5:
+		nu += TAU   # the very end of an inbound leg (ν = 2π), not its start
+	var r := a * (1.0 - e * e) / (1.0 + e * cos(nu))
+	# the angle swept since the start point (the near point is the start, or π away)
+	var swept := nu - (0.0 if tr["peri_first"] else PI)
+	return Vector2.from_angle(float(tr["start_ang"]) + swept * float(tr["sense"])) * r
+
+
+## The transfer point lifted off the plane by the transfer's own tilt (turned
+## about the start–end line): Vector3(plane x, plane y, height).
+func _transfer_xyh(tr: Dictionary, u: float) -> Vector3:
+	var p := _transfer_point(tr, u)
+	var s := Vector2.from_angle(float(tr["start_ang"]))
+	var n := s.rotated(PI * 0.5)
+	var inc: float = tr["inc"]
+	var along := p.dot(s)
+	var across := p.dot(n)
+	var q := s * along + n * across * cos(inc)
+	return Vector3(q.x, q.y, -across * sin(inc))
+
+
+## Screen point (x, y, depth) of the tilted transfer at u.
+func _tproj(tr: Dictionary, u: float) -> Vector3:
+	var v := _transfer_xyh(tr, u)
+	var p := _project(Vector2(v.x, v.y))
+	var up := sqrt(maxf(0.0, 1.0 - _tilt * _tilt))
+	return Vector3(p.x, p.y - v.z * _scale() * up, p.z)
+
+
+## A ship in the planet view's own pixel art (PlanetaryView.draw_ship_sprite:
+## the same little hull for a shuttle / freighter, the lander's legs), lit
+## yellow while hovered as there, with a pixel engine burn behind it on the
+## side away from its heading while it fires.
+func _draw_ship(canvas: Node2D, p: Vector2, dir: Vector2, sh: ShipData, a := 1.0, burning := false) -> void:
+	var d := dir.normalized() if dir.length() > 0.001 else Vector2.RIGHT
+	var hovered := _hover_orb == "ship:" + sh.ship_id
+	var col := Color(1.0, 0.92, 0.40, a) if hovered else Color(1, 1, 1, 0.92 * a)
+	if burning:
+		var hue := 0.45 + 0.25 * (0.5 + 0.5 * sin(_time * 37.0 + float(sh.ship_id.hash() % 11)))
+		var f := (p - Vector2.ONE).floor() - (d * 3.0).round()
+		canvas.draw_rect(Rect2(f, Vector2(2, 2)), Color(1.0, hue, 0.05, 0.9 * a))
+	PlanetView.draw_ship_sprite(canvas, p, sh.ship_type, col)
 
 
 ## Sends a rocket from body a to body b (a curved climb, a coast, an arrival).
@@ -381,8 +703,8 @@ func _flight_point(fl: Dictionary, u: float) -> Vector2:
 	var pa := _plane(a)
 	var pb := _plane(b)
 	var dir := (pb - pa).normalized()
-	var start := pa + dir * float(_bodies[a]["rad"])
-	var end := pb - dir * float(_bodies[b]["rad"])
+	var start := pa + dir * _rad_eff(a)
+	var end := pb - dir * _rad_eff(b)
 	var side := Vector2(-dir.y, dir.x) * float(fl["side"]) * start.distance_to(end) * 0.25
 	var q := start.lerp(end, u) + side * sin(u * PI)
 	var lift := start.distance_to(end) * 0.22 * sin(u * PI)
@@ -430,6 +752,26 @@ func _draw_front() -> void:
 		var p := _project(_plane(i))
 		_front.draw_line(Vector2(p.x, p.y - _px(i) * 0.5 - 3.0), cell.position + Vector2(cell.size.x * 0.5, cell.size.y),
 			Color(1, 1, 1, 0.6), 1.0)
+
+
+## The planet view's light for body i (PlanetRenderer._update_light_direction):
+## the shared light angle running on in real time (GameState.light_angle since
+## light_last_unix, at PlanetaryView.LIGHT_SPEED), plus the body's own time
+## offset and its turn here (spin + yaw); tilted with the body.
+const PV_LIGHT_SPEED := 0.04
+
+func _pv_light(i: int) -> Vector3:
+	var b := _bodies[i]
+	var pd: PlanetData = b["pd"]
+	var la := GameState.light_angle
+	if GameState.light_last_unix > 0:
+		la += float(int(Time.get_unix_time_from_system()) - GameState.light_last_unix) * PV_LIGHT_SPEED
+	var eff := la + pd.local_time_offset + fposmod(float(b["spin"]) + _yaw, TAU)
+	var ld := Vector3(cos(eff) * 0.85, -0.45, sin(eff) * 0.55).normalized()
+	var t: float = b.get("tilt", 0.0)
+	var c := cos(t)
+	var sn := sin(t)
+	return Vector3(ld.x, ld.y * c + ld.z * sn, -ld.y * sn + ld.z * c)
 
 
 ## The sun's glow (additive, off towards the sun, at the frame's edge), the
@@ -492,13 +834,37 @@ func _glow_sprite(col: Color, strength: float, z: int) -> Sprite2D:
 	return spr
 
 
+## The hovered orbital's / ship's name, following it.
+func _place_orb_badge() -> void:
+	if _orb_badge == null:
+		_orb_badge = PanelContainer.new()
+		_orb_badge.theme_type_variation = &"Badge"
+		_orb_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_orb_badge.z_as_relative = false
+		_orb_badge.z_index = 192
+		var lbl := Label.new()
+		lbl.theme_type_variation = &"CounterLabel"
+		_orb_badge.add_child(lbl)
+		_space.add_child(_orb_badge)
+	var hit: Dictionary = {}
+	for h: Dictionary in _orb_hits:
+		if h["key"] == _hover_orb:
+			hit = h
+	_orb_badge.visible = not hit.is_empty()
+	if hit.is_empty():
+		return
+	(_orb_badge.get_child(0) as Label).text = String(hit["name"]).to_upper()
+	_orb_badge.size = _orb_badge.get_combined_minimum_size()
+	_orb_badge.position = ((hit["pos"] as Vector2) - Vector2(_orb_badge.size.x * 0.5, _orb_badge.size.y + 10.0)).round()
+
+
 func _place_look(planet_p: Vector3) -> void:
 	if _sun_glow == null:
 		return
 	# the sun's glow sits where the sun is, pulled back to the frame's edge
-	var sp := _project(_sun_dir * 5000.0)
+	var ld := _pv_light(0)   # the glow sits on the lit side
 	var c := _center()
-	var dir := Vector2(sp.x, sp.y) - c
+	var dir := Vector2(ld.x, ld.y) * 5000.0
 	var edge := minf(_space.size.x, _space.size.y) * 0.62
 	_sun_glow.position = c + dir.limit_length(edge)
 	_sun_glow.scale = Vector2.ONE * (_space.size.y * 0.7 / 128.0)
@@ -527,10 +893,26 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		var h := _body_at(lp)
+		# an orbital / ship near the mouse names itself: one passing in front of
+		# a body wins over that body; one behind it only shows off the disc
+		var ho := ""
+		var best := 10.0
+		for hit: Dictionary in _orb_hits:
+			if h >= 0 and not bool(hit.get("front", true)):
+				continue
+			var d := (hit["pos"] as Vector2).distance_to(lp)
+			if d < best:
+				best = d
+				ho = hit["key"]
+		if ho != "":
+			h = -1
 		if h != _hover:
 			if h >= 0:
 				AudioManager.play("hover")
 			_hover = h
+		if ho != _hover_orb and ho != "":
+			AudioManager.play("hover")
+		_hover_orb = ho
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -629,7 +1011,7 @@ func _select(i: int) -> void:
 	if i >= 0:
 		AudioManager.play("poi_select")
 		_focus_t = _plane(i)
-		_zoom_t = maxf(_zoom_t, clampf(120.0 / maxf(float(_bodies[i]["rad"]), 1.0), 1.0, ZOOM_MAX))
+		_zoom_t = maxf(_zoom_t, clampf(pow(120.0 / maxf(float(_bodies[i]["rad"]), 1.0), 1.0 / SIZE_POW), 1.0, ZOOM_MAX))
 	else:
 		_focus_t = Vector2.ZERO
 	_build_panel()
@@ -675,6 +1057,9 @@ func _hand_over(i: int) -> void:
 	var pd: PlanetData = _bodies[i]["pd"]
 	if _solar != null:
 		pd.set_meta("__solar_data", _solar)
+	# the face shown here, for the planet view to open on
+	pd.set_meta("__ps_rot", fposmod(float(_bodies[i]["spin"]) + _yaw, TAU))
+	pd.set_meta("__ps_tilt", float(_bodies[i].get("tilt", 0.0)))
 	GameState.set_meta("enter_from_system", true)   # PlanetaryView opens slightly out and zooms in
 	SceneTransition.go_soft(PLANET_SCENE, pd)
 
@@ -719,6 +1104,14 @@ func _arrive_from(body: PlanetData) -> void:
 	else:
 		# up from a planet view: ease out until the moons are in
 		_zoom_t = ARRIVE_ZOOM if idx == 0 else maxf(ARRIVE_ZOOM, 1.6)
+	# up from a planet view: the globe keeps the face it showed there (its turn
+	# is the spin plus our yaw; its tilt eases back to the plane's)
+	if body.has_meta("__pv_rot"):
+		var b := _bodies[idx]
+		b["spin"] = fposmod(float(body.get_meta("__pv_rot")) - _yaw, TAU)
+		b["tilt"] = float(body.get_meta("__pv_tilt", 0.0))
+		body.remove_meta("__pv_rot")
+		body.remove_meta("__pv_tilt")
 	if GameState.has_meta("planet_system_highlight"):
 		# the Moon's reveal: pick it, so the player sees where it is
 		var hs := int(GameState.get_meta("planet_system_highlight"))

@@ -293,6 +293,12 @@ func _ready() -> void:
 		_zoom_vel = 0.0
 		_zoom_target = ZOOM_MIN
 		_apply_zoom()
+		# the same face of the globe the Planet System showed (its turn and tilt)
+		if current_data.has_meta("__ps_rot"):
+			planet_renderer.set_rotation_offset(float(current_data.get_meta("__ps_rot")))
+			planet_renderer.set_tilt(float(current_data.get_meta("__ps_tilt", 0.0)))
+			current_data.remove_meta("__ps_rot")
+			current_data.remove_meta("__ps_tilt")
 	if _awaiting_capital(current_data):
 		_hold_ui()   # before the first frame: the fade-in shows the planet alone
 	if GameState.showcase_mode:
@@ -1105,6 +1111,9 @@ func _go_back() -> void:
 	_zoom_target = SYSTEM_EXIT_ZOOM
 	await get_tree().create_timer(SYSTEM_EXIT_SEC).timeout
 	current_data.set_meta("__pv_zoom", _zoom)
+	# the face of the globe as it is now, so the Planet System shows the same one
+	current_data.set_meta("__pv_rot", planet_renderer.get_rotation_offset())
+	current_data.set_meta("__pv_tilt", float(planet_renderer.tilt))
 	# zooming out of a planet goes to its Planet System first (its moons)
 	SceneTransition.go_soft(PLANET_SYSTEM_SCENE if PLANET_SYSTEM_LAYER else STAR_SYSTEM_SCENE, current_data)
 
@@ -1951,6 +1960,9 @@ func _transfer_point(ship: ShipData, p: float, ob: Dictionary, db: Dictionary) -
 	var q := s * u * u * u + p1 * 3.0 * u * u * t + p2 * 3.0 * u * t * t + e * t * t * t
 	return Vector3(q.x, q.y, 0.0)
 
+## Share of a flight (at each end) the planet view still draws.
+const TRANSIT_SHOWN := DEPART_FRAC + 0.06
+
 func _draw_transits() -> void:
 	var cv := _transit_canvas
 	var o := cv.global_position
@@ -1964,16 +1976,15 @@ func _draw_transits() -> void:
 			continue
 		_plan_transfer(ship, ob, db)
 		var p := clampf(ship.travel_progress, 0.0, 1.0)
-		# the route ahead, faint and dashed — traffic throws it out as it sets off
-		var reach := clampf(p / 0.12, 0.0, 1.0) if ship.ship_type == "freighter" else 1.0
-		var lane_a := 0.30 if ship.ship_type == "freighter" else 0.35
-		var end_q := lerpf(p, 1.0, reach)
-		var prev := _transfer_point(ship, p, ob, db)
-		for q in range(1, 41):
-			var cur := _transfer_point(ship, lerpf(p, end_q, float(q) / 40.0), ob, db)
-			if q % 2 == 0 and prev.z < 0.5 and cur.z < 0.5:
-				cv.draw_line(Vector2(prev.x, prev.y) - o, Vector2(cur.x, cur.y) - o, Color(0.65, 0.85, 1.0, lane_a), 1.0)
-			prev = cur
+		# the planet view only shows a flight by this world: leaving its orbit,
+		# or coming in to it. Out between the worlds it belongs to the Planet /
+		# Star System views (the long lanes across the globe looked wrong), so
+		# no route lines here, and nothing once it is away.
+		var here := current_data.seed if current_data != null else -1
+		var near_start := ship.orbit_seed == here and p < TRANSIT_SHOWN
+		var near_end := ship.dest_seed == here and p > 1.0 - TRANSIT_SHOWN
+		if not near_start and not near_end:
+			continue
 		# trail: the route just behind (hidden where a body covers it)
 		const TRAIL := 0.12
 		for k in 18:
@@ -2076,8 +2087,9 @@ static func draw_ship_sprite(cv: CanvasItem, pos: Vector2, ship_type: String, co
 			cv.draw_rect(Rect2(p + Vector2(-8, 0), Vector2(6, 2)), Color(0.30, 0.60, 1.0, col.a))
 			cv.draw_rect(Rect2(p + Vector2(4, 0), Vector2(6, 2)), Color(0.30, 0.60, 1.0, col.a))
 		_:
-			cv.draw_rect(Rect2(p + Vector2(-2, -2), Vector2(2, 2)), col)
-			cv.draw_rect(Rect2(p + Vector2(0, -2), Vector2(2, 2)), col)
+			# a shuttle / freighter: one pixel (2×2), on a faint dark halo so
+			# it reads over a bright globe
+			cv.draw_rect(Rect2(p - Vector2.ONE, Vector2(4, 4)), Color(0, 0, 0, col.a * 0.45))
 			cv.draw_rect(Rect2(p, Vector2(2, 2)), col)
 
 var _transit_hover := false

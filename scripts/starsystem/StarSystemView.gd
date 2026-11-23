@@ -30,6 +30,7 @@
 extends Control
 
 const PLANET_SCENE := "res://scenes/planetary/PlanetaryView.tscn"
+const PlanetView := preload("res://scripts/planetary/PlanetaryView.gd")   # its ship sprites
 
 const ZOOM_MIN := 0.6
 const ZOOM_MAX := 5.0
@@ -80,6 +81,16 @@ const MOON_LOD_A := 1.5
 const MOON_LOD_B := 2.3
 
 const RING_COL := Color(0.72, 0.84, 1.0, 0.26)
+## Moons sit this much closer to their planet here than in the Planet System.
+const SS_MOON_K := 0.45
+## Ships and bases (ShipManager, GameState.outposts) — live, as in the Planet
+## System: every world's ships circle it, a detail with a base gets a station
+## mark and its own ships, and ships flying between them follow a transfer arc
+## round the star (from one's orbit radius to the other's, swinging prograde,
+## Kepler-paced: slower out where it is farther), its path dashed.
+const SHIP_COL := Color(0.95, 0.97, 1.0)
+const BASE_COL := Color(0.55, 0.95, 1.0)
+
 ## The golden angle that spreads the worlds around the star.
 const GOLDEN := 2.39996323
 const RING_SEL_COL := Color(0.55, 0.95, 1.0, 0.9)
@@ -403,7 +414,7 @@ func _place_markers() -> void:
 		var is_moon := int(b["parent"]) >= 0
 		var a := 1.0
 		if is_moon:
-			a = moon_a if _selected != i else 1.0
+			a = _moon_vis(i)
 		var shown := a > 0.3 and (b["rect"] as CanvasItem).visible
 		var lit := i == _hover or i == _selected
 		# a marker only where there is something of ours; any world's name on hover
@@ -734,7 +745,7 @@ static func planet_angle(sd: SolarData, i: int) -> float:
 
 ## Moon j's angle round its planet.
 static func moon_angle(planet_seed: int, j: int) -> float:
-	return fposmod(float(planet_seed % 628) * 0.01 + 0.9 + GOLDEN * float(j), TAU)
+	return OrbitLayout.moon_angle(planet_seed, j)
 
 
 ## A world's size on screen at zoom 1 (px at 1080 p).
@@ -779,6 +790,7 @@ static func _planet_material(pd: PlanetData) -> ShaderMaterial:
 	mat.set_shader_parameter("seed", pd.seed)
 	mat.set_shader_parameter("terrain_roughness", pd.terrain_roughness)
 	mat.set_shader_parameter("rotation_offset", 0.0)
+	mat.set_shader_parameter("night_shadow", SettingsManager.night_shadow)   # the night darkness setting
 	var c := PlanetData.get_colors(pd.planet_type)
 	match PlanetData.get_shader_type(pd.planet_type):
 		PlanetData.ShaderType.ROCKY:
@@ -851,7 +863,8 @@ func _body_plane(i: int) -> Vector2:
 		return Vector2(cos(a), sin(a)) * float(b["r"])
 	var pb := _bodies[int(b["parent"])]
 	# in step with the planet's size on screen, whatever the zoom
-	var mr := moon_orbit(float(pb["sz"]), _moon_index(i))
+	# kept small here (a miniature): the Planet System spreads them out on zoom
+	var mr := moon_orbit(float(pb["sz"]), _moon_index(i)) * SS_MOON_K
 	return _body_plane(int(b["parent"])) + Vector2(cos(a), sin(a)) * mr / _fit()
 
 
@@ -866,6 +879,20 @@ func _moon_index(i: int) -> int:
 
 func _body_px(i: int) -> float:
 	return float(_bodies[i]["sz"]) * _zoom * _ui()
+
+
+## How visible moon i is: only the picked world's moons show (and the picked
+## or entered moon with its siblings), the rest stay hidden whatever the zoom.
+func _moon_vis(i: int) -> float:
+	var par := int(_bodies[i]["parent"])
+	if i == _selected or i == _entering:
+		return 1.0
+	for pick: int in [_selected, _entering]:
+		if pick < 0:
+			continue
+		if pick == par or int(_bodies[pick]["parent"]) == par:
+			return 1.0
+	return 0.0
 
 
 func _moon_alpha() -> float:
@@ -954,7 +981,7 @@ func _place_bodies(delta: float) -> void:
 		var is_moon := int(b["parent"]) >= 0
 		var a := 1.0
 		if is_moon:
-			a = moon_a if _selected != i and _entering != i else 1.0
+			a = _moon_vis(i)
 		rect.visible = a > 0.02
 		if not rect.visible:
 			continue
@@ -985,6 +1012,7 @@ func _place_bodies(delta: float) -> void:
 		b["turn"] = float(b["turn"]) + fl * MOON_SWING * delta
 		b["fling"] = fl * exp(-FLING_DECAY * delta) if absf(fl) > 0.001 else 0.0
 		mat.set_shader_parameter("rotation_offset", b["spin"])
+		mat.set_shader_parameter("night_shadow", SettingsManager.night_shadow)   # follows the setting live
 		mat.set_shader_parameter("tilt", b["tilt"])
 		_set_rim(i, mat)
 		var to_star := Vector2(star_p.x - p.x, star_p.y - p.y)
@@ -995,11 +1023,124 @@ func _place_bodies(delta: float) -> void:
 
 # ── Drawing ──────────────────────────────────────────────────────────────────
 
+# ── Ships, routes and bases ──────────────────────────────────────────────────
+
+## Every place ships can be in this system: { seed: { pos (plane), r (px-ish
+## radius of the thing, for the parking ring), detail (index or -1) } }.
+func _ship_places() -> Dictionary:
+	var out := {}
+	for i in _bodies.size():
+		if int(_bodies[i]["parent"]) >= 0:
+			continue
+		out[(_bodies[i]["pd"] as PlanetData).seed] = {"pos": _body_plane(i), "r": _body_px(i) * 0.5 / maxf(_scale(), 0.001), "detail": -1}
+	for f in _details.size():
+		var ds := OrbitLayout.detail_seed(_solar.seed, f)
+		out[ds] = {"pos": _details[f]["center"], "r": 14.0 / maxf(_fit(), 0.01), "detail": f}
+	return out
+
+
+## Plane point of a transfer between two places at u: round the star from one
+## radius to the other, prograde, a little swing out on the way.
+func _route_point(pa: Vector2, pb: Vector2, u: float) -> Vector2:
+	var ta := pa.angle()
+	var tb := pb.angle()
+	var sweep := fposmod(tb - ta, TAU)   # prograde, the way the worlds go round
+	var ra := pa.length()
+	var rb := pb.length()
+	# Kepler-ish pacing: the angle runs faster where the arc is nearer the star
+	var k := u * u * (3.0 - 2.0 * u)
+	var r := lerpf(ra, rb, k) * (1.0 + 0.12 * sin(PI * u))
+	return Vector2.from_angle(ta + sweep * k) * r
+
+
+func _draw_routes(back_half: bool, canvas: Node2D) -> void:
+	var places := _ship_places()
+	var star_z := _project(Vector2.ZERO).z
+	for sd: int in places:
+		for sh: ShipData in ShipManager.ships_for(sd):
+			if not sh.is_travelling() or not places.has(sh.dest_seed):
+				continue
+			var pa: Vector2 = places[sd]["pos"]
+			var pb: Vector2 = places[sh.dest_seed]["pos"]
+			var prev := _project(_route_point(pa, pb, 0.0))
+			for kk in range(1, 49):
+				var uu := float(kk) / 48.0
+				var q := _project(_route_point(pa, pb, uu))
+				if (((q.z + prev.z) * 0.5 - star_z) < 0.0) == back_half and kk % 3 != 0:
+					canvas.draw_line(Vector2(prev.x, prev.y), Vector2(q.x, q.y),
+						Color(SHIP_COL, 0.42 if uu > sh.travel_progress else 0.14), 1.0, true)
+				prev = q
+
+
+func _draw_ships() -> void:
+	var places := _ship_places()
+	for sd: int in places:
+		var pl: Dictionary = places[sd]
+		var f: int = pl["detail"]
+		if f >= 0 and GameState.outposts.has(str(sd)):
+			# a base: a station mark on the detail
+			var bc := _project(pl["pos"])
+			var c := Vector2(bc.x, bc.y).round()
+			_front.draw_rect(Rect2(c - Vector2(4, 4), Vector2(8, 8)), Color(0, 0, 0, 0.7))
+			_front.draw_rect(Rect2(c - Vector2(3, 3), Vector2(6, 6)), BASE_COL)
+		for sh: ShipData in ShipManager.ships_for(sd):
+			if sh.traffic_state == "pad" or sh.orbit_radius < 0.999:
+				continue
+			if sh.is_travelling():
+				if places.has(sh.dest_seed):
+					var pa: Vector2 = pl["pos"]
+					var pb: Vector2 = places[sh.dest_seed]["pos"]
+					var u := clampf(sh.travel_progress, 0.0, 1.0)
+					var q := _project(_route_point(pa, pb, u))
+					var burn := u < 0.1 or u > 0.9
+					if burn:
+						var ah := _project(_route_point(pa, pb, minf(u + 0.01, 1.0)))
+						var d := (Vector2(ah.x, ah.y) - Vector2(q.x, q.y)).normalized()
+						_front.draw_rect(Rect2((Vector2(q.x, q.y) - Vector2.ONE).floor() - (d * 3.0).round(), Vector2(2, 2)),
+							Color(1.0, 0.6, 0.1, 0.9))
+					PlanetView.draw_ship_sprite(_front, Vector2(q.x, q.y), sh.ship_type, Color(1, 1, 1, 0.92))
+				continue
+			# ships circling a world are left to the Planet System (too small here)
+
+
+## Buttons for DebugPopup: real pioneers (ShipManager.send_pioneer) — on
+## arrival they open a route, and haulers start running it on their own.
+func debug_actions() -> Array:
+	var out: Array = []
+	var home := GameState.home_planet_seed
+	if _selected >= 0 and int(_bodies[_selected]["parent"]) < 0:
+		var pd: PlanetData = _bodies[_selected]["pd"]
+		if pd.seed != home:
+			out.append({"name": "Pioneer: home → %s" % pd.planet_name, "call": func() -> void:
+				ShipManager.send_pioneer(home, pd.seed)
+				AudioManager.play("click")})
+	if _sel_f >= 0:
+		var d := _details[_sel_f]
+		var ds := OrbitLayout.detail_seed(_solar.seed, _sel_f)
+		out.append({"name": "Pioneer: home → %s (set up a base)" % d["name"], "call": func() -> void:
+			ShipManager.send_pioneer(home, ds, {"kind": d["kind"], "name": d["name"], "system": _solar.seed})
+			AudioManager.play("click")})
+	if out.is_empty():
+		out.append({"name": "(pick a world or an asteroid cluster / nebula)", "call": func() -> void: pass})
+	out.append({"name": "Clear all routes, bases and haulers (test)", "call": func() -> void:
+		GameState.traffic_links.clear()
+		GameState.outposts.clear()
+		for pd: PlanetData in _solar.planets:
+			for sh: ShipData in ShipManager.ships_for(pd.seed):
+				if sh.ship_type in [ShipManager.HAULER, ShipManager.PIONEER]:
+					ShipManager.remove_ship(sh.orbit_seed, sh.ship_id)
+		for f in _details.size():
+			for sh: ShipData in ShipManager.ships_for(OrbitLayout.detail_seed(_solar.seed, f)):
+				ShipManager.remove_ship(sh.orbit_seed, sh.ship_id)})
+	return out
+
+
 func _draw_back() -> void:
 	if _solar == null:
 		return
 	_draw_rings(true, _back)   # the star's glow is _halo_* / _light now
 	_draw_details(true, _back, _project(Vector2.ZERO).z)
+	_draw_routes(true, _back)
 
 
 func _draw_mid() -> void:
@@ -1007,6 +1148,7 @@ func _draw_mid() -> void:
 		return
 	_draw_rings(false, _mid)
 	_draw_details(false, _mid, _project(Vector2.ZERO).z)
+	_draw_routes(false, _mid)
 
 
 ## Orbit rings, split at the star's depth so the near half passes in front of it.
@@ -1080,6 +1222,7 @@ func _ticks(canvas: Node2D, r0: float, r1: float, count: int, col: Color, back_h
 func _draw_front() -> void:
 	if _solar == null:
 		return
+	_draw_ships()
 	# marker stems (the markers themselves are UI nodes: _place_markers)
 	for i in _bodies.size():
 		var m: Dictionary = _bodies[i]["marker"]
@@ -1182,7 +1325,7 @@ func _body_at(lp: Vector2) -> int:
 	var best_d := INF
 	var moon_a := _moon_alpha()
 	for i in _bodies.size():
-		if int(_bodies[i]["parent"]) >= 0 and moon_a < 0.3 and _selected != i:
+		if int(_bodies[i]["parent"]) >= 0 and _moon_vis(i) < 0.3:
 			continue
 		var p := _project(_body_plane(i))
 		var rad := maxf(_body_px(i) * 0.5, 8.0) + 4.0

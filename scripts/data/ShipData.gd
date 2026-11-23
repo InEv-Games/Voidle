@@ -50,6 +50,12 @@ extends Resource
 ## Amount to pick up (pickup only).
 @export var transfer_amount:   int    = 0
 
+## A transfer ordered but not begun (-1 = none): the ship waits in its parking
+## orbit for the burn window (ShipManager.dispatch_on_window), then goes.
+@export var pending_dest: int = -1
+@export var pending_duration: float = 0.0
+@export var pending_wait: float = 0.0
+
 ## Destination planet seed (-1 = parked in orbit).
 @export var dest_seed:    int    = -1
 

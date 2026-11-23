@@ -401,6 +401,11 @@ var galaxy_unlocked:   bool = false
 var system_level: int = 1
 var system_upgrade_start: float = 0.0
 var system_upgrade_end: float = 0.0
+## Traffic (ShipManager haulers, visual only): routes opened by a first
+## (pioneer) rocket, as [from_seed, to_seed] pairs; and bases set up on a star
+## system's details (asteroid clusters, nebulae): { str(seed): { kind, name, system } }.
+var traffic_links: Array = []
+var outposts: Dictionary = {}
 
 # ── Showcase (read-only viewer) ──────────────────────────────────────────────
 ## Explore mode (internally "showcase"): a read-only look around every map —
@@ -779,6 +784,14 @@ func _build_home_solar() -> SolarData:
 	return sd
 
 # ── Accessors ─────────────────────────────────────────────────────────────────
+
+## Opens a traffic route (both ways count as one).
+func add_traffic_link(a: int, b: int) -> void:
+	for l: Array in traffic_links:
+		if (int(l[0]) == a and int(l[1]) == b) or (int(l[0]) == b and int(l[1]) == a):
+			return
+	traffic_links.append([a, b])
+
 
 func get_home_solar() -> SolarData:
 	return _home_solar
@@ -1579,6 +1592,8 @@ func save() -> void:
 			"seq": trade_seq, "overflow_sold": overflow_sold, "pressure": trade_pressure,
 			"history": trade_history},
 		"ships":                get_node("/root/ShipManager").serialize() if has_node("/root/ShipManager") else [],
+		"traffic_links":        traffic_links,
+		"outposts":             outposts,
 		"planet_progress":      {},
 	}
 	for seed_val in _planet_progress:
@@ -1800,6 +1815,8 @@ func load_save() -> bool:
 
 	if has_node("/root/ShipManager"):
 		get_node("/root/ShipManager").deserialize(data.get("ships", []))
+	traffic_links = data.get("traffic_links", [])
+	outposts = data.get("outposts", {})
 
 	for key in data.get("planet_progress", {}).keys():
 		var seed_val: int    = int(key)
@@ -1933,5 +1950,7 @@ func delete_save(remove_file := true, rebuild := true) -> void:
 	# the old game's ships (freighters, landers) must not keep flying in the new one
 	if has_node("/root/ShipManager"):
 		get_node("/root/ShipManager").deserialize([])
+	traffic_links = []
+	outposts = {}
 	if rebuild:
 		_bootstrap_world()

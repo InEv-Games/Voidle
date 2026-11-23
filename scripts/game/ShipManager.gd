@@ -22,6 +22,8 @@ func _process(delta: float) -> void:
 					arrived.append(ship)
 			else:
 				ship.orbit_angle = fmod(ship.orbit_angle + ship.orbit_speed * delta, TAU)
+				if ship.pending_dest >= 0:
+					_try_window(ship, delta)
 			ship_changed.emit(ship)
 	for ship: ShipData in arrived:
 		_on_arrived(ship)
@@ -44,6 +46,19 @@ func _on_arrived(ship: ShipData) -> void:
 	ship.transfer_depart_angle = NAN
 	ship.transfer_arrive_angle = NAN
 	var old_seed := ship.orbit_seed
+	# within one planet system (no route angle of the planet view's): captured
+	# into the orbit it arrives on — same place, same heading (OrbitLayout)
+	# (freighters dock at their hub, the lander lands: their own flows, untouched)
+	if ship.ship_type != FREIGHTER and ship.ship_type != "lander":
+		var cap := OrbitLayout.capture(old_seed, ship.dest_seed, 1.0 if ship.orbit_speed >= 0.0 else -1.0,
+			OrbitLayout.transfer_inc(ship.ship_id))
+		if not cap.is_empty():
+			ship.orbit_inclination = float(cap["inc"])
+			ship.orbit_node = float(cap["node"])
+			ship.orbit_angle = float(cap["angle"])
+			ship.orbit_speed = absf(ship.orbit_speed) * float(cap["spin"])
+			if float(cap["radius"]) > 0.0:
+				ship.orbit_radius = float(cap["radius"])
 	if ship.ship_type == FREIGHTER:   # captured into the destination orbit
 		ship.traffic_state = "captured"
 		ship.traffic_partner = old_seed
@@ -58,6 +73,13 @@ func _on_arrived(ship: ShipData) -> void:
 	add_ship(ship)
 	if ship.ship_type == FREIGHTER:
 		_dock_at_hub(ship)
+	if ship.ship_type == PIONEER:
+		_pioneer_arrived(ship, old_seed)
+	elif ship.ship_type == HAULER:
+		ship.traffic_partner = old_seed   # next run goes back
+		ship.traffic_state = "orbit"
+		ship.state_t = 0.0
+		ship.state_len = randf_range(HAULER_WAIT_MIN, HAULER_WAIT_MAX)
 	ship_arrived.emit(ship)
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -100,6 +122,36 @@ func dispatch(ship: ShipData, dest_seed: int, duration_sec: float) -> void:
 	ship.travel_progress = 0.0
 	ship_changed.emit(ship)
 
+## Orders a transfer that starts at the burn window: the ship keeps circling
+## its parking orbit until it is on the far side from the target (a Hohmann
+## transfer burns there, so the far point of its path meets the target), then
+## leaves. Bodies not in one planet system (no window): it leaves at once.
+func dispatch_on_window(ship: ShipData, dest_seed: int, duration_sec: float) -> void:
+	ship.pending_dest = dest_seed
+	ship.pending_duration = duration_sec
+	ship.pending_wait = 0.0
+	ship_changed.emit(ship)
+
+
+## How close (cos of the angle) the ship must be to the burn point.
+const WINDOW_COS := 0.985
+
+func _try_window(ship: ShipData, delta: float) -> void:
+	ship.pending_wait += delta
+	var to_dest := OrbitLayout.dir_between(ship.orbit_seed, ship.pending_dest)
+	var period := TAU / maxf(absf(ship.orbit_speed), 0.05)
+	var go := to_dest == Vector2.ZERO or ship.pending_wait > period * 1.5   # never wait forever
+	if not go:
+		var v := ShipData.orbit_point(1.0, ship.orbit_inclination, ship.orbit_node, ship.orbit_angle)
+		var here := Vector2(v.x, v.z)
+		go = here.length() > 0.2 and here.normalized().dot(-to_dest) >= WINDOW_COS
+	if go:
+		var dest := ship.pending_dest
+		var dur := ship.pending_duration
+		ship.pending_dest = -1
+		ship.pending_wait = 0.0
+		dispatch(ship, dest, dur)
+
 ## Save / load
 func serialize() -> Array:
 	var out: Array = []
@@ -127,6 +179,9 @@ func serialize() -> Array:
 				"state_t":           ship.state_t,
 				"state_len":         ship.state_len,
 				"park_radius":       ship.park_radius,
+				"pending_dest":      ship.pending_dest,
+				"pending_duration":  ship.pending_duration,
+				"pending_wait":      ship.pending_wait,
 			})
 	return out
 
@@ -155,6 +210,9 @@ func deserialize(arr: Array) -> void:
 		s.state_t           = float(d.get("state_t", 0.0))
 		s.state_len         = float(d.get("state_len", 0.0))
 		s.park_radius       = float(d.get("park_radius", 1.2))
+		s.pending_dest      = int(d.get("pending_dest", -1))
+		s.pending_duration  = float(d.get("pending_duration", 0.0))
+		s.pending_wait      = float(d.get("pending_wait", 0.0))
 		if s.orbit_seed >= 0:
 			add_ship(s)
 
@@ -182,10 +240,116 @@ func _tick_traffic(delta: float) -> void:
 		for ship: ShipData in (_ships[seed_val] as Array).duplicate():
 			if ship.ship_type == FREIGHTER:
 				_advance_freighter(ship, delta)
+			elif ship.ship_type == HAULER:
+				_advance_hauler(ship, delta)
 	_traffic_t += delta
 	if _traffic_t >= TRAFFIC_TICK:
 		_traffic_t = 0.0
 		_balance_fleets()
+		_balance_haulers()
+
+# ── Route traffic (pioneers and haulers) ─────────────────────────────────────
+# A first rocket (a pioneer) opens a route when it arrives: between two worlds,
+# or to a base it sets up on an asteroid cluster / nebula (GameState.outposts).
+# Every open route then gets haulers going back and forth on their own, more
+# as the worlds at its ends grow (_world_size) — a picture of the traffic, like
+# the freighters: no cargo, no economy. A hauler waits in orbit, leaves (at the
+# burn window inside one planet system), arrives, waits, and goes back.
+
+const PIONEER := "pioneer"
+const HAULER := "hauler"
+const HAULER_WAIT_MIN := 10.0
+const HAULER_WAIT_MAX := 26.0
+const HAULER_FLEET_MAX := 6
+## Travel times: inside one planet system / between planets / to a base.
+const LOCAL_SEC := 30.0
+const INTERPLANETARY_SEC := 60.0
+
+
+func flight_sec(a: int, b: int) -> float:
+	return LOCAL_SEC if OrbitLayout.dir_between(a, b) != Vector2.ZERO else INTERPLANETARY_SEC
+
+
+## Sends a first rocket from `from_seed` to `to_seed` (a world, or a detail's
+## stand-in seed, OrbitLayout.detail_seed); `base` names the base it sets up
+## there ({ kind, name, system } — empty for a world).
+func send_pioneer(from_seed: int, to_seed: int, base: Dictionary = {}) -> ShipData:
+	var ship := ShipData.make("Pioneer %s-%d" % [char(65 + randi() % 26), randi_range(10, 99)], from_seed, randf() * TAU)
+	ship.ship_id += "_%d" % randi()
+	ship.ship_type = PIONEER
+	ship.orbit_speed = 0.3
+	ship.orbit_radius = 1.12
+	ship.orbit_inclination = randf_range(-0.3, 0.3)
+	ship.traffic_pair = JSON.stringify(base) if not base.is_empty() else ""
+	add_ship(ship)
+	if OrbitLayout.dir_between(from_seed, to_seed) != Vector2.ZERO:
+		dispatch_on_window(ship, to_seed, flight_sec(from_seed, to_seed))
+	else:
+		dispatch(ship, to_seed, flight_sec(from_seed, to_seed))
+	return ship
+
+
+func _pioneer_arrived(ship: ShipData, from_seed: int) -> void:
+	if ship.traffic_pair != "":
+		var base = JSON.parse_string(ship.traffic_pair)
+		if base is Dictionary:
+			GameState.outposts[str(ship.orbit_seed)] = base
+	GameState.add_traffic_link(from_seed, ship.orbit_seed)
+	# it stays as the route's first hauler
+	ship.ship_type = HAULER
+	ship.traffic_pair = _pair_key(from_seed, ship.orbit_seed)
+	ship.traffic_partner = from_seed
+	ship.traffic_state = "orbit"
+	ship.state_t = 0.0
+	ship.state_len = randf_range(HAULER_WAIT_MIN, HAULER_WAIT_MAX)
+	NewsFeed.post("%s reached its goal: a new route is open." % ship.ship_name)
+
+
+func _advance_hauler(ship: ShipData, delta: float) -> void:
+	if ship.is_travelling() or ship.pending_dest >= 0:
+		return
+	ship.state_t += delta
+	if ship.state_t < ship.state_len or ship.traffic_partner < 0:
+		return
+	ship.traffic_state = "transfer"
+	var to := ship.traffic_partner
+	if OrbitLayout.dir_between(ship.orbit_seed, to) != Vector2.ZERO:
+		dispatch_on_window(ship, to, flight_sec(ship.orbit_seed, to))
+	else:
+		dispatch(ship, to, flight_sec(ship.orbit_seed, to))
+
+
+## How big a route's fleet is: grows with the worlds at its ends (a base counts small).
+func _route_fleet(a: int, b: int) -> int:
+	var size := maxi(_world_size(a), 1) + maxi(_world_size(b), 1)
+	return clampi(1 + floori(float(size - 2) / 3.0), 1, HAULER_FLEET_MAX)
+
+
+func _balance_haulers() -> void:
+	var have := {}
+	for seed_val: int in _ships:
+		for ship: ShipData in _ships[seed_val]:
+			if ship.ship_type == HAULER:
+				have[ship.traffic_pair] = int(have.get(ship.traffic_pair, 0)) + 1
+	for l: Array in GameState.traffic_links:
+		var a := int(l[0])
+		var b := int(l[1])
+		var key := _pair_key(a, b)
+		var n := int(have.get(key, 0))
+		if n < _route_fleet(a, b):
+			var at := a if n % 2 == 0 else b
+			var ship := ShipData.make("Hauler %s-%d" % [char(65 + randi() % 26), randi_range(10, 99)], at, randf() * TAU)
+			ship.ship_id += "_%d" % randi()
+			ship.ship_type = HAULER
+			ship.orbit_speed = randf_range(0.22, 0.32) * (1.0 if randf() < 0.7 else -1.0)
+			ship.orbit_radius = randf_range(1.1, 1.3)
+			ship.orbit_inclination = randf_range(-0.5, 0.5)
+			ship.traffic_pair = key
+			ship.traffic_partner = b if at == a else a
+			ship.traffic_state = "orbit"
+			ship.state_len = randf_range(HAULER_WAIT_MIN, HAULER_WAIT_MAX)
+			add_ship(ship)
+
 
 ## Worlds with a finished Spaceport (or an older save's Lunar Spaceport).
 func _port_worlds() -> Array[int]:

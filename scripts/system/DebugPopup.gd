@@ -77,12 +77,32 @@ func _ready() -> void:
 	_rebuild()
 
 
-func _process(_delta: float) -> void:
-	# a new scene: its own buttons
+var _sig := ""
+var _poll := 0.0
+
+func _process(delta: float) -> void:
+	# a new scene, or the scene's buttons changed (e.g. something else picked):
+	# rebuild the list
 	var sc := get_tree().current_scene
 	var id := sc.get_instance_id() if sc != null else 0
 	if id != _scene_id:
 		_rebuild()
+		return
+	_poll += delta
+	if _poll < 0.3:
+		return
+	_poll = 0.0
+	if _signature(sc) != _sig:
+		_rebuild()
+
+
+func _signature(sc: Node) -> String:
+	if sc == null or not sc.has_method("debug_actions"):
+		return ""
+	var names: PackedStringArray = []
+	for a: Dictionary in sc.call("debug_actions"):
+		names.append(String(a.get("name", "")))
+	return "|".join(names)
 
 
 func _rebuild() -> void:
@@ -94,6 +114,7 @@ func _rebuild() -> void:
 	var actions: Array = []
 	if sc != null and sc.has_method("debug_actions"):
 		actions = sc.call("debug_actions")
+	_sig = _signature(sc)
 	if actions.is_empty():
 		var none := Label.new()
 		none.text = "This view has no debug actions."
