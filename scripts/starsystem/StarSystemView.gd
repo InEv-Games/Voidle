@@ -1119,10 +1119,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_drag_moved += mm.relative.length()
 			if _drag_btn == MOUSE_BUTTON_LEFT and _drag_world and _selected >= 0:
 				_turn_world(_selected, mm.relative, mm.velocity)
-			elif _drag_btn == MOUSE_BUTTON_LEFT:
-				_pan(mm.relative)
 			else:
-				_turn(mm.relative)
+				_turn(mm.relative)   # any other drag turns round the focus (no panning)
 			get_viewport().set_input_as_handled()
 			return
 		var h := _body_at(lp)
@@ -1173,7 +1171,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _on_picked(_space.get_global_transform().affine_inverse() * pg.position):
 			_turn_world(_selected, -pg.delta * 6.0, Vector2.ZERO)
 		else:
-			_pan(-pg.delta * 6.0)
+			_turn(-pg.delta * 2.0)
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey:
@@ -1336,14 +1334,9 @@ func _pinch(lp: Vector2, factor: float) -> void:
 ## Zooms keeping one point where it is on screen: the hovered world, else the
 ## plane point under the cursor (worked out on the target camera, so quick
 ## wheel steps chain up smoothly).
-func _zoom_to(z: float, lp: Vector2) -> void:
-	if is_equal_approx(z, _zoom_t):
-		return
-	var anchor := _body_plane(_hover) if _hover >= 0 else _unproject_at(lp, _focus_t, _zoom_t)
-	_focus_t = anchor - (anchor - _focus_t) * (_zoom_t / z)
-	var lim := _outer_r * 1.25
-	if _focus_t.length() > lim:
-		_focus_t = _focus_t.normalized() * lim
+## Zooms on the focus (the picked object, else the middle): no panning — the
+## view is moved by picking things, it turns round whatever is picked.
+func _zoom_to(z: float, _lp: Vector2) -> void:
 	_zoom_t = z
 
 

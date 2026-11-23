@@ -519,10 +519,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var lp := _space.get_global_transform().affine_inverse() * mm.global_position
 		if _drag_btn >= 0:
 			_drag_moved += mm.relative.length()
-			if _drag_btn == MOUSE_BUTTON_LEFT:
-				_pan(mm.relative)
-			else:
-				_turn(mm.relative)
+			_turn(mm.relative)   # any drag turns round the focus (no panning)
 			get_viewport().set_input_as_handled()
 			return
 		var h := _site_at(lp)
@@ -574,10 +571,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventPanGesture:
 		var pg := event as InputEventPanGesture
-		if pg.shift_pressed:
-			_turn(pg.delta * 2.0)
-		else:
-			_pan(-pg.delta * 6.0)
+		_turn(-pg.delta * 2.0)
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey:
@@ -614,6 +608,8 @@ func _select(i: int) -> void:
 		AudioManager.play("poi_select")
 		_focus_t = _sites[i]["center"]
 		_zoom_t = maxf(_zoom_t, clampf(_zoom_for_screen_r(i, _space.size.y * 0.16), 1.2, ZOOM_MAX))
+	else:
+		_focus_t = Vector2.ZERO   # nothing picked: back round the galaxy's heart
 	_build_panel()
 
 
@@ -627,13 +623,9 @@ func _wheel_in(lp: Vector2) -> void:
 	_zoom_to(clampf(_zoom_t * ZOOM_STEP, ZOOM_MIN, ZOOM_MAX), lp)
 
 
-func _zoom_to(z: float, lp: Vector2) -> void:
-	if is_equal_approx(z, _zoom_t):
-		return
-	var anchor: Vector2 = _sites[_hover]["center"] if _hover >= 0 else _unproject(lp, _focus_t, _zoom_t, _yaw_t, _tilt_t)
-	_focus_t = anchor - (anchor - _focus_t) * (_zoom_t / z)
-	if _focus_t.length() > _radius:
-		_focus_t = _focus_t.normalized() * _radius
+## Zooms on the focus (the picked object, else the middle): no panning — the
+## view is moved by picking things, it turns round whatever is picked.
+func _zoom_to(z: float, _lp: Vector2) -> void:
 	_zoom_t = z
 
 
