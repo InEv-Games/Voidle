@@ -1574,6 +1574,7 @@ func save() -> void:
 			"seq": trade_seq, "overflow_sold": overflow_sold, "pressure": trade_pressure,
 			"history": trade_history},
 		"ships":                get_node("/root/ShipManager").serialize() if has_node("/root/ShipManager") else [],
+		"rovers":               get_node("/root/RoverManager").serialize() if has_node("/root/RoverManager") else {},
 		"planet_progress":      {},
 	}
 	for seed_val in _planet_progress:
@@ -1789,6 +1790,8 @@ func load_save() -> bool:
 
 	if has_node("/root/ShipManager"):
 		get_node("/root/ShipManager").deserialize(data.get("ships", []))
+	if has_node("/root/RoverManager"):
+		get_node("/root/RoverManager").deserialize(data.get("rovers", {}))
 
 	for key in data.get("planet_progress", {}).keys():
 		var seed_val: int    = int(key)

@@ -338,6 +338,7 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]state[/color]  [color=#88ddcc]loc[/color]  [color=#88ddcc]clear[/color]  [color=#88ddcc]debug coords[/color]")
 			_log_info("  [color=#88ddcc]--seed[/color]            — seed of what you're looking at (copied)")
 			_log_info("  [color=#88ddcc]moonlaunch[/color] [color=#aaaaaa][sec] [reset][/color] — send the Moon lander now (default 15s)")
+			_log_info("  [color=#88ddcc]rover[/color] [color=#aaaaaa][n | clear | list][/color] — TEST: spawn n rovers at the globe's centre / remove / list")
 			_log_info("  [color=#88ddcc]rocket[/color] [color=#aaaaaa][sec][/color] — launch the final rocket now (completes Civilization 0)")
 			_log_info("  [color=#88ddcc]tutorial complete[/color] — skip/finish tutorial")
 			_log_info("  [color=#88ddcc]excavate ready[/color] — finish the digs under way now")
@@ -559,6 +560,9 @@ func _exec(line: String) -> void:
 		# ── Moon lander test ──────────────────────────────────────────────────
 		"moonlaunch":
 			_cmd_moonlaunch(parts)
+		# ── Rovers (TEST unit system) ─────────────────────────────────────────
+		"rover", "rovers":
+			_cmd_rover(parts)
 		"rocket":
 			_cmd_rocket(parts)
 
@@ -840,6 +844,51 @@ func _cmd_res(parts: Array) -> void:
 ## Starts the Moon colonization flight right away (unlocks, tops up, short
 ## flight) and zooms the planet view out to watch it. `reset` wipes a Moon that
 ## was already settled so the whole thing can be replayed.
+func _cmd_rover(parts: Array) -> void:
+	if not RoverManager.ENABLED:
+		_log_err("Rovers are switched off (RoverManager.ENABLED).")
+		return
+	var view := get_tree().current_scene
+	var pd = view.get("current_data") if view != null else null
+	if not (pd is PlanetData):
+		_log_err("Open a planet view first.")
+		return
+	var arg := String(parts[1]).to_lower() if parts.size() > 1 else "1"
+	if arg == "clear":
+		RoverManager.remove_all_on(pd.seed)
+		_log_ok("Rovers removed from this world.")
+		return
+	if arg == "list":
+		for r: RoverData in RoverManager.rovers_on(pd.seed):
+			_log_info("%s  lon %.1f  lat %.1f  %s  %.0f km" % [r.name, rad_to_deg(r.lon()), rad_to_deg(r.lat()),
+				"driving" if r.is_moving() else "idle", r.km_driven])
+		_log_info("surveyed %.1f%%" % (RoverManager.explored_fraction(pd.seed) * 100.0))
+		return
+	if not RoverManager.world_allows(pd):
+		_log_err("No solid ground here.")
+		return
+	var renderer = view.get("planet_renderer")
+	var ll: Dictionary = view.call("_screen_to_lonlat", (renderer as Control).global_position + (renderer as Control).size * 0.5)
+	if not ll.get("hit", false):
+		_log_err("Couldn't find the globe's centre.")
+		return
+	var n := clampi(int(arg) if arg.is_valid_int() else 1, 1, 12)
+	var made := 0
+	for i in n * 6:
+		if made >= n:
+			break
+		var a := TAU * float(i) / 6.0
+		var d := deg_to_rad(1.5 * float(1 + i / 6)) if i > 0 else 0.0
+		var lon: float = float(ll["lon"]) + cos(a) * d
+		var lat: float = clampf(float(ll["lat"]) + sin(a) * d, -1.4, 1.4)
+		if RoverManager.passable(pd, lon, lat):
+			RoverManager.spawn(pd, lon, lat)
+			made += 1
+	if made == 0:
+		_log_err("No land at the globe's centre: turn it to land and try again.")
+	else:
+		_log_ok("%d rover(s) placed." % made)
+
 func _cmd_moonlaunch(parts: Array) -> void:
 	var home := GameState.get_home_planet()
 	if home == null or home.moons.is_empty():

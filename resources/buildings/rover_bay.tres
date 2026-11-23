@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "rover_bay"
+display_name = "Rover Bay"
+description = "TEST: builds exploration rovers. Click it to start one; it rolls out beside the Capital when done. One per world."
+allowed_poi_types = Array[int]([0])
+allowed_planet_types = Array[int]([])
+base_cost = 1200.0
+min_planet_lv = 1
+max_per_district = 1
+max_per_planet = 1
+construct_duration = 10.0
+tick_duration = 0.0
+energy_per_tick = 0.0
+outputs = {}
+inputs = {}
+planet_bonus = {}
+planet_wide = false
+storage = {}
+build_materials = {}
+pop_cost = 100
+tier = 2
+cost_tier = -1
+min_civilization = 0
+required_features = Array[String]([])
+unlocked_by_default = true

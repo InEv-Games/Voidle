@@ -29,6 +29,12 @@ var _district_body_scroll: ScrollContainer = null
 var _district_scroll_label: String = ""
 var _overview_energy_val: Label = null   # kept for live energy updates
 var _orbital_layer: OrbitalLayer = null
+## Surface units (TEST — RoverManager.ENABLED): drawn above the POI layer.
+var _rover_layer: Node2D = null
+## The rover the side panel shows ("" = none): the first one selected.
+var _rover_panel_id := ""
+## What the rover panel was built for; a change rebuilds it (actions, state).
+var _rover_panel_sig := ""
 var _mission_builder_overlay: Control = null  # non-null while Mission Builder is open
 
 ## Active rocket launch animation state. Empty when no launch in progress.
@@ -209,6 +215,13 @@ func _ready() -> void:
 	tree_exiting.connect(func() -> void: VAM.stop_snapshot(PLACE_SNAPSHOT, &"placement"))
 	tree_exiting.connect(func() -> void: TooltipManager.set_world_point(null))
 	poi_layer.territory_lookup = _territory_at_screen
+	if RoverManager.ENABLED:
+		_rover_layer = (load("res://scripts/planetary/RoverLayer.gd") as GDScript).new()
+		_rover_layer.name = "RoverLayer"
+		add_child(_rover_layer)
+		move_child(_rover_layer, poi_layer.get_index() + 1)
+		_rover_layer.call("setup", planet_renderer, self, _orbitron)
+		_rover_layer.connect("selection_changed", _on_rover_selection)
 	SettingsManager.night_shadow_changed.connect(func(v: float) -> void:
 		if planet_renderer.material:
 			(planet_renderer.material as ShaderMaterial).set_shader_parameter("night_shadow", v))
@@ -1183,6 +1196,11 @@ func _try_force_buy() -> bool:
 func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton and PadScheme.chord_held:
 		return
+	# rovers get the mouse first: selecting, box select, Esc (RoverLayer)
+	if _rover_layer != null and not _naming_open and _radial_menu == null \
+			and _rover_layer.call("handle_input", event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseMotion:
 		if (event as InputEventMouseMotion).relative.length_squared() > 4.0:
 			_using_right_stick = false
@@ -1394,8 +1412,9 @@ func _input(event: InputEvent) -> void:
 				_rmb = {}
 				if was_drag:
 					planet_renderer.end_drag()
-				else:
-					_on_right_click(at)
+				elif _rover_layer == null or _radial_menu != null \
+						or not _rover_layer.call("handle_right_click", at, mb.shift_pressed):
+					_on_right_click(at)   # no rover selected: the old menu
 			get_viewport().set_input_as_handled()
 		# Wheel / pinch only zoom. Leaving the planet view on zoom-out is disabled
 		# for now — it will be bound to another control.
@@ -1437,6 +1456,8 @@ func load_planet(data: PlanetData) -> void:
 	current_data = data
 	if planet_changed:
 		_active_district_poi = null   # clear stale reference on planet switch
+		if _rover_layer != null:
+			_rover_layer.call("clear_selection")
 	_open_mineral_switchers.clear()
 	GameState.active_planet_seed = data.seed
 	GameState.cache_planet_data(data)
@@ -2121,7 +2142,7 @@ func _switch_to_body(pd: PlanetData, from_rect: Rect2) -> void:
 	# the bigger world always passes in front (going to the Moon and coming back)
 	g_old.z_index = 31 if old.planet_size >= pd.planet_size else 29
 	_companions.fade = 0.0
-	for n: CanvasItem in [_planet_view, poi_layer, _orbital_layer]:
+	for n: CanvasItem in [_planet_view, poi_layer, _orbital_layer, _rover_layer]:
 		if n != null and is_instance_valid(n):
 			n.modulate.a = 0.0
 	# spin + sunlight slide from each body's corner look to its globe look (and
@@ -2185,7 +2206,7 @@ func _switch_to_body(pd: PlanetData, from_rect: Rect2) -> void:
 	tw2.tween_property(g_new, "modulate:a", 0.0, 0.45)
 	tw2.tween_property(self, "_district_reveal", 1.0, 1.3).set_delay(0.25) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	for n: CanvasItem in [poi_layer, _orbital_layer]:
+	for n: CanvasItem in [poi_layer, _orbital_layer, _rover_layer]:
 		if n != null and is_instance_valid(n):
 			tw2.tween_property(n, "modulate:a", 1.0, 0.6).set_delay(0.9)
 	tw2.chain().tween_callback(g_new.queue_free)
@@ -3216,6 +3237,8 @@ func _prepare_planet_maps(data: PlanetData) -> void:
 	RoadNetwork.for_planet(data)   # graph builds on a worker thread
 	_maps_ready_seed = data.seed
 	_roads_dirty = true
+	RoverManager.forget_nav(data.seed)   # route grid from the exact terrain
+	RoverManager.ensure_starters(data)
 	_rebuild_lens_bar()
 	_refresh_lens()
 
@@ -3342,7 +3365,10 @@ func _refresh_pois(data: PlanetData) -> void:
 func _refresh_active_panel() -> void:
 	if current_data == null:
 		return
-	if _city_panel_poi != null and _city_panel_poi in current_data.custom_pois:
+	var rover: RoverData = RoverManager.get_rover(_rover_panel_id) if _rover_panel_id != "" else null
+	if rover != null and rover.planet_seed == current_data.seed:
+		_build_rover_panel(rover)
+	elif _city_panel_poi != null and _city_panel_poi in current_data.custom_pois:
 		_build_city_panel(_city_panel_poi, current_data)
 	elif _orbit_panel_open:
 		_build_orbit_panel(current_data)
@@ -3709,6 +3735,7 @@ func _rebuild_roads() -> void:
 			out.append(r)
 			routed.append({"a": pr.x, "b": pr.y, "route": r})
 	poi_layer.roads = out
+	RoverManager.set_roads(current_data.seed, out)   # rovers drive faster on roads
 	_set_spokes_from_routes(routed)
 	_store_road_relations(routed)
 
@@ -7457,6 +7484,386 @@ func _prompt_city_name(def: DistrictDef, site: Vector2, cost: float) -> void:
 		edit.grab_focus()
 		edit.select_all()
 
+# ── Rovers in the side panel (TEST — RoverManager) ──────────────────────────
+
+## ROVERS section of the planet panel: one row per rover with its state and ETA.
+## A click selects it on the map and turns the globe to it (double-click: all).
+func _add_rover_list(page: VBoxContainer, data: PlanetData) -> void:
+	if not RoverManager.ENABLED or _rover_layer == null or GameState.showcase_mode:
+		return
+	var rovers := RoverManager.rovers_on(data.seed)
+	if rovers.is_empty():
+		return
+	page.add_child(HSeparator.new())
+	page.add_child(SectionHeader.create("ROVERS", str(rovers.size())))
+	for r: RoverData in rovers:
+		var id := r.id
+		var btn := IconButton.create(r.name.to_upper(), "explore", IconButton.Variant.NEUTRAL)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var refresh := func() -> void:
+			var rv: RoverData = RoverManager.get_rover(id)
+			if rv == null or not is_instance_valid(btn):
+				return
+			btn.counter = _rover_status(rv)
+			btn.modulate = Color(0.75, 1.0, 1.0) if _rover_layer.call("is_selected", id) else Color.WHITE
+		refresh.call()
+		var tm := Timer.new()
+		tm.wait_time = 0.25
+		tm.autostart = true
+		tm.timeout.connect(refresh)
+		btn.add_child(tm)
+		btn.pressed.connect(func() -> void:
+			var rv: RoverData = RoverManager.get_rover(id)
+			if rv == null:
+				return
+			var add := Input.is_key_pressed(KEY_SHIFT)
+			_rover_layer.call("select_ids", [id], add)
+			AudioManager.play("poi_select")
+			_rotate_to_lon(rad_to_deg(rv.lon()), 0.5))
+		page.add_child(btn)
+
+## Selecting rovers on the map / in the list opens the rover's panel;
+## deselecting goes back to whatever the panel showed before.
+func _on_rover_selection(ids: Array) -> void:
+	if not ids.is_empty():
+		_rover_panel_id = String(ids[0])
+		_rover_panel_sig = ""
+		if not _panel_open:
+			_set_panel_open(true)
+		_refresh_active_panel()
+	elif _rover_panel_id != "":
+		_rover_panel_id = ""
+		_refresh_active_panel()
+
+## Panel layout key: rebuilt when this changes (state, order, the actions offered).
+func _rover_sig(r: RoverData) -> String:
+	var parts: Array[String] = [str(r.state), str(r.is_moving()), String(r.action.get("id", "")), str(r.repeat),
+		str(RoverManager.waiting_to_move(r))]
+	for a: Dictionary in RoverManager.actions_for(r):
+		parts.append("%s:%s:%s" % [a["id"], a["why"], a["hidden"]])
+	return "|".join(parts)
+
+## The rover's side panel: its state, ETA, where it stands, Stop, and what it
+## can do here (timed actions with inputs and outputs) or from orbit.
+func _build_rover_panel(r: RoverData) -> void:
+	var planet := current_data
+	var panel_content := $SidePanel/Layout/PanelContent
+	var old := panel_content.get_node_or_null("DistrictBuildPanel")
+	if old:
+		old.name = "__freeing_district__"
+		old.queue_free()
+		_bar_meta.clear()
+	_rover_panel_sig = _rover_sig(r)
+	var pp := GameState.get_planet(planet.seed)
+	var id := r.id
+	var root := VBoxContainer.new()
+	root.name = "DistrictBuildPanel"
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 8)
+
+	var back := LeftPanel.back_button(planet.planet_name.to_upper())
+	back.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		_rover_layer.call("clear_selection"))
+	_mount_above_hero(back, root)
+	_set_hero("Rover - In orbit" if r.in_orbit() else "Rover", r.name, [])
+
+	var body_scroll := ScrollContainer.new()
+	body_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	body_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_style_scroll(body_scroll)
+	root.add_child(body_scroll)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 8)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body_scroll.add_child(body)
+
+	# live rows (a timer below keeps them current)
+	var status_row := _info_line("Status", "")
+	body.add_child(status_row)
+	var eta_row := _info_line("ETA", "")
+	body.add_child(eta_row)
+	if not r.in_orbit():
+		body.add_child(_info_line("Ground", _rover_ground_text(planet, r)))
+	var km_row := _info_line("Driven", "")
+	body.add_child(km_row)
+
+	# Actions
+	body.add_child(HSeparator.new())
+	# only what it can do now: nothing while it drives or works (the running
+	# action shows instead), the ground's actions once it stands still
+	var acts: Array[Dictionary] = []
+	for a: Dictionary in RoverManager.actions_for(r):
+		if not a["hidden"]:
+			acts.append(a)
+	body.add_child(SectionHeader.create("ACTIONS", str(acts.size())))
+	# the running one keeps its place in the list (as a working row); the
+	# others stay, greyed, until it ends
+	var run_id := String(r.action.get("id", ""))
+	var run_seed := int((r.action.get("target", {}) as Dictionary).get("seed", -1))
+	var placed := false
+	for a: Dictionary in acts:
+		var is_run: bool = r.is_busy() and not placed and a["id"] == run_id \
+			and (run_id != "transfer" or int(a["target"].get("seed", -2)) == run_seed)
+		if is_run:
+			body.add_child(_rover_running_card(r))
+			placed = true
+		else:
+			body.add_child(_rover_action_card(r, a, planet, pp))
+	if r.is_busy() and not placed:
+		body.add_child(_rover_running_card(r))
+		body.move_child(body.get_child(body.get_child_count() - 1), body.get_child_count() - 1 - acts.size())
+	if acts.is_empty() and not r.is_busy():
+		var none := Label.new()
+		none.text = "Driving." if r.is_moving() else "Nothing to do here. Drive somewhere else."
+		none.theme_type_variation = &"SubLabel"
+		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		body.add_child(none)
+	if not r.in_orbit():
+		var rep := CheckButton.new()
+		rep.text = "Repeat ground actions"
+		rep.button_pressed = r.repeat
+		rep.toggled.connect(func(on: bool) -> void:
+			var rv: RoverData = RoverManager.get_rover(id)
+			if rv != null:
+				rv.repeat = on)
+		body.add_child(rep)
+
+	# footer, under the scrolling list (it never pushes the list): a drive
+	# planned while it works waits for the work (Move Now calls the work off);
+	# Stop drops the route
+	if r.is_moving():
+		root.add_child(HSeparator.new())
+	if RoverManager.waiting_to_move(r):
+		var wait_lbl := Label.new()
+		wait_lbl.text = "A drive is planned: it starts when %s is done." % String(r.action.get("name", ""))
+		wait_lbl.theme_type_variation = &"SubLabel"
+		wait_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		root.add_child(wait_lbl)
+		var move_btn := IconButton.create("MOVE NOW", "move", IconButton.Variant.POSITIVE)
+		move_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		move_btn.mouse_entered.connect(func() -> void:
+			TooltipManager.show_tip("Move now", "Calls the running work off (what it cost comes back) and drives at once."))
+		move_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+		move_btn.pressed.connect(func() -> void:
+			TooltipManager.hide_tip()
+			var rv: RoverData = RoverManager.get_rover(id)
+			if rv != null:
+				RoverManager.move_now(rv)
+				AudioManager.play("click"))
+		root.add_child(move_btn)
+	if r.is_moving():
+		var stop_btn := IconButton.create("STOP", "cancel", IconButton.Variant.NEGATIVE)
+		stop_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stop_btn.mouse_entered.connect(func() -> void:
+			TooltipManager.show_tip("Stop", "Drops the route; a running action goes on."))
+		stop_btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+		stop_btn.pressed.connect(func() -> void:
+			TooltipManager.hide_tip()
+			var rv: RoverData = RoverManager.get_rover(id)
+			if rv != null:
+				RoverManager.stop(rv)
+				AudioManager.play("click"))
+		root.add_child(stop_btn)
+
+	var refresh := func() -> void:
+		var rv: RoverData = RoverManager.get_rover(id)
+		if rv == null or rv.planet_seed != planet.seed or _rover_panel_id != id:
+			return
+		if _rover_sig(rv) != _rover_panel_sig:
+			_build_rover_panel(rv)
+			return
+		_set_info_value(status_row, _rover_status(rv))
+		_set_info_value(eta_row, RoverManager.format_eta(RoverManager.eta_sec(rv)) if rv.is_moving() else "-")
+		_set_info_value(km_row, "%s km" % Economy.fmt(rv.km_driven))
+	refresh.call()
+	var tm := Timer.new()
+	tm.wait_time = 0.25
+	tm.autostart = true
+	tm.timeout.connect(refresh)
+	root.add_child(tm)
+	panel_content.add_child(root)
+
+const ROVER_LAND_MSG := "rover_landing"
+
+## The value label of an _info_line row.
+func _set_info_value(row: Control, text: String) -> void:
+	if row == null or not is_instance_valid(row) or row.get_child_count() < 2:
+		return
+	var v := row.get_child(row.get_child_count() - 1)
+	if v is MarqueeLabel:
+		(v as MarqueeLabel).set_text(text)
+	elif v is Label:
+		(v as Label).text = text
+
+## The ground features under a rover ("Crater, Ion storm region" / terrain).
+func _rover_ground_text(planet: PlanetData, r: RoverData) -> String:
+	var sh := FeatureMap.shares(planet, r.lon(), r.lat())
+	var names: Array[String] = []
+	for i in FeatureMap.IDS.size():
+		if float(sh.get(FeatureMap.IDS[i], 0.0)) >= 1.0:
+			names.append(FeatureMap.NAMES[i])
+	if names.is_empty():
+		var t := TerrainSampler.sample(planet, r.lon(), r.lat())
+		return TerrainSampler.label(t["terrain"], planet.planet_type)
+	return ", ".join(names)
+
+## One action the rover can take, as a build-list row (ListItem): name, its
+## cycle, the cost in the badge, what it gives as stats. Click to start.
+func _rover_action_card(r: RoverData, a: Dictionary, planet: PlanetData, pp: PlanetProgress) -> Control:
+	var id := r.id
+	var ins: Dictionary = a["in"]
+	var outs: Dictionary = a["out"]
+	var aid := String(a["id"])
+	var icon := "explore"
+	match aid:
+		"orbit_up", "transfer": icon = "rocket"
+		"land": icon = "planet"
+	var card := ListItem.create(String(a["name"]).to_upper(), icon, "", _rover_gain_stats(outs),
+		"Pick a landing spot" if aid == "land" else String(a["desc"]))
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.icon_color = UIStyle.color(&"accent")
+	card.cycle = ProductionManager.cycle_text(float(a["dur"]))
+	card.badge_items = _cost_items(ins)
+	card.clickable = true
+	var tip := String(a["desc"])
+	tip += "\n\nCost  " + _full_cost_bb(ins, 0, planet, pp)
+	if not outs.is_empty():
+		tip += "\nGives  " + _gain_bb(outs)
+	if String(a["why"]) != "":
+		tip += "\n\n" + _bb(String(a["why"]), BB_BAD)
+	card.mouse_entered.connect(func() -> void:
+		AudioManager.play("hover")
+		TooltipManager.show_tip(String(a["name"]), tip))
+	card.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	var target: Dictionary = a["target"]
+	if r.is_busy():   # another action runs: listed, not startable (like a locked row)
+		card.clickable = false
+		card.modulate.a = 0.45
+		return card
+	card.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		var rv: RoverData = RoverManager.get_rover(id)
+		if rv == null:
+			return
+		if aid == "land":
+			if not Economy.can_pay(ins):
+				AudioManager.play("error")
+				return
+			_rover_layer.call("begin_landing", id)
+			AudioManager.play("click")
+			NewsFeed.show_message(ROVER_LAND_MSG, planet.planet_name, "Landing %s" % rv.name,
+				"Click a spot on the globe  //  Right click or Esc to cancel", {"sec": 6.0})
+			return
+		AudioManager.play("click" if RoverManager.start_action(rv, aid, target) else "error"))
+	return card
+
+## ListItem stats for what an action gives: "science:+45" (icons only).
+func _rover_gain_stats(outs: Dictionary) -> PackedStringArray:
+	var st := PackedStringArray()
+	for k: String in outs:
+		st.append("%s:+%s" % [k if UIIcons.has_icon(k) else UIIcons.RAW_PLACEHOLDER, Economy.fmt(float(outs[k]))])
+	return st
+
+## The running action as a row like a building at work: its progress fills the
+## card; a click calls it off (the inputs come back).
+func _rover_running_card(r: RoverData) -> Control:
+	var id := r.id
+	var outs: Dictionary = r.action.get("out", {})
+	var card := ListItem.create(String(r.action.get("name", "")).to_upper(), "explore", "WORKING",
+		_rover_gain_stats(outs), "Working")
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.icon_color = UIStyle.color(&"accent")
+	card.progress_color = UIStyle.color(&"positive_stroke")
+	card.progress = RoverManager.action_progress(r)
+	card.clickable = true
+	card.mouse_entered.connect(func() -> void:
+		AudioManager.play("hover")
+		TooltipManager.show_tip(String(r.action.get("name", "")),
+			"Click to call it off: what it cost comes back."))
+	card.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	card.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		var rv: RoverData = RoverManager.get_rover(id)
+		if rv != null:
+			RoverManager.cancel_action(rv)
+			AudioManager.play("click"))
+	var tick := func() -> void:
+		var rv: RoverData = RoverManager.get_rover(id)
+		if rv == null or not is_instance_valid(card) or not rv.is_busy():
+			return
+		card.progress = RoverManager.action_progress(rv)
+		card.cycle = RoverManager.format_eta(RoverManager.action_left(rv))
+	tick.call()
+	var tm := Timer.new()
+	tm.wait_time = 0.1
+	tm.autostart = true
+	tm.timeout.connect(tick)
+	card.add_child(tm)
+	return card
+
+## Rover Bay (Capital District): a row like the other buildings. Click: pay and
+## start a rover; the fill shows the build; when full the rover rolls out.
+func _build_rover_bay_card(def: BuildingDef, pm_key: String, pp: PlanetProgress, poi: POIData) -> PanelContainer:
+	var seed_val := pp.planet_seed
+	var card := ListItem.create(def.display_name.to_upper(), "explore", "", PackedStringArray(), "Click to build a rover")
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.icon_color = UIStyle.color(&"accent")
+	card.progress_color = UIStyle.color(&"positive_stroke")
+	card.clickable = true
+	card.cycle = ProductionManager.cycle_text(RoverManager.ROVER_BUILD_SEC)
+	var refresh := func() -> void:
+		if not is_instance_valid(card):
+			return
+		if RoverManager.is_building(seed_val):
+			card.badge_items = PackedStringArray()
+			card.description = "Building a rover: %s" % RoverManager.format_eta(RoverManager.build_left(seed_val))
+			card.progress = RoverManager.build_progress(seed_val)
+		else:
+			card.badge_items = _cost_items(RoverManager.rover_cost())
+			card.description = "Click to build a rover  //  %d on this world" % RoverManager.rovers_on(seed_val).size()
+			card.progress = -1.0
+	refresh.call()
+	var tm := Timer.new()
+	tm.wait_time = 0.2
+	tm.autostart = true
+	tm.timeout.connect(refresh)
+	card.add_child(tm)
+	card.mouse_entered.connect(func() -> void:
+		AudioManager.play("hover")
+		var tip := def.description
+		if not RoverManager.is_building(seed_val):
+			tip += "\n\nCost  " + _full_cost_bb(RoverManager.rover_cost(), 0, current_data, pp)
+		TooltipManager.show_tip(def.display_name, tip))
+	card.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	card.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		var pd := GameState.get_planet_data(seed_val)
+		if pd == null or RoverManager.is_building(seed_val):
+			AudioManager.play("error")
+			return
+		var ok := RoverManager.start_rover_build(pd, deg_to_rad(poi.lon_deg), deg_to_rad(poi.lat_deg))
+		AudioManager.play("click" if ok else "error")
+		refresh.call())
+	_bar_meta[pm_key] = {"planet_seed": seed_val}
+	return card
+
+## "IDLE", "ROAD · 0:42", "DRIVING · 1:10", "SCAN RUINS · 0:30", "IN ORBIT".
+func _rover_status(r: RoverData) -> String:
+	if r.is_busy():
+		var st := "%s · %s" % [String(r.action.get("name", "")).to_upper(), RoverManager.format_eta(RoverManager.action_left(r))]
+		return st + " · THEN DRIVE" if r.is_moving() else st
+	if r.in_orbit():
+		return "IN ORBIT"
+	if not r.is_moving():
+		return "IDLE"
+	var how := "DRIVING"
+	if RoverManager.in_storm(r):
+		how = "ION STORM"
+	elif r.on_road():
+		how = "ROAD"
+	return "%s · %s" % [how, RoverManager.format_eta(RoverManager.eta_sec(r))]
+
 func _on_planet_clicked(_screen_pos: Vector2) -> void:
 	if _naming_open or GameState.showcase_mode:
 		return
@@ -7896,6 +8303,7 @@ func _build_planet_overview(data: PlanetData) -> void:
 	if can_add_surface and not lander_pending:
 		var add_dist_card := _build_add_district_card(data, true, false)
 		districts_page.add_child(add_dist_card)
+	_add_rover_list(districts_page, data)
 	# Tutorial: districts are added from a City's panel — point at the first City
 	if TutorialManager.get_action_step_type() == "district" and districts_page.get_child_count() > 0:
 		_tut_highlight_node = districts_page.get_child(0) as Control
@@ -10578,6 +10986,8 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	# ── Spaceport: custom launch card ────────────────────────────────────────────
 	if def.building_id == "spaceport":
 		return _build_spaceport_card(def, pm_key, pp, poi, entry)
+	if def.building_id == RoverManager.BAY_ID:
+		return _build_rover_bay_card(def, pm_key, pp, poi)
 
 	# ListItem look (scenes/ui/components/ListItem.tscn): icon │ NAME [xN] / stats / [-][+] / cycle bar
 	var badges: Array[String] = []
@@ -12684,6 +13094,8 @@ func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 		if child.parent_city == city.label and not child.is_orbital():
 			body.add_child(_build_district_overview_card(child, planet, pp, panel_content, body))
 	body.add_child(add_card)
+	if not GameState.planet_view_unlocked:
+		_add_rover_list(body, planet)   # the planet panel isn't open yet: list them here
 	if TutorialManager.get_action_step_type() == "district" and count < max_d and add_card.get_child_count() > 0:
 		_tut_highlight_node = add_card.get_child(0) as Control
 		_start_tut_node_pulse(_tut_highlight_node)
