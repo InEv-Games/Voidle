@@ -43,6 +43,12 @@ static func galaxy_entry(gd: GalaxyData) -> Dictionary:
 ## The Star Cluster (the home neighbourhood, Mechanic-Test/Star-Map).
 const CLUSTER_SCENE := "res://scenes/starcluster/StarClusterView.tscn"
 
+## The Galaxy map (above the Star Cluster).
+const GALAXY_MAP_SCENE := "res://scenes/galaxymap/GalaxyMapView.tscn"
+
+static func galaxy_map_entry() -> Dictionary:
+	return {"key": "galaxymap", "scene": GALAXY_MAP_SCENE, "data": null, "sub": {}, "label": "Galaxy"}
+
 static func cluster_entry() -> Dictionary:
 	return {"key": "cluster", "scene": CLUSTER_SCENE, "data": null, "sub": {}, "label": "Star Cluster"}
 

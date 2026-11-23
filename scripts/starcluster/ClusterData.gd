@@ -30,32 +30,48 @@ const NEB_COLORS: Array[Color] = [Color(0.62, 0.38, 1.0), Color(0.25, 0.85, 0.85
 	Color(1.0, 0.42, 0.62), Color(1.0, 0.70, 0.30), Color(0.40, 0.60, 1.0)]
 
 
-static func generate(run_seed: int, home: SolarData) -> Dictionary:
+## `cluster_seed`: the run's seed for the home neighbourhood, a galaxy site's
+## seed for the others (GalaxyMapData); `home`: the home system, or null.
+## `bounds`: the neighbourhood's shape on the Galaxy map, in cluster units round
+## its core (GalaxyMapData.cluster_bounds). Every star, the home one and the
+## nebulae are placed inside it, so the cluster has the galaxy's shape. Empty:
+## a plain disk of RADIUS.
+static func generate(run_seed: int, home: SolarData, bounds: PackedVector2Array = PackedVector2Array()) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = run_seed ^ 0xC1D5
 	var stars: Array[Dictionary] = []
 	var n := rng.randi_range(16, 24)
 	var used_names := {}
+	var reach := RADIUS
+	for q: Vector2 in bounds:
+		reach = maxf(reach, q.length())
 
 	# the core: a black hole in the middle (home there instead if HOME_AT_CENTER)
 	var home_pos := Vector2.ZERO
 	if not HOME_AT_CENTER:
-		var a := rng.randf_range(0.0, TAU)
-		home_pos = Vector2(cos(a), sin(a)) * RADIUS * rng.randf_range(0.45, 0.6)
+		for t in 200:
+			var a := rng.randf_range(0.0, TAU)
+			home_pos = Vector2(cos(a), sin(a)) * reach * rng.randf_range(0.35, 0.65)
+			if _inside(home_pos, bounds, 40.0):
+				break
 		stars.append(_star(rng, used_names, SolarData.StarType.BLACK_HOLE, Vector2.ZERO, 0.0))
-	var home_type: int = home.star_type if home != null else SolarData.StarType.YELLOW_DWARF
-	var hs := _star(rng, used_names, home_type, home_pos, 0.0)
-	hs["home"] = true
+	# the home system, only in the home neighbourhood (home == null: another one)
 	if home != null:
+		var hs := _star(rng, used_names, home.star_type, home_pos, 0.0)
+		hs["home"] = true
 		hs["name"] = home.system_name
 		hs["seed"] = home.seed
-	stars.append(hs)
+		stars.append(hs)
+	elif HOME_AT_CENTER:
+		stars.append(_star(rng, used_names, SolarData.StarType.BLACK_HOLE, Vector2.ZERO, 0.0))
 
 	# the rest, spread out (never too close to another)
 	var tries := 0
 	while stars.size() < n and tries < 2000:
 		tries += 1
-		var p := Vector2.from_angle(rng.randf_range(0.0, TAU)) * RADIUS * sqrt(rng.randf())
+		var p := Vector2.from_angle(rng.randf_range(0.0, TAU)) * reach * sqrt(rng.randf())
+		if not _inside(p, bounds, 30.0):
+			continue
 		var ok := true
 		for s: Dictionary in stars:
 			if p.distance_to(s["pos"]) < MIN_GAP:
@@ -67,7 +83,19 @@ static func generate(run_seed: int, home: SolarData) -> Dictionary:
 		var t: int = SolarData.StarType.BLACK_HOLE if rng.randf() < 0.08 else _roll_type(rng)
 		stars.append(_star(rng, used_names, t, p, rng.randf_range(-HEIGHT, HEIGHT)))
 
-	return {"stars": stars, "links": _links(stars), "nebulae": _nebulae(rng, stars)}
+	return {"stars": stars, "links": _links(stars), "nebulae": _nebulae(rng, stars, bounds, reach)}
+
+
+## Inside the shape, at least `margin` from its edge (or the disk, unbounded).
+static func _inside(p: Vector2, bounds: PackedVector2Array, margin: float) -> bool:
+	if bounds.size() < 3:
+		return p.length() <= RADIUS - margin
+	if not Geometry2D.is_point_in_polygon(p, bounds):
+		return false
+	for k in 6:
+		if not Geometry2D.is_point_in_polygon(p + Vector2.from_angle(TAU * float(k) / 6.0) * margin, bounds):
+			return false
+	return true
 
 
 static func _star(rng: RandomNumberGenerator, used: Dictionary, type: int, pos: Vector2, h: float) -> Dictionary:
@@ -138,14 +166,17 @@ static func _add_link(out: Array[Vector2i], have: Dictionary, a: int, b: int) ->
 
 
 ## 2–3 wide clouds between the stars (volumes, like a system's nebulae, bigger).
-static func _nebulae(rng: RandomNumberGenerator, stars: Array[Dictionary]) -> Array[Dictionary]:
+static func _nebulae(rng: RandomNumberGenerator, stars: Array[Dictionary], bounds: PackedVector2Array,
+		reach: float) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for k in rng.randi_range(2, 3):
 		var radius := rng.randf_range(130.0, 260.0)
 		var center := Vector2.ZERO
 		var best_room := -INF
-		for t in 20:
-			var c := Vector2.from_angle(rng.randf_range(0.0, TAU)) * RADIUS * rng.randf_range(0.2, 1.05)
+		for t in 30:
+			var c := Vector2.from_angle(rng.randf_range(0.0, TAU)) * reach * rng.randf_range(0.2, 0.9)
+			if not _inside(c, bounds, 0.0):
+				continue
 			var room := INF
 			for nb: Dictionary in out:
 				room = minf(room, c.distance_to(nb["center"]) - float(nb["radius"]) - radius)

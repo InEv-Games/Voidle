@@ -175,8 +175,8 @@ func _ready() -> void:
 
 	var pending = SceneTransition.pending_data
 	SceneTransition.pending_data = null
-	var from_body: PlanetData = pending as PlanetData
-	var sd: SolarData = pending as SolarData
+	var from_body: PlanetData = pending if pending is PlanetData else null
+	var sd: SolarData = pending if pending is SolarData else null
 	if from_body != null and from_body.has_meta("__solar_data"):
 		sd = from_body.get_meta("__solar_data") as SolarData
 	if sd == null:

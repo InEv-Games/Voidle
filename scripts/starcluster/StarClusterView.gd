@@ -19,7 +19,7 @@ const SYSTEM_SCENE := "res://scenes/starsystem/StarSystemView.tscn"
 const SystemView := preload("res://scripts/starsystem/StarSystemView.gd")
 
 
-const ZOOM_MIN := 0.6
+const ZOOM_MIN := 1.0   # the whole neighbourhood; farther out is the Galaxy map's job
 const ZOOM_MAX := 6.0
 const ZOOM_STEP := 1.2
 const TILT_MIN := 0.16
@@ -50,6 +50,17 @@ const RING_COL := Color(0.72, 0.84, 1.0)
 @onready var _panel: LeftPanel = $SidePanel
 
 var _loaded := false
+## Which neighbourhood this is: { cluster_seed, home, index (galaxy site; -1 =
+## home), name, screen_r }. Carried to its systems (SolarData meta "__cluster")
+## so coming back up lands in the same one.
+var _info: Dictionary = {}
+const GALAXY_SCENE := "res://scenes/galaxymap/GalaxyMapView.tscn"
+const GALAXY_EXIT_CHARGE := 3
+const GALAXY_EXIT_PINCH := 0.7
+const GALAXY_EXIT_ZOOM := 0.75   # a short ease out before the Galaxy map takes over
+const GALAXY_EXIT_SEC := 0.35
+var _galaxy_charge := 0
+var _galaxy_pinch := 1.0
 ## ClusterData stars + their nodes: [{ name, type, seed, pos, h, home, rect, mat, badge, cell }]
 var _stars: Array[Dictionary] = []
 ## ClusterData nebulae + their "sprites" and "badge".
@@ -58,6 +69,9 @@ var _hover_n := -1
 var _sel_n := -1
 var _links: Array[Vector2i] = []   # pairs of indices into _stars
 var _outer_r := 400.0
+## The neighbourhood's shape as the Galaxy map draws it, in cluster units
+## round the core (GalaxyMapData.cluster_bounds): the cluster's border.
+var _bounds := PackedVector2Array()
 var _back: Node2D
 var _front: Node2D
 ## Planet previews, split at each star's depth: behind every star / in front of
@@ -125,12 +139,30 @@ func _ready() -> void:
 	_apply_panel_t(_panel_t)
 	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - LeftPanel.edge_frac()))
 
-	var from_sd := SceneTransition.pending_data as SolarData
+	var pending = SceneTransition.pending_data
 	SceneTransition.pending_data = null
+	var from_sd: SolarData = pending if pending is SolarData else null   # `as` errors on a Dictionary
+	var info: Dictionary = {}
+	if pending is Dictionary:
+		info = pending   # down from the Galaxy map
+	elif from_sd != null and from_sd.has_meta("__cluster"):
+		info = from_sd.get_meta("__cluster")
+	if info.is_empty():
+		info = {"cluster_seed": GameState.home_planet_seed, "home": true, "index": -1}
 	await get_tree().process_frame
-	_load()
+	_load(info)
 	if from_sd != null:
 		_arrive_from(from_sd)
+	elif pending is Dictionary and pending.has("screen_r"):
+		# the cell was this big on the Galaxy map: start the cluster that big
+		_zoom = float(pending["screen_r"]) / maxf(_outer_r * _ui() * _fit(), 0.001)
+		_zoom_v = 0.0
+		if pending.has("yaw"):   # the galaxy's angle, so the stars line up
+			_yaw = float(pending["yaw"])
+			_yaw_t = _yaw
+			_tilt = clampf(float(pending["tilt"]), TILT_MIN, TILT_MAX)
+			_tilt_t = _tilt
+		_zoom_t = 1.0
 	NavigationManager.end_apply()
 	NavigationManager.visit(NavigationManager.cluster_entry())
 
@@ -142,14 +174,19 @@ func nav_apply(_entry: Dictionary) -> bool:
 
 # ── Building ─────────────────────────────────────────────────────────────────
 
-func _load() -> void:
-	var home_sd := GameState.get_home_solar()
-	var data := ClusterData.generate(GameState.home_planet_seed, home_sd)
+func _load(info: Dictionary) -> void:
+	_info = info
+	# its cell on the Galaxy map gives its shape (and its seed, the same one)
+	var gdata := GalaxyMapData.generate(GameState.home_planet_seed)
+	var site: Dictionary = gdata["sites"][GalaxyMapData.site_index(gdata, int(info.get("index", -1)))]
+	_bounds = GalaxyMapData.cluster_bounds(site)
+	_outer_r = GalaxyMapData.cluster_outer(_bounds)
+	var home_sd := GameState.get_home_solar() if bool(info.get("home", true)) else null
+	var data := ClusterData.generate(int(info.get("cluster_seed", GameState.home_planet_seed)), home_sd, _bounds)
 	_stars = data["stars"]
 	_links = data["links"]
 	_nebulae = data["nebulae"]
 	for st: Dictionary in _stars:
-		_outer_r = maxf(_outer_r, (st["pos"] as Vector2).length())
 		_make_star_nodes(st)
 	for nb: Dictionary in _nebulae:
 		_make_nebula_nodes(nb)
@@ -484,6 +521,7 @@ func _system_of(i: int) -> SolarData:
 		sd.system_name = st["name"]
 		sd.star_type = st["type"] as SolarData.StarType
 	sd.set_meta("__cluster_star", i)
+	sd.set_meta("__cluster", _info)
 	return sd
 
 
@@ -609,12 +647,19 @@ func _draw_back() -> void:
 	if not _loaded:
 		return
 	var acc := UIStyle.color(&"accent")
-	# distance rings round the home star: a few, of different kinds (HUD lines)
-	var step := _outer_r / 3.0
-	for k in 3:
-		var r := step * float(k + 1)
-		_ring(r, Color(acc, 0.10 if k < 2 else 0.18), 1.0, 0.5 if k == 2 else 0.0)
-	_ring(step * 1.5, Color(acc, 0.05), 6.0, 0.0)
+	# the neighbourhood's border: its shape on the Galaxy map, lying on the plane
+	# (a faint fill, a soft glow and a crisp line, like a territory)
+	if _bounds.size() >= 3:
+		var pts := PackedVector2Array()
+		for q: Vector2 in _bounds:
+			var pp := _project(q)
+			pts.append(Vector2(pp.x, pp.y))
+		_back.draw_colored_polygon(pts, Color(acc, 0.035))
+		pts.append(pts[0])
+		_back.draw_polyline(pts, Color(acc, 0.08), 7.0, true)
+		_back.draw_polyline(pts, Color(acc, 0.55), 1.4, true)
+	# one faint ring round the core, for scale
+	_ring(_outer_r * 0.35, Color(acc, 0.08), 1.0, 0.5)
 	# lanes between the stars, by how far we have come:
 	#   ours     (both ends reached)  — thick accent line on a strong glow
 	#   frontier (one end reached)    — accent line on a soft glow: the next steps
@@ -775,9 +820,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_WHEEL_DOWN:
 				if mb.pressed:
 					_enter_charge = 0
-					if _zoom_t <= ZOOM_MIN + 0.001 and (_selected >= 0 or _sel_n >= 0):
-						_select(-1)
+					if _zoom_t <= ZOOM_MIN + 0.001:
+						# a few more steps out go up to the Galaxy map (the
+						# first lets go of a pick, if there is one)
+						if _selected >= 0 or _sel_n >= 0:
+							_select(-1)
+						_galaxy_charge += 1
+						if _galaxy_charge >= GALAXY_EXIT_CHARGE:
+							_go_to_galaxy()
 					else:
+						_galaxy_charge = 0
 						_zoom_to(clampf(_zoom_t / ZOOM_STEP, ZOOM_MIN, ZOOM_MAX), lp)
 					get_viewport().set_input_as_handled()
 		return
@@ -790,9 +842,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _enter_pinch >= ENTER_PINCH:
 				_enter_pinch = 1.0
 				_begin_enter(target)
+		elif mg.factor < 1.0 and _zoom_t <= ZOOM_MIN + 0.001:
+			_enter_pinch = 1.0
+			if _selected >= 0 or _sel_n >= 0:
+				_select(-1)
+			_galaxy_pinch *= mg.factor
+			if _galaxy_pinch <= GALAXY_EXIT_PINCH:
+				_galaxy_pinch = 1.0
+				_go_to_galaxy()
 		else:
 			if mg.factor < 1.0:
 				_enter_pinch = 1.0
+			else:
+				_galaxy_pinch = 1.0
 			_zoom_to(clampf(_zoom_t * mg.factor, ZOOM_MIN, ZOOM_MAX), lp)
 		get_viewport().set_input_as_handled()
 		return
@@ -916,6 +978,20 @@ func _hand_over(i: int) -> void:
 	SceneTransition.go_soft(SYSTEM_SCENE, _system_of(i))
 
 
+## Zooms the whole cluster out a little more on its own, then the Galaxy map
+## takes over on this neighbourhood, at the size the cluster had then.
+func _go_to_galaxy() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	_galaxy_charge = 0
+	_focus_t = Vector2.ZERO
+	_zoom_t = GALAXY_EXIT_ZOOM
+	await get_tree().create_timer(GALAXY_EXIT_SEC).timeout
+	SceneTransition.go_soft(GALAXY_SCENE, {"index": int(_info.get("index", -1)),
+		"screen_r": _outer_r * _scale(), "yaw": _yaw, "tilt": _tilt})
+
+
 ## Came out of a Star System: start on its star at the size it had there, then
 ## ease out to its neighbourhood, picked.
 func _arrive_from(sd: SolarData) -> void:
@@ -960,7 +1036,11 @@ func _build_panel() -> void:
 	root.add_theme_constant_override("separation", 8)
 	content.add_child(root)
 	root.add_child(_info_line("Systems", str(_stars.size())))
-	root.add_child(_info_line("Settled", "1"))   # the home system (others: later)
+	var settled := 0
+	for st: Dictionary in _stars:
+		if st["home"]:
+			settled += 1
+	root.add_child(_info_line("Settled", str(settled)))
 	root.add_child(HSeparator.new())
 	if _sel_n >= 0:
 		var nb := _nebulae[_sel_n]
