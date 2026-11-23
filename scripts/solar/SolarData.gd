@@ -1,7 +1,9 @@
 class_name SolarData
 extends Resource
 
-enum StarType { YELLOW_DWARF, RED_DWARF, BLUE_GIANT, ORANGE_SUBGIANT, WHITE_DWARF }
+## BLACK_HOLE: a system round a black hole (Star Cluster, Mechanic-Test/Star-Map);
+## drawn with shaders/black_hole.gdshader instead of the star shader.
+enum StarType { YELLOW_DWARF, RED_DWARF, BLUE_GIANT, ORANGE_SUBGIANT, WHITE_DWARF, BLACK_HOLE }
 
 @export var system_name:  String = "Unknown System"
 @export var star_type:    StarType = StarType.YELLOW_DWARF
@@ -100,6 +102,8 @@ static func get_star_colors(type: StarType) -> Dictionary:
 			return {"core": Vector3(1.0,0.90,0.65),  "surface": Vector3(1.0,0.62,0.22),  "corona": Vector3(0.90,0.38,0.05)}
 		StarType.WHITE_DWARF:
 			return {"core": Vector3(0.95,0.97,1.0),  "surface": Vector3(0.82,0.90,1.0),  "corona": Vector3(0.65,0.75,1.0)}
+		StarType.BLACK_HOLE:   # core: the photon ring; surface: the disk; corona: the haze
+			return {"core": Vector3(1.0,0.80,0.55),  "surface": Vector3(1.0,0.55,0.22),  "corona": Vector3(0.50,0.28,0.95)}
 		_: # YELLOW_DWARF
 			return {"core": Vector3(1.0,0.98,0.88),  "surface": Vector3(1.0,0.78,0.30),  "corona": Vector3(1.0,0.45,0.08)}
 
@@ -117,4 +121,5 @@ static func get_star_type_name(type: StarType) -> String:
 		StarType.BLUE_GIANT:      return "Blue Giant"
 		StarType.ORANGE_SUBGIANT: return "Orange Subgiant"
 		StarType.WHITE_DWARF:     return "White Dwarf"
+		StarType.BLACK_HOLE:      return "Black Hole"
 		_:                        return "Yellow Dwarf"

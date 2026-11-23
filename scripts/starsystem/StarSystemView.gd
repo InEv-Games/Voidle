@@ -43,6 +43,17 @@ const ENTER_CHARGE := 2
 ## at this rate (1/s).
 const MOON_SWING := 1.0
 const FLING_DECAY := 2.5
+## Up to the Star Cluster: wheel steps / pinch-out at the farthest zoom with
+## nothing picked; the system then shrinks to CLUSTER_EXIT_ZOOM and the cluster
+## takes over at that size. Coming down from it, the view opens at FROM_CLUSTER_ZOOM.
+const CLUSTER_SCENE := "res://scenes/starcluster/StarClusterView.tscn"
+const CLUSTER_EXIT_CHARGE := 3
+const CLUSTER_EXIT_PINCH := 0.7
+const CLUSTER_EXIT_ZOOM := 0.3
+const CLUSTER_EXIT_SEC := 0.35
+const FROM_CLUSTER_ZOOM := 0.3
+var _cluster_charge := 0
+var _cluster_pinch := 1.0
 ## Coming out of a planet view, the camera settles at this zoom on that world.
 const ARRIVE_ZOOM := 2.2
 const ARRIVE_ZOOM_MOON := 3.2
@@ -86,6 +97,8 @@ var _star: ColorRect
 var _halo_near: Sprite2D
 var _halo_far: Sprite2D
 var _light: PointLight2D
+## A black hole's accretion disk (null for a star).
+var _disk: Sprite2D = null
 var _back: Node2D
 var _mid: Node2D
 var _front: Node2D
@@ -172,6 +185,12 @@ func _ready() -> void:
 	_load(sd)
 	if from_body != null:
 		_arrive_from(from_body)
+	elif GameState.has_meta("enter_from_cluster"):
+		# down from the Star Cluster: the star starts at the size it had there
+		GameState.remove_meta("enter_from_cluster")
+		_zoom = FROM_CLUSTER_ZOOM
+		_zoom_v = 0.0
+		_zoom_t = 1.0
 	NavigationManager.end_apply()
 	if _solar != null:
 		NavigationManager.visit(NavigationManager.solar_entry(_solar))
@@ -258,9 +277,10 @@ func _load(sd: SolarData) -> void:
 	_bodies.clear()
 	if _star != null:
 		_star.queue_free()
-	for l in [_halo_near, _halo_far, _light]:
+	for l in [_halo_near, _halo_far, _light, _disk]:
 		if l != null:
 			l.queue_free()
+	_disk = null
 	for d: Dictionary in _details:
 		for spr: Node in d.get("sprites", []):
 			spr.queue_free()
@@ -634,8 +654,20 @@ func _make_light(sd: SolarData) -> void:
 	var core: Vector3 = SolarData.get_star_colors(sd.star_type)["surface"]
 	var c := Color(col.x, col.y, col.z)
 	var cc := Color(core.x, core.y, core.z)
-	_halo_far = _halo_sprite(c, 0.30, 3)
-	_halo_near = _halo_sprite(cc, 0.55, 4)
+	var bh := sd.star_type == SolarData.StarType.BLACK_HOLE
+	_halo_far = _halo_sprite(c, 0.22 if bh else 0.30, 3)
+	_halo_near = _halo_sprite(cc, 0.30 if bh else 0.55, 4)
+	if bh:
+		# the accretion disk: a bright ring lying in the plane, just under the hole
+		_disk = Sprite2D.new()
+		_disk.texture = _ring_tex(cc)
+		var dm := CanvasItemMaterial.new()
+		dm.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		dm.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+		_disk.material = dm
+		_disk.z_as_relative = false
+		_disk.z_index = 49
+		_space.add_child(_disk)
 	_light = PointLight2D.new()
 	_light.texture = _radial_tex(Color.WHITE, 1.0)
 	_light.color = cc.lerp(Color.WHITE, 0.3)
@@ -677,6 +709,8 @@ static func _radial_tex(col: Color, strength: float) -> GradientTexture2D:
 
 
 func _make_star(sd: SolarData) -> ColorRect:
+	if sd.star_type == SolarData.StarType.BLACK_HOLE:
+		return make_black_hole(sd.seed)
 	var s := ColorRect.new()
 	s.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	s.z_as_relative = false
@@ -693,6 +727,22 @@ func _make_star(sd: SolarData) -> ColorRect:
 	mat.set_shader_parameter("color_core", colors["core"])
 	mat.set_shader_parameter("color_surface", colors["surface"])
 	mat.set_shader_parameter("color_corona", colors["corona"])
+	s.material = mat
+	return s
+
+
+## A black hole in place of a star (also used by the Star Cluster view).
+static func make_black_hole(seed_val: int) -> ColorRect:
+	var s := ColorRect.new()
+	s.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	s.z_as_relative = false
+	s.z_index = 50
+	var c := SolarData.get_star_colors(SolarData.StarType.BLACK_HOLE)
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/black_hole.gdshader")
+	mat.set_shader_parameter("ring_color", c["core"])
+	mat.set_shader_parameter("glow_color", c["corona"])
+	mat.set_shader_parameter("seed", float(seed_val % 997))
 	s.material = mat
 	return s
 
@@ -851,6 +901,26 @@ func _place_star() -> void:
 	_star.size = Vector2(px, px)
 	_star.position = Vector2(p.x, p.y) - _star.size * 0.5
 	(_star.material as ShaderMaterial).set_shader_parameter("pixel_count", clampf(px * 0.45, 48.0, 220.0))
+	if _disk != null:
+		_disk.position = Vector2(p.x, p.y)
+		_disk.rotation = 0.0
+		_disk.scale = Vector2(1.0, _tilt) * (px * 0.9 / 128.0)
+
+
+## A ring texture (transparent middle, bright band, soft fade out) for a disk.
+static func _ring_tex(col: Color) -> GradientTexture2D:
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.30, 0.38, 0.5, 0.75, 1.0])
+	g.colors = PackedColorArray([Color(col, 0.0), Color(col, 0.0), Color(col.lerp(Color.WHITE, 0.4), 0.95),
+		Color(col, 0.6), Color(col, 0.15), Color(col, 0.0)])
+	var t := GradientTexture2D.new()
+	t.gradient = g
+	t.fill = GradientTexture2D.FILL_RADIAL
+	t.fill_from = Vector2(0.5, 0.5)
+	t.fill_to = Vector2(1.0, 0.5)
+	t.width = 256
+	t.height = 256
+	return t
 
 
 func _place_bodies(delta: float) -> void:
@@ -871,8 +941,18 @@ func _place_bodies(delta: float) -> void:
 		rect.size = Vector2(px, px) / 0.8   # the shader draws the disc at 0.4 of the rect
 		rect.position = Vector2(p.x, p.y) - rect.size * 0.5
 		rect.modulate.a = a
-		var dd := p.z - star_p.z
-		rect.z_index = (60 + mini(40, int(absf(dd) * 0.05))) if dd > 0.0 else (45 - mini(35, int(absf(dd) * 0.05)))
+		# depth order: a planet against the star (even steps, so its moons fit
+		# between), a moon just behind / in front of its own planet by its own
+		# depth against the planet's (the planet always comes first in _bodies)
+		b["depth"] = p.z
+		var owner_i := int(b["parent"])
+		if owner_i < 0:
+			var dd := p.z - star_p.z
+			rect.z_index = (60 + 2 * mini(40, int(absf(dd) * 0.05))) if dd > 0.0 \
+				else (45 - 2 * mini(17, int(absf(dd) * 0.05)))
+		else:
+			var pr: ColorRect = _bodies[owner_i]["rect"]
+			rect.z_index = pr.z_index + (1 if p.z > float(_bodies[owner_i].get("depth", 0.0)) else -1)
 		var mat: ShaderMaterial = b["mat"]
 		mat.set_shader_parameter("pixel_count", clampf(px * 0.55, 16.0, 150.0))
 		# its own slow turn, plus what a drag flung (fading out)
@@ -1142,9 +1222,15 @@ func _wheel_in(lp: Vector2) -> void:
 func _wheel_out(lp: Vector2) -> void:
 	_enter_charge = 0
 	if _zoom_t <= ZOOM_MIN + 0.001:
+		# a few more steps out go up to the Star Cluster (the first lets go of
+		# a pick, if there is one)
 		if _selected >= 0 or _sel_f >= 0:
 			_select(-1)
+		_cluster_charge += 1
+		if _cluster_charge >= CLUSTER_EXIT_CHARGE:
+			_go_to_cluster()
 		return
+	_cluster_charge = 0
 	_zoom_to(clampf(_zoom_t / ZOOM_STEP, ZOOM_MIN, ZOOM_MAX), lp)
 
 
@@ -1206,6 +1292,18 @@ func _pinch(lp: Vector2, factor: float) -> void:
 		return
 	if factor < 1.0:
 		_enter_pinch = 1.0
+		if _zoom_t <= ZOOM_MIN + 0.001:
+			# at the farthest zoom a pinch-out lets go of the pick (coming out
+			# of a planet view, its world is picked) and goes on up
+			if _selected >= 0 or _sel_f >= 0:
+				_select(-1)
+			_cluster_pinch *= factor
+			if _cluster_pinch <= CLUSTER_EXIT_PINCH:
+				_cluster_pinch = 1.0
+				_go_to_cluster()
+			return
+	else:
+		_cluster_pinch = 1.0
 	_zoom_to(clampf(_zoom_t * factor, ZOOM_MIN, ZOOM_MAX), lp)
 
 
@@ -1266,6 +1364,20 @@ func _hand_over(i: int) -> void:
 	pd.set_meta("__solar_data", _solar)
 	GameState.set_meta("enter_from_system", true)   # PlanetaryView opens slightly out and zooms in
 	SceneTransition.go_soft(PLANET_SCENE, pd)
+
+
+## Zooms the whole system out a little more on its own, then the Star Cluster
+## view takes over framed on this star (StarClusterView._arrive_from).
+func _go_to_cluster() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	_cluster_charge = 0
+	_focus_t = Vector2.ZERO
+	_zoom_t = CLUSTER_EXIT_ZOOM
+	await get_tree().create_timer(CLUSTER_EXIT_SEC).timeout
+	_solar.set_meta("__sys_zoom", _zoom)
+	SceneTransition.go_soft(CLUSTER_SCENE, _solar)
 
 
 ## Came out of a planet view: start framed on that world at its planet-view size

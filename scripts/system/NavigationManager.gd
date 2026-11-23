@@ -40,6 +40,12 @@ var _font: Font = null
 static func galaxy_entry(gd: GalaxyData) -> Dictionary:
 	return {"key": "galaxy", "scene": GALAXY_SCENE, "data": gd, "sub": {}, "label": "Galaxy"}
 
+## The Star Cluster (the home neighbourhood, Mechanic-Test/Star-Map).
+const CLUSTER_SCENE := "res://scenes/starcluster/StarClusterView.tscn"
+
+static func cluster_entry() -> Dictionary:
+	return {"key": "cluster", "scene": CLUSTER_SCENE, "data": null, "sub": {}, "label": "Star Cluster"}
+
 static func solar_entry(sd: SolarData) -> Dictionary:
 	return {"key": "solar:%d" % sd.seed, "scene": SOLAR_SCENE, "data": sd, "sub": {},
 		"label": sd.system_name}
