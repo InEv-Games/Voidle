@@ -1091,7 +1091,9 @@ func _update_tutorial_highlight() -> void:
 ## farthest zoom, or the old "solar view" command): a soft switch, the Star
 ## System opening framed on this world (StarSystemView._arrive_from).
 func _go_back() -> void:
-	if not StarSystemProgress.can_view() or current_data == null or _leaving_view:
+	if current_data == null or _leaving_view:
+		return
+	if not PLANET_SYSTEM_LAYER and not StarSystemProgress.can_view():
 		return
 	_leaving_view = true
 	AudioManager.set_activity(false, false)
@@ -1103,7 +1105,8 @@ func _go_back() -> void:
 	_zoom_target = SYSTEM_EXIT_ZOOM
 	await get_tree().create_timer(SYSTEM_EXIT_SEC).timeout
 	current_data.set_meta("__pv_zoom", _zoom)
-	SceneTransition.go_soft(STAR_SYSTEM_SCENE, current_data)
+	# zooming out of a planet goes to its Planet System first (its moons)
+	SceneTransition.go_soft(PLANET_SYSTEM_SCENE if PLANET_SYSTEM_LAYER else STAR_SYSTEM_SCENE, current_data)
 
 ## How far the globe shrinks, and for how long, before the Star System view opens.
 const SYSTEM_EXIT_ZOOM := 0.32
@@ -1581,7 +1584,15 @@ func _companion_list(data: PlanetData) -> Array[PlanetData]:
 	return out
 
 ## Zooming out past the planet needs the Local System (Lunar Program) and a neighbour.
+## The top-right moon corner (CompanionBodies) is off while the Planet System
+## view takes its place (Mechanic-Test/Star-Map, step 1: its code stays so the
+## lander's flows keep working; they move over next).
+const PLANET_SYSTEM_LAYER := true
+const PLANET_SYSTEM_SCENE := "res://scenes/planetsystem/PlanetSystemView.tscn"
+
 func _system_zoom_ok() -> bool:
+	if PLANET_SYSTEM_LAYER:
+		return false
 	return GameState.can_view_moon() and _companions != null and not _companions.bodies.is_empty()
 
 func _setup_companions(data: PlanetData) -> void:
@@ -2592,6 +2603,11 @@ func reveal_moon() -> void:
 		return
 	if current_data.seed == moon.seed:
 		_show_planet_overview()
+		return
+	if PLANET_SYSTEM_LAYER:
+		# the Moon is shown in the Planet System view now: go up there, picked
+		GameState.set_meta("planet_system_highlight", moon.seed)
+		_go_back()
 		return
 	if not _system_zoom_ok():
 		_setup_companions(current_data)

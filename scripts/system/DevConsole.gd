@@ -338,6 +338,7 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]state[/color]  [color=#88ddcc]loc[/color]  [color=#88ddcc]clear[/color]  [color=#88ddcc]debug coords[/color]")
 			_log_info("  [color=#88ddcc]--seed[/color]            — seed of what you're looking at (copied)")
 			_log_info("  [color=#88ddcc]moonlaunch[/color] [color=#aaaaaa][sec] [reset][/color] — send the Moon lander now (default 15s)")
+			_log_info("  [color=#88ddcc]debug-popup[/color] [color=#aaaaaa][--open | --close][/color] — a draggable window with the current view's test buttons")
 			_log_info("  [color=#88ddcc]rocket[/color] [color=#aaaaaa][sec][/color] — launch the final rocket now (completes Civilization 0)")
 			_log_info("  [color=#88ddcc]tutorial complete[/color] — skip/finish tutorial")
 			_log_info("  [color=#88ddcc]excavate ready[/color] — finish the digs under way now")
@@ -559,6 +560,15 @@ func _exec(line: String) -> void:
 		# ── Moon lander test ──────────────────────────────────────────────────
 		"moonlaunch":
 			_cmd_moonlaunch(parts)
+		# ── Debug popup (a view's animation tests) ─────────────────────────────
+		"debug-popup":
+			var arg := String(parts[1]).to_lower() if parts.size() > 1 else "--open"
+			if arg == "--close":
+				DebugPopup.close()
+				_log_ok("Debug popup closed.")
+			else:
+				DebugPopup.open(get_tree())
+				_log_ok("Debug popup open (drag it by its title).")
 		"rocket":
 			_cmd_rocket(parts)
 

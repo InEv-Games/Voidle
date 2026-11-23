@@ -302,16 +302,12 @@ func _load(sd: SolarData) -> void:
 		var r := ORBIT_BASE + ORBIT_STEP * float(i)
 		var p_idx := _bodies.size()
 		# standing still, each a golden angle on from the last: far from both neighbours
-		var start := fposmod(float(sd.seed % 628) * 0.01 + GOLDEN * float(i), TAU)
-		_bodies.append(_make_body(pd, -1, r, start, 0.0,
-			clampf(BODY_PX * pow(maxf(pd.planet_size, 0.05), BODY_POW), BODY_MIN, BODY_MAX)))
+		_bodies.append(_make_body(pd, -1, r, planet_angle(sd, i), 0.0, planet_px(pd)))
 		if pd.moons.is_empty():
 			pd.generate_moons(pd.seed)
 		for j in pd.moons.size():
 			var m: PlanetData = pd.moons[j]
-			_bodies.append(_make_body(m, p_idx, 0.0,
-				rng.randf_range(0.0, TAU) + TAU * float(j) / float(pd.moons.size()), 0.0,
-				maxf(MOON_PX * pow(maxf(m.planet_size, 0.05), MOON_POW), MOON_MIN)))
+			_bodies.append(_make_body(m, p_idx, 0.0, moon_angle(pd.seed, j), 0.0, moon_px(m)))
 	_outer_r = ORBIT_BASE + ORBIT_STEP * float(maxi(sd.planets.size() - 1, 0))
 	var planet_pos: Array[Vector2] = []
 	for i in _bodies.size():
@@ -731,6 +727,36 @@ func _make_star(sd: SolarData) -> ColorRect:
 	return s
 
 
+# ── Shared layout (Star System ⇄ Planet System) ──────────────────────────────
+# Both views place a world's moons by these, so a moon is at the same angle and
+# the same distance (in planet sizes) in both, and the switch lines up.
+
+## A world's angle round the star (the golden-angle spread).
+static func planet_angle(sd: SolarData, i: int) -> float:
+	return fposmod(float(sd.seed % 628) * 0.01 + GOLDEN * float(i), TAU)
+
+
+## Moon j's angle round its planet.
+static func moon_angle(planet_seed: int, j: int) -> float:
+	return fposmod(float(planet_seed % 628) * 0.01 + 0.9 + GOLDEN * float(j), TAU)
+
+
+## A world's size on screen at zoom 1 (px at 1080 p).
+static func planet_px(pd: PlanetData) -> float:
+	return clampf(BODY_PX * pow(maxf(pd.planet_size, 0.05), BODY_POW), BODY_MIN, BODY_MAX)
+
+
+static func moon_px(pd: PlanetData) -> float:
+	return maxf(MOON_PX * pow(maxf(pd.planet_size, 0.05), MOON_POW), MOON_MIN)
+
+
+## Moon j's orbit radius, for a planet `planet_diam` across (same unit back).
+## Wide on purpose: room between a world and its moons for the flights
+## (landers, rockets) to be seen.
+static func moon_orbit(planet_diam: float, j: int) -> float:
+	return planet_diam * 0.5 * (4.0 + 1.3 * float(j))
+
+
 ## A black hole in place of a star (also used by the Star Cluster view).
 static func make_black_hole(seed_val: int) -> ColorRect:
 	var s := ColorRect.new()
@@ -829,7 +855,7 @@ func _body_plane(i: int) -> Vector2:
 		return Vector2(cos(a), sin(a)) * float(b["r"])
 	var pb := _bodies[int(b["parent"])]
 	# in step with the planet's size on screen, whatever the zoom
-	var mr: float = float(pb["sz"]) * 0.9 + 10.0 + 9.0 * float(_moon_index(i))
+	var mr := moon_orbit(float(pb["sz"]), _moon_index(i))
 	return _body_plane(int(b["parent"])) + Vector2(cos(a), sin(a)) * mr / _fit()
 
 
@@ -1355,15 +1381,29 @@ func _begin_enter(i: int) -> void:
 	_selected = i
 	_entering = i
 	_focus_t = _body_plane(i)
-	_zoom_t = _zoom_for_planet_view(i, 0.82)
+	# close in until the world is as big as the Planet System opens with it
+	_zoom_t = _zoom_for_planet_view(i, HANDOVER_PV)
 
+
+## Going down hands over to the Planet System (the world and its moons) at
+## this size, in the planet view's terms; the angle goes along too.
+const PLANET_SYSTEM_SCENE := "res://scenes/planetsystem/PlanetSystemView.tscn"
+const HANDOVER_PV := 0.16
 
 func _hand_over(i: int) -> void:
 	_leaving = true
 	var pd: PlanetData = _bodies[i]["pd"]
 	pd.set_meta("__solar_data", _solar)
-	GameState.set_meta("enter_from_system", true)   # PlanetaryView opens slightly out and zooms in
-	SceneTransition.go_soft(PLANET_SCENE, pd)
+	pd.set_meta("__pv_zoom", _pv_zoom_of(i))
+	pd.set_meta("__pose", {"yaw": _yaw, "tilt": _tilt})
+	SceneTransition.go_soft(PLANET_SYSTEM_SCENE, pd)
+
+
+## The planet view's zoom that draws body i as big as it is here now.
+func _pv_zoom_of(i: int) -> float:
+	var pd: PlanetData = _bodies[i]["pd"]
+	var diam := 2.0 * clampf(0.42 * clampf(pd.planet_size, 0.2, 2.0), 0.10, 0.48) * _space.size.y
+	return _body_px(i) / maxf(diam, 1.0)
 
 
 ## Zooms the whole system out a little more on its own, then the Star Cluster
@@ -1395,7 +1435,14 @@ func _arrive_from(pd: PlanetData) -> void:
 	_focus_t = _focus
 	_zoom = _zoom_for_planet_view(idx, float(pd.get_meta("__pv_zoom", 0.62)))
 	_zoom_v = 0.0
-	_zoom_t = ARRIVE_ZOOM if int(_bodies[idx]["parent"]) < 0 else ARRIVE_ZOOM_MOON
+	_zoom_t = minf(_zoom * 0.8, ARRIVE_ZOOM if int(_bodies[idx]["parent"]) < 0 else ARRIVE_ZOOM_MOON)
+	if pd.has_meta("__pose"):   # up from the Planet System: its angle, so the moons line up
+		var pose: Dictionary = pd.get_meta("__pose")
+		pd.remove_meta("__pose")
+		_yaw = float(pose["yaw"])
+		_yaw_t = _yaw
+		_tilt = clampf(float(pose["tilt"]), TILT_MIN, TILT_MAX)
+		_tilt_t = _tilt
 	_selected = idx
 	_build_panel()
 
