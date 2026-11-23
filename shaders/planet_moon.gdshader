@@ -8,6 +8,12 @@ uniform float night_shadow : hint_range(0.0, 1.0) = 1.0;
 uniform float planet_radius   : hint_range(0.1, 0.5)    = 0.32;
 uniform float pixel_count     : hint_range(32.0, 512.0) = 140.0;
 uniform float aspect_ratio    : hint_range(0.1, 4.0)    = 1.0;
+
+// Rim (Star System view): a ring of whole pixels just outside the body, so it
+// reads as a thing to pick off the background. rim_px = its width in pixels
+// of this shader's grid; 0 = off (the default: other views are unchanged).
+uniform float rim_px = 0.0;
+uniform vec4 rim_color : source_color = vec4(1.0, 1.0, 1.0, 0.35);
 uniform float terrain_roughness : hint_range(0.2, 2.0)  = 1.2;
 uniform int   seed             : hint_range(0, 99999)   = 12345;
 
@@ -158,6 +164,12 @@ void fragment() {
 
 
 		COLOR = vec4(clamp(surf, vec3(0.0), vec3(1.0)), 1.0);
+	}
+	if (rim_px > 0.0) {
+		float out_d = dist - planet_radius;
+		if (out_d > 0.0 && out_d <= rim_px / pixel_count + 0.0001) {
+			COLOR = rim_color;
+		}
 	}
 	if (fade_with_modulate) {
 		COLOR.a *= fade_a;

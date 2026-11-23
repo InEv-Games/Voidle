@@ -941,7 +941,7 @@ func go_to(loc: Dictionary) -> void:
 			HUDManager.press_shortcut("tree")
 		return
 	if loc.get("solar", false):   # the star system view (e.g. the final rocket's flight)
-		SceneTransition.go("res://scenes/solar/SolarView.tscn", GameState.get_home_solar())
+		SceneTransition.go("res://scenes/starsystem/StarSystemView.tscn", GameState.get_home_solar())
 		return
 	if loc.get("lander", false):   # the Moon with the lander and its card
 		HUDManager.go_to_lander(int(loc.get("seed", -1)))

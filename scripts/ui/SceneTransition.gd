@@ -34,3 +34,30 @@ func go(path: String, data: Variant = null) -> void:
 		_transitioning = false
 		_fade_to_clear()         # reveal the new scene
 	)
+
+## Soft switch for zoom transitions (Planet ⇄ Star System): the last frame of
+## the old view stays on top as a still and melts away over the new one, which
+## starts in the same framing and keeps zooming — no black in between. The two
+## views stay separate scenes (only one is loaded at a time).
+func go_soft(path: String, data: Variant = null, fade_sec := 0.45) -> void:
+	if _transitioning:
+		return
+	_transitioning = true
+	pending_data = data
+	var img := get_viewport().get_texture().get_image()
+	var snap := TextureRect.new()
+	snap.texture = ImageTexture.create_from_image(img)
+	snap.anchor_right = 1.0
+	snap.anchor_bottom = 1.0
+	snap.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	snap.stretch_mode = TextureRect.STRETCH_SCALE
+	snap.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(snap)
+	get_tree().change_scene_to_file(path)
+	# let the new view build and draw its first frames under the still
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_transitioning = false
+	var tw := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(snap, "modulate:a", 0.0, fade_sec)
+	tw.tween_callback(snap.queue_free)

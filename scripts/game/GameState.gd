@@ -396,6 +396,11 @@ var moon_unlocked:     bool = false
 ## final rocket's research needs 100 (GDD §17.9, KARARLAR §5).
 var moon_local_moonstone: float = 0.0
 var galaxy_unlocked:   bool = false
+## Star System layer (StarSystemProgress): its level, and a level-up running
+## between these play_seconds (end 0 = none).
+var system_level: int = 1
+var system_upgrade_start: float = 0.0
+var system_upgrade_end: float = 0.0
 
 # ── Showcase (read-only viewer) ──────────────────────────────────────────────
 ## Explore mode (internally "showcase"): a read-only look around every map —
@@ -462,9 +467,9 @@ func start_explore() -> void:
 	# galaxy one step out from there
 	var sd = get_home_solar()
 	if sd != null:
-		SceneTransition.go("res://scenes/solar/SolarView.tscn", sd)
+		SceneTransition.go("res://scenes/starsystem/StarSystemView.tscn", sd)
 	else:
-		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")
+		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")   # unreachable in play (no home)
 
 ## Back from the tour to the home world.
 func end_explore() -> void:
@@ -1645,6 +1650,8 @@ func save() -> void:
 	data["surveyed_bodies"]     = surveyed_bodies
 	data["discovered_minerals"] = discovered_minerals
 	data["planet_view_unlocked"] = planet_view_unlocked
+	data["system_level"] = system_level
+	data["system_upgrade"] = [system_upgrade_start, system_upgrade_end]
 	data["light_angle"]         = light_angle
 	data["production"]          = ProductionManager.get_save_data()
 	data["achievements"]        = AchievementManager.get_save_data()
@@ -1772,6 +1779,10 @@ func load_save() -> bool:
 	surveyed_bodies     = data.get("surveyed_bodies", {})
 	discovered_minerals = data.get("discovered_minerals", {})
 	planet_view_unlocked = data.get("planet_view_unlocked", false)
+	system_level = int(data.get("system_level", 1))
+	var su: Array = data.get("system_upgrade", [0.0, 0.0])
+	system_upgrade_start = float(su[0])
+	system_upgrade_end = float(su[1])
 	light_angle         = data.get("light_angle",        0.8)
 
 	if data.has("achievements"):
@@ -1865,6 +1876,9 @@ func delete_save(remove_file := true, rebuild := true) -> void:
 	_offline_measured    = true
 	expeditions          = {}
 	galaxy_unlocked      = false
+	system_level         = 1
+	system_upgrade_start = 0.0
+	system_upgrade_end   = 0.0
 	discovered_asteroids = []
 	asteroid_scan_counts = {}
 	# the seed typed in the New Game window (SessionPrep), else a random one

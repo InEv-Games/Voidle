@@ -1452,8 +1452,10 @@ func _play_slot(slot: int) -> void:
 ## the galaxy first showed its side panel and the HUD over a black screen for
 ## a moment before it passed the player on to the planet.
 func _enter_game() -> void:
+	# the Galaxy view is out of the game flow for now (Mechanic-Test/Star-Map):
+	# a run always opens on the home planet
 	var home := GameState.get_home_planet()
-	if home != null and not GameState.can_view_solar() and not GameState.can_view_galaxy():
+	if home != null:
 		SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", home)
 	else:
 		SceneTransition.go("res://scenes/galaxy/GalaxyView.tscn")

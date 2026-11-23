@@ -1,0 +1,1154 @@
+## Star System view — the layer above a planet (replaces the Solar View in play;
+## SolarView / GalaxyView stay in the project, out of the game flow).
+## (Development: Mechanic-Test/Star-Map.)
+##
+## The system on a tilted plane: the star in the middle, every planet standing
+## still on its orbit (spread out so neighbours never meet, which fits more
+## worlds on a small screen), its moons around it once you are close enough
+## (LOD), a marker over each world. A few general orbit lines frame the system;
+## a world's own orbit shows, dashed, while it is hovered or picked. Drag (left
+## Picking a world adds a second control layer on it: a left drag / two-finger
+## drag that starts on that world turns the globe round its axis (horizontal
+## only, flung like the planet view) and its moons go round with it;
+## Esc, a click on empty space or zooming out past the farthest zoom gives the
+## controls back to the system.
+## Otherwise a left drag (and a two-finger trackpad drag) moves the system on its plane;
+## right drag (Shift + two-finger drag) turns and tilts it around the screen's
+## centre; the wheel / pinch zooms towards the cursor, or the hovered world. Click a world to
+## pick it and follow it; keep zooming into it (or click its row twice) and the
+## planet view takes over: the camera closes in until the world has the size it
+## has in the planet view, then SceneTransition.go_soft melts one scene into the
+## other. Zooming out of a planet view lands here the same way, framed on that
+## world, and eases out to the whole system.
+##
+## The side panel is the system's own: its level (StarSystemProgress), what it
+## allows, and its worlds as rows.
+extends Control
+
+const PLANET_SCENE := "res://scenes/planetary/PlanetaryView.tscn"
+
+const ZOOM_MIN := 0.6
+const ZOOM_MAX := 5.0
+const ZOOM_STEP := 1.2
+const TILT_MIN := 0.16
+const TILT_MAX := 0.85
+const CAM_TIME := 0.18
+## Wheel steps into a world already at ZOOM_MAX before the planet view opens.
+const ENTER_CHARGE := 2
+## A turned planet swings its moons by this share of its spin (1 = together); a fling fades
+## at this rate (1/s).
+const MOON_SWING := 1.0
+const FLING_DECAY := 2.5
+## Coming out of a planet view, the camera settles at this zoom on that world.
+const ARRIVE_ZOOM := 2.2
+const ARRIVE_ZOOM_MOON := 3.2
+## The same for a trackpad pinch (product of the gesture factors).
+const ENTER_PINCH := 1.4
+var _enter_pinch := 1.0
+
+## Plane layout (units = px at zoom 1 on a 1080 p screen).
+const ORBIT_BASE := 210.0
+const ORBIT_STEP := 115.0
+## World size on screen at zoom 1 (px at 1080 p), relative to planet_size and
+## stretched (power > 1) so the difference reads at a glance: a small barren
+## world (0.5) ≈ 11 px, an Earth (1.0) 30, a gas giant (1.8) ≈ 72.
+const BODY_PX := 30.0
+const BODY_POW := 1.5
+const BODY_MIN := 9.0
+const BODY_MAX := 90.0
+## Moons on the same scale, a little gentler so the smallest stay visible.
+const MOON_PX := 26.0
+const MOON_POW := 1.2
+const MOON_MIN := 6.0
+## Moons fade in between these zooms.
+const MOON_LOD_A := 1.5
+const MOON_LOD_B := 2.3
+
+const RING_COL := Color(0.72, 0.84, 1.0, 0.26)
+## The golden angle that spreads the worlds around the star.
+const GOLDEN := 2.39996323
+const RING_SEL_COL := Color(0.55, 0.95, 1.0, 0.9)
+const MARK_COL := Color(0.92, 0.96, 1.0)
+
+@onready var _space: Control = $Space
+@onready var _panel: LeftPanel = $SidePanel
+
+var _solar: SolarData
+## [{ pd, parent (index or -1), r, a0, speed, rect, mat, sz }]
+var _bodies: Array[Dictionary] = []
+var _star: ColorRect
+## The star's light: two additive halos lying in the plane (emissive look) and a
+## Light2D that brightens the orbit lines near it (they carry light mask 2).
+var _halo_near: Sprite2D
+var _halo_far: Sprite2D
+var _light: PointLight2D
+var _back: Node2D
+var _mid: Node2D
+var _front: Node2D
+var _outer_r := 600.0
+var _time := 0.0
+
+# camera (current, target, spring velocity)
+var _yaw := 0.6
+var _yaw_t := 0.6
+var _yaw_v := 0.0
+var _tilt := 0.42
+var _tilt_t := 0.42
+var _tilt_v := 0.0
+var _zoom := 1.0
+var _zoom_t := 1.0
+var _zoom_v := 0.0
+var _focus := Vector2.ZERO
+var _focus_t := Vector2.ZERO
+var _focus_v := Vector2.ZERO
+
+var _hover := -1
+var _selected := -1
+var _entering := -1
+var _enter_charge := 0
+var _leaving := false
+var _drag_btn := -1
+var _drag_from := Vector2.ZERO
+var _drag_moved := 0.0
+## The left drag started on the picked world: it turns that world, not the map.
+var _drag_world := false
+var _last_row_click := {}
+
+
+func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	HUDManager.set_game_hud(not GameState.showcase_mode)
+	CursorManager.set_state(CursorManager.State.NORMAL)
+	Starfield.apply($Background as ColorRect)
+	_back = Node2D.new()
+	_back.z_index = 0
+	_mid = Node2D.new()
+	_mid.z_index = 55
+	_front = Node2D.new()
+	_front.z_index = 200
+	for n: Node2D in [_back, _mid, _front]:
+		n.z_as_relative = false
+		_space.add_child(n)
+	_back.draw.connect(_draw_back)
+	_mid.draw.connect(_draw_mid)
+	_front.draw.connect(_draw_front)
+	_panel.visible = not GameState.showcase_mode
+	_space.anchor_left = 0.0 if GameState.showcase_mode else LeftPanel.edge_frac()
+	HUDManager.set_view_area_fraction(1.0 - _space.anchor_left)
+	tree_exiting.connect(func() -> void: HUDManager.set_view_area_fraction(1.0 - LeftPanel.edge_frac()))
+
+	var pending = SceneTransition.pending_data
+	SceneTransition.pending_data = null
+	var from_body: PlanetData = pending as PlanetData
+	var sd: SolarData = pending as SolarData
+	if from_body != null and from_body.has_meta("__solar_data"):
+		sd = from_body.get_meta("__solar_data") as SolarData
+	if sd == null:
+		sd = GameState.get_home_solar()
+	await get_tree().process_frame   # sizes laid out
+	_load(sd)
+	if from_body != null:
+		_arrive_from(from_body)
+	NavigationManager.end_apply()
+	if _solar != null:
+		NavigationManager.visit(NavigationManager.solar_entry(_solar))
+
+
+## Back / forward landing on this view while it shows the same system.
+func nav_apply(entry: Dictionary) -> bool:
+	var sd := entry.get("data") as SolarData
+	if sd == null:
+		return false
+	if sd != _solar:
+		_load(sd)
+	NavigationManager.end_apply()
+	return true
+
+
+# ── Building the system ──────────────────────────────────────────────────────
+
+func _load(sd: SolarData) -> void:
+	_solar = sd
+	for b: Dictionary in _bodies:
+		(b["rect"] as Node).queue_free()
+		for key: String in ["cell", "badge"]:
+			(b["marker"][key] as Node).queue_free()
+	_bodies.clear()
+	if _star != null:
+		_star.queue_free()
+	for l in [_halo_near, _halo_far, _light]:
+		if l != null:
+			l.queue_free()
+	_hover = -1
+	_selected = -1
+	if sd == null:
+		return
+	_star = _make_star(sd)
+	_space.add_child(_star)
+	_make_light(sd)
+	var rng := RandomNumberGenerator.new()
+	for i in sd.planets.size():
+		var pd: PlanetData = sd.planets[i]
+		rng.seed = pd.seed ^ 0x5157
+		var r := ORBIT_BASE + ORBIT_STEP * float(i)
+		var p_idx := _bodies.size()
+		# standing still, each a golden angle on from the last: far from both neighbours
+		var start := fposmod(float(sd.seed % 628) * 0.01 + GOLDEN * float(i), TAU)
+		_bodies.append(_make_body(pd, -1, r, start, 0.0,
+			clampf(BODY_PX * pow(maxf(pd.planet_size, 0.05), BODY_POW), BODY_MIN, BODY_MAX)))
+		if pd.moons.is_empty():
+			pd.generate_moons(pd.seed)
+		for j in pd.moons.size():
+			var m: PlanetData = pd.moons[j]
+			_bodies.append(_make_body(m, p_idx, 0.0,
+				rng.randf_range(0.0, TAU) + TAU * float(j) / float(pd.moons.size()), 0.0,
+				maxf(MOON_PX * pow(maxf(m.planet_size, 0.05), MOON_POW), MOON_MIN)))
+	_outer_r = ORBIT_BASE + ORBIT_STEP * float(maxi(sd.planets.size() - 1, 0))
+	_build_panel()
+
+
+func _make_body(pd: PlanetData, parent: int, r: float, a0: float, speed: float, sz: float) -> Dictionary:
+	var rect := ColorRect.new()
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rect.z_as_relative = false
+	var mat := _planet_material(pd)
+	rect.material = mat
+	_space.add_child(rect)
+	return {"pd": pd, "parent": parent, "r": r, "a0": a0, "speed": speed, "rect": rect, "mat": mat,
+		"marker": _make_marker(pd, parent >= 0),
+		"sz": sz, "spin": randf() * TAU, "spin_v": randf_range(0.06, 0.16),
+		"tilt": 0.0, "fling": 0.0, "turn": 0.0}
+
+
+## A world's marker in the interface's own look: the IconCell of the list rows
+## (ListItem) with the world's icon, and its name on a Badge beside it while
+## hovered or picked. Settled worlds glow in the accent, the rest stay muted.
+func _make_marker(pd: PlanetData, is_moon: bool) -> Dictionary:
+	var cell := PanelContainer.new()
+	cell.theme_type_variation = &"IconCell"
+	cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.z_as_relative = false
+	cell.z_index = 190
+	var icon := TextureRect.new()
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var side := 14.0 if is_moon else 18.0
+	icon.custom_minimum_size = Vector2(side, side)
+	cell.add_child(icon)
+	_space.add_child(cell)
+	var badge := PanelContainer.new()
+	badge.theme_type_variation = &"Badge"
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.z_as_relative = false
+	badge.z_index = 191
+	var lbl := Label.new()
+	lbl.text = pd.planet_name.to_upper()
+	lbl.theme_type_variation = &"CounterLabel"
+	badge.add_child(lbl)
+	badge.visible = false
+	_space.add_child(badge)
+	var m := {"cell": cell, "icon": icon, "badge": badge}
+	_style_marker(m, pd)
+	return m
+
+
+func _style_marker(m: Dictionary, pd: PlanetData) -> void:
+	var icon: TextureRect = m["icon"]
+	var icon_id := _marker_icon(pd)
+	var settled := icon_id != ""
+	if icon_id == "":
+		icon_id = "moon" if pd.planet_type == PlanetData.Type.MOON else "planet"
+	icon.texture = UIIcons.get_icon(icon_id)
+	icon.self_modulate = UIStyle.color(&"accent") if settled else Color(0.62, 0.70, 0.82)
+	m["settled"] = settled
+
+
+## The world's rim (a pixel ring drawn by its own shader): faint white so it
+## stands off the background, brighter while hovered; the picked one gets a
+## wider rim in the accent that breathes slowly.
+func _set_rim(i: int, mat: ShaderMaterial) -> void:
+	var px := 1.0
+	var col := Color(1, 1, 1, 0.32)
+	if i == _selected:
+		px = 2.0
+		col = Color(RING_SEL_COL, 0.65 + 0.35 * (0.5 + 0.5 * sin(_time * 3.0)))
+	elif i == _hover:
+		col = Color(1, 1, 1, 0.85)
+	mat.set_shader_parameter("rim_px", px)
+	mat.set_shader_parameter("rim_color", col)
+
+
+## Puts each marker over its world (moons only once they show).
+func _place_markers() -> void:
+	var moon_a := _moon_alpha()
+	for i in _bodies.size():
+		var b := _bodies[i]
+		var m: Dictionary = b["marker"]
+		var cell: PanelContainer = m["cell"]
+		var badge: PanelContainer = m["badge"]
+		var is_moon := int(b["parent"]) >= 0
+		var a := 1.0
+		if is_moon:
+			a = moon_a if _selected != i else 1.0
+		var shown := a > 0.3 and (b["rect"] as CanvasItem).visible
+		var lit := i == _hover or i == _selected
+		# a marker only where there is something of ours; any world's name on hover
+		cell.visible = shown and m["settled"]
+		badge.visible = shown and lit
+		var p := _project(_body_plane(i))
+		var top := Vector2(p.x, p.y - _body_px(i) * 0.5 - 3.0)
+		if cell.visible:
+			var stem := 12.0 if is_moon else 20.0
+			cell.size = cell.get_combined_minimum_size()
+			cell.position = (top - Vector2(0, stem) - Vector2(cell.size.x * 0.5, cell.size.y)).round()
+			cell.modulate.a = a
+		if badge.visible:
+			badge.size = badge.get_combined_minimum_size()
+			if cell.visible:
+				badge.position = (cell.position + Vector2(cell.size.x + 6.0, (cell.size.y - badge.size.y) * 0.5)).round()
+			else:
+				badge.position = (top - Vector2(badge.size.x * 0.5, badge.size.y + 8.0)).round()
+
+
+func _make_light(sd: SolarData) -> void:
+	var col: Vector3 = SolarData.get_star_colors(sd.star_type)["corona"]
+	var core: Vector3 = SolarData.get_star_colors(sd.star_type)["surface"]
+	var c := Color(col.x, col.y, col.z)
+	var cc := Color(core.x, core.y, core.z)
+	_halo_far = _halo_sprite(c, 0.30, 3)
+	_halo_near = _halo_sprite(cc, 0.55, 4)
+	_light = PointLight2D.new()
+	_light.texture = _radial_tex(Color.WHITE, 1.0)
+	_light.color = cc.lerp(Color.WHITE, 0.3)
+	_light.energy = 1.6
+	_light.blend_mode = Light2D.BLEND_MODE_ADD
+	_light.range_item_cull_mask = 2
+	_space.add_child(_light)
+	_back.light_mask = 3
+	_mid.light_mask = 3
+
+
+func _halo_sprite(col: Color, strength: float, z: int) -> Sprite2D:
+	var spr := Sprite2D.new()
+	spr.texture = _radial_tex(col, strength)
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
+	spr.material = mat
+	spr.z_as_relative = false
+	spr.z_index = z
+	_space.add_child(spr)
+	return spr
+
+
+## 256 px radial falloff (bright middle, soft edge).
+static func _radial_tex(col: Color, strength: float) -> GradientTexture2D:
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, 0.25, 0.6, 1.0])
+	g.colors = PackedColorArray([Color(col, strength), Color(col, strength * 0.45),
+		Color(col, strength * 0.12), Color(col, 0.0)])
+	var t := GradientTexture2D.new()
+	t.gradient = g
+	t.fill = GradientTexture2D.FILL_RADIAL
+	t.fill_from = Vector2(0.5, 0.5)
+	t.fill_to = Vector2(1.0, 0.5)
+	t.width = 256
+	t.height = 256
+	return t
+
+
+func _make_star(sd: SolarData) -> ColorRect:
+	var s := ColorRect.new()
+	s.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	s.z_as_relative = false
+	s.z_index = 50
+	var colors := SolarData.get_star_colors(sd.star_type)
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/star.gdshader")
+	mat.set_shader_parameter("star_radius", 0.35)
+	mat.set_shader_parameter("corona_size", 0.14)
+	mat.set_shader_parameter("pixel_count", 96.0)
+	mat.set_shader_parameter("aspect_ratio", 1.0)
+	mat.set_shader_parameter("flicker_speed", 0.35)
+	mat.set_shader_parameter("seed", sd.seed % 99999)
+	mat.set_shader_parameter("color_core", colors["core"])
+	mat.set_shader_parameter("color_surface", colors["surface"])
+	mat.set_shader_parameter("color_corona", colors["corona"])
+	s.material = mat
+	return s
+
+
+## The same planet look as the other views (PlanetOrbitNode's material).
+static func _planet_material(pd: PlanetData) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load(PlanetData.get_shader_path(pd.planet_type))
+	mat.set_shader_parameter("planet_radius", 0.40)
+	mat.set_shader_parameter("pixel_count", 40.0)
+	mat.set_shader_parameter("aspect_ratio", 1.0)
+	mat.set_shader_parameter("seed", pd.seed)
+	mat.set_shader_parameter("terrain_roughness", pd.terrain_roughness)
+	mat.set_shader_parameter("rotation_offset", 0.0)
+	var c := PlanetData.get_colors(pd.planet_type)
+	match PlanetData.get_shader_type(pd.planet_type):
+		PlanetData.ShaderType.ROCKY:
+			mat.set_shader_parameter("sea_level", pd.sea_level)
+			mat.set_shader_parameter("continent_scale", pd.continent_scale)
+			mat.set_shader_parameter("continentality", pd.effective_continentality())
+			mat.set_shader_parameter("has_clouds", 0.0)
+			mat.set_shader_parameter("atmosphere_density", pd.atmosphere_density if pd.has_atmosphere else 0.0)
+			mat.set_shader_parameter("specular_strength", pd.specular_strength)
+			mat.set_shader_parameter("city_lights", 0.0)
+			mat.set_shader_parameter("poi_count", 0)
+			for key in c:
+				mat.set_shader_parameter(key, c[key])
+		PlanetData.ShaderType.GAS:
+			mat.set_shader_parameter("cloud_speed", 0.0)
+			mat.set_shader_parameter("atmosphere_density", pd.atmosphere_density)
+			mat.set_shader_parameter("color_band_a", c.get("color_sand", Vector3(0.72, 0.55, 0.35)))
+			mat.set_shader_parameter("color_band_b", c.get("color_forest", Vector3(0.50, 0.32, 0.18)))
+			mat.set_shader_parameter("color_storm", c.get("color_snow", Vector3(0.88, 0.82, 0.72)))
+			mat.set_shader_parameter("color_atmosphere", c.get("color_atmosphere", Vector3(0.72, 0.55, 0.35)))
+		PlanetData.ShaderType.MOON:
+			mat.set_shader_parameter("color_highland", c.get("color_mountain", Vector3(0.62, 0.60, 0.56)))
+			mat.set_shader_parameter("color_mare", c.get("color_deep_ocean", Vector3(0.22, 0.21, 0.20)))
+			mat.set_shader_parameter("color_rim", c.get("color_snow", Vector3(0.78, 0.76, 0.72)))
+			mat.set_shader_parameter("color_floor", c.get("color_ocean", Vector3(0.16, 0.15, 0.14)))
+		PlanetData.ShaderType.ASTEROID:
+			mat.set_shader_parameter("irregularity", pd.irregularity)
+			mat.set_shader_parameter("elongation", 1.0 + pd.irregularity * 0.8)
+	return mat
+
+
+# ── Camera & projection ──────────────────────────────────────────────────────
+
+## Screen scale: 1080 p reference.
+func _ui() -> float:
+	return maxf(_space.size.y, 1.0) / 1080.0
+
+
+## How much the plane is spread to fill the view at zoom 1.
+func _fit() -> float:
+	return minf((_space.size.x * 0.44) / maxf(_outer_r * _ui(), 1.0), 1.4)
+
+
+## Plane units → px at the current zoom.
+func _scale() -> float:
+	return _zoom * _ui() * _fit()
+
+
+func _center() -> Vector2:
+	return _space.size * 0.5 + Vector2(0, _space.size.y * 0.04)
+
+
+## Plane point → Vector3(local x, local y, depth); depth > 0 = nearer (lower).
+func _project(p: Vector2) -> Vector3:
+	var d := p - _focus
+	var c := cos(_yaw)
+	var s := sin(_yaw)
+	var rx := d.x * c - d.y * s
+	var ry := d.x * s + d.y * c
+	var k := _scale()
+	return Vector3(_center().x + rx * k, _center().y + ry * _tilt * k, ry)
+
+
+func _body_plane(i: int) -> Vector2:
+	var b := _bodies[i]
+	var a: float = float(b["a0"]) + _time * float(b["speed"])
+	if int(b["parent"]) >= 0:
+		a += float(_bodies[int(b["parent"])]["turn"])   # swung by hand (picked planet)
+	if int(b["parent"]) < 0:
+		return Vector2(cos(a), sin(a)) * float(b["r"])
+	var pb := _bodies[int(b["parent"])]
+	# in step with the planet's size on screen, whatever the zoom
+	var mr: float = float(pb["sz"]) * 0.9 + 10.0 + 9.0 * float(_moon_index(i))
+	return _body_plane(int(b["parent"])) + Vector2(cos(a), sin(a)) * mr / _fit()
+
+
+func _moon_index(i: int) -> int:
+	var p := int(_bodies[i]["parent"])
+	var n := 0
+	for k in range(p + 1, i):
+		if int(_bodies[k]["parent"]) == p:
+			n += 1
+	return n
+
+
+func _body_px(i: int) -> float:
+	return float(_bodies[i]["sz"]) * _zoom * _ui()
+
+
+func _moon_alpha() -> float:
+	return smoothstep(MOON_LOD_A, MOON_LOD_B, _zoom)
+
+
+## The zoom at which a world has the size it has in the planet view at `pv_zoom`
+## (PlanetaryView: radius = clamp(0.42 × size, 0.10, 0.48) of the view height).
+func _zoom_for_planet_view(i: int, pv_zoom: float) -> float:
+	var pd: PlanetData = _bodies[i]["pd"]
+	var diam := 2.0 * clampf(0.42 * clampf(pd.planet_size, 0.2, 2.0), 0.10, 0.48) * _space.size.y * pv_zoom
+	return diam / maxf(float(_bodies[i]["sz"]) * _ui(), 1.0)
+
+
+# ── Frame ────────────────────────────────────────────────────────────────────
+
+func _process(delta: float) -> void:
+	if _solar == null:
+		return
+	_time += delta
+	var r := Spring.damp_angle(_yaw, _yaw_v, _yaw_t, CAM_TIME, delta)
+	_yaw = r.x
+	_yaw_v = r.y
+	r = Spring.damp(_tilt, _tilt_v, _tilt_t, CAM_TIME, delta)
+	_tilt = r.x
+	_tilt_v = r.y
+	r = Spring.damp(_zoom, _zoom_v, _zoom_t, CAM_TIME * (1.6 if _entering >= 0 else 1.0), delta)
+	_zoom = r.x
+	_zoom_v = r.y
+	var f := Spring.damp_v2(_focus, _focus_v, _focus_t, CAM_TIME, delta)
+	_focus = f[0]
+	_focus_v = f[1]
+	_place_star()
+	_place_bodies(delta)
+	_place_markers()
+	_back.queue_redraw()
+	_mid.queue_redraw()
+	_front.queue_redraw()
+	if _entering >= 0 and not _leaving and _zoom >= _zoom_t * 0.96:
+		_hand_over(_entering)
+
+
+func _place_star() -> void:
+	var p := _project(Vector2.ZERO)
+	# the light lies in the system's plane: an ellipse squashed by the tilt
+	for l: Node2D in [_halo_near, _halo_far, _light]:
+		l.position = Vector2(p.x, p.y)
+	var k := _scale()
+	_halo_near.scale = Vector2(1.0, _tilt) * (ORBIT_BASE * 1.1 * k / 128.0)
+	_halo_far.scale = Vector2(1.0, _tilt) * (_outer_r * 1.25 * k / 128.0)
+	_light.scale = Vector2(1.0, _tilt) * (_outer_r * 0.9 * k / 128.0)
+	var px := clampf(150.0 * _zoom * _ui(), 40.0, 2400.0)
+	_star.size = Vector2(px, px)
+	_star.position = Vector2(p.x, p.y) - _star.size * 0.5
+	(_star.material as ShaderMaterial).set_shader_parameter("pixel_count", clampf(px * 0.45, 48.0, 220.0))
+
+
+func _place_bodies(delta: float) -> void:
+	var star_p := _project(Vector2.ZERO)
+	var moon_a := _moon_alpha()
+	for i in _bodies.size():
+		var b := _bodies[i]
+		var rect: ColorRect = b["rect"]
+		var is_moon := int(b["parent"]) >= 0
+		var a := 1.0
+		if is_moon:
+			a = moon_a if _selected != i and _entering != i else 1.0
+		rect.visible = a > 0.02
+		if not rect.visible:
+			continue
+		var p := _project(_body_plane(i))
+		var px := _body_px(i)
+		rect.size = Vector2(px, px) / 0.8   # the shader draws the disc at 0.4 of the rect
+		rect.position = Vector2(p.x, p.y) - rect.size * 0.5
+		rect.modulate.a = a
+		var dd := p.z - star_p.z
+		rect.z_index = (60 + mini(40, int(absf(dd) * 0.05))) if dd > 0.0 else (45 - mini(35, int(absf(dd) * 0.05)))
+		var mat: ShaderMaterial = b["mat"]
+		mat.set_shader_parameter("pixel_count", clampf(px * 0.55, 16.0, 150.0))
+		# its own slow turn, plus what a drag flung (fading out)
+		var fl: float = b["fling"]
+		var par := int(b["parent"])
+		var carried: float = float(_bodies[par]["fling"]) if par >= 0 else 0.0   # a moon turns with its flung planet
+		b["spin"] = fposmod(float(b["spin"]) + (float(b["spin_v"]) + fl + carried) * delta, TAU)
+		b["turn"] = float(b["turn"]) + fl * MOON_SWING * delta
+		b["fling"] = fl * exp(-FLING_DECAY * delta) if absf(fl) > 0.001 else 0.0
+		mat.set_shader_parameter("rotation_offset", b["spin"])
+		mat.set_shader_parameter("tilt", b["tilt"])
+		_set_rim(i, mat)
+		var to_star := Vector2(star_p.x - p.x, star_p.y - p.y)
+		# mostly from the front, leaning towards the star: lit faces, a soft terminator
+		var ld := Vector3(to_star.x, to_star.y, maxf(to_star.length() * 1.1, 1.0)).normalized()
+		mat.set_shader_parameter("light_direction", ld)
+
+
+# ── Drawing ──────────────────────────────────────────────────────────────────
+
+func _draw_back() -> void:
+	if _solar == null:
+		return
+	_draw_rings(true, _back)   # the star's glow is _halo_* / _light now
+
+
+func _draw_mid() -> void:
+	_draw_rings(false, _mid)
+
+
+## Orbit rings, split at the star's depth so the near half passes in front of it.
+func _draw_rings(back_half: bool, canvas: Node2D) -> void:
+	if _solar == null:
+		return
+	var sd := _project(Vector2.ZERO).z
+	var acc := UIStyle.color(&"accent")
+	var r_in := ORBIT_BASE * 0.6
+	var r_out := _outer_r * 1.2
+	var r_mid := lerpf(r_in, r_out, 0.55)
+	# HUD-style screen lines (SkillTree look): few, each of its own kind
+	# inner: one hairline
+	_ring(canvas, r_in, Color(acc, 0.16), 1.0, back_half, sd)
+	# middle: a soft wide band with a crisp line on it
+	_ring(canvas, r_mid, Color(acc, 0.05), 7.0, back_half, sd)
+	_ring(canvas, r_mid, Color(acc, 0.30), 1.4, back_half, sd)
+	# between: broken arcs with ticks, like a scale
+	var r_arc := lerpf(r_in, r_mid, 0.5)
+	_ring(canvas, r_arc, Color(acc, 0.22), 2.0, back_half, sd, 0.0,
+		[[0.15, 1.35], [2.0, 2.9], [3.5, 4.9], [5.4, 6.0]])
+	_ticks(canvas, r_arc, r_arc * 1.035, 48, Color(acc, 0.16), back_half, sd)
+	# outer: fine dashes, with four heavy brackets on it
+	_ring(canvas, r_out, Color(acc, 0.16), 1.0, back_half, sd, 0.5)
+	_ring(canvas, r_out, Color(acc, 0.45), 3.0, back_half, sd, 0.0,
+		[[0.70, 0.95], [2.27, 2.52], [3.84, 4.09], [5.41, 5.66]])
+	# the hovered / picked world's own orbit, dashed
+	for idx: int in [_hover, _selected]:
+		if idx < 0:
+			continue
+		var owner_i := idx if int(_bodies[idx]["parent"]) < 0 else int(_bodies[idx]["parent"])
+		var col := RING_SEL_COL if idx == _selected else Color(RING_SEL_COL, 0.6)
+		_ring(canvas, float(_bodies[owner_i]["r"]), col, 1.6, back_half, sd, 0.5)
+
+
+## An orbit-plane circle of radius r. dash > 0: dashed; arcs: only these
+## [from, to] plane angles (radians). Split at the star's depth (back_half).
+func _ring(canvas: Node2D, r: float, col: Color, w: float, back_half: bool, star_depth: float,
+		dash := 0.0, arcs: Array = []) -> void:
+	var n := 180
+	var prev := _project(Vector2(r, 0.0))
+	for k in range(1, n + 1):
+		var a := TAU * float(k) / float(n)
+		var p := _project(Vector2(cos(a), sin(a)) * r)
+		var draw_it: bool = (((p.z + prev.z) * 0.5 - star_depth) < 0.0) == back_half
+		if draw_it and dash > 0.0:
+			draw_it = k % 4 < 2
+		if draw_it and not arcs.is_empty():
+			draw_it = false
+			var am := a - TAU / float(n) * 0.5
+			for arc: Array in arcs:
+				if am >= float(arc[0]) and am <= float(arc[1]):
+					draw_it = true
+		if draw_it:
+			canvas.draw_line(Vector2(prev.x, prev.y), Vector2(p.x, p.y), col, w, true)
+		prev = p
+
+
+## Short radial ticks between r0 and r1, `count` around the circle.
+func _ticks(canvas: Node2D, r0: float, r1: float, count: int, col: Color, back_half: bool, star_depth: float) -> void:
+	for k in count:
+		var a := TAU * float(k) / float(count)
+		var d := Vector2(cos(a), sin(a))
+		var p0 := _project(d * r0)
+		if (p0.z - star_depth < 0.0) != back_half:
+			continue
+		var p1 := _project(d * (r1 if k % 4 == 0 else lerpf(r0, r1, 0.5)))
+		canvas.draw_line(Vector2(p0.x, p0.y), Vector2(p1.x, p1.y), col, 1.0, true)
+
+
+func _draw_front() -> void:
+	if _solar == null:
+		return
+	# marker stems (the markers themselves are UI nodes: _place_markers)
+	for i in _bodies.size():
+		var m: Dictionary = _bodies[i]["marker"]
+		var cell: Control = m["cell"]
+		if not cell.visible:
+			continue
+		var p := _project(_body_plane(i))
+		var top := Vector2(p.x, p.y - _body_px(i) * 0.5 - 3.0)
+		var bottom := cell.position + Vector2(cell.size.x * 0.5, cell.size.y)
+		var lit := i == _hover or i == _selected
+		_front.draw_line(top, bottom, Color(RING_SEL_COL if lit else MARK_COL, 0.6 * cell.modulate.a), 1.0)
+
+
+## Marker icon of a world: the home world, a settled world, the rocket's target.
+func _marker_icon(pd: PlanetData) -> String:
+	if pd.seed == GameState.home_planet_seed:
+		return "city"
+	var pp := GameState.find_planet(pd.seed)
+	if pp != null and pp.is_colonized:
+		return "moon" if pd.planet_type == PlanetData.Type.MOON else "planet"
+	return ""
+
+
+# ── Input ────────────────────────────────────────────────────────────────────
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _solar == null or _leaving:
+		return
+	if event is InputEventMouseMotion:
+		var mm := event as InputEventMouseMotion
+		var lp := _space.get_global_transform().affine_inverse() * mm.global_position
+		if _drag_btn >= 0:
+			_drag_moved += mm.relative.length()
+			if _drag_btn == MOUSE_BUTTON_LEFT and _drag_world and _selected >= 0:
+				_turn_world(_selected, mm.relative, mm.velocity)
+			elif _drag_btn == MOUSE_BUTTON_LEFT:
+				_pan(mm.relative)
+			else:
+				_turn(mm.relative)
+			get_viewport().set_input_as_handled()
+			return
+		var h := _body_at(lp)
+		if h != _hover:
+			_hover = h
+			if h >= 0:
+				AudioManager.play("hover")
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		var lp := _space.get_global_transform().affine_inverse() * mb.global_position
+		match mb.button_index:
+			MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT:
+				if mb.pressed:
+					_drag_btn = mb.button_index
+					_drag_from = lp
+					_drag_moved = 0.0
+					_drag_world = mb.button_index == MOUSE_BUTTON_LEFT and _on_picked(lp)
+					if _drag_world:
+						_bodies[_selected]["fling"] = 0.0   # caught by the hand
+				elif _drag_btn == mb.button_index:
+					_drag_btn = -1
+					if _drag_moved < 6.0 and mb.button_index == MOUSE_BUTTON_LEFT:
+						_click(lp, mb.double_click)
+				get_viewport().set_input_as_handled()
+			MOUSE_BUTTON_WHEEL_UP:
+				if mb.pressed:
+					_wheel_in(lp)
+					get_viewport().set_input_as_handled()
+			MOUSE_BUTTON_WHEEL_DOWN:
+				if mb.pressed:
+					_wheel_out(lp)
+					get_viewport().set_input_as_handled()
+		return
+	# trackpad: pinch zooms (towards the fingers / the hovered world, into a
+	# world at the closest zoom); a two-finger drag turns and tilts like a drag
+	if event is InputEventMagnifyGesture:
+		var mg := event as InputEventMagnifyGesture
+		_pinch(_space.get_global_transform().affine_inverse() * mg.position, mg.factor)
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventPanGesture:
+		var pg := event as InputEventPanGesture
+		if pg.shift_pressed:
+			_turn(pg.delta * 2.0)
+		elif _on_picked(_space.get_global_transform().affine_inverse() * pg.position):
+			_turn_world(_selected, -pg.delta * 6.0, Vector2.ZERO)
+		else:
+			_pan(-pg.delta * 6.0)
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventKey:
+		var ke := event as InputEventKey
+		if ke.pressed and not ke.echo and ke.keycode == KEY_ESCAPE and _selected >= 0:
+			_select(-1)
+			get_viewport().set_input_as_handled()
+
+
+func _body_at(lp: Vector2) -> int:
+	var best := -1
+	var best_d := INF
+	var moon_a := _moon_alpha()
+	for i in _bodies.size():
+		if int(_bodies[i]["parent"]) >= 0 and moon_a < 0.3 and _selected != i:
+			continue
+		var p := _project(_body_plane(i))
+		var rad := maxf(_body_px(i) * 0.5, 8.0) + 4.0
+		var d := Vector2(p.x, p.y).distance_to(lp)
+		if d < rad and d < best_d:
+			best_d = d
+			best = i
+	return best
+
+
+func _click(lp: Vector2, double: bool) -> void:
+	var i := _body_at(lp)
+	if i < 0:
+		if _selected >= 0:
+			_select(-1)
+		return
+	var pd: PlanetData = _bodies[i]["pd"]
+	if GameState.rocket_picking() and GameState.rocket_target_block(pd.seed) == "":
+		_offer_rocket_target(pd)
+		return
+	if double or i == _selected:
+		_begin_enter(i)
+		return
+	_select(i)
+
+
+func _select(i: int) -> void:
+	_selected = i
+	_enter_charge = 0
+	if i < 0:
+		_focus_t = Vector2.ZERO
+		_zoom_t = clampf(_zoom_t, ZOOM_MIN, 1.4)
+	else:
+		AudioManager.play("poi_select")
+		_focus_t = _body_plane(i)
+		# close enough that even a small world shows (~70 px)
+		var want := clampf(70.0 / float(_bodies[i]["sz"]), 1.8 if int(_bodies[i]["parent"]) < 0 else 2.6, ZOOM_MAX)
+		_zoom_t = maxf(_zoom_t, want)
+	_build_panel()
+
+
+func _wheel_in(lp: Vector2) -> void:
+	var target := _hover if _hover >= 0 else _selected
+	if _zoom_t >= ZOOM_MAX - 0.001 and target >= 0:
+		_enter_charge += 1
+		if _enter_charge >= ENTER_CHARGE:
+			_begin_enter(target)
+		return
+	_zoom_to(clampf(_zoom_t * ZOOM_STEP, ZOOM_MIN, ZOOM_MAX), lp)
+
+
+func _wheel_out(lp: Vector2) -> void:
+	_enter_charge = 0
+	if _zoom_t <= ZOOM_MIN + 0.001:
+		if _selected >= 0:
+			_select(-1)
+		return
+	_zoom_to(clampf(_zoom_t / ZOOM_STEP, ZOOM_MIN, ZOOM_MAX), lp)
+
+
+## Moves the system on its plane by a screen delta (the plane follows the hand).
+func _pan(rel: Vector2) -> void:
+	var k := _scale()
+	var dx := rel.x / k
+	var dy := rel.y / (k * _tilt)
+	var c := cos(_yaw)
+	var sn := sin(_yaw)
+	var d := Vector2(dx * c + dy * sn, -dx * sn + dy * c)
+	_focus_t -= d
+	var lim := _outer_r * 1.25
+	if _focus_t.length() > lim:
+		_focus_t = _focus_t.normalized() * lim
+	_focus = _focus_t   # 1:1 with the hand, no lag
+	_focus_v = Vector2.ZERO
+
+
+## Whether a screen point is on the picked world (a little margin round it).
+func _on_picked(lp: Vector2) -> bool:
+	if _selected < 0:
+		return false
+	var p := _project(_body_plane(_selected))
+	return Vector2(p.x, p.y).distance_to(lp) <= maxf(_body_px(_selected) * 0.65, 14.0)
+
+
+## Picked world under the hand: a horizontal drag spins the globe and takes
+## its moons round with it; the release keeps some spin (fling).
+func _turn_world(i: int, rel: Vector2, vel: Vector2) -> void:
+	var b := _bodies[i]
+	var r_px := maxf(_body_px(i) * 0.5, 12.0)
+	# horizontal only; the surface follows the hand (rotation_offset runs the
+	# other way), and the moons go round with it, one with the globe
+	var d_spin := -rel.x / r_px
+	b["spin"] = fposmod(float(b["spin"]) + d_spin, TAU)
+	b["turn"] = float(b["turn"]) + d_spin * MOON_SWING
+	for k in _bodies.size():
+		if int(_bodies[k]["parent"]) == i:
+			_bodies[k]["spin"] = fposmod(float(_bodies[k]["spin"]) + d_spin, TAU)
+	b["fling"] = clampf(-vel.x / r_px, -6.0, 6.0) if vel != Vector2.ZERO else 0.0
+
+
+## Turns (x) and tilts (y) the plane around the screen's centre.
+func _turn(rel: Vector2) -> void:
+	_yaw_t -= rel.x * 0.006
+	_tilt_t = clampf(_tilt_t + rel.y * 0.0025, TILT_MIN, TILT_MAX)
+
+
+## Trackpad pinch: zoom by `factor`; pinching on at the closest zoom over a
+## world goes down into it once it adds up to ENTER_PINCH.
+func _pinch(lp: Vector2, factor: float) -> void:
+	var target := _hover if _hover >= 0 else _selected
+	if factor > 1.0 and _zoom_t >= ZOOM_MAX - 0.001 and target >= 0:
+		_enter_pinch *= factor
+		if _enter_pinch >= ENTER_PINCH:
+			_enter_pinch = 1.0
+			_begin_enter(target)
+		return
+	if factor < 1.0:
+		_enter_pinch = 1.0
+	_zoom_to(clampf(_zoom_t * factor, ZOOM_MIN, ZOOM_MAX), lp)
+
+
+## Zooms keeping one point where it is on screen: the hovered world, else the
+## plane point under the cursor (worked out on the target camera, so quick
+## wheel steps chain up smoothly).
+func _zoom_to(z: float, lp: Vector2) -> void:
+	if is_equal_approx(z, _zoom_t):
+		return
+	var anchor := _body_plane(_hover) if _hover >= 0 else _unproject_at(lp, _focus_t, _zoom_t)
+	_focus_t = anchor - (anchor - _focus_t) * (_zoom_t / z)
+	var lim := _outer_r * 1.25
+	if _focus_t.length() > lim:
+		_focus_t = _focus_t.normalized() * lim
+	_zoom_t = z
+
+
+func _unproject_at(sp: Vector2, focus: Vector2, zoom: float) -> Vector2:
+	var k := zoom * _ui() * _fit()
+	var rx := (sp.x - _center().x) / k
+	var ry := (sp.y - _center().y) / (k * _tilt_t)
+	var c := cos(_yaw_t)
+	var sn := sin(_yaw_t)
+	return focus + Vector2(rx * c + ry * sn, -rx * sn + ry * c)
+
+
+# ── Into / out of a planet view ──────────────────────────────────────────────
+
+func _can_enter(pd: PlanetData) -> bool:
+	if pd.planet_type == PlanetData.Type.MOON:
+		var home := GameState.get_home_planet()
+		if home != null and pd in home.moons and not GameState.can_view_moon():
+			return false
+	return true
+
+
+## Closes in on world i until it has its planet-view size, then hands over.
+func _begin_enter(i: int) -> void:
+	var pd: PlanetData = _bodies[i]["pd"]
+	if not _can_enter(pd):
+		AudioManager.play("error")
+		NewsFeed.show_message("system_locked", _solar.system_name, pd.planet_name, "Not reachable yet.", {"sec": 3.0})
+		return
+	AudioManager.play("click")
+	_selected = i
+	_entering = i
+	_focus_t = _body_plane(i)
+	_zoom_t = _zoom_for_planet_view(i, 0.82)
+
+
+func _hand_over(i: int) -> void:
+	_leaving = true
+	var pd: PlanetData = _bodies[i]["pd"]
+	pd.set_meta("__solar_data", _solar)
+	GameState.set_meta("enter_from_system", true)   # PlanetaryView opens slightly out and zooms in
+	SceneTransition.go_soft(PLANET_SCENE, pd)
+
+
+## Came out of a planet view: start framed on that world at its planet-view size
+## and ease out to the whole system.
+func _arrive_from(pd: PlanetData) -> void:
+	var idx := -1
+	for i in _bodies.size():
+		if (_bodies[i]["pd"] as PlanetData).seed == pd.seed:
+			idx = i
+	if idx < 0:
+		return
+	# start on the world we left, at the size the planet view let go of it, and
+	# ease out only to its neighbourhood: picked, framed in the middle
+	_focus = _body_plane(idx)
+	_focus_t = _focus
+	_zoom = _zoom_for_planet_view(idx, float(pd.get_meta("__pv_zoom", 0.62)))
+	_zoom_v = 0.0
+	_zoom_t = ARRIVE_ZOOM if int(_bodies[idx]["parent"]) < 0 else ARRIVE_ZOOM_MOON
+	_selected = idx
+	_build_panel()
+
+
+func _offer_rocket_target(pd: PlanetData) -> void:
+	var kind: String = String(PlanetData.Type.keys()[pd.planet_type]).capitalize()
+	var p := ModalPopup.open(self, "Send the Rocket", "rocket", "Send the final rocket to %s?" % pd.planet_name)
+	p.add_row("World", kind)
+	p.add_row("Flight", "%d min" % int(round(GameState.ROCKET_FLIGHT_SEC / 60.0)))
+	p.add_row("On arrival", "Civilization Type 0 complete", InfoRow.Tone.GOOD)
+	var ok := p.confirm_button()
+	ok.label_text = "SEND ROCKET"
+	ok.icon_name = "rocket"
+	ok.variant = IconButton.Variant.POSITIVE
+	ok.pressed.connect(func() -> void:
+		p.close()
+		AudioManager.play("click" if GameState.set_rocket_target(pd.seed) else "error"))
+
+
+# ── Side panel ───────────────────────────────────────────────────────────────
+
+func _build_panel() -> void:
+	for b: Dictionary in _bodies:
+		_style_marker(b["marker"], b["pd"])
+	if GameState.showcase_mode or _solar == null:
+		return
+	var content := _panel.get_node("Layout/PanelContent")
+	for c in content.get_children():
+		if c.name in ["SystemHero", "SystemPanel"]:
+			c.name = "__freeing"
+			c.queue_free()
+	var lv := StarSystemProgress.level()
+	var hero := HeroHeader.create("Star System - Level %d" % lv, _solar.system_name)
+	hero.name = "SystemHero"
+	content.add_child(hero)
+
+	var root := VBoxContainer.new()
+	root.name = "SystemPanel"
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 8)
+	content.add_child(root)
+
+	var colonies_row := _info_line("Colonies", "")
+	root.add_child(colonies_row)
+	var plat_row := _info_line("Platforms", "")
+	root.add_child(plat_row)
+	root.add_child(_info_line("Star", SolarData.get_star_type_name(_solar.star_type)))
+
+	root.add_child(HSeparator.new())
+	var listed: Array[int] = []
+	for i in _bodies.size():
+		if _listed(_bodies[i]["pd"]):
+			listed.append(i)
+	root.add_child(SectionHeader.create("WORLDS", str(listed.size())))
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 8)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	for i: int in listed:
+		list.add_child(_world_row(i))
+
+	# level up, like a planet's
+	root.add_child(HSeparator.new())
+	var up := IconButton.create("UPGRADE SYSTEM", "upgrade", IconButton.Variant.POSITIVE)
+	up.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ProgressFill.attach(up, UIStyle.color(&"neutral_stroke"),
+		func() -> float: return StarSystemProgress.upgrade_progress() if StarSystemProgress.is_upgrading() else -1.0, true)
+	up.mouse_entered.connect(func() -> void:
+		var cur := StarSystemProgress.level()
+		var tip := "Level %d → %d\n\nColonies %d → %d\nPlatforms %d → %d" % [cur, cur + 1,
+			StarSystemProgress.colony_capacity(cur), StarSystemProgress.colony_capacity(cur + 1),
+			StarSystemProgress.platform_capacity(cur), StarSystemProgress.platform_capacity(cur + 1)]
+		var blk := StarSystemProgress.upgrade_block()
+		if blk != "" and not StarSystemProgress.is_upgrading():
+			tip += "\n\n" + blk
+		TooltipManager.show_tip("System level up", tip))
+	up.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+	up.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		if StarSystemProgress.start_upgrade():
+			AudioManager.play("click")
+		else:
+			AudioManager.play("error"))
+	root.add_child(up)
+
+	var shown_lv := lv
+	var refresh := func() -> void:
+		if not is_instance_valid(up):
+			return
+		var cur := StarSystemProgress.level()
+		if cur != shown_lv:
+			_build_panel()
+			return
+		_set_info(colonies_row, "%d / %d" % [StarSystemProgress.colonies_used(), StarSystemProgress.colony_capacity()])
+		_set_info(plat_row, "0 / %d" % StarSystemProgress.platform_capacity())
+		if StarSystemProgress.is_upgrading():
+			up.label_text = "LEVELLING UP…"
+			up.counter = "%s" % _fmt_time(StarSystemProgress.upgrade_left())
+			up.counter_items = PackedStringArray()
+			up.disabled = false
+		else:
+			up.label_text = "UPGRADE SYSTEM  LV %d → %d" % [cur, cur + 1]
+			up.counter = ""
+			up.counter_items = _cost_items(StarSystemProgress.upgrade_cost())
+			up.disabled = StarSystemProgress.upgrade_block() != ""
+	refresh.call()
+	var tm := Timer.new()
+	tm.wait_time = 0.25
+	tm.autostart = true
+	tm.timeout.connect(refresh)
+	root.add_child(tm)
+
+
+## Worlds the panel lists: the settled ones and those a rover reached (the
+## rest are on the map only). Rovers are on another branch: asked by name.
+func _listed(pd: PlanetData) -> bool:
+	if pd.seed == GameState.home_planet_seed:
+		return true
+	var pp := GameState.find_planet(pd.seed)
+	if pp != null and pp.is_colonized:
+		return true
+	var rm := get_node_or_null("/root/RoverManager")
+	if rm != null and rm.has_method("rovers_on") and not (rm.call("rovers_on", pd.seed) as Array).is_empty():
+		return true
+	return false
+
+
+## One world of the system as a list row: click picks it (and follows it on the
+## map); clicking the picked one again goes down into it.
+func _world_row(i: int) -> Control:
+	var b := _bodies[i]
+	var pd: PlanetData = b["pd"]
+	var is_moon := int(b["parent"]) >= 0
+	var pp := GameState.find_planet(pd.seed)
+	var status := "Uncharted"
+	if pd.seed == GameState.home_planet_seed:
+		status = "Home world  //  Level %d" % (pp.level if pp != null else 1)
+	elif pp != null and pp.is_colonized:
+		status = "Settled  //  Level %d" % pp.level
+	var kind: String = String(PlanetData.Type.keys()[pd.planet_type]).capitalize().replace("_", " ")
+	var row := ListItem.create(("   " if is_moon else "") + pd.planet_name.to_upper(),
+		"moon" if is_moon else "planet", kind.to_upper(), PackedStringArray(), status)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.selected = i == _selected
+	row.icon_color = UIStyle.color(&"accent") if pp != null and pp.is_colonized else Color(0.62, 0.70, 0.82)
+	row.mouse_entered.connect(func() -> void:
+		_hover = i
+		TooltipManager.show_tip(pd.planet_name,
+			"Click to pick it on the map; click again to go down to it."))
+	row.mouse_exited.connect(func() -> void:
+		if _hover == i:
+			_hover = -1
+		TooltipManager.hide_tip())
+	row.pressed.connect(func() -> void:
+		TooltipManager.hide_tip()
+		if GameState.rocket_picking() and GameState.rocket_target_block(pd.seed) == "":
+			_offer_rocket_target(pd)
+		elif _selected == i:
+			_begin_enter(i)
+		else:
+			_select(i))
+	return row
+
+
+func _info_line(key: String, value: String) -> Control:
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var k := Label.new()
+	k.text = key
+	k.theme_type_variation = &"SubLabel"
+	var v := MarqueeLabel.create(value)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(k)
+	row.add_child(v)
+	return row
+
+
+func _set_info(row: Control, text: String) -> void:
+	if row == null or not is_instance_valid(row) or row.get_child_count() < 2:
+		return
+	var v := row.get_child(1)
+	if v is MarqueeLabel:
+		(v as MarqueeLabel).set_text(text)
+
+
+static func _cost_items(cost: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	if float(cost.get(Economy.CREDITS, 0.0)) > 0.0:
+		out.append("credits:" + HUDManager.fmt_credits(float(cost[Economy.CREDITS])))
+	for id: String in cost:
+		if id != Economy.CREDITS:
+			out.append("%s:%s" % [id, Economy.fmt(float(cost[id]))])
+	return out
+
+
+static func _fmt_time(sec: float) -> String:
+	var s := int(ceil(sec))
+	return "%d:%02d" % [s / 60, s % 60]

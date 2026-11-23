@@ -10,7 +10,9 @@
 extends CanvasLayer
 
 const GALAXY_SCENE := "res://scenes/galaxy/GalaxyView.tscn"
-const SOLAR_SCENE  := "res://scenes/solar/SolarView.tscn"
+## The star system layer is the Star System view now (Mechanic-Test/Star-Map);
+## SolarView stays in the project, out of the flow.
+const SOLAR_SCENE  := "res://scenes/starsystem/StarSystemView.tscn"
 const PLANET_SCENE := "res://scenes/planetary/PlanetaryView.tscn"
 const MAX_HISTORY  := 50
 const APPLY_TIMEOUT_MS := 4000

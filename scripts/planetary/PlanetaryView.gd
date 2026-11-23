@@ -285,6 +285,14 @@ func _ready() -> void:
 	GameState.light_last_unix = now
 
 	load_planet(planet_to_load)
+	if GameState.has_meta("enter_from_system"):
+		# came down from the Star System view: start a little out (the size the
+		# world had there) and zoom in, under the melting still
+		GameState.remove_meta("enter_from_system")
+		_zoom = 0.82
+		_zoom_vel = 0.0
+		_zoom_target = ZOOM_MIN
+		_apply_zoom()
 	if _awaiting_capital(current_data):
 		_hold_ui()   # before the first frame: the fade-in shows the planet alone
 	if GameState.showcase_mode:
@@ -1079,15 +1087,37 @@ func _update_tutorial_highlight() -> void:
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-## Leaves the planet view for the star system (the Local System view is gone —
-## a body's moons show in the corner when zoomed out). Needs the system unlocked.
+## Leaves the planet view for the Star System view (zooming out past the
+## farthest zoom, or the old "solar view" command): a soft switch, the Star
+## System opening framed on this world (StarSystemView._arrive_from).
 func _go_back() -> void:
-	if not GameState.can_view_solar():
+	if not StarSystemProgress.can_view() or current_data == null or _leaving_view:
 		return
+	_leaving_view = true
 	AudioManager.set_activity(false, false)
 	_save_light_angle()
 	var sd := _system_solar if _system_solar != null else GameState.get_home_solar()
-	SceneTransition.go("res://scenes/solar/SolarView.tscn", sd)
+	current_data.set_meta("__solar_data", sd)
+	# the globe keeps shrinking on its own spring past the farthest zoom, then
+	# the Star System takes over at that very size (StarSystemView._arrive_from)
+	_zoom_target = SYSTEM_EXIT_ZOOM
+	await get_tree().create_timer(SYSTEM_EXIT_SEC).timeout
+	current_data.set_meta("__pv_zoom", _zoom)
+	SceneTransition.go_soft(STAR_SYSTEM_SCENE, current_data)
+
+## How far the globe shrinks, and for how long, before the Star System view opens.
+const SYSTEM_EXIT_ZOOM := 0.32
+const SYSTEM_EXIT_SEC := 0.35
+var _leaving_view := false
+
+const STAR_SYSTEM_SCENE := "res://scenes/starsystem/StarSystemView.tscn"
+## Wheel steps out at the farthest zoom before the Star System view opens.
+const SYSTEM_EXIT_CHARGE := 3
+var _system_exit_charge := 0
+## Trackpad: how far a pinch-out at the farthest zoom has gone (product of the
+## gesture factors); at SYSTEM_EXIT_PINCH the Star System opens.
+const SYSTEM_EXIT_PINCH := 0.7
+var _system_exit_pinch := 1.0
 
 ## A district or building of `data` is under construction.
 func _is_constructing(data: PlanetData) -> bool:
@@ -1181,6 +1211,9 @@ func _try_force_buy() -> bool:
 	return true
 
 func _input(event: InputEvent) -> void:
+	if _leaving_view:   # zooming out to the Star System: hands off
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventJoypadButton and PadScheme.chord_held:
 		return
 	if event is InputEventMouseMotion:
@@ -1401,16 +1434,39 @@ func _input(event: InputEvent) -> void:
 		# for now — it will be bound to another control.
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
 			if _is_over_planet_area(mb.global_position):
-				_set_zoom_target(_zoom_target / ZOOM_STEP, mb.global_position)
+				# already at the farthest zoom: a few more steps go up to the Star System
+				var floor_z := ZOOM_SYSTEM if _system_zoom_ok() else ZOOM_MIN
+				if _zoom_target <= floor_z + 0.001 and StarSystemProgress.can_view() \
+						and _placing_def == null and not GameState.showcase_mode:
+					_system_exit_charge += 1
+					if _system_exit_charge >= SYSTEM_EXIT_CHARGE:
+						_system_exit_charge = 0
+						_go_back()
+				else:
+					_system_exit_charge = 0
+					_set_zoom_target(_zoom_target / ZOOM_STEP, mb.global_position)
 				get_viewport().set_input_as_handled()
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
+			_system_exit_charge = 0
 			if _is_over_planet_area(mb.global_position):
 				_set_zoom_target(_zoom_target * ZOOM_STEP, mb.global_position)
 				get_viewport().set_input_as_handled()
 	elif event is InputEventMagnifyGesture:
 		var mg := event as InputEventMagnifyGesture
 		if _is_over_planet_area(mg.position):
-			_set_zoom_target(_zoom_target * mg.factor, mg.position)
+			# trackpad pinch: like the wheel, pinching out on at the farthest zoom
+			# goes up to the Star System once it adds up to SYSTEM_EXIT_PINCH
+			var floor_z := ZOOM_SYSTEM if _system_zoom_ok() else ZOOM_MIN
+			if mg.factor < 1.0 and _zoom_target <= floor_z + 0.001 and StarSystemProgress.can_view() \
+					and _placing_def == null and not GameState.showcase_mode:
+				_system_exit_pinch *= mg.factor
+				if _system_exit_pinch <= SYSTEM_EXIT_PINCH:
+					_system_exit_pinch = 1.0
+					_go_back()
+			else:
+				if mg.factor > 1.0:
+					_system_exit_pinch = 1.0
+				_set_zoom_target(_zoom_target * mg.factor, mg.position)
 			get_viewport().set_input_as_handled()
 	elif event is InputEventPanGesture:
 		# 2-finger drag moves the globe like a mouse drag: x spins, y tilts.

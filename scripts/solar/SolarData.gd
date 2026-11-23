@@ -40,7 +40,7 @@ static func from_seed(s: int, ensure_gas_giant: bool = false) -> SolarData:
 
 	data.system_name = _gen_name(rng)
 
-	var count := rng.randi_range(3, 6)
+	var count := rng.randi_range(9, 10)   # a full system (Star System view, Mechanic-Test/Star-Map)
 	for i in count:
 		var pseed: int = (s * 31 + i * 1337 + 7) % 99999
 		var pd    := PlanetData.from_seed_no_minor(pseed)
