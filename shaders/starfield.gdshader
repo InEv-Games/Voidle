@@ -61,7 +61,12 @@ float star_layer(vec2 px, float cell, float seed, float twinkle_amt) {
 }
 
 void fragment() {
+	// each layer slides by its own share of `offset` (Skybox): the far stars
+	// least, the near ones most — the sky turns with the camera, with depth.
+	// offset 0 (the planet view): all three line up as before.
 	vec2 px = floor((FRAGCOORD.xy + offset) / pixel);
+	vec2 px_far = floor((FRAGCOORD.xy + offset * 0.55) / pixel);
+	vec2 px_mid = floor((FRAGCOORD.xy + offset * 0.78) / pixel);
 	vec3 col = base_color.rgb;
 	// faint nebula: two soft colour clouds
 	vec2 uv = (FRAGCOORD.xy + offset * 0.3) / nebula_scale;
@@ -70,8 +75,8 @@ void fragment() {
 	col += vec3(0.20, 0.10, 0.35) * smoothstep(0.55, 0.85, n1) * nebula;
 	col += vec3(0.05, 0.18, 0.30) * smoothstep(0.55, 0.85, n2) * nebula;
 	// three layers: far (many, dim), mid, near (few, brighter, some twinkle)
-	float s = star_layer(px, 9.0, 11.0, 0.0) * 0.45
-		+ star_layer(px, 17.0, 37.0, 0.25) * 0.75
+	float s = star_layer(px_far, 9.0, 11.0, 0.0) * 0.45
+		+ star_layer(px_mid, 17.0, 37.0, 0.25) * 0.75
 		+ star_layer(px, 31.0, 73.0, 0.55);
 	vec3 tint = mix(vec3(0.75, 0.85, 1.0), vec3(1.0, 0.92, 0.80), hash(px * 0.01));
 	col += tint * s * brightness;

@@ -381,6 +381,7 @@ func _process(delta: float) -> void:
 	_focus = f[0]
 	_focus_v = f[1]
 	_focus_h = _h(_focus)
+	Skybox.follow(_sky, _yaw, _tilt, _focus.rotated(_yaw) * _ui() * 0.03, _ui())   # the sky turns with the camera
 	_place_glow()
 	_place_labels()
 	_back.queue_redraw()

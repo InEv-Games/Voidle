@@ -633,12 +633,8 @@ func _place_stars() -> void:
 func _sky_follow() -> void:
 	if _sky.is_empty():
 		return
-	var off := _focus.rotated(_yaw) * _ui() * 0.08
-	if off.distance_to(_sky_off) < 0.5:
-		return
-	_sky_off = off
-	(_sky["mat"] as ShaderMaterial).set_shader_parameter("offset", off)
-	(_sky["vp"] as SubViewport).render_target_update_mode = SubViewport.UPDATE_ONCE
+	# a skybox: it turns and tilts with the camera, drifting a little with the focus
+	Skybox.follow(_sky, _yaw, _tilt, _focus.rotated(_yaw) * _ui() * 0.08, _ui())
 
 
 # ── Drawing ──────────────────────────────────────────────────────────────────

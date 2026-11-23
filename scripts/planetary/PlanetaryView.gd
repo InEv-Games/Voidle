@@ -186,7 +186,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	if has_node("Background"):
 		get_node("Background").mouse_filter = Control.MOUSE_FILTER_IGNORE
-		Starfield.apply(get_node("Background") as ColorRect)
+		_sky = Starfield.apply(get_node("Background") as ColorRect)
 	if planet_renderer:
 		planet_renderer.mouse_filter = Control.MOUSE_FILTER_PASS
 		if planet_renderer.get_parent() is Control:
@@ -5478,9 +5478,26 @@ func _mount_orbit_toggle() -> void:
 
 var _last_hud_h := -1.0
 
+## The sky turns with the globe like the map views' (Skybox): the globe's turn
+## counted on without wrapping (rotation_offset wraps at a full turn, which
+## would make the sky jump), and its tilt.
+var _sky: Dictionary = {}
+var _sky_yaw := 0.0
+var _sky_rot_last := INF
+
+func _sky_follow() -> void:
+	var rot: float = planet_renderer.get_rotation_offset()   # (planet_renderer is typed ColorRect)
+	if _sky_rot_last != INF:
+		_sky_yaw += wrapf(rot - _sky_rot_last, -PI, PI)
+	_sky_rot_last = rot
+	var tilt: float = planet_renderer.tilt
+	Skybox.follow(_sky, _sky_yaw, 0.45 + tilt * 0.5, Vector2.ZERO,
+		maxf(get_viewport_rect().size.y, 1.0) / 1080.0)
+
 func _process(delta: float) -> void:
 	# drag easing / fling first, so every layer this frame sees the same globe
 	planet_renderer.tick_motion(delta)
+	_sky_follow()
 	_place_objectives()
 	if not _build_tip_ctx.is_empty():
 		_show_build_row_tip()   # Shift / Ctrl change how many a click buys

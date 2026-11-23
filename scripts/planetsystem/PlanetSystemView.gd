@@ -260,6 +260,7 @@ func _process(delta: float) -> void:
 	var f := Spring.damp_v2(_focus, _focus_v, _focus_t, CAM_TIME, delta)
 	_focus = f[0]
 	_focus_v = f[1]
+	Skybox.follow(_sky, _yaw, _tilt, Vector2.ZERO, _ui())   # the sky turns with the camera
 	_place_bodies(delta)
 	for fl: Dictionary in _flights:
 		fl["t"] = float(fl["t"]) + delta
@@ -289,7 +290,10 @@ func _place_bodies(delta: float) -> void:
 		var mat: ShaderMaterial = b["mat"]
 		mat.set_shader_parameter("pixel_count", clampf(px * 0.55, 16.0, 150.0))
 		b["spin"] = fposmod(float(b["spin"]) + 0.08 * delta, TAU)
-		mat.set_shader_parameter("rotation_offset", b["spin"])
+		# turning the view turns the globes with it: the camera goes round them,
+		# so another side of each faces it (+yaw moves the near side the way the
+		# moons in front move)
+		mat.set_shader_parameter("rotation_offset", fposmod(float(b["spin"]) + _yaw, TAU))
 		# lit from where the sun really is (as the Star System lights them)
 		var sp := _project(_plane(i) + _sun_dir * 5000.0)
 		var to_sun := Vector2(sp.x - p.x, sp.y - p.y)
