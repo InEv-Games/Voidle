@@ -86,3 +86,189 @@ static func _place(seed_val: int) -> Dictionary:
 			if (pd.moons[j] as PlanetData).seed == seed_val:
 				return {"planet": pd.seed, "pos": Vector2.from_angle(moon_angle(pd.seed, j)) * (1.0 + float(j))}
 	return {}
+
+
+# ── Leaving and reaching a body (any flight that leaves the view's body) ─────
+# A ship leaves its parking orbit on an escape hyperbola: its burn point (the
+# near point) is where it was circling when it fired, the curve lies in that
+# orbit's own plane and opens outward as it climbs, fast low down and slow far
+# out (Kepler, hyperbolic). Coming in it is the same curve backwards, ending
+# on the orbit it is captured into (arrival()). The views draw these legs and
+# fade them out with height: many ships together look like a fountain.
+
+## Eccentricity of the escape / approach hyperbolas.
+const ESCAPE_E := 1.6
+## Share of a flight spent on each of the two legs (leaving, arriving).
+const ESCAPE_U := 0.22
+## Height (body radii) a leg reaches at its far end, where the views have faded it.
+const ESCAPE_R := 6.0
+
+
+## Where a body is on its star system's plane (Star System units): a moon at
+## its planet, a detail stand-in at its cloud. ZERO when unknown.
+static func system_pos(seed_val: int) -> Vector2:
+	var sd := GameState.get_home_solar()
+	if sd == null:
+		return Vector2.ZERO
+	var planet_pos: Array[Vector2] = []
+	for i in sd.planets.size():
+		planet_pos.append(Vector2.from_angle(fposmod(float(sd.seed % 628) * 0.01 + GOLDEN * float(i), TAU))
+			* (SYS_ORBIT_BASE + SYS_ORBIT_STEP * float(i)))
+	for i in sd.planets.size():
+		var pd: PlanetData = sd.planets[i]
+		if pd.seed == seed_val:
+			return planet_pos[i]
+		for m: PlanetData in pd.moons:
+			if m.seed == seed_val:
+				return planet_pos[i]
+	if is_detail_seed(seed_val):
+		var key := sd.seed
+		if not _details_cache.has(key):
+			_details_cache[key] = SystemDetails.generate(sd, planet_pos, SYS_ORBIT_BASE, SYS_ORBIT_STEP)
+		var dets: Array = _details_cache[key]
+		for f in dets.size():
+			if detail_seed(sd.seed, f) == seed_val:
+				return dets[f]["center"]
+	return Vector2.ZERO
+
+## StarSystemView's ORBIT_BASE / ORBIT_STEP (planet i circles at BASE + STEP·i).
+const SYS_ORBIT_BASE := 210.0
+const SYS_ORBIT_STEP := 115.0
+static var _details_cache := {}
+
+
+## The way a ship between two planet systems is heading, on the plane, as it
+## leaves `from_seed` (at_end false) or reaches `to_seed` (true): round the star
+## the way the worlds go (as the Star System draws the lane), leaning out or
+## in towards the other's distance.
+static func heading(from_seed: int, to_seed: int, at_end: bool) -> Vector2:
+	var pa := system_pos(from_seed)
+	var pb := system_pos(to_seed)
+	var here := pb if at_end else pa
+	if here.length() < 0.001:
+		return Vector2.RIGHT
+	var lean := clampf((pb.length() - pa.length()) / maxf(here.length(), 1.0), -1.0, 1.0) * 0.6
+	return (here.normalized().rotated(PI * 0.5) + here.normalized() * lean).normalized()
+
+
+## The escape leg of a ship leaving its body now: { peri, inc, node, sense, rp }.
+static func departure_leg(ship: ShipData) -> Dictionary:
+	return {"peri": ship.orbit_angle, "inc": ship.orbit_inclination, "node": ship.orbit_node,
+		"sense": 1.0 if ship.orbit_speed >= 0.0 else -1.0, "rp": maxf(ship.orbit_radius, 1.02), "inbound": false}
+
+
+## The approach leg of a flying ship, ending on its arrival() orbit, or {}.
+static func arrival_leg(ship: ShipData) -> Dictionary:
+	var arr := arrival(ship)
+	if arr.is_empty():
+		return {}
+	return {"peri": float(arr["angle"]), "inc": float(arr["inc"]), "node": float(arr["node"]),
+		"sense": float(arr["spin"]), "rp": maxf(float(arr["radius"]), 1.02), "inbound": true}
+
+
+## A point of a leg at s (0..1 of the leg's time), in the body's frame (body
+## radii, ShipData.orbit_point's axes): Vector3, and its height in .length().
+static func leg_point(leg: Dictionary, s: float) -> Vector3:
+	var e := ESCAPE_E
+	var rp: float = leg["rp"]
+	var a := rp / (e - 1.0)
+	var r_end := maxf(ESCAPE_R, rp * 1.5)
+	var h_end := acosh((r_end / a + 1.0) / e)
+	var m_end := e * sinh(h_end) - h_end
+	# hyperbolic Kepler: e·sinh H − H = M, M even in time
+	var m := clampf(s, 0.0, 1.0) * m_end
+	if leg["inbound"]:
+		m = -(1.0 - clampf(s, 0.0, 1.0)) * m_end
+	var h := asinh(m / e)
+	for it in 8:
+		h -= (e * sinh(h) - h - m) / (e * cosh(h) - 1.0)
+	var nu := 2.0 * atan(sqrt((e + 1.0) / (e - 1.0)) * tanh(h * 0.5))
+	var r := a * (e * cosh(h) - 1.0)
+	return ShipData.orbit_point(r, leg["inc"], leg["node"], float(leg["peri"]) + float(leg["sense"]) * nu)
+
+
+## Which leg a flight is on and how far: { leg ("out" / "in" / ""), s }.
+static func leg_of(ship: ShipData) -> Dictionary:
+	var u := clampf(ship.travel_progress, 0.0, 1.0)
+	if u < ESCAPE_U:
+		return {"leg": "out", "s": u / ESCAPE_U}
+	if u > 1.0 - ESCAPE_U:
+		return {"leg": "in", "s": (u - (1.0 - ESCAPE_U)) / ESCAPE_U}
+	return {"leg": "", "s": 0.0}
+
+
+## The orbit a flying ship ends on at its destination (ShipManager applies it
+## on arrival, the views end the approach leg on it): { angle, inc, node, spin,
+## radius }. Inside one planet system: capture() (it carries on from its
+## transfer). Otherwise it keeps its orbit's tilt and height, and arrives at
+## the near point of a hyperbola coming in from the way it was heading. {} for
+## the lander (its own flow) and ships not flying.
+static func arrival(ship: ShipData) -> Dictionary:
+	if ship.dest_seed < 0 or ship.ship_type == "lander":
+		return {}
+	var sense := 1.0 if ship.orbit_speed >= 0.0 else -1.0
+	var cap := capture(ship.orbit_seed, ship.dest_seed, sense, transfer_inc(ship.ship_id))
+	if not cap.is_empty():
+		cap["radius"] = float(cap["radius"]) if float(cap["radius"]) > 0.0 else ship.orbit_radius
+		return cap
+	# came in from where it was heading away from; the near point lies ν∞ on
+	# from that direction, the way the orbit runs
+	var from_dir := -_flight_heading(ship.orbit_seed, ship.dest_seed, true)
+	var peri := _angle_facing(ship.orbit_inclination, ship.orbit_node, from_dir.rotated(sense * _nu_inf()))
+	return {"angle": peri, "inc": ship.orbit_inclination, "node": ship.orbit_node, "spin": sense,
+		"radius": ship.orbit_radius}
+
+
+## Where a ship should be on its orbit to burn for `to_seed` (the near point of
+## its escape, ν∞ back from the way it must head off): plane direction.
+static func burn_dir(ship: ShipData, to_seed: int) -> Vector2:
+	var sense := 1.0 if ship.orbit_speed >= 0.0 else -1.0
+	return _flight_heading(ship.orbit_seed, to_seed, false).rotated(-sense * _nu_inf())
+
+
+## The leaving / arriving heading of a flight on the body's plane: between two
+## planet systems round the star (heading()); inside one, along the transfer
+## (away from the other body: a Hohmann burn on the far side).
+static func _flight_heading(from_seed: int, to_seed: int, at_end: bool) -> Vector2:
+	var d := dir_between(from_seed, to_seed)
+	if d != Vector2.ZERO:
+		return d
+	return heading(from_seed, to_seed, at_end)
+
+
+static func _nu_inf() -> float:
+	return acos(-1.0 / ESCAPE_E)
+
+
+## The angle on an orbit (tilt inc, node) whose point, seen on the plane,
+## points most nearly along `want`.
+static func _angle_facing(inc: float, node: float, want: Vector2) -> float:
+	var best := 0.0
+	var best_d := -INF
+	for k in 72:
+		var a := TAU * float(k) / 72.0
+		var v := ShipData.orbit_point(1.0, inc, node, a)
+		var p := Vector2(v.x, v.z)
+		if p.length() < 0.05:
+			continue
+		var d := p.normalized().dot(want)
+		if d > best_d:
+			best_d = d
+			best = a
+	return best
+
+
+## The bodies of one planet system (the planet and its moons), or [seed].
+static func family(seed_val: int) -> Array[int]:
+	var out: Array[int] = []
+	var pl := _place(seed_val)
+	var sd := GameState.get_home_solar()
+	if pl.is_empty() or sd == null:
+		out.append(seed_val)
+		return out
+	for pd: PlanetData in sd.planets:
+		if pd.seed == int(pl["planet"]):
+			out.append(pd.seed)
+			for m: PlanetData in pd.moons:
+				out.append(m.seed)
+	return out

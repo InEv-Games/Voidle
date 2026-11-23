@@ -280,6 +280,8 @@ func _place_panel_toggle() -> void:
 # ── Building the system ──────────────────────────────────────────────────────
 
 func _load(sd: SolarData) -> void:
+	_pc_size = Vector2.INF   # _project's cache: the plane's fit changes with the system
+	_route_cache.clear()
 	_solar = sd
 	for b: Dictionary in _bodies:
 		(b["rect"] as Node).queue_free()
@@ -533,9 +535,12 @@ func _draw_details(back_half: bool, canvas: Node2D, star_depth: float) -> void:
 		elif lit and not back_half:
 			# a territory-like outline that follows the cloud's own shape
 			var pts := _nebula_contour(d, 8.0)
+			var segs := PackedVector2Array()
 			for e in range(0, pts.size() - 1):
 				if e % 3 != 2:   # dashes
-					canvas.draw_line(pts[e], pts[e + 1], col_ol, 1.6, true)
+					segs.append(pts[e])
+					segs.append(pts[e + 1])
+			canvas.draw_multiline(segs, col_ol, 1.6)
 
 
 ## How far a puff visibly reaches, as a share of its sprite's radius (the
@@ -845,13 +850,39 @@ func _center() -> Vector2:
 
 ## Plane point → Vector3(local x, local y, depth); depth > 0 = nearer (lower).
 func _project(p: Vector2) -> Vector3:
-	var d := p - _focus
-	var c := cos(_yaw)
-	var s := sin(_yaw)
-	var rx := d.x * c - d.y * s
-	var ry := d.x * s + d.y * c
-	var k := _scale()
-	return Vector3(_center().x + rx * k, _center().y + ry * _tilt * k, ry)
+	if _pc_yaw != _yaw or _pc_tilt != _tilt or _pc_zoom != _zoom or _pc_focus != _focus or _pc_size != _space.size:
+		_proj_refresh()
+	var dx := p.x - _focus.x
+	var dy := p.y - _focus.y
+	var rx := dx * _pc_c - dy * _pc_s
+	var ry := dx * _pc_s + dy * _pc_c
+	return Vector3(_pc_center.x + rx * _pc_k, _pc_center.y + ry * _pc_kt, ry)
+
+
+# _project's camera constants (thousands of points a frame go through it):
+# worked out again only when the camera or the view's size changes
+var _pc_yaw := NAN
+var _pc_tilt := NAN
+var _pc_zoom := NAN
+var _pc_focus := Vector2.INF
+var _pc_size := Vector2.INF
+var _pc_c := 1.0
+var _pc_s := 0.0
+var _pc_k := 1.0
+var _pc_kt := 1.0
+var _pc_center := Vector2.ZERO
+
+func _proj_refresh() -> void:
+	_pc_yaw = _yaw
+	_pc_tilt = _tilt
+	_pc_zoom = _zoom
+	_pc_focus = _focus
+	_pc_size = _space.size
+	_pc_c = cos(_yaw)
+	_pc_s = sin(_yaw)
+	_pc_k = _scale()
+	_pc_kt = _pc_k * _tilt
+	_pc_center = _center()
 
 
 func _body_plane(i: int) -> Vector2:
@@ -930,6 +961,8 @@ func _process(delta: float) -> void:
 	_place_markers()
 	_place_details()
 	_sky_follow()
+	_places = _ship_places()
+	_build_route_segs()
 	_back.queue_redraw()
 	_mid.queue_redraw()
 	_front.queue_redraw()
@@ -1030,9 +1063,10 @@ func _place_bodies(delta: float) -> void:
 func _ship_places() -> Dictionary:
 	var out := {}
 	for i in _bodies.size():
-		if int(_bodies[i]["parent"]) >= 0:
-			continue
-		out[(_bodies[i]["pd"] as PlanetData).seed] = {"pos": _body_plane(i), "r": _body_px(i) * 0.5 / maxf(_scale(), 0.001), "detail": -1}
+		var owner_i := int(_bodies[i]["parent"])
+		# a moon's ships fly from / to its planet's place (moons are a speck here)
+		var at := i if owner_i < 0 else owner_i
+		out[(_bodies[i]["pd"] as PlanetData).seed] = {"pos": _body_plane(at), "r": _body_px(at) * 0.5 / maxf(_scale(), 0.001), "detail": -1}
 	for f in _details.size():
 		var ds := OrbitLayout.detail_seed(_solar.seed, f)
 		out[ds] = {"pos": _details[f]["center"], "r": 14.0 / maxf(_fit(), 0.01), "detail": f}
@@ -1053,27 +1087,67 @@ func _route_point(pa: Vector2, pb: Vector2, u: float) -> Vector2:
 	return Vector2.from_angle(ta + sweep * k) * r
 
 
-func _draw_routes(back_half: bool, canvas: Node2D) -> void:
-	var places := _ship_places()
+## This frame's ship places (_ship_places), and the lanes flown right now as
+## dashed screen segments, split at the star's depth: [back, front].
+var _places := {}
+var _route_segs: Array[PackedVector2Array] = [PackedVector2Array(), PackedVector2Array()]
+## Plane points of a lane (from → to): Vector2i(from, to) → { pa, pb, pts }.
+## A lane is the same curve for every ship on it, worked out once.
+var _route_cache := {}
+const ROUTE_STEPS := 48
+const ROUTE_COL := Color(SHIP_COL, 0.32)
+
+func _route_pts(key: Vector2i, pa: Vector2, pb: Vector2) -> PackedVector2Array:
+	var c: Dictionary = _route_cache.get(key, {})
+	if c.is_empty() or c["pa"] != pa or c["pb"] != pb:
+		var pts := PackedVector2Array()
+		pts.resize(ROUTE_STEPS + 1)
+		for kk in ROUTE_STEPS + 1:
+			pts[kk] = _route_point(pa, pb, float(kk) / float(ROUTE_STEPS))
+		c = {"pa": pa, "pb": pb, "pts": pts}
+		_route_cache[key] = c
+	return c["pts"]
+
+
+## Every lane in use drawn once, however many ships are on it.
+func _build_route_segs() -> void:
+	var back := PackedVector2Array()
+	var front := PackedVector2Array()
 	var star_z := _project(Vector2.ZERO).z
-	for sd: int in places:
-		for sh: ShipData in ShipManager.ships_for(sd):
-			if not sh.is_travelling() or not places.has(sh.dest_seed):
+	var seen := {}
+	for sd: int in _places:
+		for sh: ShipData in ShipManager.ships_at(sd):
+			if not sh.is_travelling() or not _places.has(sh.dest_seed):
 				continue
-			var pa: Vector2 = places[sd]["pos"]
-			var pb: Vector2 = places[sh.dest_seed]["pos"]
-			var prev := _project(_route_point(pa, pb, 0.0))
-			for kk in range(1, 49):
-				var uu := float(kk) / 48.0
-				var q := _project(_route_point(pa, pb, uu))
-				if (((q.z + prev.z) * 0.5 - star_z) < 0.0) == back_half and kk % 3 != 0:
-					canvas.draw_line(Vector2(prev.x, prev.y), Vector2(q.x, q.y),
-						Color(SHIP_COL, 0.42 if uu > sh.travel_progress else 0.14), 1.0, true)
+			var pa: Vector2 = _places[sd]["pos"]
+			var pb: Vector2 = _places[sh.dest_seed]["pos"]
+			var lane := Vector4(pa.x, pa.y, pb.x, pb.y)   # a moon's lane is its planet's
+			if seen.has(lane):
+				continue
+			seen[lane] = true
+			var pts := _route_pts(Vector2i(sd, sh.dest_seed), pa, pb)
+			var prev := _project(pts[0])
+			for kk in range(1, ROUTE_STEPS + 1):
+				var q := _project(pts[kk])
+				if kk % 3 != 0:
+					if (prev.z + q.z) * 0.5 < star_z:
+						back.append(Vector2(prev.x, prev.y))
+						back.append(Vector2(q.x, q.y))
+					else:
+						front.append(Vector2(prev.x, prev.y))
+						front.append(Vector2(q.x, q.y))
 				prev = q
+	_route_segs = [back, front]
+
+
+func _draw_routes(back_half: bool, canvas: Node2D) -> void:
+	var segs: PackedVector2Array = _route_segs[0 if back_half else 1]
+	if segs.size() >= 2:
+		canvas.draw_multiline(segs, ROUTE_COL, 1.0)
 
 
 func _draw_ships() -> void:
-	var places := _ship_places()
+	var places := _places
 	for sd: int in places:
 		var pl: Dictionary = places[sd]
 		var f: int = pl["detail"]
@@ -1083,7 +1157,7 @@ func _draw_ships() -> void:
 			var c := Vector2(bc.x, bc.y).round()
 			_front.draw_rect(Rect2(c - Vector2(4, 4), Vector2(8, 8)), Color(0, 0, 0, 0.7))
 			_front.draw_rect(Rect2(c - Vector2(3, 3), Vector2(6, 6)), BASE_COL)
-		for sh: ShipData in ShipManager.ships_for(sd):
+		for sh: ShipData in ShipManager.ships_at(sd):
 			if sh.traffic_state == "pad" or sh.orbit_radius < 0.999:
 				continue
 			if sh.is_travelling():
@@ -1152,9 +1226,26 @@ func _draw_mid() -> void:
 
 
 ## Orbit rings, split at the star's depth so the near half passes in front of it.
+## Worked out only when the camera, the hover or the pick changes; drawn as a
+## few batched lines per frame (_ring_batches: [back segs, front segs, colour, width]).
+var _ring_key: Array = []
+var _ring_batches: Array = []
+
 func _draw_rings(back_half: bool, canvas: Node2D) -> void:
 	if _solar == null:
 		return
+	var key := [_yaw, _tilt, _zoom, _focus, _space.size, _hover, _selected]
+	if key != _ring_key:
+		_ring_key = key
+		_build_rings()
+	for b: Array in _ring_batches:
+		var segs: PackedVector2Array = b[0] if back_half else b[1]
+		if segs.size() >= 2:
+			canvas.draw_multiline(segs, b[2], b[3])
+
+
+func _build_rings() -> void:
+	_ring_batches.clear()
 	var sd := _project(Vector2.ZERO).z
 	var acc := UIStyle.color(&"accent")
 	var r_in := ORBIT_BASE * 0.6
@@ -1162,61 +1253,94 @@ func _draw_rings(back_half: bool, canvas: Node2D) -> void:
 	var r_mid := lerpf(r_in, r_out, 0.55)
 	# HUD-style screen lines (SkillTree look): few, each of its own kind
 	# inner: one hairline
-	_ring(canvas, r_in, Color(acc, 0.16), 1.0, back_half, sd)
+	_ring_batch(r_in, Color(acc, 0.16), 1.0, sd)
 	# middle: a soft wide band with a crisp line on it
-	_ring(canvas, r_mid, Color(acc, 0.05), 7.0, back_half, sd)
-	_ring(canvas, r_mid, Color(acc, 0.30), 1.4, back_half, sd)
+	_ring_batch(r_mid, Color(acc, 0.05), 7.0, sd)
+	_ring_batch(r_mid, Color(acc, 0.30), 1.4, sd)
 	# between: broken arcs with ticks, like a scale
 	var r_arc := lerpf(r_in, r_mid, 0.5)
-	_ring(canvas, r_arc, Color(acc, 0.22), 2.0, back_half, sd, 0.0,
-		[[0.15, 1.35], [2.0, 2.9], [3.5, 4.9], [5.4, 6.0]])
-	_ticks(canvas, r_arc, r_arc * 1.035, 48, Color(acc, 0.16), back_half, sd)
+	_ring_batch(r_arc, Color(acc, 0.22), 2.0, sd, 0.0, [[0.15, 1.35], [2.0, 2.9], [3.5, 4.9], [5.4, 6.0]])
+	var tk := _tick_segs(r_arc, r_arc * 1.035, 48, sd)
+	_ring_batches.append([tk[0], tk[1], Color(acc, 0.16), 1.0])
 	# outer: fine dashes, with four heavy brackets on it
-	_ring(canvas, r_out, Color(acc, 0.16), 1.0, back_half, sd, 0.5)
-	_ring(canvas, r_out, Color(acc, 0.45), 3.0, back_half, sd, 0.0,
-		[[0.70, 0.95], [2.27, 2.52], [3.84, 4.09], [5.41, 5.66]])
+	_ring_batch(r_out, Color(acc, 0.16), 1.0, sd, 0.5)
+	_ring_batch(r_out, Color(acc, 0.45), 3.0, sd, 0.0, [[0.70, 0.95], [2.27, 2.52], [3.84, 4.09], [5.41, 5.66]])
 	# the hovered / picked world's own orbit, dashed
 	for idx: int in [_hover, _selected]:
 		if idx < 0:
 			continue
 		var owner_i := idx if int(_bodies[idx]["parent"]) < 0 else int(_bodies[idx]["parent"])
 		var col := RING_SEL_COL if idx == _selected else Color(RING_SEL_COL, 0.6)
-		_ring(canvas, float(_bodies[owner_i]["r"]), col, 1.6, back_half, sd, 0.5)
+		_ring_batch(float(_bodies[owner_i]["r"]), col, 1.6, sd, 0.5)
 
 
-## An orbit-plane circle of radius r. dash > 0: dashed; arcs: only these
-## [from, to] plane angles (radians). Split at the star's depth (back_half).
+func _ring_batch(r: float, col: Color, w: float, star_depth: float, dash := 0.0, arcs: Array = []) -> void:
+	var segs := _ring_segs(r, star_depth, dash, arcs)
+	_ring_batches.append([segs[0], segs[1], col, w])
+
+
+## An orbit-plane circle of radius r drawn on one half. dash > 0: dashed;
+## arcs: only these [from, to] plane angles (radians).
 func _ring(canvas: Node2D, r: float, col: Color, w: float, back_half: bool, star_depth: float,
 		dash := 0.0, arcs: Array = [], center := Vector2.ZERO) -> void:
-	var n := 180
-	var prev := _project(center + Vector2(r, 0.0))
-	for k in range(1, n + 1):
-		var a := TAU * float(k) / float(n)
-		var p := _project(center + Vector2(cos(a), sin(a)) * r)
-		var draw_it: bool = (((p.z + prev.z) * 0.5 - star_depth) < 0.0) == back_half
-		if draw_it and dash > 0.0:
+	var segs := _ring_segs(r, star_depth, dash, arcs, center)
+	var half: PackedVector2Array = segs[0] if back_half else segs[1]
+	if half.size() >= 2:
+		canvas.draw_multiline(half, col, w)
+
+
+const RING_STEPS := 180
+static var _unit_circle := PackedVector2Array()
+
+## The circle's segments as screen point pairs, split at the star's depth: [back, front].
+func _ring_segs(r: float, star_depth: float, dash := 0.0, arcs: Array = [], center := Vector2.ZERO) -> Array[PackedVector2Array]:
+	if _unit_circle.is_empty():
+		for k in RING_STEPS + 1:
+			var a := TAU * float(k) / float(RING_STEPS)
+			_unit_circle.append(Vector2(cos(a), sin(a)))
+	var back := PackedVector2Array()
+	var front := PackedVector2Array()
+	var step := TAU / float(RING_STEPS)
+	var prev := _project(center + _unit_circle[0] * r)
+	for k in range(1, RING_STEPS + 1):
+		var p := _project(center + _unit_circle[k] * r)
+		var draw_it := true
+		if dash > 0.0:
 			draw_it = k % 4 < 2
 		if draw_it and not arcs.is_empty():
 			draw_it = false
-			var am := a - TAU / float(n) * 0.5
+			var am := step * (float(k) - 0.5)
 			for arc: Array in arcs:
 				if am >= float(arc[0]) and am <= float(arc[1]):
 					draw_it = true
+					break
 		if draw_it:
-			canvas.draw_line(Vector2(prev.x, prev.y), Vector2(p.x, p.y), col, w, true)
+			if (p.z + prev.z) * 0.5 < star_depth:
+				back.append(Vector2(prev.x, prev.y))
+				back.append(Vector2(p.x, p.y))
+			else:
+				front.append(Vector2(prev.x, prev.y))
+				front.append(Vector2(p.x, p.y))
 		prev = p
+	return [back, front]
 
 
-## Short radial ticks between r0 and r1, `count` around the circle.
-func _ticks(canvas: Node2D, r0: float, r1: float, count: int, col: Color, back_half: bool, star_depth: float) -> void:
+## Short radial ticks between r0 and r1, `count` around the circle: [back, front].
+func _tick_segs(r0: float, r1: float, count: int, star_depth: float) -> Array[PackedVector2Array]:
+	var back := PackedVector2Array()
+	var front := PackedVector2Array()
 	for k in count:
 		var a := TAU * float(k) / float(count)
 		var d := Vector2(cos(a), sin(a))
 		var p0 := _project(d * r0)
-		if (p0.z - star_depth < 0.0) != back_half:
-			continue
 		var p1 := _project(d * (r1 if k % 4 == 0 else lerpf(r0, r1, 0.5)))
-		canvas.draw_line(Vector2(p0.x, p0.y), Vector2(p1.x, p1.y), col, 1.0, true)
+		if p0.z < star_depth:
+			back.append(Vector2(p0.x, p0.y))
+			back.append(Vector2(p1.x, p1.y))
+		else:
+			front.append(Vector2(p0.x, p0.y))
+			front.append(Vector2(p1.x, p1.y))
+	return [back, front]
 
 
 func _draw_front() -> void:

@@ -1702,6 +1702,11 @@ func _tick_transits() -> void:
 		seeds[b.seed] = true
 	for b: PlanetData in _bodies_in_view():
 		for ship: ShipData in ShipManager.ships_for(b.seed):
+			# with the Planet System layer on, the companion corner is off: only
+			# the lander keeps this route (its own flow); every other flight is
+			# drawn by the orbital layer on its escape / approach legs
+			if PLANET_SYSTEM_LAYER and ship.ship_type != "lander":
+				continue
 			if ship.is_travelling() and seeds.has(ship.dest_seed) and ship.dest_seed != b.seed:
 				_transits.append(ship)
 				hid[ship.ship_id] = true

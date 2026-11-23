@@ -41,24 +41,22 @@ func travelling_to(dest_seed: int, ship_type: String = "") -> ShipData:
 func _on_arrived(ship: ShipData) -> void:
 	# a transfer route ends on a point of the destination orbit — carry on
 	# orbiting from exactly there
-	if not is_nan(ship.transfer_arrive_angle):
+	var old_seed := ship.orbit_seed
+	# it ends on the orbit its approach came in on (OrbitLayout.arrival: the
+	# near point of its incoming hyperbola, or the capture of a transfer inside
+	# one planet system) — same place, same heading as the views drew it
+	# (the lander keeps its own flow: the planet view's planned angle)
+	var arr := OrbitLayout.arrival(ship)
+	if not arr.is_empty():
+		ship.orbit_inclination = float(arr["inc"])
+		ship.orbit_node = float(arr["node"])
+		ship.orbit_angle = float(arr["angle"])
+		ship.orbit_speed = absf(ship.orbit_speed) * float(arr["spin"])
+		ship.orbit_radius = float(arr["radius"])
+	elif not is_nan(ship.transfer_arrive_angle):
 		ship.orbit_angle = ship.transfer_arrive_angle
 	ship.transfer_depart_angle = NAN
 	ship.transfer_arrive_angle = NAN
-	var old_seed := ship.orbit_seed
-	# within one planet system (no route angle of the planet view's): captured
-	# into the orbit it arrives on — same place, same heading (OrbitLayout)
-	# (freighters dock at their hub, the lander lands: their own flows, untouched)
-	if ship.ship_type != FREIGHTER and ship.ship_type != "lander":
-		var cap := OrbitLayout.capture(old_seed, ship.dest_seed, 1.0 if ship.orbit_speed >= 0.0 else -1.0,
-			OrbitLayout.transfer_inc(ship.ship_id))
-		if not cap.is_empty():
-			ship.orbit_inclination = float(cap["inc"])
-			ship.orbit_node = float(cap["node"])
-			ship.orbit_angle = float(cap["angle"])
-			ship.orbit_speed = absf(ship.orbit_speed) * float(cap["spin"])
-			if float(cap["radius"]) > 0.0:
-				ship.orbit_radius = float(cap["radius"])
 	if ship.ship_type == FREIGHTER:   # captured into the destination orbit
 		ship.traffic_state = "captured"
 		ship.traffic_partner = old_seed
@@ -90,6 +88,30 @@ func ships_for(planet_seed: int) -> Array[ShipData]:
 	var result: Array[ShipData] = []
 	result.assign(_ships[planet_seed])
 	return result
+
+## Flying ships headed for `dest_seed` (read only; one index a frame).
+func inbound(dest_seed: int) -> Array:
+	var f := Engine.get_process_frames()
+	if f != _inbound_frame:
+		_inbound_frame = f
+		_inbound.clear()
+		for seed_val: int in _ships:
+			for ship: ShipData in _ships[seed_val]:
+				if ship.is_travelling():
+					if not _inbound.has(ship.dest_seed):
+						_inbound[ship.dest_seed] = []
+					(_inbound[ship.dest_seed] as Array).append(ship)
+	return _inbound.get(dest_seed, _NONE)
+
+var _inbound := {}
+var _inbound_frame := -1
+
+## The ships at a place, without a copy: read only, never changed or kept
+## (views go through these every frame). ships_for() for a list to work on.
+func ships_at(planet_seed: int) -> Array:
+	return _ships.get(planet_seed, _NONE)
+
+const _NONE: Array = []
 
 func add_ship(ship: ShipData) -> void:
 	if not _ships.has(ship.orbit_seed):
@@ -138,13 +160,17 @@ const WINDOW_COS := 0.985
 
 func _try_window(ship: ShipData, delta: float) -> void:
 	ship.pending_wait += delta
+	# inside one planet system: a Hohmann burn on the far side from the target;
+	# out to another: at the near point of the escape that heads off the way
+	# the lane goes (OrbitLayout.burn_dir). A base's ships just go.
 	var to_dest := OrbitLayout.dir_between(ship.orbit_seed, ship.pending_dest)
+	var want := -to_dest if to_dest != Vector2.ZERO else OrbitLayout.burn_dir(ship, ship.pending_dest)
 	var period := TAU / maxf(absf(ship.orbit_speed), 0.05)
-	var go := to_dest == Vector2.ZERO or ship.pending_wait > period * 1.5   # never wait forever
+	var go := OrbitLayout.is_detail_seed(ship.orbit_seed) or ship.pending_wait > period * 1.5   # never wait forever
 	if not go:
 		var v := ShipData.orbit_point(1.0, ship.orbit_inclination, ship.orbit_node, ship.orbit_angle)
 		var here := Vector2(v.x, v.z)
-		go = here.length() > 0.2 and here.normalized().dot(-to_dest) >= WINDOW_COS
+		go = here.length() > 0.2 and here.normalized().dot(want) >= WINDOW_COS
 	if go:
 		var dest := ship.pending_dest
 		var dur := ship.pending_duration
@@ -282,10 +308,7 @@ func send_pioneer(from_seed: int, to_seed: int, base: Dictionary = {}) -> ShipDa
 	ship.orbit_inclination = randf_range(-0.3, 0.3)
 	ship.traffic_pair = JSON.stringify(base) if not base.is_empty() else ""
 	add_ship(ship)
-	if OrbitLayout.dir_between(from_seed, to_seed) != Vector2.ZERO:
-		dispatch_on_window(ship, to_seed, flight_sec(from_seed, to_seed))
-	else:
-		dispatch(ship, to_seed, flight_sec(from_seed, to_seed))
+	dispatch_on_window(ship, to_seed, flight_sec(from_seed, to_seed))
 	return ship
 
 
@@ -312,11 +335,22 @@ func _advance_hauler(ship: ShipData, delta: float) -> void:
 	if ship.state_t < ship.state_len or ship.traffic_partner < 0:
 		return
 	ship.traffic_state = "transfer"
-	var to := ship.traffic_partner
-	if OrbitLayout.dir_between(ship.orbit_seed, to) != Vector2.ZERO:
-		dispatch_on_window(ship, to, flight_sec(ship.orbit_seed, to))
-	else:
-		dispatch(ship, to, flight_sec(ship.orbit_seed, to))
+	var to := _route_end(ship.orbit_seed, ship.traffic_partner)
+	dispatch_on_window(ship, to, flight_sec(ship.orbit_seed, to))
+
+
+## Where a hauler at `here` lands at the far end `partner` of its route: on a
+## route between two planet systems, any settled body of the far one (the
+## planet or a colonized moon), so the traffic spreads over them; else partner.
+func _route_end(here: int, partner: int) -> int:
+	if OrbitLayout.dir_between(here, partner) != Vector2.ZERO or OrbitLayout.is_detail_seed(partner):
+		return partner
+	var opts: Array[int] = [partner]
+	for s: int in OrbitLayout.family(partner):
+		if s != partner and GameState._planet_progress.has(s) \
+				and (GameState._planet_progress[s] as PlanetProgress).is_colonized:
+			opts.append(s)
+	return opts[randi() % opts.size()]
 
 
 ## How big a route's fleet is: grows with the worlds at its ends (a base counts small).

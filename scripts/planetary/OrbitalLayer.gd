@@ -551,6 +551,8 @@ func _draw() -> void:
 			continue  # drawn by its DescentFX / the planet view's flight
 		if ship.traffic_state == "pad":
 			continue  # a freighter waiting on its Spaceport
+		if ship.is_travelling():
+			continue  # leaving: its escape leg (_draw_legs), not its old orbit
 		var climbing := ship.traffic_state == "ascend" or ship.traffic_state == "descend"
 
 		var is_selected: bool = ship == _selected_ship
@@ -622,10 +624,82 @@ func _draw() -> void:
 		elif is_hovered:
 			_draw_hover_label(spos, ship)
 
+	_draw_legs(center)
+
 	# ── Landing animations ───────────────────────────────────────────────────
 
 	# ── Space station districts ───────────────────────────────────────────────
 	_draw_station_pois(center)
+
+## Ships leaving this body and ships coming to it, on their escape / approach
+## hyperbolas (OrbitLayout legs): the whole curve dashed and fading with height
+## (many together: a fountain opening out of the world), the ship on it. Away
+## from both ends a flight isn't shown here.
+const LEG_STEPS := 36
+const LEG_COL := Color(0.92, 0.95, 1.0)
+
+func _draw_legs(center: Vector2) -> void:
+	for ship: ShipData in ShipManager.ships_at(_planet_seed):
+		if ship.is_travelling() and not hidden_ships.has(ship.ship_id):
+			var on := OrbitLayout.leg_of(ship)
+			if on["leg"] == "out":
+				_draw_leg(center, ship, OrbitLayout.departure_leg(ship), float(on["s"]))
+	for ship: ShipData in ShipManager.inbound(_planet_seed):
+		if hidden_ships.has(ship.ship_id) or ship.orbit_seed == _planet_seed:
+			continue
+		var on := OrbitLayout.leg_of(ship)
+		if on["leg"] == "in":
+			var leg := OrbitLayout.arrival_leg(ship)
+			if not leg.is_empty():
+				_draw_leg(center, ship, leg, float(on["s"]))
+
+
+func _leg_screen(leg: Dictionary, s: float) -> Vector3:
+	return _view(OrbitLayout.leg_point(leg, s) * _planet_radius)
+
+
+## How visible a leg is at height r (body radii): full low down, gone far out.
+static func _leg_fade(leg: Dictionary, r: float, fade_end := 1.0) -> float:
+	var rp: float = leg["rp"]
+	var far := rp + (OrbitLayout.ESCAPE_R - rp) * fade_end
+	return 1.0 - smoothstep(rp + (far - rp) * 0.2, far, r)
+
+
+func _draw_leg(center: Vector2, ship: ShipData, leg: Dictionary, s: float) -> void:
+	var inbound: bool = leg["inbound"]
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	var prev := _leg_screen(leg, 0.0)
+	for k in range(1, LEG_STEPS + 1):
+		var t := float(k) / float(LEG_STEPS)
+		var q := _leg_screen(leg, t)
+		if k % 3 != 0 and not _is_occluded(prev) and not _is_occluded(q):
+			var r := OrbitLayout.leg_point(leg, t).length()
+			var ahead := t > s   # the way still to go
+			var a := (0.40 if ahead else 0.16) * _leg_fade(leg, r)
+			if a > 0.01:
+				pts.append(center + Vector2(prev.x, prev.y))
+				pts.append(center + Vector2(q.x, q.y))
+				cols.append(Color(LEG_COL, a))
+		prev = q
+	if not pts.is_empty():
+		draw_multiline_colors(pts, cols, 1.0)
+	# the ship, fading as it climbs away / showing as it comes in
+	var at := _leg_screen(leg, s)
+	if _is_occluded(at):
+		return
+	var fade := _leg_fade(leg, OrbitLayout.leg_point(leg, s).length())
+	if fade < 0.05:
+		return
+	var pos := center + Vector2(at.x, at.y)
+	var nx := _leg_screen(leg, minf(s + 0.01, 1.0))
+	var heading := (Vector2(nx.x, nx.y) - Vector2(at.x, at.y)).normalized()
+	if (s < 0.15 and not inbound) or (s > 0.85 and inbound):   # the burn at the near point
+		var hue: float = 0.45 + randf() * 0.25
+		var f := (pos - Vector2.ONE).floor() - (heading * 3.0).round()
+		draw_rect(Rect2(f, Vector2(2, 2)), Color(1.0, hue, 0.05, 0.9 * fade))
+	_draw_pixel_ship(pos, Color(1, 1, 1, 0.92 * fade))
+
 
 func _bezier(p0: Vector2, p1: Vector2, p2: Vector2, t: float) -> Vector2:
 	var mt := 1.0 - t
@@ -914,6 +988,8 @@ func _ship_at(global_pos: Vector2, include_landers := false) -> ShipData:
 		# landers and freighters aren't commanded: hover shows them, clicks don't pick them
 		if (ship.ship_type == "lander" or ship.ship_type == "freighter") and not include_landers:
 			continue
+		if ship.is_travelling():
+			continue   # away on a leg (_draw_legs): not on its old orbit
 		var sv := _project(ship, ship.orbit_angle)
 		if _is_occluded(sv):
 			continue

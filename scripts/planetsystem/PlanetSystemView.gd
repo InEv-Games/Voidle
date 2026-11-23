@@ -493,8 +493,17 @@ func _draw_orbitals(back_half: bool, canvas: Node2D) -> void:
 				var c := Vector2(sp.x, sp.y).round()
 				canvas.draw_rect(Rect2(c - Vector2(3, 3), Vector2(6, 6)), Color(0, 0, 0, 0.7))
 				canvas.draw_rect(Rect2(c - Vector2(2, 2), Vector2(4, 4)), STATION_COL)
+		# ships coming in from another planet system: their approach leg
+		for sh: ShipData in ShipManager.inbound(pd.seed):
+			if _body_index(sh.orbit_seed) >= 0:
+				continue   # from a body here: its Hohmann transfer (_draw_transfer)
+			var on := OrbitLayout.leg_of(sh)
+			if on["leg"] == "in":
+				var leg := OrbitLayout.arrival_leg(sh)
+				if not leg.is_empty():
+					_draw_leg(i, sh, leg, float(on["s"]), back_half, canvas)
 		# ships of this body: in orbit (also lifting off / coming down), or flying
-		for sh: ShipData in ShipManager.ships_for(pd.seed):
+		for sh: ShipData in ShipManager.ships_at(pd.seed):
 			if sh.traffic_state == "pad" or sh.orbit_radius < 0.999:
 				continue
 			if sh.is_travelling():
@@ -531,13 +540,10 @@ func _draw_transfer(from_i: int, sh: ShipData, back_half: bool, canvas: Node2D) 
 	var to_i := _body_index(sh.dest_seed)
 	var u := clampf(sh.travel_progress, 0.0, 1.0)
 	if to_i < 0:
-		if back_half:
-			return
-		var c := _project(_plane(from_i))
-		var p := _project(_plane(from_i) + (-_sun_dir) * _rad_eff(from_i) * (1.2 + u * 8.0))
-		var a := 1.0 - smoothstep(0.3, 0.6, u)
-		if a > 0.01:
-			_draw_ship(canvas, Vector2(p.x, p.y), Vector2(p.x - c.x, p.y - c.y), sh, a, true)
+		# out of this planet system: its escape leg, then gone (_draw_leg)
+		var on := OrbitLayout.leg_of(sh)
+		if on["leg"] == "out":
+			_draw_leg(from_i, sh, OrbitLayout.departure_leg(sh), float(on["s"]), back_half, canvas)
 		return
 	var tr := _transfer_of(from_i, to_i, sh)
 	_draw_capture_orbit(from_i, to_i, sh, back_half, canvas)
@@ -570,6 +576,43 @@ func _draw_transfer(from_i: int, sh: ShipData, back_half: bool, canvas: Node2D) 
 
 
 const BLEND_U := 0.06
+
+## A ship leaving for / coming from another planet system round body i, on
+## its escape / approach hyperbola (OrbitLayout legs, drawn with the same
+## spread as every orbit here): the curve dashed and fading out with height
+## (a fountain of them over a busy world), the ship on it.
+const LEG_STEPS := 36
+## Share of a leg's height it has faded out by here (the view is wide).
+const LEG_FADE_END := 0.6
+
+func _draw_leg(i: int, sh: ShipData, leg: Dictionary, s: float, back_half: bool, canvas: Node2D) -> void:
+	var center_z := _project(_plane(i)).z
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	var prev := _orbit_screen(i, OrbitLayout.leg_point(leg, 0.0))
+	for k in range(1, LEG_STEPS + 1):
+		var t := float(k) / float(LEG_STEPS)
+		var f := OrbitLayout.leg_point(leg, t)
+		var q := _orbit_screen(i, f)
+		if k % 3 != 0 and (((q.z + prev.z) * 0.5 - center_z) < 0.0) == back_half:
+			var a := (0.42 if t > s else 0.15) * OrbitalLayer._leg_fade(leg, f.length(), LEG_FADE_END)
+			if a > 0.01:
+				pts.append(Vector2(prev.x, prev.y))
+				pts.append(Vector2(q.x, q.y))
+				cols.append(Color(SHIP_COL, a))
+		prev = q
+	if not pts.is_empty():
+		canvas.draw_multiline_colors(pts, cols, 1.0)
+	var f0 := OrbitLayout.leg_point(leg, s)
+	var fade := OrbitalLayer._leg_fade(leg, f0.length(), LEG_FADE_END)
+	var p := _orbit_screen(i, f0)
+	if fade < 0.05 or ((p.z - center_z) < 0.0) != back_half:
+		return
+	var ahead := _orbit_screen(i, OrbitLayout.leg_point(leg, minf(s + 0.01, 1.0)))
+	var inbound: bool = leg["inbound"]
+	var burning := (s < 0.15 and not inbound) or (s > 0.85 and inbound)
+	_orb_hits.append({"key": "ship:" + sh.ship_id, "name": sh.ship_name, "pos": Vector2(p.x, p.y), "front": not back_half})
+	_draw_ship(canvas, Vector2(p.x, p.y), Vector2(ahead.x, ahead.y) - Vector2(p.x, p.y), sh, fade, burning)
 
 ## The orbit a flying ship will be captured into round its target (the same
 ## one ShipManager puts it on: OrbitLayout.capture), dashed, so the transfer's
