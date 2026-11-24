@@ -130,6 +130,8 @@ var _companion_btns: Array[Button] = []   # shown once someone has joined
 const TREE_FLAG := "ui:tree_open"
 
 func _tree_open() -> bool:
+	if ColonyTutorial.active():
+		return ColonyTutorial.reached("mining")
 	if GameState.story_flags.has(TREE_FLAG):
 		return true
 	var st := get_node_or_null("/root/SkillTree")
@@ -149,7 +151,8 @@ func _tree_open() -> bool:
 
 ## The two caretakers are on the roster from the handover on (narrative J-d).
 static func _companions_open() -> bool:
-	return GameState.onboarding_stage == "done"
+	return GameState.onboarding_stage == "done" \
+		and (ColonyTutorial.allows_ui("companions") or GameState.government_available())
 
 ## Shows each shortcut once it is open; the row (and its rule) only with one in it.
 func _sync_shortcuts() -> void:
@@ -306,8 +309,9 @@ func _make_companions_button() -> Button:
 	b.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
 		var adv := CompanionDef.find(GameState.active_advisor)
-		TooltipManager.show_tip("Government", ("Chancellor: %s. " % adv.display_name if adv != null else "") \
-			+ "Seat your Agents in the ministries: each gives their bonus while serving.  [C]"))
+		var government := GameState.government_available() or GameState.legacy_government_available()
+		TooltipManager.show_tip("Government" if government else "Agents", ("Advisor: %s. " % adv.display_name if adv != null else "") \
+			+ ("View the council.  [C]" if government else "View your Agents.  [C]")))
 	b.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())

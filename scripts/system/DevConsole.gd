@@ -340,6 +340,7 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]moonlaunch[/color] [color=#aaaaaa][sec] [reset][/color] — send the Moon lander now (default 15s)")
 			_log_info("  [color=#88ddcc]rocket[/color] [color=#aaaaaa][sec][/color] — launch the final rocket now (completes Civilization 0)")
 			_log_info("  [color=#88ddcc]tutorial complete[/color] — skip/finish tutorial")
+			_log_info("  [color=#88ddcc]incident preview[/color]  //  open the major incident choices")
 			_log_info("  [color=#88ddcc]excavate ready[/color] — finish the digs under way now")
 			_log_info("  [color=#88ddcc]excavate reset[/color] — start every excavation over: marks, story choices, companions")
 			_log_info("[color=#33cc55]── BALANCE ───────────────────────────────[/color]")
@@ -561,6 +562,11 @@ func _exec(line: String) -> void:
 			_cmd_moonlaunch(parts)
 		"rocket":
 			_cmd_rocket(parts)
+		"incident":
+			if parts.size() == 2 and parts[1].to_lower() == "preview":
+				_preview_incident()
+			else:
+				_log_err("Try: incident preview")
 
 		# ── Seed of the current view ──────────────────────────────────────────
 		"--seed", "seed":
@@ -643,6 +649,20 @@ static func _building_site_needs(b: BuildingDef) -> String:
 	if b.requires_liquid_sea:
 		needs.append("a liquid sea")
 	return ", ".join(needs)
+
+func _preview_incident() -> void:
+	var view := get_tree().current_scene
+	if view == null or not view.scene_file_path.ends_with("PlanetaryView.tscn") or ColonyTutorial.active():
+		_log_err("Open a planet after the tutorial first.")
+		return
+	var loss := minf(5.0, Economy.payable_amount("goods"))
+	var damage := "Lose up to %s Goods from the depot." % Economy.fmt(loss)
+	var queued := Narrative.offer_major_incident("preview:%d" % Time.get_ticks_msec(),
+		"A depot fire has reached the loading bay. We can divert grid power to the fire pumps.",
+		damage, func() -> void:
+			GameState.consume_resource("goods", minf(loss, Economy.payable_amount("goods"))))
+	if queued and _open:
+		_toggle()
 
 func _cmd_buildings(filter: String) -> void:
 	var groups := {}

@@ -222,6 +222,8 @@ func _build_rows() -> void:
 	_status.text = "Research Trade Access (150 Science) to buy and sell." if not Trade.has_access() \
 		else MARKET_LINES[randi() % MARKET_LINES.size()]
 	for id: String in Trade.products():
+		if ColonyTutorial.active() and id not in ["ferrite", "goods"]:
+			continue
 		_list.add_child(_product_row(id))
 	_refresh()
 
@@ -237,12 +239,14 @@ func _column_head() -> Control:
 		["TREND", -1.0, "Trend", func() -> String:
 			return "The last minutes of its price against the usual price (dotted)."],
 		["AUTOMATION", TARGET_W + GAP + ROW_H - 2.0, "Automation", func() -> String:
-			return "Set a target and a mode: the market trades for you every 20 s, a little worse than by hand." \
-				if Trade.has_automation() else "Research Trade Automation for standing orders."],
+			return "Set a target and a mode. Standing orders trade each colony month." \
+				if Trade.has_automation() else Trade.automation_block()],
 		["TRADE", BTN_W * 2.0 + GAP, "Trade", func() -> String:
 			return "Sell or buy one lot. Shift ×10, Ctrl/Cmd everything you can."],
 	]
 	for c: Array in cols:
+		if ColonyTutorial.active() and c[0] == "AUTOMATION":
+			continue
 		var l := _label(String(c[0]), 8, UIStyle.color(&"text_muted"))
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		if float(c[1]) > 0.0:
@@ -283,6 +287,8 @@ static func _joy_shoulder(right: bool) -> bool:
 
 ## Units a click trades: one lot, ×10 with Shift/LB, everything with Ctrl/Cmd/RB.
 static func _click_qty(id: String, selling: bool) -> float:
+	if ColonyTutorial.active():
+		return ColonyTutorial.trade_limit(id, selling, lot(id))
 	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META) or _joy_shoulder(true):
 		return Trade.sellable(id) if selling else Trade.max_buy(id)
 	return lot(id) * (10.0 if (Input.is_key_pressed(KEY_SHIFT) or _joy_shoulder(false)) else 1.0)
@@ -406,14 +412,16 @@ func _product_row(id: String) -> Control:
 			apply.call(String(Trade.order(id)["mode"])))
 	mode.pressed.connect(func() -> void: _open_mode_menu(mode, id, apply))
 	_tip(target, "Automation target", func() -> String:
-		return "The amount the standing order works towards." if auto_ok else "Research Trade Automation for standing orders.")
+		return "The amount the standing order works towards." if Trade.has_automation() else Trade.automation_block())
 	_tip(mode, "Automation", func() -> String:
-		if not auto_ok:
-			return "Research Trade Automation for standing orders."
+		if not Trade.has_automation():
+			return Trade.automation_block()
 		return "%s\n\n%s\n\nClick to change: Off // Sell until // Buy until // Keep it at." % [
 			Trade.mode_label(String(Trade.order(id)["mode"])), Trade.order_text(id)])
 	row.add_child(target)
 	row.add_child(mode)
+	target.visible = not ColonyTutorial.active()
+	mode.visible = not ColonyTutorial.active()
 
 	var sell := _compact_button("SELL", UIStyle.NEGATIVE)   # sell red, buy green
 	_fixed(sell, BTN_W, ROW_H - 2.0)
@@ -446,7 +454,8 @@ func _product_row(id: String) -> Control:
 		band.add_theme_stylebox_override("normal", bsb)
 		band.mouse_filter = Control.MOUSE_FILTER_STOP   # nothing under it reacts
 		stack.add_child(band)
-	_rows[id] = {"price": price, "chart": chart, "target": target, "mode": mode}
+	_rows[id] = {"price": price, "chart": chart, "target": target, "mode": mode,
+		"sell": sell, "buy": buy, "live": live}
 	return stack
 
 ## The four modes in a small menu under the square button — drawn in the game
@@ -503,6 +512,7 @@ func _do(amount: float) -> void:
 	_refresh()
 
 func _refresh() -> void:
+	var auto_ok := Trade.has_automation()
 	for id: String in _rows:
 		var e: Dictionary = _rows[id]
 		if not is_instance_valid(e["price"]):
@@ -512,8 +522,14 @@ func _refresh() -> void:
 		(e["price"] as Label).text = _price(Trade.unit_price(id))
 		(e["price"] as Label).add_theme_color_override("font_color", tc)
 		(e["chart"] as Control).queue_redraw()
-		(e["mode"] as Button).text = MODE_GLYPH.get(String(Trade.order(id)["mode"]), "–")
+		var mode := e["mode"] as Button
+		mode.text = MODE_GLYPH.get(String(Trade.order(id)["mode"]), "–")
+		mode.disabled = not (auto_ok and e["live"])
+		if ColonyTutorial.active():
+			(e["sell"] as Button).disabled = not e["live"] or _click_qty(id, true) <= 0.0
+			(e["buy"] as Button).disabled = not e["live"] or _click_qty(id, false) <= 0.0
 		var target := e["target"] as LineEdit
+		target.editable = auto_ok and e["live"]
 		if not target.has_focus():
 			var t := float(Trade.order(id)["target"])
 			target.text = Economy.fmt(t) if t > 0.0 else ""

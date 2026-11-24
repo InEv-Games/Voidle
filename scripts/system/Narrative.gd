@@ -80,7 +80,8 @@ func play(graph_path: String, entry: String, opts: Dictionary = {}) -> bool:
 	var item := {"graph": graph_path, "entry": entry, "id": id, "main": main,
 		"pause": bool(opts.get("pause", main)), "once": once, "on_done": opts.get("on_done", Callable()),
 		"now": bool(opts.get("now", false)), "lines": opts.get("lines", []),
-		"skippable": bool(opts.get("skippable", false)), "outcomes": opts.get("outcomes", {})}
+		"skippable": bool(opts.get("skippable", false)), "outcomes": opts.get("outcomes", {}),
+		"incident_damage": opts.get("incident_damage", "")}
 	if item["now"]:
 		if not _current.is_empty() and not bool(_current["main"]):
 			_end_scene("", true)   # a short line gives way (it stays in the log)
@@ -94,6 +95,21 @@ func play(graph_path: String, entry: String, opts: Dictionary = {}) -> bool:
 	else:
 		_queue.append(item)
 	return true
+
+## Entry point for harmful major events. The event provides its own consequence.
+## Use a distinct id for each occurrence that can be resolved once.
+func offer_major_incident(id: String, advisor_line: String, damage: String, accept_damage: Callable) -> bool:
+	if id.is_empty() or advisor_line.is_empty() or damage.is_empty() or not accept_damage.is_valid():
+		return false
+	return play("", "major_incident", {"id": "incident:" + id, "lines": [["", advisor_line]],
+		"incident_damage": damage, "on_done": func(result: String) -> void:
+			if result == "accept":
+				accept_damage.call()
+				log_event(damage, "incident:" + id)
+			else:
+				log_event("Emergency response prevented the damage. Energy use rose by 20% for one month.", "incident:" + id)
+				NewsFeed.post_press_statement("Emergency crews contained the incident.")
+			GameState.save()})
 
 ## A scene is on screen.
 func is_busy() -> bool:
@@ -193,6 +209,8 @@ func _begin(item: Dictionary) -> void:
 		scene_started.emit(String(item["id"]))
 		_line_i = 0
 		_show_plain_line()
+		if not String(item["incident_damage"]).is_empty():
+			_show_incident_choices()
 		return
 	var graph := load(String(item["graph"])) as VSMData
 	if graph == null:
@@ -246,6 +264,8 @@ func _ensure_ui(main: bool) -> void:
 
 ## CONTINUE, a click on the card: the next line, or the scene's end.
 func _advance() -> void:
+	if not String(_current.get("incident_damage", "")).is_empty():
+		return
 	if _mgr != null:
 		_mgr.advance()
 	elif not _current.is_empty() and not (_current.get("lines", []) as Array).is_empty():
@@ -327,9 +347,24 @@ func say(speaker: String, text: String, id := "") -> bool:
 		"main": false, "once": id != "", "lines": [[speaker, text]]})
 
 func _on_choice_made(index: int, text: String) -> void:
+	if not String(_current.get("incident_damage", "")).is_empty():
+		if index == 1 and not GameState.start_emergency_response():
+			_show_incident_choices()
+			return
+		_log("choice", "Player", text)
+		_end_scene("accept" if index == 0 else "respond", true)
+		return
 	_log("choice", "Player", text)
 	if _mgr != null:
 		_mgr.choose(index)
+
+func _show_incident_choices() -> void:
+	var ready := ProductionManager.has_running_facility("emergency_response_center")
+	var tip := "Prevent the damage. The colony uses 20% more energy for one month."
+	if not ready:
+		tip = "Requires an operating Emergency Response Center."
+	_panel.show_choices(["Accept the outcome", "Use emergency power"],
+		[String(_current["incident_damage"]), tip], PackedInt32Array([] if ready else [1]))
 
 func _end_scene(exit_name: String, completed: bool) -> void:
 	var item := _current
@@ -394,6 +429,8 @@ var _log_popup: ModalPopup = null
 
 ## Opens the Narrative Log, or closes it when it is open (LOG, L: a toggle).
 func open_log() -> void:
+	if not ColonyTutorial.allows_ui("log"):
+		return
 	if _log_popup != null and is_instance_valid(_log_popup) and _log_popup.is_inside_tree():
 		_log_popup.close()
 		_log_popup = null
@@ -454,7 +491,8 @@ func _say_bark(b: Dictionary) -> void:
 func _tick_barks(delta: float) -> void:
 	var scene := get_tree().current_scene
 	if scene == null or scene.scene_file_path.ends_with("MainMenu.tscn") or GameState.showcase_mode \
-			or GameState.active_advisor == "" or GameState.onboarding_stage != "done" or get_tree().paused:
+			or GameState.active_advisor == "" or GameState.onboarding_stage != "done" or get_tree().paused \
+			or ColonyTutorial.active():
 		return
 	var busy := not _current.is_empty() or not _queue.is_empty()
 	if not busy:

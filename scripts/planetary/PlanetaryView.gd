@@ -405,6 +405,8 @@ func _open_context_menu_for_poi(poi: POIData, global_pos: Vector2) -> bool:
 
 ## Why `poi` can't level up now ("" when it can). Shared by the panel button and the menu.
 func _district_level_up_block(poi: POIData, planet: PlanetData) -> String:
+	if not ColonyTutorial.permits_level(planet, poi, false):
+		return "Follow the advisor's current step"
 	var pp := GameState.get_planet(planet.seed)
 	var lv: int = pp.district_levels.get(poi.label, 1)
 	if pp.is_district_upgrading(poi.label):
@@ -432,6 +434,8 @@ func _district_level_up(poi: POIData, planet: PlanetData) -> bool:
 	return true
 
 func _city_level_up_block(city: POIData, planet: PlanetData) -> String:
+	if not ColonyTutorial.permits_level(planet, city, true):
+		return "Follow the advisor's current step"
 	var pp := GameState.get_planet(planet.seed)
 	var block := Leveling.city_level_block(planet, pp, city)
 	if block != "":
@@ -455,6 +459,8 @@ func _city_level_up(city: POIData, planet: PlanetData) -> bool:
 
 ## Why a new district can't be placed in `city` right now ("" when it can).
 func _add_district_block(city: POIData, def: DistrictDef) -> String:
+	if not ColonyTutorial.permits_district(def.id):
+		return "Follow the advisor's current district"
 	var pp := GameState.get_planet(current_data.seed)
 	if city.constructing:
 		return "The City is still under construction"
@@ -628,6 +634,8 @@ func _cancel_commands(poi: POIData, pp: PlanetProgress) -> Array:
 	return out
 
 func _cancel_district(poi: POIData) -> void:
+	if ColonyTutorial.active():
+		return
 	var back := Settlement.cancel_district(current_data, poi)
 	if back.is_empty():
 		AudioManager.play("error")
@@ -654,6 +662,8 @@ func _ask_cancel_upgrade(what: String, cancel: Callable) -> void:
 			_refresh_active_panel())
 
 func _cancel_level(poi: POIData, city_lv: bool) -> void:
+	if ColonyTutorial.active():
+		return
 	var back := Settlement.cancel_level(GameState.get_planet(current_data.seed), poi, city_lv)
 	if back <= 0.0:
 		AudioManager.play("error")
@@ -663,6 +673,8 @@ func _cancel_level(poi: POIData, city_lv: bool) -> void:
 	_refresh_active_panel()
 
 func _cancel_building(entry: Dictionary) -> void:
+	if ColonyTutorial.active():
+		return
 	var back := Settlement.cancel_building(GameState.get_planet(current_data.seed), entry)
 	if back.is_empty():
 		AudioManager.play("error")
@@ -678,13 +690,19 @@ static func _refund_cost(entry: Dictionary) -> Dictionary:
 	return out
 
 func _remove_one_building(entry: Dictionary) -> void:
+	if not ColonyTutorial.permits_remove(entry):
+		AudioManager.play("denied")
+		return
 	var back := _refund_cost(entry)   # before the stack shrinks
 	Settlement.remove_buildings(GameState.get_planet(current_data.seed), entry, 1)
+	ColonyTutorial.note("remove_house")
 	AudioManager.play("click")
 	_notify("Building removed. %s refunded." % Economy.cost_text(back))
 	_refresh_active_panel()
 
 func _confirm_settlement(kind: String, poi: POIData) -> void:
+	if ColonyTutorial.active():
+		return
 	var pv := Settlement.preview(kind, current_data, poi)
 	var verb: String = {"clear": "Clear", "reset": "Reset", "demolish": "Demolish"}[kind]
 	var data := current_data
@@ -728,6 +746,8 @@ func _try_move_here(site: Vector2) -> void:
 
 ## Starts placement mode for moving a settlement (its whole subtree follows).
 func _begin_move(poi: POIData) -> void:
+	if ColonyTutorial.active():
+		return
 	var def := ProductionManager.district_def(poi)
 	if def == null:
 		return
@@ -888,7 +908,7 @@ func _notify_tutorial_district_opened(poi: POIData, root: VBoxContainer) -> void
 	var target_bid := TutorialManager.get_action_building_target()
 	if target_bid == "":
 		return
-	var buildable := BuildingDef.for_poi_and_planet(poi.build_poi_type(), current_data.planet_type)
+	var buildable := BuildingDef.for_poi_and_planet(poi.build_poi_type(), current_data.planet_type, poi.is_orbital())
 	var can_here := false
 	for def in buildable:
 		if def.building_id == target_bid:
@@ -1364,6 +1384,7 @@ func _input(event: InputEvent) -> void:
 			planet_renderer.begin_drag(_rmb["from"])
 		if _rmb["drag"]:
 			planet_renderer.drag_to(mm.position)
+			ColonyTutorial.note("turn")
 			get_viewport().set_input_as_handled()
 			return
 
@@ -1772,6 +1793,8 @@ func _tick_key_spin(delta: float) -> void:
 	if dir == Vector2.ZERO and _key_spin_vel.length_squared() < 1e-4:
 		_key_spin_vel = Vector2.ZERO
 		return
+	if dir != Vector2.ZERO:
+		ColonyTutorial.note("turn")
 	if planet_renderer.tilt_locked:
 		_key_spin_vel.y = 0.0
 	planet_renderer.set_rotation_offset(planet_renderer.get_rotation_offset() + _key_spin_vel.x * delta)
@@ -2437,16 +2460,16 @@ func _on_expedition_changed(kind: String) -> void:
 	_play_rocket_animation(current_data.seed, pad, _on_lander_lifted, "", "Colony Lander", "lander")
 	_refresh_active_panel()
 
-## The district that holds the Spaceport (a Capital), else the first City.
+## The district that holds the finished Spaceport, or the first City.
 func _spaceport_pad(data: PlanetData) -> POIData:
 	var pad: POIData = null
 	var pp := GameState.get_planet(data.seed)
 	for p: POIData in data.custom_pois:
-		if p.is_city() and not p.is_orbital() and not p.constructing:
+		if not p.is_orbital() and not p.constructing:
 			if pp.buildings_in_district(p.label).any(
-					func(b: Dictionary) -> bool: return b.get("building_id", "") == "spaceport"):
+					func(b: Dictionary) -> bool: return b.get("building_id", "") == "spaceport" and not b.get("constructing", false)):
 				return p
-			if pad == null:
+			if pad == null and p.is_city():
 				pad = p
 	return pad
 
@@ -2486,7 +2509,9 @@ func _tick_spaceport_focus() -> void:
 		return
 	_focus_on_site(pad2.lon_deg, pad2.lat_deg, 0.6)
 	_set_zoom_target(maxf(_zoom_target, 1.8), Vector2.INF)
-	_open_capital(pad2)
+	_reveal_panel()
+	_build_district_panel(pad2, current_data)
+	_select_district_on_planet(pad2.label)
 
 # ── Big moments on the globe (playtest 12.11 K44/K46) ───────────────────────
 
@@ -2986,6 +3011,12 @@ func _land_lander(nm: String, def: DistrictDef, site: Vector2) -> void:
 			poi_layer.spawn_floating_text(rad_to_deg(site.x), rad_to_deg(site.y), "Touchdown!", Color(0.65, 1.0, 0.7), 14))
 
 func _maybe_require_first_city() -> void:
+	if ColonyTutorial.active():
+		var first_city := ColonyTutorial.host(current_data, "city")
+		if first_city != null and first_city.constructing:
+			return
+		if current_data == null or not FeatureMap.has_map(current_data.seed):
+			return
 	if _ui_held and not _awaiting_capital(current_data):
 		_release_ui()   # the Capital stands: the interface comes in
 	if current_data == null or _placing_def != null or _naming_open:
@@ -2994,6 +3025,8 @@ func _maybe_require_first_city() -> void:
 		return
 	var city_def := DistrictDef.find(DistrictDef.Type.CITY)
 	if city_def == null:
+		return
+	if not ColonyTutorial.permits_district(city_def.id):
 		return
 	# the opening comes first: the story, the advisor, the handover (playtest 07.11 J)
 	if GameState.onboarding_stage != "done" and not GameState.showcase_mode:
@@ -3015,8 +3048,46 @@ func _maybe_require_first_city() -> void:
 	# on a new game it was never open here, so it stayed shut afterwards)
 	_reopen_panel_after_place = was_open or not GameState.showcase_mode
 	if lead_in and not GameState.showcase_mode:
-		poi_layer.suggested_sites = _suggest_city_sites(city_def)
-		_play_capital_lead_in()
+		if ColonyTutorial.active() or not ColonyTutorial.uses_start_rules():
+			poi_layer.suggested_sites = _suggest_city_sites(city_def)
+		if not ColonyTutorial.active():
+			_play_capital_lead_in()
+		elif not poi_layer.suggested_sites.is_empty():
+			var site: Dictionary = poi_layer.suggested_sites[0]
+			_focus_on_site(rad_to_deg(site["lon"]), rad_to_deg(site["lat"]), 1.0)
+
+func _choose_tutorial_advisor() -> void:
+	if _onboarding_busy or not GameState.active_advisor.is_empty() \
+			or (ColonyTutorial.active() and not ColonyTutorial.acknowledged()):
+		return
+	_onboarding_busy = true
+	AdvisorChoice.open(self, func(id: String) -> void:
+		for advisor: String in AdvisorChoice.IDS:
+			if not GameState.unlocked_advisors.has(advisor):
+				GameState.unlocked_advisors.append(advisor)
+		GameState.appoint_advisor(id)
+		Narrative.log_event("%s was appointed as advisor." % GameState._advisor_name(id))
+		_onboarding_busy = false
+		GameState.save())
+
+func _open_tutorial_district(label: String, capital_panel := false) -> void:
+	var poi := _find_poi(current_data, label)
+	if poi == null:
+		return
+	_focus_on_site(poi.lon_deg, poi.lat_deg)
+	_reveal_panel()
+	if poi.is_city() and not capital_panel:
+		_build_city_panel(poi, current_data)
+	else:
+		_build_district_panel(poi, current_data)
+
+func _refresh_colony_course() -> void:
+	if _ui_held and not _awaiting_capital(current_data):
+		_maybe_require_first_city()
+	_rebuild_lens_bar()
+	HUDManager._sync_shortcuts()
+	_refresh_active_panel()
+	_refresh_excavation_sites()
 
 ## Closes the planet panel: at once (`snap`, nothing on screen yet) or sliding.
 func _tuck_panel(snap: bool) -> void:
@@ -3765,6 +3836,15 @@ func _road_links() -> Array[Vector2i]:
 		groups[c].append(i)
 	for c in groups:
 		links.append_array(_mst(groups[c]))
+	if ColonyTutorial.active():
+		for i in _territories.size():
+			var poi: POIData = _territories[i]["poi"]
+			var parent := _city_index_of(i)
+			if parent < 0 or parent == i or poi.type_tag not in ["residential", "generator"]:
+				continue
+			var pair := Vector2i(parent, i)
+			if not links.has(pair) and not links.has(Vector2i(i, parent)):
+				links.append(pair)
 	# every pair of cities gets its own road / sea lane — port to port, not
 	# hopping through a third city
 	var cities: Array = groups.keys()
@@ -5601,7 +5681,8 @@ func _rebuild_lens_bar() -> void:
 			tree_exiting.disconnect(_lens_bar.queue_free)
 		_lens_bar.queue_free()
 	_lens_buttons.clear()
-	if current_data == null or not FeatureMap.has_map(current_data.seed):
+	if current_data == null or not FeatureMap.has_map(current_data.seed) \
+			or (current_data.seed == GameState.home_planet_seed and not ColonyTutorial.facility_ready("survey_office")):
 		_mount_orbit_toggle()   # no lens bar: back to the bottom-left
 		return
 	if _role != "" and not GameState.is_scanned(current_data.seed):
@@ -5632,6 +5713,8 @@ func _rebuild_lens_bar() -> void:
 	_lens_buttons[""] = nb
 	list.add_child(nb)
 	for role: String in FeatureMap.ROLES:
+		if not ColonyTutorial.lens_open(role):
+			continue
 		var info: Dictionary = FeatureMap.ROLES[role]
 		var tint: Color = info["tint"]
 		var cap_role := role
@@ -6221,8 +6304,13 @@ func _tick_lens_tip() -> void:
 
 ## Shows one role's overlay ("" = none).
 func _set_role(role: String) -> void:
+	if not ColonyTutorial.lens_open(role):
+		return
 	_role = role
 	_refresh_lens()
+	if ColonyTutorial.note_lens(role):
+		_refresh_active_panel()
+		GameState.save()
 
 ## Pushes the current role overlay to the planet shader.
 ## Colour key of the open lens, just above the lens bar: one swatch per feature.
@@ -6438,7 +6526,10 @@ func _can_hover_excavation(at: Vector2) -> bool:
 		and _is_over_planet_area(at)
 
 func _set_zoom_target(z: float, anchor: Vector2) -> void:
-	_zoom_target = clampf(z, ZOOM_SYSTEM if _system_zoom_ok() else ZOOM_MIN, _zoom_max())
+	var target := clampf(z, ZOOM_SYSTEM if _system_zoom_ok() else ZOOM_MIN, _zoom_max())
+	if not is_equal_approx(target, _zoom_target):
+		ColonyTutorial.note("zoom")
+	_zoom_target = target
 	_zoom_anchor = anchor
 
 func _apply_zoom() -> void:
@@ -6514,6 +6605,9 @@ func _screen_to_lonlat(global_pos: Vector2) -> Dictionary:
 var _reopen_panel_after_place := false
 
 func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void:
+	if not ColonyTutorial.permits_district(def.id):
+		AudioManager.play("denied")
+		return
 	_end_district_placement()
 	# the first City on a world with a lander in orbit is always a landing
 	if def.is_system_anchor() and current_data != null and _city_count(current_data) == 0 \
@@ -6546,6 +6640,9 @@ func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void
 		_role_before_place = _role
 		_set_role(lens)
 	_place_zoom_in(def, parent)
+	if ColonyTutorial.active() and not poi_layer.suggested_sites.is_empty():
+		var target: Dictionary = poi_layer.suggested_sites[0]
+		_focus_on_site(rad_to_deg(target["lon"]), rad_to_deg(target["lat"]))
 
 ## Placing something brings the globe in close (revision 12.11): a district
 ## turns to its City and zooms until the City's reach fills most of the view;
@@ -6623,6 +6720,8 @@ func _show_place_hint(def: DistrictDef) -> void:
 		title = "CHOOSE THE SITE OF YOUR CAPITAL"
 		help = "Click a site on %s  //  Drag to rotate  //  Scroll to zoom" \
 			% TerrainSampler.placement_label(def.placement)
+	if ColonyTutorial.active():
+		help = "Click the marked site  //  Drag to rotate  //  Scroll to zoom"
 	NewsFeed.show_message(PLACE_MSG, current_data.planet_name if current_data != null else "Placement",
 		title, help, {"sec": 0.0, "extra": extra, "extra_color": &"neutral_stroke"})
 
@@ -6713,7 +6812,11 @@ func _update_placement_hover() -> void:
 	if not hit["hit"] or not _is_over_planet_area(mouse) or TutorialManager.is_narrating():
 		poi_layer.clear_ghost()
 		return
+	var guided_site := _snap_to_tutorial_site(hit)
 	var chk := TerrainSampler.check_site(current_data, _placing_def, hit["lon"], hit["lat"])
+	if not guided_site:
+		chk["ok"] = false
+		chk["reason"] = "Build at the marked site"
 	if _moving_poi != null:   # the moved settlement and its districts must all fit
 		var mb := Settlement.move_site_block(current_data, _moving_poi, Vector2(hit["lon"], hit["lat"]))
 		chk["ok"] = mb == ""
@@ -7078,7 +7181,12 @@ func _site_probe(def: DistrictDef, tags: Dictionary, coastal: bool, terrain: int
 ## River"): the ones it can't build are left out (playtest 31.10).
 func _site_building_rows(def: DistrictDef, probe: POIData) -> Array:
 	var rows: Array = []
-	for b: BuildingDef in BuildingDef.for_poi_and_planet(def.to_poi_type(), current_data.planet_type):
+	var buildings := BuildingDef.for_poi_and_planet(def.to_poi_type(), current_data.planet_type, def.is_orbital)
+	if ColonyTutorial.active() and def.id == DistrictDef.Type.GENERATOR:
+		var turbine := BuildingDef.find("wind_turbine")
+		if turbine != null and not buildings.has(turbine):
+			buildings.append(turbine)
+	for b: BuildingDef in buildings:
 		if b.required_tag == "" and not b.requires_coastal and b.required_terrain.is_empty() \
 				and b.required_features.is_empty():
 			continue
@@ -7226,6 +7334,21 @@ func _suggest_guide_site(def: DistrictDef, parent: POIData) -> void:
 		return
 	if def.base_outputs.is_empty() or Guide._has_district(current_data, def.id):
 		return
+	var planned_energy := Vector2.INF
+	if ColonyTutorial.active():
+		var plan: Dictionary = GameState.story_flags.get(TutorialSites.PLAN, {})
+		var site: Vector2 = plan.get(ColonyTutorial.step(), Vector2.INF)
+		if site != Vector2.INF and TerrainSampler.check_site(current_data, def, site.x, site.y)["ok"] \
+				and _placement_system_check(def, site.x, site.y)["ok"]:
+			poi_layer.suggested_sites = [TutorialSites.marker(site, current_data)]
+			return
+		if def.id == DistrictDef.Type.GENERATOR:
+			var wind_site := _find_tutorial_wind_site(def, parent)
+			if wind_site != Vector2.INF:
+				poi_layer.suggested_sites = [TutorialSites.marker(wind_site, current_data)]
+			return
+		if def.id == DistrictDef.Type.RESIDENTIAL:
+			planned_energy = plan.get("energy", Vector2.INF)
 
 	var existing_multipliers := {}
 	for poi: POIData in current_data.custom_pois:
@@ -7255,17 +7378,50 @@ func _suggest_guide_site(def: DistrictDef, parent: POIData) -> void:
 				var point := ring_centre + tangent * ring_radius
 				var site_lon := atan2(point.x, point.z)
 				var site_lat := asin(clampf(-point.y, -1.0, 1.0))
+				if planned_energy != Vector2.INF and TerrainSampler.angular_distance(
+						site_lon, site_lat, planned_energy.x, planned_energy.y) < min_angle:
+					continue
 				var check := TerrainSampler.check_site(current_data, def, site_lon, site_lat)
 				if not check["ok"] or not _placement_system_check(def, site_lon, site_lat)["ok"]:
 					continue
 				var terrain: Dictionary = check["terrain"]
 				var probe := _site_probe(def, {}, bool(terrain["coastal"]), int(terrain["terrain"]), site_lon, site_lat)
 				var score := _guide_site_score(probe, output_id, existing_multipliers)
+				if ColonyTutorial.active():
+					var total := Economy.site_mult(FeatureMap.terrain_mult(current_data, probe, output_id),
+						Location.mult(current_data, probe))
+					score = -absf(total - 2.0)
 				if score > best_score:
 					best_score = score
 					best_site = {"lon": site_lon, "lat": site_lat, "r": min_angle * 0.47}
 	if not best_site.is_empty():
 		poi_layer.suggested_sites = [best_site]
+
+func _find_tutorial_wind_site(def: DistrictDef, parent: POIData) -> Vector2:
+	var turbine := BuildingDef.find("wind_turbine")
+	var best := Vector2.INF
+	var error := INF
+	var reach := _city_reach_rad(parent.label) + deg_to_rad(TerrainSampler.territory_radius_deg(current_data, parent))
+	var centre := Vector2(deg_to_rad(parent.lon_deg), deg_to_rad(parent.lat_deg))
+	for site: Vector2 in TutorialSites.wind_cells(current_data):
+		if TerrainSampler.angular_distance(centre.x, centre.y, site.x, site.y) > reach:
+			continue
+		var check := TerrainSampler.check_site(current_data, def, site.x, site.y)
+		if not check["ok"] or not _placement_system_check(def, site.x, site.y)["ok"]:
+			continue
+		var terrain: Dictionary = check["terrain"]
+		var probe := _site_probe(def, {}, bool(terrain["coastal"]), int(terrain["terrain"]), site.x, site.y)
+		if not turbine.site_block_reason(probe, current_data).is_empty():
+			continue
+		var location := Location.mult(current_data, probe)
+		var total := Economy.site_mult(FeatureMap.terrain_mult(current_data, probe, Economy.ENERGY), location)
+		var difference := absf(total - 2.0) + absf(location - 2.0)
+		if difference < error:
+			error = difference
+			best = site
+			if is_zero_approx(error):
+				break
+	return best
 
 func _guide_site_score(probe: POIData, output_id: String, existing_multipliers: Dictionary) -> float:
 	var geography := FeatureMap.terrain_mult(current_data, probe, output_id)
@@ -7283,6 +7439,11 @@ func _suggest_city_sites(def: DistrictDef) -> Array:
 	var out: Array = []
 	if current_data == null:
 		return out
+	var guided := ColonyTutorial.active()
+	if guided:
+		var saved: Dictionary = GameState.story_flags.get(TutorialSites.PLAN, {})
+		if saved.has("city"):
+			return [TutorialSites.marker(saved["city"], current_data)]
 	var cands: Array = []
 	var lat_lim := int(TerrainSampler.MAX_PLACE_LAT_DEG) - 5
 	for lat_d in range(-lat_lim, lat_lim + 1, 5):
@@ -7301,15 +7462,22 @@ func _suggest_city_sites(def: DistrictDef) -> Array:
 	cands.sort_custom(func(x: Array, y: Array) -> bool: return float(x[0]) > float(y[0]))
 	var r := deg_to_rad(TerrainSampler.city_reach_deg(current_data, 1))
 	for c: Array in cands:
-		if out.size() >= SUGGEST_COUNT:
+		if out.size() >= (24 if guided else SUGGEST_COUNT):
 			break
 		var apart := true
 		for o: Dictionary in out:
-			if TerrainSampler.angular_distance(float(c[1]), float(c[2]), float(o["lon"]), float(o["lat"])) < r * 1.5:
+			if TerrainSampler.angular_distance(float(c[1]), float(c[2]), float(o["lon"]), float(o["lat"])) < r * (0.65 if guided else 1.5):
 				apart = false
 				break
 		if apart and bool(TerrainSampler.check_site(current_data, def, float(c[1]), float(c[2]))["ok"]):
 			out.append({"lon": float(c[1]), "lat": float(c[2]), "r": r})
+	if guided and not out.is_empty():
+		var plan := TutorialSites.choose(current_data, out)
+		if not plan.is_empty():
+			GameState.story_flags[TutorialSites.PLAN] = plan
+			GameState.save()
+			return [TutorialSites.marker(plan["city"], current_data)]
+		return [TutorialSites.marker(Vector2(out[0]["lon"], out[0]["lat"]), current_data)]
 	return out
 
 ## The reach summary as one card row: how many district kinds the land helps
@@ -7327,13 +7495,32 @@ func _reach_rows(lon: float, lat: float) -> Array:
 		_bb("[b]helps %d of %d district kinds[/b]" % [nf, REACH_FAMILIES.size()], col)])
 	return rows
 
+func _snap_to_tutorial_site(hit: Dictionary) -> bool:
+	if not ColonyTutorial.active():
+		return true
+	if poi_layer.suggested_sites.is_empty():
+		return false
+	var target: Dictionary = poi_layer.suggested_sites[0]
+	if TerrainSampler.angular_distance(hit["lon"], hit["lat"], target["lon"], target["lat"]) > float(target["r"]):
+		return false
+	hit["lon"] = target["lon"]
+	hit["lat"] = target["lat"]
+	return true
+
 func _try_place_district(global_pos: Vector2) -> void:
 	var hit := _screen_to_lonlat(global_pos)
 	if not hit["hit"] or current_data == null:
 		return
 	var def := _placing_def
 	if _moving_poi != null:
+		if ColonyTutorial.active():
+			return
 		_try_move_here(Vector2(hit["lon"], hit["lat"]))
+		return
+	if def == null or not ColonyTutorial.permits_district(def.id):
+		return
+	if not _snap_to_tutorial_site(hit):
+		AudioManager.play("denied")
 		return
 	var chk := TerrainSampler.check_site(current_data, def, hit["lon"], hit["lat"])
 	if not chk["ok"] or not _placement_system_check(def, hit["lon"], hit["lat"])["ok"]:
@@ -8415,7 +8602,8 @@ func _show_found_city_tip(data: PlanetData) -> void:
 		lines.append("")
 		lines.append(_bb("➡ " + block, BB_BAD))
 	var makes := cdef.base_outputs.duplicate()
-	makes[Economy.POPULATION] = float(makes.get(Economy.POPULATION, 0.0)) + Balance.cfg.city_base_pop   # it houses people too
+	var base_housing := ColonyTutorial.CITY_HOUSING if ColonyTutorial.active() else Balance.cfg.city_base_pop
+	makes[Economy.POPULATION] = float(makes.get(Economy.POPULATION, 0.0)) + base_housing
 	_show_build_tip("Found City", "\n".join(lines), makes, ProductionManager.district_cycle_sec(cdef), _cost_bb(cost, 0, data, pp),
 		GameState.credits >= cost)
 
@@ -8424,6 +8612,8 @@ func _show_found_city_tip(data: PlanetData) -> void:
 func _district_options(data: PlanetData, orbital_only: bool, parent: POIData) -> Array[DistrictDef]:
 	var out: Array[DistrictDef] = []
 	for def: DistrictDef in DistrictDef.for_planet(data.planet_type):
+		if not ColonyTutorial.permits_district(def.id):
+			continue
 		if def.is_orbital != orbital_only or def.is_orbit_city:
 			continue   # the Orbit City comes with the Orbit, never as a district
 		if def.unlock_skill != "" and not get_node("/root/SkillTree").is_unlocked(def.unlock_skill):
@@ -9056,6 +9246,14 @@ func _refresh_bar_label_status(key: String) -> void:
 func _on_building_constructed(planet_seed: int, key: String, _building_id: String = "") -> void:
 	if current_data == null or current_data.seed != planet_seed:
 		return
+	if ColonyTutorial.uses_start_rules() and not ColonyTutorial.active() and planet_seed == GameState.home_planet_seed:
+		match _building_id:
+			"survey_office", "archaeology_bureau":
+				_refresh_colony_course.call_deferred()
+			"communications_station":
+				NewsFeed.post("Surface station online. The first transmission has been received.", NewsFeed.Kind.EVENT)
+			"government_building":
+				_choose_tutorial_advisor.call_deferred()
 
 	# Parse key format: "{seed}:{poi_label}:{idx}"
 	var last_col  := key.rfind(":")
@@ -10209,7 +10407,7 @@ func _bulk_options_bb() -> String:
 ## many were queued (0 = nothing bought, error sound played).
 func _buy_buildings(poi: POIData, planet: PlanetData, def: BuildingDef, want: int) -> int:
 	var pp := GameState.get_planet(planet.seed)
-	var n := Economy.max_buildable(pp, def, poi, want)
+	var n := Economy.max_buildable(pp, def, poi, mini(want, ColonyTutorial.build_limit(planet, poi, def.building_id)))
 	if n <= 0 or not Economy.pay(Economy.building_full_cost(pp, def, poi.label, n)):
 		AudioManager.play("error")
 		return 0
@@ -10445,7 +10643,7 @@ func _build_district_base_row(poi: POIData, planet: PlanetData, pp: PlanetProgre
 		box.add_child(brow)
 	# Site-only buildings this spot unlocks
 	var unlocked: Array[String] = []
-	for b: BuildingDef in BuildingDef.for_poi_and_planet(poi.build_poi_type(), planet.planet_type):
+	for b: BuildingDef in BuildingDef.for_poi_and_planet(poi.build_poi_type(), planet.planet_type, poi.is_orbital()):
 		if (b.required_tag != "" or b.requires_coastal or not b.required_terrain.is_empty() or not b.required_features.is_empty()) \
 				and b.site_block_reason(poi, planet) == "":
 			unlocked.append(b.display_name)
@@ -11970,7 +12168,7 @@ func _slot_dd_signature() -> String:
 	var pp: PlanetProgress = _slot_dd_args[3]
 	var free_pop := Economy.free_population(planet, pp)
 	var sig := ""
-	for def: BuildingDef in BuildingDef.for_poi_and_planet(poi.build_poi_type(), planet.planet_type):
+	for def: BuildingDef in BuildingDef.for_poi_and_planet(poi.build_poi_type(), planet.planet_type, poi.is_orbital()):
 		# payable and housed are separate bits: with population short, a row
 		# that became affordable must still rebuild (playtest 30.10)
 		sig += "1" if Economy.can_pay(Economy.building_full_cost(pp, def, poi.label)) else "0"
@@ -12015,7 +12213,7 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 				_start_tut_node_pulse(_tut_highlight_node)
 			return
 
-	var buildable := BuildingDef.for_poi_and_planet(poi.build_poi_type(), current_data.planet_type)
+	var buildable := BuildingDef.for_poi_and_planet(poi.build_poi_type(), current_data.planet_type, poi.is_orbital())
 	if buildable.is_empty():
 		return
 	_slot_dd_args = [card, poi, planet, pp, root, _slot_idx]
@@ -12043,6 +12241,8 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 	scroll.add_child(list)
 
 	for def: BuildingDef in buildable:
+		if ColonyTutorial.build_limit(planet, poi, def.building_id) <= 0:
+			continue
 		if def.min_planet_lv > pp.level:
 			continue
 		if def.planet_limit_reached(pp):
@@ -12066,10 +12266,12 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		var pop_need := def.pop_use()
 		var has_pop: bool = Economy.free_population(planet, pp) >= pop_need
 		var known: bool = def.minerals_known()
-		var enabled: bool    = can_afford and has_slots and not at_limit and site_reason == "" and known
+		var facility_block := def.facility_build_block(pp, poi)
+		var enabled: bool = can_afford and has_slots and not at_limit and known and facility_block.is_empty()
 
 		var reason := ""
-		if not known: reason = "Needs a mineral you haven't found yet. A Production district or mine finds this world's minerals."
+		if not facility_block.is_empty(): reason = facility_block
+		elif not known: reason = "Needs a mineral you haven't found yet. A Production district or mine finds this world's minerals."
 		elif site_reason != "": reason = site_reason
 		elif at_limit: reason = "Limit reached"
 		elif not has_slots: reason = "No free slots"
@@ -12899,7 +13101,7 @@ func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 		"Workers", "People working here: the district itself and its buildings."))
 	tot_chips.add_child(_mini_chip("population", Economy.fmt(housed_here), Economy.color_of(Economy.POPULATION),
 		"Housing", "Homes here: the district and its buildings%s." % (
-			", and the City centre (%s)" % Economy.fmt(Balance.cfg.city_base_pop) if poi.is_city() else "")))
+			", and the City centre (%s)" % Economy.fmt(ColonyTutorial.city_housing(planet, poi, pp)) if poi.is_city() else "")))
 	var tot_m := MarqueeLabel.wrap(tot_chips)   # glides when it runs long
 	tot_m.align = 1.0
 	tot_m.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -13289,7 +13491,7 @@ func _burst_particles(pos: Vector2, col: Color) -> void:
 
 func _on_seed_clicked(event: InputEvent, s: int) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		DisplayServer.clipboard_set(str(s))
+		DisplayServer.clipboard_set(ColonyTutorial.seed_label(s))
 
 func _build_rings(data: PlanetData) -> void:
 	if _ring_back  and is_instance_valid(_ring_back):  _ring_back.queue_free()

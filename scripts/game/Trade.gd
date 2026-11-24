@@ -2,7 +2,7 @@
 ##
 ##   access      Trade Access research opens manual buying and selling of every
 ##               product the player can reach, Science included; automation needs
-##               Trade Automation. A raw resource must have been discovered first
+##               an operating Trade Administration. A raw resource must have been discovered first
 ##               (its name and price never show before); Fuel needs Fuel
 ##               Processing, Rare needs Rare Processing. Trade never opens access.
 ##   prices      one market price, reference × m (unit_price; sell / buy ratios
@@ -153,7 +153,8 @@ static func _push(id: String, units: float) -> void:
 
 ## Every frame (ProductionManager): pressure fades back toward the reference.
 static func tick_prices(delta: float) -> void:
-	_tick_noise(delta)
+	if not ColonyTutorial.active() or ColonyTutorial.step() != "buy":
+		_tick_noise(delta)
 	_record_history(delta)
 	if GameState.trade_pressure.is_empty():
 		return
@@ -169,7 +170,12 @@ static func has_access() -> bool:
 	return SkillTree.is_unlocked("trade_access")
 
 static func has_automation() -> bool:
-	return SkillTree.is_unlocked("trade_automation")
+	return has_access() and ProductionManager.has_running_facility("trade_administration")
+
+static func automation_block() -> String:
+	if not SkillTree.is_unlocked("trade_automation"):
+		return "Research Trade Automation to unlock the Trade Administration."
+	return "An operating Trade Administration is required for standing orders."
 
 ## Products shown on the trade panel, in a fixed order (only reachable ones).
 ## The Market's rows, in order (playtest 07.11): Science, the raw minerals,
@@ -272,6 +278,8 @@ static func max_buy(id: String, credit_floor: float = 0.0) -> float:
 
 ## Sells up to `qty` (less if the sellable stock is short). Returns the amount sold.
 static func sell(id: String, qty: float, source: String = "manual", extra_reserve: float = 0.0) -> float:
+	if ColonyTutorial.active():
+		qty = ColonyTutorial.trade_limit(id, true, qty) if source == "manual" else 0.0
 	if not can_trade(id) or qty <= 0.0:
 		return 0.0
 	var n := minf(qty, sellable(id, extra_reserve))
@@ -288,9 +296,14 @@ static func sell(id: String, qty: float, source: String = "manual", extra_reserv
 
 ## Buys up to `qty` (less if credits or storage are short). Returns the amount bought.
 static func buy(id: String, qty: float, source: String = "manual", credit_floor: float = 0.0) -> float:
+	if ColonyTutorial.active():
+		qty = ColonyTutorial.trade_limit(id, false, qty) if source == "manual" else 0.0
 	if not can_trade(id) or qty <= 0.0:
 		return 0.0
 	var n := minf(qty, max_buy(id, credit_floor))
+	if ColonyTutorial.active() and source == "manual" and room(id) >= qty \
+			and buy_cost(id, qty) <= GameState.credits - credit_floor:
+		n = qty # The exact quoted quantity can be affordable even when max_buy rounds down.
 	if n <= 0.0:
 		return 0.0
 	var credits := buy_cost(id, n)
@@ -312,7 +325,7 @@ static func _take(id: String, n: float) -> void:
 		_:               GameState.consume_resource(id, n)
 
 ## New production that didn't fit in storage (GameState.add_resource). Sold
-## once Trade Automation is researched (playtest 23.10: it should be earned);
+## while the Trade Administration is operating;
 ## otherwise it's lost. It lowers the price like any sale.
 static func sell_overflow(id: String, overflow: float) -> void:
 	if overflow <= 0.0 or not can_trade(id) or not has_automation():
@@ -344,7 +357,7 @@ static func order(id: String) -> Dictionary:
 ## Why an order can't be set ("" when it can).
 static func order_block(id: String, mode: String, target: float) -> String:
 	if not has_automation():
-		return "Research Trade Automation"
+		return automation_block()
 	if not can_trade(id):
 		return product_block(id)
 	if mode != MODE_OFF and mode != MODE_SELL and target > Economy.cap(id):

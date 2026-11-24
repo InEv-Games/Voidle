@@ -131,17 +131,20 @@ func show_line(speaker: String, text: String, portrait: Texture2D) -> void:
 
 ## The answers to the line on screen; CONTINUE gives way to them. `tips[i]`:
 ## what that answer leads to in the game, shown in its tooltip ("": none).
-func show_choices(texts: Array[String], tips: Array[String] = []) -> void:
+func show_choices(texts: Array[String], tips: Array[String] = [], locked := PackedInt32Array()) -> void:
 	_clear_choices()
 	_has_choices = true
 	_side.custom_minimum_size.x = SIDE_W
 	_next.visible = false
 	for i in texts.size():
 		var b := IconButton.create(texts[i], "confirm", IconButton.Variant.DEFAULT)
+		b.disabled = locked.has(i)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL   # the column's width, stacked
 		var at := i
 		var label := texts[i]
 		b.pressed.connect(func() -> void:
+			if b.disabled:
+				return
 			if _typing != null:
 				_skip_typing()
 				return

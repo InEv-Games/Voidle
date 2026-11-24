@@ -12,8 +12,8 @@ extends RefCounted
 ##                 (SettingsManager.unlocked_starts), played in a later build.
 ##   MOON          the home world's moon. Only the rocky moon for now (locked).
 ##   HEAD START    one of BOONS: a small push in one direction.
-##   TUTORIAL      the small box by BEGIN: guided (the advisor leads) or the
-##                 optional checklist, which can be skipped for its rewards.
+##   TUTORIAL      required until completed once, then optional. Guided starts
+##                 use the tutorial seed and Standard starting resources.
 ## The choices go to GameState.pending_setup (the seed is read by delete_save,
 ## the rest by _apply_new_game_start).
 
@@ -72,9 +72,13 @@ const BOON_ORDER := ["", "merchant", "industry", "gifted"]
 ## range. Anything typed (a long number, a word) is folded into it (seed_of).
 const SEED_MIN := 1000
 const SEED_MAX := 99999
+const TUTORIAL_SEED_CODE := "847209631758492063"
 const NAME_MAX := 20
 
 static var _popup: ModalPopup = null
+
+static func tutorial_seed() -> int:
+	return seed_of(TUTORIAL_SEED_CODE)
 
 ## Opens the window over `host` (the main menu); `begin` runs after the
 ## choices are stored (BEGIN).

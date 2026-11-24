@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BuildingDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+building_id = "survey_office"
+display_name = "Survey Office"
+description = "Unlocks the surface survey and the colony's first lens."
+allowed_poi_types = Array[int]([0])
+base_cost = 180.0
+max_per_planet = 1
+construct_duration = 4.0
+tick_duration = 0.0
+energy_per_tick = 0.0
+build_materials = {}
+pop_cost = 0
+tier = 0

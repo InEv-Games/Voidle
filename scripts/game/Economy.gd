@@ -148,7 +148,13 @@ static func base_cap(key: String) -> float:
 		GOODS: return c.base_cap_goods
 		FUEL:  return c.base_cap_fuel
 		RARE:  return c.base_cap_rare
-		RAW:   return c.base_cap_raw   # per raw resource kind
+		RAW:
+			if ColonyTutorial.active() and not ColonyTutorial.reached("civilization"):
+				var pd := GameState.get_home_planet()
+				var pp := GameState.get_planet(pd.seed) if pd != null else null
+				if ColonyTutorial.count(pp, ColonyTutorial.host(pd, "production"), "warehouse", true) == 0:
+					return 20.0
+			return c.base_cap_raw   # per raw resource kind
 	return 0.0
 
 static var _cap_cache: Dictionary = {}
@@ -350,6 +356,8 @@ static func max_buildable(pp: PlanetProgress, def: BuildingDef, poi: POIData, ca
 ## How many of `def` the district still has room for: free slots and the
 ## per-district / per-planet limits, the cost left out.
 static func building_room(pp: PlanetProgress, def: BuildingDef, poi: POIData) -> int:
+	if not def.facility_build_block(pp, poi).is_empty():
+		return 0
 	var free_slots: int = pp.district_slots(poi) - pp.slots_used_in_district(poi.label)
 	var n := int(floor(float(free_slots) / float(maxi(def.slot_cost, 1))))
 	if def.max_per_district > 0:
@@ -474,7 +482,7 @@ static func world_max_population(pd: PlanetData, pp: PlanetProgress) -> int:
 			total += ProductionManager.district_base(pp, poi, POPULATION)   # the Orbit City's
 			continue
 		if poi.is_city() and not poi.constructing:   # a City houses nobody until it stands
-			total += Balance.cfg.city_base_pop * scope_bonus(pp, poi.label, POPULATION, pd)
+			total += ColonyTutorial.city_housing(pd, poi, pp) * scope_bonus(pp, poi.label, POPULATION, pd)
 		total += ProductionManager.district_base(pp, poi, POPULATION)   # bonus included
 	for b: Dictionary in pp.buildings:
 		if b.get("constructing", false):
@@ -554,7 +562,7 @@ static func district_pop_used(pp: PlanetProgress, poi: POIData) -> int:
 static func district_housing(pd: PlanetData, pp: PlanetProgress, poi: POIData) -> int:
 	var total := ProductionManager.district_base(pp, poi, POPULATION)
 	if poi.is_city() and not poi.constructing:
-		total += Balance.cfg.city_base_pop * scope_bonus(pp, poi.label, POPULATION, pd)
+		total += ColonyTutorial.city_housing(pd, poi, pp) * scope_bonus(pp, poi.label, POPULATION, pd)
 	for b: Dictionary in pp.buildings_in_district(poi.label):
 		if b.get("constructing", false):
 			continue

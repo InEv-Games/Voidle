@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BuildingDef" format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+building_id = "communications_station"
+display_name = "Communications Station"
+description = "Receives news and transmissions for the colony."
+allowed_poi_types = Array[int]([0])
+base_cost = 200.0
+max_per_planet = 1
+construct_duration = 4.0
+tick_duration = 0.0
+energy_per_tick = -2.0
+build_materials = {}
+pop_cost = 125
+tier = 0

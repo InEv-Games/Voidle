@@ -140,6 +140,10 @@ func note_capital_opened() -> void:
 ## notifications) waits until the tutorial is over (playtest 12.11: a dig at
 ## the very start confused). Later games (the optional checklist): at once.
 func side_open() -> bool:
+	if ColonyTutorial.active():
+		return ColonyTutorial.reached("dig")
+	if ColonyTutorial.uses_start_rules():
+		return ColonyTutorial.facility_ready("archaeology_bureau")
 	return GameState.tutorial_step == "done" or checklist_mode()
 
 ## The tutorial is running.
@@ -158,6 +162,10 @@ func _reset() -> void:
 
 func _process(delta: float) -> void:
 	_update_blocker()
+	if ColonyTutorial.active():
+		if not NewsFeed.on_main_menu():
+			ColonyTutorial.tick(get_tree().current_scene)
+		return
 	var step := GameState.tutorial_step
 	if step != "" and step != "done" and not STEPS.has(step):
 		GameState.tutorial_step = STEPS[0]   # a step id of an older build: start over (done ones pass at once)
@@ -301,6 +309,8 @@ func _reward_bb(step: String) -> String:
 ## The guided run is on a step the player must follow (not the checklist, not
 ## the last line, in the planet view).
 func blocking() -> bool:
+	if ColonyTutorial.active():
+		return false # The course gates actions at their entry points.
 	if checklist_mode() or GameState.showcase_mode or NewsFeed.on_main_menu():
 		return false
 	var step := GameState.tutorial_step
@@ -343,6 +353,8 @@ func blocks_panel_keys() -> bool:
 
 ## A shortcut ("trade", "tree", "companions" …) the step allows.
 func allows_shortcut(which: String) -> bool:
+	if ColonyTutorial.active():
+		return ColonyTutorial.allows_ui(which)
 	if not blocking():
 		return true
 	var step := GameState.tutorial_step
@@ -435,6 +447,8 @@ func _ask_skip() -> void:
 
 ## Ends the checklist and pays every reward not paid yet.
 func skip_tutorial() -> void:
+	if ColonyTutorial.active():
+		return
 	for step: String in STEPS:
 		_pay(step)   # flagged: never twice
 	GameState.tutorial_step = "done"
@@ -450,6 +464,8 @@ func skip_tutorial() -> void:
 func reset_tutorial() -> void:
 	SettingsManager.tutorial_ever_done = false
 	SettingsManager.save_settings()
+	if GameState.story_flags.get(ColonyTutorial.FLAG, false):
+		return # A new course needs a new colony, its reserved sites and its original economy.
 	GameState.tutorial_guided = true
 	if GameState.onboarding_stage == "done" and GameState.tutorial_step == "done":
 		GameState.tutorial_step = STEPS[0]
@@ -886,7 +902,7 @@ static func _rich(px: int) -> RichTextLabel:
 ## (Also run by Inbox each second: after the tutorial this card's loop stops.)
 func _refresh_extras() -> void:
 	# 10.11: the side stories are notifications now (Inbox), not card buttons
-	if not side_open():
+	if ColonyTutorial.active() or not side_open():
 		return   # after the tutorial (playtest 12.11)
 	if not Narrative.has_played("archive_lazarus") and not Inbox.has("story:record") \
 			and not GameState.story_flags.has("inbox_told:record"):

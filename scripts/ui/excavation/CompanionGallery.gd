@@ -161,7 +161,7 @@ func _pick(id: String) -> void:
 	_name.caption = def.role if met else "Not met yet"
 	_name.title = def.display_name.to_upper() if met else "???"
 	_bonus.text = def.bonus_bb(11) if def != null else ""
-	_bonus.visible = met
+	_bonus.visible = met and ministry != GameState.PRESS_ASSISTANT
 	_bio.text = def.bio if met else (def.hint if def != null else "Others will join you in the civilizations ahead.")
 	_refresh_assign()
 	_detail.modulate.a = 0.0
@@ -206,9 +206,12 @@ func _appoint_tip() -> String:
 	var lines: Array[String] = []
 	lines.append("[color=#%s]%s[/color]  %s  >  %s" % [dim, _title_of(ministry),
 		sitting.display_name if sitting != null else "vacant", def.display_name])
-	if sitting != null:
-		lines.append("[color=#%s]Ends:[/color]  %s" % [UIStyle.hex(&"bad"), sitting.bonus_bb(12)])
-	lines.append("[color=#%s]Starts:[/color]  %s" % [UIStyle.hex(&"good"), def.bonus_bb(12)])
+	if ministry == GameState.PRESS_ASSISTANT:
+		lines.append("Gives press statements in the News feed.")
+	else:
+		if sitting != null:
+			lines.append("[color=#%s]Ends:[/color]  %s" % [UIStyle.hex(&"bad"), sitting.bonus_bb(12)])
+		lines.append("[color=#%s]Starts:[/color]  %s" % [UIStyle.hex(&"good"), def.bonus_bb(12)])
 	var cost := GameState.early_appoint_cost(ministry)
 	if cost > 0.0:
 		var left := GameState.ministry_ready_at(ministry) - GameState.calendar_seconds

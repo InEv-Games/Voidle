@@ -331,6 +331,8 @@ static func slot_cost(i: int) -> Dictionary:
 
 ## Pays for slot `i` and queues its pick of three. False when it can't be bought.
 static func unlock_slot(pd: PlanetData, i: int) -> bool:
+	if ColonyTutorial.active():
+		return false
 	if slot_state(pd, i) != Slot.OPEN_TO_BUY or not Economy.pay(slot_cost(i)):
 		return false
 	queue_offer(pd)

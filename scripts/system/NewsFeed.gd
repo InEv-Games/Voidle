@@ -130,10 +130,20 @@ func post_planet_level(planet_seed: int, level: int) -> void:
 	var pd := GameState.get_planet_data(planet_seed)
 	var pname := pd.planet_name if pd else "A world"
 	var new_pick := level in Balance.cfg.trait_slot_levels.slice(1)
-	post("%s reaches planet level %d.%s" % [pname, level, "  A trait slot can be opened." if new_pick else ""],
+	var headline := "%s reaches planet level %d.%s" % [pname, level, "  A trait slot can be opened." if new_pick else ""]
+	var assistant := GameState.press_assistant_name()
+	if not assistant.is_empty():
+		headline = "%s confirms %s has reached planet level %d.%s" % [assistant, pname, level,
+			"  A trait slot can be opened." if new_pick else ""]
+	post(headline,
 		Kind.EVENT, "The planet can now hold %d Cities.%s" % [Leveling.max_cities(GameState.get_planet(planet_seed)),
 			"\nOpen it on the planet page (Science + Rare Metals) and pick a trait." if new_pick else ""],
 		"%s // Level %d" % [pname, level], {"seed": planet_seed})
+
+func post_press_statement(statement: String) -> void:
+	var assistant := GameState.press_assistant_name()
+	if not assistant.is_empty():
+		post('%s: "%s"' % [assistant, statement], Kind.EVENT)
 
 # ── Sources ──────────────────────────────────────────────────────────────────
 
@@ -344,7 +354,8 @@ func _process(delta: float) -> void:
 		_batch_left -= delta
 		if _batch_left <= 0.0:
 			_flush_build_batch()
-	var on := HUDManager.visible and GameState.home_planet_seed >= 0 and not get_tree().paused
+	var on := HUDManager.visible and GameState.home_planet_seed >= 0 and not get_tree().paused \
+		and ColonyTutorial.reached("energy") and ColonyTutorial.facility_ready("communications_station")
 	if not on:
 		browsing = false
 		_kb_label = null
@@ -687,7 +698,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _layout_objectives_btn() -> void:
 	if _obj_btn == null or not is_instance_valid(_obj_btn):
 		return
-	var on := true   # the notifications button is always there (10.11)
+	var on := ColonyTutorial.allows_ui("inbox")
 	_obj_btn.visible = on
 	var n := Inbox.unread()
 	var ctext := str(n) if n > 0 else ""
@@ -719,7 +730,7 @@ func _layout_objectives_btn() -> void:
 		_obj_btn.offset_bottom = HEIGHT + 1.0
 		right -= bw + OBJ_BTN_GAP
 	if _log_btn != null and is_instance_valid(_log_btn):
-		_log_btn.visible = not GameState.narrative_log.is_empty()
+		_log_btn.visible = ColonyTutorial.allows_ui("log") and not GameState.narrative_log.is_empty()
 		if _log_btn.visible:
 			_log_btn.anchor_left = 1.0
 			_log_btn.anchor_right = 1.0

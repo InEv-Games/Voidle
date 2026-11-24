@@ -194,6 +194,8 @@ func _show_civ(civ: int) -> void:
 
 ## Nodes of the tree on screen. Later trees show whole (as previews).
 func _in_view(st: Node, id: String) -> bool:
+	if not ColonyTutorial.research_visible(id):
+		return false
 	var node = st.get("nodes")[id]
 	if int(node.civilization) != SkillTreeView._view_civ:
 		return false

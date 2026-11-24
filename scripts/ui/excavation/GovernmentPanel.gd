@@ -1,16 +1,8 @@
 class_name GovernmentPanel
 extends RefCounted
 
-## GOVERNMENT (10.11): the ministries, each with one minister's slot. An Agent
-## in a slot gives their bonus while they sit there (GameState.active_agents).
-## Laid out as the choice screens: a hero across the top (AGENTS and ✕ at its
-## end), the ministries side by side under it, each its minister standing large
-## with, over their lower part, the ministry's name, the minister's card and
-## under it REPLACE / APPOINT.
-## The Chancellery is open from the start (the opening's advisor sits there);
-## Industry, Science and Trade open when the tutorial is over. A slot's APPOINT /
-## REPLACE opens AGENTS for that ministry; AGENTS at the bottom browses them all.
-## C (or the pad's shortcuts menu, or the Agents button by the left panel) opens it.
+## Civil Administration opens a council with the Facilitator, the advisor and
+## a press assistant. Older cabinets are shown until the new office is built.
 
 const LAYER := 234   # under AGENTS (235): its screen comes up over this one
 const COL_W := 250.0        # one ministry's width
@@ -21,6 +13,7 @@ const PORTRAIT_X := 0.6     # their centre across the column (share)
 const NAME_SIZE := 24       # the ministry's name (the hero's font, smaller)
 const CARD_H := 76.0        # every card as tall, so the names line up
 const REVEAL_SLOW := 2.0
+const FACILITATOR := {"id": "facilitator", "name": "Facilitator", "title": "Leader"}
 
 static var _popup: ModalPopup = null
 
@@ -38,10 +31,13 @@ static func open(host: Node) -> void:
 	if is_open():
 		_popup.close()
 	LeftPanel.close_dropdowns(host.get_tree())   # revision 12.11: none left open behind it
+	var council := GameState.government_available()
+	if not council and not GameState.legacy_government_available():
+		CompanionGallery.open(host)
+		return
 	var p := ModalPopup.open(host, "Government", "groups", "", LAYER)
 	_popup = p
-	var hero := p.use_hero("Year %d  //  %d of %d ministries open" % [GameState.calendar_year(),
-		GameState.ministries_unlocked.size(), GameState.MINISTRIES.size()], "GOVERNMENT")
+	var hero := p.use_hero("Year %d" % GameState.calendar_year(), "GOVERNMENT")
 	p.card.add_theme_stylebox_override(&"panel", StyleBoxEmpty.new())   # the ministries have their own cards
 	(p.card.get_node("VBox/Buttons") as Control).visible = false   # the ✕ by the hero, Esc
 	p.closed.connect(func() -> void: _popup = null)
@@ -61,8 +57,10 @@ static func open(host: Node) -> void:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	p.add_content(row)
 	var fronts: Array[Control] = []
-	for i in GameState.MINISTRIES.size():
-		row.add_child(_slot(host, p, GameState.MINISTRIES[i] as Dictionary, i, fronts))
+	var offices: Array = [GameState.ministry_def(GameState.CHANCELLERY), FACILITATOR,
+		GameState.ASSISTANT_OFFICE] if council else GameState.MINISTRIES
+	for i in offices.size():
+		row.add_child(_slot(host, p, offices[i], i, fronts))
 	(func() -> void:   # the cards come in as the panels' rows do
 		for f: Control in fronts:
 			if is_instance_valid(f):
@@ -72,8 +70,10 @@ static func open(host: Node) -> void:
 ## lower part the ministry's name, the card and the button.
 static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Array[Control]) -> Control:
 	var mid: String = m["id"]
+	var leader := mid == FACILITATOR["id"]
+	var press := mid == GameState.PRESS_ASSISTANT
 	var open_slot := GameState.ministry_unlocked(mid)
-	var agent_id := GameState.minister_of(mid) if open_slot else ""
+	var agent_id := GameState.minister_of(mid) if (open_slot or press) else ""
 	var def := CompanionDef.find(agent_id)
 	var col := Control.new()
 	col.custom_minimum_size = Vector2(COL_W, COL_H)
@@ -90,8 +90,8 @@ static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Arra
 		face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var pw := PORTRAIT_H * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
 		face.size = Vector2(pw, PORTRAIT_H)
-		face.position = Vector2(COL_W * PORTRAIT_X - pw * 0.5, 0.0)
-		var tint := Color.WHITE if def != null else Color(0.25, 0.28, 0.36)
+		face.position = Vector2(COL_W * (0.5 if leader else PORTRAIT_X) - pw * 0.5, 0.0)
+		var tint := Color.WHITE if def != null or leader else Color(0.25, 0.28, 0.36)
 		face.modulate = Color(tint, 0.0)
 		col.add_child(face)
 		face.create_tween().tween_property(face, "modulate:a", 1.0, 0.5) \
@@ -116,11 +116,15 @@ static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Arra
 	inner.add_theme_constant_override(&"separation", 6)
 	card.add_child(inner)
 	var dim := UIStyle.hex(&"text_subtle")
-	if not open_slot:
+	if leader:
+		inner.add_child(_text("You lead the colony."))
+	elif not open_slot:
 		inner.add_child(_text("[color=#%s]Locked. Opens when the tutorial is over.[/color]" % dim))
 		col.modulate = Color(0.6, 0.62, 0.7, 0.85)
 	elif def == null:
 		inner.add_child(_text("[color=#%s]Vacant: appoint one of your Agents.[/color]" % dim))
+	elif press:
+		inner.add_child(_text("[font_size=13]%s[/font_size]\nSpeaks to the press in the News feed." % def.display_name))
 	else:
 		inner.add_child(_text("[font_size=13]%s[/font_size]\n[color=#%s]%s  //  Lv %d[/color]\n%s" % [
 			def.display_name, dim, def.role, GameState.agent_level(agent_id), def.bonus_bb(12)]))
@@ -141,7 +145,7 @@ static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Arra
 				TooltipManager.show_tip("Replace", _replace_tip(mid, def))))
 		btn.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
 	buttons.add_child(btn)
-	if not open_slot:   # no button, but its room (not focusable by the keys / pad)
+	if leader or not open_slot:   # keep the cards aligned
 		buttons.custom_minimum_size.y = btn.get_combined_minimum_size().y
 		btn.visible = false
 	# at the column's bottom once its size is known

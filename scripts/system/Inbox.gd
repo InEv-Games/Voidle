@@ -75,6 +75,19 @@ func has(id: String) -> bool:
 
 ## Everything to show now, in its sections' order, dismissed ones left out.
 func items() -> Array:
+	if ColonyTutorial.active():
+		var tutorial_items := ColonyTutorial.notifications()
+		if ColonyTutorial.reached("dig"):
+			var site := Excavations.find_site(ColonyTutorial.FIRST_DIG)
+			if site != null:
+				match Excavations.stage(site):
+					Excavations.Stage.IDLE:
+						tutorial_items.append(_row("course:dig", "dig", "explore", "The Toppled Stones",
+							"Open the site to start the excavation.", {"site": site.site_id}))
+					Excavations.Stage.READY:
+						tutorial_items.append(_row("course:dig_ready", "dig", "explore", "The Toppled Stones is ready",
+							"Return to the site to see what the crew found.", {"site": site.site_id}))
+		return tutorial_items
 	var out: Array = []
 	for e: Dictionary in _live + entries:
 		if not GameState.story_flags.has("inbox_x:" + String(e["id"])):
@@ -103,6 +116,17 @@ func _mark_seen() -> void:
 
 ## What a row does when pressed.
 func activate(e: Dictionary) -> void:
+	if e.get("act", {}).has("course"):
+		var target: Dictionary = e["act"]
+		if not ColonyTutorial.allows_notification(target["course"]):
+			return
+		var view := get_tree().current_scene
+		if view != null and view.has_method("_open_tutorial_district"):
+			GameState.story_flags["inbox_seen:" + String(e["id"])] = true
+			ColonyTutorial.note(ColonyTutorial.step())
+			close()
+			view.call("_open_tutorial_district", target["district"])
+		return
 	GameState.story_flags["inbox_seen:" + String(e["id"])] = true
 	var act: Dictionary = e.get("act", {})
 	var host := get_tree().current_scene
@@ -174,6 +198,15 @@ func _process(delta: float) -> void:
 			_changed()
 		return
 	Guide._refresh_extras()   # the side stories, once they are open to the player
+	if ColonyTutorial.active():
+		var ids: PackedStringArray = []
+		for e: Dictionary in items():
+			ids.append(String(e["id"]))
+		var course_sig := "|".join(ids)
+		if course_sig != _sig:
+			_sig = course_sig
+			_changed()
+		return
 	var live: Array = []
 	_add_digs(live)
 	_add_expeditions(live)
@@ -332,8 +365,9 @@ func close() -> void:
 	_layer = null
 
 func open() -> void:
-	if is_open() or NewsFeed.on_main_menu():
+	if is_open() or NewsFeed.on_main_menu() or not ColonyTutorial.allows_ui("inbox"):
 		return
+	ColonyTutorial.note("inbox")
 	AudioManager.play("click")
 	_layer = CanvasLayer.new()
 	_layer.layer = LAYER

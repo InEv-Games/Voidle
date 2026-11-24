@@ -229,6 +229,56 @@ Başlangıç commit’i `71bb565b1adc774576cbb113457ea57da4a8f1dc`. Godot ve tes
 
 Başlangıç commit’i `4e24e5f990ed9c05c18fe176936ccecf9fab90e5`. Godot ve testler çalıştırılmadı.
 
+### New Game öğretici seçimi
+
+- `NewGamePanel.gd` öğretici bir kez tamamlanana kadar Tutorial seçimini açık tutuyor. Sonraki yeni oyunlarda oyuncu öğreticiyi açıp kapatabiliyor. Seed, Random ve Head Start seçenekleri yalnızca öğretici kapalıyken gösteriliyor. Aynı panelde öğretici tekrar kapatıldığında serbest başlangıç için yazılan seed ve seçilen Head Start geri geliyor.
+- `_on_begin()` ve `SessionPrep.tutorial_seed()` öğreticili oyunun önizlemesinde ve kaydında `847209631758492063` kodundan üretilen aynı seed’i kullanıyor. Kod mevcut `seed_of()` fonksiyonuyla arazi üreticisinin desteklediği aralığa dönüştürülüyor. Öğretici Tip 0, Terran, Rocky Moon ve Standard başlangıcını alıyor.
+- `GameState._apply_new_game_start()` öğretici kapalı açılan yeni oyunun rehber adımlarını tamamlanmış durumda başlatıyor. Böylece eski isteğe bağlı kontrol listesi ve atlama ödülü yeni serbest oyunda devreye girmiyor. Mevcut kayıtlar kendi rehber durumlarını okuyor.
+- O tarihte sıradaki tasarım işi Head Start seçeneklerini gözden geçirmekti. Bu karar 24 Kasım’da ırk seçimiyle değişti. Narrative turunda danışmanın «Tamam» konuşmalarındaki kaynak desteğinin her adım için nedeni yazılacak.
+
+### Koloni öğreticisi ve Capital District binaları
+
+- `ColonyTutorial.gd`, kamera kontrolünden ücretli Bolo atamasına kadar 46 adımı çalıştırıyor. Kayıt `story_flags` içinde adımı, oyuncunun onayını, gereken eylemleri ve önerilen koordinatları saklıyor. Mother Superior ve High Father ilk adımlarda dönüşümlü konuşuyor. Seçim tamamlanınca konuşmacı mevcut danışman oluyor. Her adımda Continue var. Onay anında yalnızca adımın inşa, araştırma, işlem veya ilk üretim çevrimi için eksik kaynaklar ekleniyor.
+- `TutorialSites.gd`, `PlanetaryView.gd` ve `Location.gd` City ile beş district’i baştan planlıyor. District’lerde mesafe, komşuluk ve coğrafyanın toplamı 2× olan noktalar tercih ediliyor. Energy için gerçek Mountain veya Tundra koşulu aranıyor. Tek harita işareti çıkıyor ve tıklama işaretin koordinatına oturuyor. Arama tam eşleşme bulamazsa geçerli seçenekler içinden 2× hedefine en yakın planı kullanıyor. Öğretici boyunca mesafe kademesinin referans erişimi sabit. Residential ve Energy için Capital’e doğrudan bağlantı yol ağına ekleniyor.
+- Capital’e Survey Office, Communications Station, Government Building ve Archaeology Bureau eklendi. Baz inşa fiyatları sırasıyla 180, 200, 240 ve 300 Credits. Archaeology Bureau ayrıca baz 10 Goods istiyor. Mevcut district içi fiyat artışı inşa sırasında uygulanıyor. `BuildingDef.gd`, `PlanetaryView.gd`, `HUDManager.gd`, `NewsFeed.gd` ve `Inbox.gd` lensleri, haberi, atamayı ve kazıyı ilgili tesis ve öğretici adımına bağlıyor. Her district’in lensi kendi adımında açılıyor ve oyuncu yerleştirmeden önce lensi seçiyor. Tesisler yeni serbest oyunda da kullanılabiliyor. Eski kayıtlar önceki açılış kurallarını okuyor.
+- `Economy.gd` ve `ProductionManager.gd`, öğreticili koloninin ilk City’sinde 200 ek konutla başlıyor ve City Lv 2’de bunu 10.000’e çıkarıyor. Capital District’in kendi konut üretimi ayrı kalıyor ve Cradle World’ün %10 nüfus bonusu hesaba katılıyor. Warehouse kurulana kadar ham madde kapasitesi 20. İlk Ferrite teslimatında taşan 2 birim haber şeridinde belirtiliyor. Notifications, gerçek nüfus ve enerji açıkları ile boş yuvaları ilgili panele bağlıyor. Öğretici, Lv 2 Residential genişletmesini ve bir Low-rise Housing yerine Habitat Block kurmayı içeriyor.
+- `SkillTree.gd` ve `SkillTreeView.gd`, ilk araştırmada Mining Operations’ı hedef gösteriyor ve satın alımdan sonra yeni düğümleri ile fiyatları oyuncu ağacı kapatana kadar ekranda tutuyor. Civilization Studies uzay dalının ilk adımı. Satın alınan her araştırma seviyesi diğer araştırmaların fiyatını profil oranıyla artırıyor. Ücretsiz Head Start araştırmaları ve miras alınan seviyeler bu sayaca eklenmiyor. `ResourceBar.gd` takvimi ve Type göstergesini Civilization Studies sonrasında açıyor.
+- `Trade.gd` ve `TradePanel.gd`, öğreticide gerçek 50 Ferrite satışı ve Goods alımı istiyor. Trade Automation öğretici dışında. `Excavations.gd` ilk The Toppled Stones kazısını öğreticide bir koloni ayına indiriyor. Sonuçta mevcut Bolo sahnesi çalışıyor. Öğreticiyi bitirmek için oyuncunun Government üzerinden ücretli Bolo atamasını onaylaması gerekiyor.
+- Notifications’ın kalıcı görev ve koloni takip işlevi ve danışman desteğinin hikâye gerekçeleri ayrı ele alınacak. Geçici Trade olayları için anlatı turunda ayrı CSV hazırlanacak.
+
+Başlangıç commit’i `6eac4eb`. Godot ve testler çalıştırılmadı. Sabit seed’de bütün district’lerin tam 2× alması ile nüfus ve enerji dengelerinin iki danışman seçimiyle seyri oyun içinde doğrulanmadı.
+
+- Açılış düzeltmesi. `ColonyTutorial.gd` içindeki bildirim satırı üreticisi ve beş çağrısı `_notification_row()` olarak adlandırıldı. Önceki `_notification()` adı Godot’un `Object._notification(int) -> void` metoduyla çakışıyor ve `GameState` yüklenirken parse hatasına yol açıyordu.
+
+## 24 Kasım 2026
+
+### Güncel tasarım sırası
+
+1. **New Game ırk seçimi.** Head Start kaldırılacak. Oyuncu portreler arasından bir ırk seçecek ve seçtiği ırk oyuna bir avantajla başlayacak. Irklar, portreler ve avantajlar tasarım turunda belirlenecek.
+2. **District binaları.** Yeni yönetim binaları T2 inşa maliyeti ve aylık gider kullanacak. Pasif üretim katkıları sıfır olacak.
+   - **Energy.** Önerilen ad Acil Müdahale Merkezi (*Emergency Response Center*). Zarar veren büyük olaylarda anlatı paneli sonucu kabul etme ve enerjiyle müdahale etme seçeneklerini gösterir. İkinci seçenek bina tamamlanınca kullanılabilir. Müdahale seçilirse olayın zararı önlenir ve bir koloni ayı boyunca toplam enerji tüketimi %20 artar.
+   - **Residential.** Sivil İdare, oyuncunun ortada lider olarak göründüğü Government ekranını ve bir yardımcı koltuğunu açar. Mevcut danışman seçimi devam eder.
+   - **Production.** Wonder İnşaat Ofisi çalışma adıyla planlanan bina, Wonder inşasını açar. Wonder, City ölçeğinde bir yapı olacak ve gezegen başına bir tane kurulabilecek. Türleri, maliyetleri ve etkileri ayrı bir tasarım turunda belirlenecek.
+   - **Commercial.** Trade Automation araştırması Ticaret İdaresi’ni açar. Otomatik Trade bina kurulunca kullanılabilir.
+   - **Science.** Rocketry ile açılan mevcut Spaceport, Capital’den Science District’e taşınır.
+3. **Upgrade Tree.** Her yeni district binası bir araştırma ile açılacak. Dallar kendi içinde düzenlenirken bu binaların düğümleri ve önkoşulları belirlenecek. Sonra dalların birleşme noktaları tasarlanacak.
+4. **Narrative ve rastgele olaylar.** Minör ve majör rastgele olaylar için danışman repliklerini içeren ayrı bir CSV hazırlanacak. Olayın ölçeği, ne zaman gerçekleşebileceği, etkisi ve danışmanın oyuncuya ne söylediği tanımlanacak. Çevrimdışı yaşanan olaylar Welcome Back akışında ele alınacak. Geçici Trade fiyat olaylarının CSV’si de ayrı iş olarak sırada. Danışman ana anlatıyı yürütecek. Yardımcı kamuya basın açıklamaları yapacak ve News haberlerinde adıyla yer alacak. Bu açıklamaların metinleri ve tetikleyicileri Narrative turunda belirlenecek.
+5. **Notifications.** Narrative sonrasında kalıcı koloni takip paneli olarak tasarlanacak.
+
+## 25 Kasım 2026
+
+### District yönetim binaları
+
+- `emergency_response_center`, `civil_administration`, `wonder_construction_bureau` ve `trade_administration` sırasıyla Energy, Residential, Production ve Commercial yüzey district’lerine eklendi. Her biri bir slot, 750 çalışan, 450 baz Credits ve profilin T2 inşa malzemelerini kullanıyor. Aylık giderleri 6 enerji, 3 Goods ve 1 Fuel. Çıktıları ve pasif bonusları sıfır. Her model bir district’te bir kez kurulabilir.
+- `SkillTree.gd` yönetim binalarının açılma noktalarını bağlıyor. Emergency Response şimdilik Solar Matrix’ten, Civil Administration Habitat Blocks’tan, Wonder Construction Deep Drilling’den geliyor. Üçünün baz bedeli 350 Science. Mevcut Trade Automation düğümü 300 baz Science ile Trade Administration’ı açıyor. Düğüm konumları, bedelleri ve önkoşulları Upgrade Tree turunda yeniden değerlendirilecek.
+- `Trade.has_automation()` otomatik emirleri ve taşma satışını çalışan bir Trade Administration’a bağlıyor. Bina devre dışı kalırsa kayıtlı emirler durur. Trade paneli durumu yeniler. Manuel Trade Access ve Force Buy için mevcut akış korunur.
+- `GovernmentPanel.gd` Civil Administration tamamlanınca danışman, ortada oyuncu ve basın yardımcısını gösteriyor. Irk seçimi ve oyuncu portreleri tasarlanana kadar ortada mevcut silüet var. İlk danışman seçimi Capital’deki Government Building’den açılıyor. Eski kayıtların önceki kabinesi Civil Administration kurulana kadar kullanılabiliyor. Yeni hükümet açılınca eski bakanlık bonusları devreden çıkıyor ve yardımcı kendi pasif bonusunu uygulamıyor. Atama mevcut kayıt ve görev süresi alanlarını kullanıyor. News şeridi yardımcının atama açıklamasını ve gezegen seviyesi haberlerinde adını gösteriyor. Diğer kamu açıklamaları Narrative turunda yazılacak.
+- `Narrative.offer_major_incident()` danışman portresiyle sonucu kabul etme ve acil güç kullanma seçeneklerini açıyor. Acil güç için çalışan Emergency Response Center gerekiyor. Müdahale hasarı önlüyor, bir koloni ayı boyunca enerji talebini %20 artırıyor ve bitiş zamanı kayda giriyor. Enerji tooltip’i ek talebi ayrı gösteriyor. `incident preview` geliştirici komutu akışı açıyor. Sonucu kabul etme yolunda en fazla 5 Goods kaybediliyor. Rastgele olay havuzu, tetikleyiciler ve CSV Narrative turunda eklenecek.
+- `BuildingDef.gd` Wonder inşa yetkisini ilgili gezegendeki tamamlanmış Wonder Construction Bureau’ya bağlıyor. Gezegen başına bir Wonder sınırı, farklı modelleri ve inşaatı sürenleri de kapsıyor. City ölçeğindeki Wonder’ların türleri, maliyetleri ve yerleştirmesi ayrıca tasarlanacak.
+- Spaceport’un yeni inşa yeri yüzeydeki Science District. Rocketry, T3 tarif ve mevcut işlevleri korunuyor. `PlanetaryView._spaceport_pad()` yeni yerini buluyor, eski kayıtta Capital’de inşa edilmiş Spaceport’u da bulmaya devam ediyor. Roket ve Ay hazırlığı mevcut Spaceport durumunu kullanıyor.
+
+Başlangıç commit’i `6eac4eb`. Godot ve testler çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.

@@ -128,13 +128,15 @@ func _add_kardashev_chip() -> void:
 	$Row.add_child(_kardashev)
 
 func _refresh_calendar() -> void:
+	var show_calendar := GameState.onboarding_stage == "done" \
+		and (not ColonyTutorial.active() or SkillTree.is_unlocked("civilization_studies"))
 	if is_instance_valid(_kardashev):
-		_kardashev.visible = GameState.onboarding_stage == "done"
+		_kardashev.visible = show_calendar
 		if _kardashev.visible:
 			_kardashev.value_text = str(GameState.civilization_type)
 	if _calendar == null or not is_instance_valid(_calendar):
 		return
-	_calendar.visible = GameState.onboarding_stage == "done"
+	_calendar.visible = show_calendar
 	if _calendar.visible:
 		# the month too (playtest 12.11): "Mar 2497"
 		_calendar.value_text = "%s %d" % [MONTHS[clampi(GameState.calendar_month() - 1, 0, 11)], GameState.calendar_year()]
@@ -551,6 +553,9 @@ func _idle_pop_text() -> String:
 ## spent to zero doesn't vanish again.
 func _update_reveals(rates: Dictionary) -> void:
 	for id: String in _res_slots:
+		if not ColonyTutorial.resource_open(id):
+			(_res_slots[id] as Control).visible = false
+			continue
 		var key := "res_seen:" + id
 		if not GameState.story_flags.has(key) and _resource_found(id, rates):
 			GameState.story_flags[key] = true

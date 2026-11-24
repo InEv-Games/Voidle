@@ -37,8 +37,10 @@ var begin: Callable
 @onready var _start: VBoxContainer = $Center/Box/Pages/Steps/Start
 @onready var _rest: VBoxContainer = $Center/Box/Pages/Steps/Rest
 @onready var _info: RichTextLabel = $Center/Box/Pages/Steps/Start/Info
+@onready var _boon_head: Label = $Center/Box/Pages/Steps/Rest/BoonHead
 @onready var _boons: GridContainer = $Center/Box/Pages/Steps/Rest/Boons
 @onready var _boon_desc: RichTextLabel = $Center/Box/Pages/Steps/Rest/BoonDesc
+@onready var _boon_rule: HSeparator = $Center/Box/Pages/Steps/Rest/Rule
 @onready var _name_edit: LineEdit = $Center/Box/Pages/Steps/Rest/SeedRow/NameEdit
 @onready var _seed_edit: LineEdit = $Center/Box/Pages/Steps/Rest/SeedRow/SeedEdit
 @onready var _dice: IconButton = $Center/Box/Pages/Steps/Rest/SeedRow/Random
@@ -54,6 +56,8 @@ var _switching := false    # a step is fading out
 var _last_look: Callable   # the preview's look: the option pressed last (the seed may change)
 var _start_info := ""     # the world or moon description selected by pressing its button
 var _boon_btns := {}
+var _tutorial_required := false
+var _free_seed_text := ""
 var _step := 1
 var _reached := 1          # the furthest step opened so far (the trail lets you back to it)
 const STEPS := 3
@@ -68,9 +72,11 @@ func _ready() -> void:
 	# choices were lost by a stray click); the ✕ and Esc still do. The Dim
 	# still takes the click, so nothing behind it reacts.
 	(_hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF   # one line
+	_tutorial_required = not SettingsManager.tutorial_ever_done
+	_free_seed_text = SessionPrep._random_seed_text()
 	_choice = {"world": "terran", "moon": "rocky", "civ": "c0", "boon": "",
-		"tutorial": not SettingsManager.tutorial_ever_done, "seed": SessionPrep.SEED_MIN,
-		"seed_text": SessionPrep._random_seed_text(), "name": ""}
+		"tutorial": _tutorial_required, "seed": SessionPrep.SEED_MIN,
+		"seed_text": "", "name": ""}
 	# the main menu's planets give way to the preview while it is open
 	_menu_planets(false)
 	closed.connect(func() -> void:
@@ -79,6 +85,7 @@ func _ready() -> void:
 			_menu_planets(true))
 	_pv.reveal(SessionPrep.PREVIEW_DELAY, SessionPrep.PREVIEW_IN)
 	_build_seed()
+	_apply_start_options()
 	_build_civ()
 	_build_start()
 	_build_boons()
@@ -107,9 +114,12 @@ func _show_last() -> void:
 		_show_choice()
 
 func _set_seed(text: String) -> void:
-	var t := text.strip_edges()
-	if t == "":
-		t = SessionPrep._random_seed_text()
+	var t := SessionPrep.TUTORIAL_SEED_CODE
+	if not _uses_tutorial():
+		t = text.strip_edges()
+		if t.is_empty():
+			t = SessionPrep._random_seed_text()
+		_free_seed_text = t
 	_choice["seed_text"] = t
 	_choice["seed"] = SessionPrep.seed_of(t)
 	_seed_edit.text = t
@@ -129,7 +139,7 @@ func _build_seed() -> void:
 		_set_seed(t)
 		_seed_edit.release_focus())
 	_seed_edit.focus_exited.connect(func() -> void:
-		if _seed_edit.text.strip_edges() != String(_choice["seed_text"]):
+		if not _uses_tutorial() and _seed_edit.text.strip_edges() != String(_choice["seed_text"]):
 			_set_seed(_seed_edit.text))
 	_name_edit.text_submitted.connect(func(t: String) -> void:
 		_set_name(t)
@@ -138,7 +148,6 @@ func _build_seed() -> void:
 	_dice.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_set_seed(SessionPrep._random_seed_text()))
-	_set_seed(String(_choice["seed_text"]))
 
 # ── Step 1: the civilization ─────────────────────────────────────────────────
 
@@ -299,15 +308,30 @@ func _build_boons() -> void:
 
 # ── The buttons and the steps ────────────────────────────────────────────────
 
-## TUTORIAL: guided (the advisor leads) or the optional checklist; its tip says.
-func _tut_tip() -> void:
-	var on := bool(_choice["tutorial"])
-	TooltipManager.show_tip("Guided tutorial" if on else "First steps checklist",
-		"On: your advisor leads you step by step through the first City.\n\nOff: an optional checklist instead; do the first steps in any order, or skip it and take all its rewards." \
-		+ "\n\nNow: %s." % ("on" if on else "off"))
+func _uses_tutorial() -> bool:
+	return _tutorial_required or bool(_choice["tutorial"])
 
-func _paint_tut() -> void:
-	_tut.icon_name = "confirm" if bool(_choice["tutorial"]) else "empty"
+func _tut_tip() -> void:
+	if _tutorial_required:
+		TooltipManager.show_tip("Guided tutorial", "Complete the tutorial once to unlock custom seeds and Head Starts.")
+	elif _uses_tutorial():
+		TooltipManager.show_tip("Tutorial on", "Use the tutorial world and Standard start.")
+	else:
+		TooltipManager.show_tip("Tutorial off", "Choose your seed and Head Start and play without the guide.")
+
+func _apply_start_options() -> void:
+	var guided := _uses_tutorial()
+	_tut.icon_name = "confirm" if guided else "empty"
+	_tut.disabled = _tutorial_required
+	_boon_head.visible = not guided
+	_boons.visible = not guided
+	_boon_desc.visible = not guided
+	_boon_rule.visible = not guided
+	_seed_edit.visible = not guided
+	_dice.visible = not guided
+	_set_seed(_free_seed_text)
+	if _crumb_btns.size() == STEPS:
+		_crumb_btns[STEPS - 1].text = "PLANET" if guided else String(STEP_NAMES[STEPS - 1])
 
 func _build_buttons() -> void:
 	_tut.mouse_entered.connect(func() -> void:
@@ -317,11 +341,12 @@ func _build_buttons() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
 	_tut.pressed.connect(func() -> void:
+		if _tutorial_required:
+			return
 		AudioManager.play("click")
 		_choice["tutorial"] = not bool(_choice["tutorial"])
-		_paint_tut()
+		_apply_start_options()
 		_tut_tip())
-	_paint_tut()
 	_next.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_go_step(mini(_step + 1, STEPS)))
@@ -358,7 +383,7 @@ func _build_crumbs() -> void:
 			sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			_crumbs.add_child(sep)
 		var b := Button.new()
-		b.text = String(STEP_NAMES[i])
+		b.text = "PLANET" if i == STEPS - 1 and _uses_tutorial() else String(STEP_NAMES[i])
 		b.theme_type_variation = UIStyle.FLAT
 		b.focus_mode = Control.FOCUS_NONE
 		var step := i + 1
@@ -432,10 +457,19 @@ func _go_step(step: int) -> void:
 
 func _on_begin() -> void:
 	AudioManager.play("click")
-	if _seed_edit.text.strip_edges() != String(_choice["seed_text"]):
+	var guided := _uses_tutorial()
+	if not guided and _seed_edit.text.strip_edges() != String(_choice["seed_text"]):
 		_set_seed(_seed_edit.text)
 	_set_name(_name_edit.text)
-	GameState.pending_setup = _choice.duplicate()
+	var setup := _choice.duplicate()
+	setup["tutorial"] = guided
+	if guided:
+		setup["seed"] = SessionPrep.tutorial_seed()
+		setup["boon"] = ""
+		setup["world"] = "terran"
+		setup["moon"] = "rocky"
+		setup["civ"] = "c0"
+	GameState.pending_setup = setup
 	TooltipManager.hide_tip()
 	_begun = true
 	close()

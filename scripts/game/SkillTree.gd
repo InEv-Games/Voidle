@@ -11,10 +11,8 @@
 ##   access       products/minerals the player must be able to get (fuel, rare,
 ##                goods, moonstone) — an undiscovered mineral is never named
 ##   events       physical milestones (a Moon production district, …)
-##   common       the shared Civilization 0 path: no cross-branch surcharge,
-##                and it doesn't count toward other branches' surcharge
-##   price        base × target level × (1 + research_cross_branch × distinct
-##                strategy nodes bought in other branches of the same civilization)
+##   common       shared progression nodes have their own visual grouping
+##   price        base × target level × (1 + surcharge per other bought level)
 ##   levels       bonuses go to Lv3; effective level = max(bought, inherited)
 ## Inherited levels come from the fractal buyout (M6); the field is saved now.
 ##
@@ -202,8 +200,11 @@ func _init() -> void:
 	# decisions of 29.10 (§9–§16): Tier 0 models need no research; Capital
 	# supports need none either.
 	_line = "exploration"
-	_n("rocketry", "Rocketry", "Heavy-lift launch technology. Build a Spaceport in your Capital District.",
-		900.0, _at("root", -90, 1.7), ["root"], "common", "Unlocks Spaceport",
+	_n("civilization_studies", "Civilization Studies", "Chart the path from a planetary foothold to a civilization that can travel beyond its home.",
+		50.0, _at("root", -90, 0.85), ["root"], "common", "Introduces the colony calendar and Civilization Type",
+		{"common": true})
+	_n("rocketry", "Rocketry", "Heavy-lift launch technology. Build a Spaceport in a Science District.",
+		900.0, _at("root", -90, 1.7), ["civilization_studies"], "common", "Unlocks Spaceport",
 		{"grants": ["spaceport"], "requires": ["fuel_processing"], "common": true})
 	_n("orbital_assembly", "Orbital Assembly", "Assemble an Orbit from Spaceport launches: its Orbit City and five kinds of support district, each +10% to the whole planet. The road to the Moon goes through orbit.",
 		1500.0, _at("rocketry", -90, 3.4), ["rocketry"], "common", "Unlocks the Orbit: Orbit City and its support districts",
@@ -260,6 +261,9 @@ func _init() -> void:
 	_n("deep_drilling", "Deep Drilling", "Drills that reach through bedrock.",
 		350.0, _at("surface_excavation", -160, 1.15), ["surface_excavation"], "production", "Unlocks Deep Drill",
 		{"grants": ["deep_drill"]})
+	_n("wonder_construction", "Wonder Construction", "Plan structures on the scale of a city.",
+		350.0, _at("deep_drilling", -125, 1.2), ["deep_drilling"], "production", "Unlocks Wonder Construction Bureau",
+		{"grants": ["wonder_construction_bureau"]})
 	_n("geothermal_drilling", "Geothermal Drilling", "Use geothermal heat to turn Ferrite into Goods. The district must stand on a Geothermal Rift.",
 		350.0, Vector2(-3.3, -0.62), ["surface_excavation", "river_extraction"], "production", "Unlocks Geothermal Drill",
 		{"grants": ["geothermal_drill"]})
@@ -302,6 +306,9 @@ func _init() -> void:
 	_n("grid_efficiency", "Superconducting Grid", "Fewer losses in the power lines.",
 		300.0, _at("solar_efficiency", -30, 1.0), ["solar_efficiency"], "energy", "−5% energy use per level",
 		{"max": 3, "shape": NodeShape.DIAMOND})
+	_n("emergency_response", "Emergency Response", "Use the grid to protect the colony during a major incident.",
+		350.0, _at("solar_matrix", 25, 1.4), ["solar_matrix"], "energy", "Unlocks Emergency Response Center",
+		{"grants": ["emergency_response_center"]})
 
 	# ── Population (down-right) ──────────────────────────────────────────────
 	_line = "population"
@@ -311,6 +318,9 @@ func _init() -> void:
 	_n("neighborhood_building", "Habitat Blocks", "Standard housing blocks.",
 		75.0, _at("start_residential", 45, 1.2), ["start_residential"], "population", "Unlocks Habitat Block",
 		{"grants": ["residential"]})
+	_n("civil_administration", "Civil Administration", "Establish a government office and appoint a press assistant.",
+		350.0, _at("neighborhood_building", 70, 1.35), ["neighborhood_building"], "population", "Unlocks Civil Administration",
+		{"grants": ["civil_administration"]})
 	_n("high_rise", "High-Rise Housing", "Dense apartment towers.",
 		350.0, _at("neighborhood_building", 45, 1.2), ["neighborhood_building", "coastal_living", "forest_living"], "population", "Unlocks Apartment Towers",
 		{"grants": ["apartments"]})
@@ -368,9 +378,9 @@ func _init() -> void:
 	_n("commodity_markets", "Commodity Markets", "Exchanges that trade Goods in bulk.",
 		900.0, _at("trade_networks", 90, 1.2), ["trade_networks"], "trade", "Unlocks Commodity Exchange",
 		{"grants": ["commodities_exchange"], "access": ["rare"], "shape": NodeShape.CIRCLE})
-	_n("trade_automation", "Trade Automation", "Standing orders: sell above a reserve, buy up to a target stock. Storage overflow is sold instead of lost.",
-		300.0, _at("trade_access", 90, 1.0), ["trade_access"], "trade", "Standing orders and overflow sales",
-		{})
+	_n("trade_automation", "Trade Automation", "Build a Trade Administration to run standing orders and sell storage overflow.",
+		300.0, _at("trade_access", 90, 1.0), ["trade_access"], "trade", "Unlocks Trade Administration",
+		{"grants": ["trade_administration"]})
 	_n("force_buy", "Force Buy", "Short of a few materials? Buy exactly what a build is missing, paid in Credits, in one go.",
 		300.0, _at("trade_automation", 90, 1.0), ["trade_automation"], "trade", "Force-buy a build's missing materials (click the build-list row, or F)",
 		{})
@@ -750,22 +760,17 @@ func get_skill_level(id: String) -> int:
 	var own := int(skill_levels.get(id, 1)) if id in unlocked_skills else 0
 	return maxi(own, int(inherited_levels.get(id, 0)))
 
-## Distinct strategy nodes bought individually in other branches of the same
-## civilization (common path, roots and inherited levels don't count).
+## Bought levels raise the price of other research. A free start or an
+## inherited level does not contribute a surcharge.
 func cross_branch_count(id: String) -> int:
-	var node: SkillNode = nodes.get(id, null)
-	if node == null or node.common:
-		return 0
 	var n := 0
 	for s: String in unlocked_skills:
 		var other: SkillNode = nodes.get(s, null)
-		if other == null or other == node or other.common or other.id == "root":
-			continue
-		if other.civilization == node.civilization and other.branch != node.branch:
-			n += 1
+		if other != null and s != id and other.cost > 0.0 and not SessionPrep.BOON_SKILLS.get(GameState.start_boon, []).has(s):
+			n += int(skill_levels.get(s, 1))
 	return n
 
-## Cross-branch price factor of a node (1 on the common path).
+## Research surcharge shared by every branch.
 func cross_branch_mult(id: String) -> float:
 	return 1.0 + Balance.cfg.research_cross_branch * float(cross_branch_count(id))
 
@@ -846,6 +851,8 @@ func buyout(civ: int) -> bool:
 
 ## Why `id` can't be bought right now ("" when it can).
 func purchase_block(id: String) -> String:
+	if not ColonyTutorial.permits_research(id):
+		return "Follow the advisor's current research"
 	var node: SkillNode = nodes.get(id, null)
 	if node == null:
 		return "Unknown research"
@@ -879,6 +886,8 @@ func can_purchase(id: String) -> bool:
 
 # Buy or upgrade a skill node
 func purchase_skill(id: String) -> bool:
+	if not ColonyTutorial.permits_research(id):
+		return false
 	if id == LEGACY_NODE_1:
 		return buyout(0)
 	if not can_purchase(id):

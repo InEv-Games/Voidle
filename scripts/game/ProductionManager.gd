@@ -106,12 +106,29 @@ func is_constructing(key: String) -> bool:
 	return _construct.has("construct:" + key)
 
 func toggle_user_pause(key: String) -> void:
+	if ColonyTutorial.active():
+		return
 	_user_paused[key] = not _user_paused.get(key, false)
 	_calc_global_energy()
 	building_toggled.emit(key, _user_paused[key])
 
 func is_user_paused(key: String) -> bool:
 	return _user_paused.get(key, false)
+
+func has_running_facility(building_id: String) -> bool:
+	var def := BuildingDef.find(building_id)
+	if def == null:
+		return false
+	for pp: PlanetProgress in _all_colonies():
+		for entry: Dictionary in pp.buildings:
+			if entry.get("building_id", "") != building_id or entry.get("constructing", false):
+				continue
+			var key := _key(pp.planet_seed, entry.get("district_id", ""), entry.get("uid", "-1"))
+			if is_user_paused(key):
+				continue
+			if float(_progress.get(key, 0.0)) > 0.0 or Economy.can_pay(def.inputs):
+				return true
+	return false
 
 ## A City finished levelling up (`unlocked_planet_view`: that opened the planet view).
 signal city_leveled(planet_seed: int, city_label: String, level: int, unlocked_planet_view: bool)
@@ -564,7 +581,7 @@ func city_support_breakdown(pp: PlanetProgress, pd: PlanetData, city: POIData) -
 			for id: String in inc:
 				before[id] = float(before.get(id, 0.0)) + float(inc[id])
 	if not city.constructing:
-		before[Economy.POPULATION] = float(before.get(Economy.POPULATION, 0.0)) + float(Balance.cfg.city_base_pop)
+		before[Economy.POPULATION] = float(before.get(Economy.POPULATION, 0.0)) + ColonyTutorial.city_housing(pd, city, pp)
 	for b: Dictionary in pp.buildings:
 		if b.get("constructing", false) or not String(b.get("district_id", "")) in members:
 			continue
@@ -903,7 +920,7 @@ func empire_idle() -> Vector2:
 			if not Balance.cfg.idle_pop_counts_city_base:
 				for poi: POIData in pd.custom_pois:
 					if poi.is_city() and not poi.is_orbital() and not poi.constructing:
-						cap -= Balance.cfg.city_base_pop
+						cap -= ColonyTutorial.city_housing(pd, poi, pp)
 		_idle_cache = [now, maxf(cap - used, 0.0), maxf(cap, 0.0)]
 		_idle_computing = false
 	return Vector2(float(_idle_cache[1]), float(_idle_cache[2]))
@@ -1021,7 +1038,7 @@ func _planet_energy(pp: PlanetProgress) -> Vector2:
 			demand += -def.energy_per_tick * float(entry.get("amount", 1)) * float(st.get_energy_consume_mult())
 	prod += districts_energy(pp)
 	demand += orbit_districts_energy_use(pp) * float(st.get_energy_consume_mult())
-	return Vector2(prod, demand)
+	return Vector2(prod, demand * GameState.emergency_energy_multiplier())
 
 ## The Orbit districts' own energy use (⚡/s), apart from their buildings.
 func orbit_districts_energy_use(pp: PlanetProgress) -> float:
@@ -1104,6 +1121,10 @@ func energy_sources() -> Dictionary:
 				add.call(label, poi.shown_name(), district_base(pp, poi, Economy.ENERGY))
 			if poi.is_orbital() and not poi.constructing and ddef.own_energy_use > 0.0:
 				add.call("Orbit districts", poi.shown_name(), -ddef.own_energy_use * consume)
+		var emergency := GameState.emergency_energy_multiplier()
+		if emergency > 1.0:
+			var extra := _planet_energy(pp).y * (1.0 - 1.0 / emergency)
+			add.call("Emergency response", pd.planet_name, -extra)
 	return out
 
 func planet_energy_split(pp: PlanetProgress) -> Vector2:

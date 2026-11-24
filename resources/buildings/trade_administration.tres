@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "trade_administration"
+display_name = "Trade Administration"
+description = "Enables standing orders and overflow sales in Trade."
+allowed_poi_types = Array[int]([8])
+surface_only = true
+base_cost = 450.0
+max_per_district = 1
+construct_duration = 12.0
+tick_duration = 20.0
+energy_per_tick = -6.0
+inputs = {"goods": 3.0, "fuel": 1.0}
+pop_cost = 750
+tier = 2
+unlocked_by_default = false

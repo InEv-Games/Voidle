@@ -117,6 +117,8 @@ static func sites_on(pd: PlanetData) -> Array:
 		var s := next_site(w)
 		if s == null:
 			continue
+		if ColonyTutorial.active() and s.site_id != ColonyTutorial.FIRST_DIG:
+			continue
 		var at := site_of(s, pd, w)
 		if at.is_finite():
 			var done := 0
@@ -248,6 +250,8 @@ static func cost_of(s: ExcavationSiteDef) -> Dictionary:
 
 ## How long the dig takes if started now (shorter inside a City's reach).
 static func duration_of(s: ExcavationSiteDef) -> float:
+	if ColonyTutorial.active() and s.site_id == ColonyTutorial.FIRST_DIG:
+		return GameState.MONTH_SEC
 	return s.duration_sec * (CITY_TIME_MULT if city_near(s) != null else 1.0)
 
 ## The length of the dig under way (what it was started with), for progress bars.
@@ -257,6 +261,9 @@ static func dig_length(s: ExcavationSiteDef) -> float:
 
 ## Why digging can't start now ("" when it can).
 static func start_block(s: ExcavationSiteDef) -> String:
+	if ColonyTutorial.active() and (s.site_id != ColonyTutorial.FIRST_DIG or ColonyTutorial.step() != "dig" \
+			or not ColonyTutorial.acknowledged()):
+		return "Follow the current tutorial step"
 	if stage(s) != Stage.IDLE:
 		return "Already started"
 	var w := world_of_site(s.site_id)

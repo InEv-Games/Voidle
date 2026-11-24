@@ -22,6 +22,8 @@ static func _distance_rad(a: POIData, b: POIData) -> float:
 		deg_to_rad(b.lon_deg), deg_to_rad(b.lat_deg))
 
 static func _city_reach_angle(pd: PlanetData, city: POIData) -> float:
+	if ColonyTutorial.active() and pd.seed == GameState.home_planet_seed:
+		return deg_to_rad(TerrainSampler.city_reach_deg(pd, 1))
 	var lv := 1
 	var pp := GameState.get_planet(pd.seed)
 	if pp != null and city != null:
@@ -29,6 +31,8 @@ static func _city_reach_angle(pd: PlanetData, city: POIData) -> float:
 	return deg_to_rad(TerrainSampler.city_reach_deg(pd, lv))
 
 static func _territory_angle(pd: PlanetData, poi: POIData) -> float:
+	if ColonyTutorial.active() and pd.seed == GameState.home_planet_seed:
+		return deg_to_rad(TerrainSampler.SETTLE_BASE_DEG * TerrainSampler.body_scale(pd))
 	if poi.label == "":
 		return deg_to_rad(TerrainSampler.territory_radius_deg(pd, poi))
 	var radii: Dictionary = _planet_cache(pd)["radii"]

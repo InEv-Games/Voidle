@@ -44,7 +44,7 @@ static func entry(id: String) -> Array:
 			return ["Deficit", "More used than made.\nEnergy: buildings that use energy make less (down to %d%%).\nPopulation: every finished cycle makes less (down to %d%%)." % [
 				int(round((1.0 - c.energy_max_slowdown) * 100.0)), int(round((1.0 - c.pop_max_slowdown) * 100.0))]]
 		"housing":
-			return ["Housing", "Room for people. Cities house %s each; Residential districts and housing buildings add more. Max population is all of it together." % Economy.fmt(c.city_base_pop)]
+			return ["Housing", "Room for people. City centres, Residential districts and housing buildings all contribute to the colony's population capacity."]
 		"workers":
 			return ["Workers", "People put to work by districts, district levels and buildings. They need housing."]
 		"cycle":

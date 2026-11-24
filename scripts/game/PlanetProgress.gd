@@ -178,6 +178,8 @@ func build_in_district(district: POIData, building_id: String,
 	var def := BuildingDef.find(building_id)
 	if def == null:
 		return false
+	if not def.facility_build_block(self, district).is_empty():
+		return false
 	if slots_used_in_district(district.label) + def.slot_cost > district_slots(district):
 		return false
 	if def.planet_limit_reached(self):

@@ -55,8 +55,8 @@ var active_advisor: String = ""
 var unlocked_advisors: Array = []
 ## The tutorial the chosen AI runs (Guide): "" not begun, a step id, "done".
 var tutorial_step: String = ""
-## This game runs the guided tutorial (true) or the optional, skippable
-## checklist (false). Chosen at New Game (SessionPrep, 11.11).
+## Guided tutorial for this save. New starts with it off mark tutorial_step
+## done. Older saves can still have an unfinished optional checklist.
 var tutorial_guided: bool = true
 ## The game's start (SessionPrep): world kind and head start ("" = none).
 var start_world: String = "terran"
@@ -80,19 +80,17 @@ var bolo_intro_route: String = ""
 var bolo_people_joined: bool = false
 const BOLO_PEOPLE := 17490
 
-# ── Government (10.11: Companions became Agents, the advisor a minister) ────
-## Ministries, in the Government panel's order: each holds one Agent, whose
-## bonus applies while they sit there. The Chancellery is the opening's
-## advisor (active_advisor); Industry, Science and Trade open when the
-## tutorial is over (playtest 12.11: they stood empty all demo long), from the
-## start in later games (Guide.side_open; _open_ministries).
+# ── Government ─────────────────────────────────────────────────────────────
+## The advisor's office and the legacy cabinet ids retained by older saves.
 const MINISTRIES := [
-	{"id": "chancellery", "name": "Chancellery", "title": "Chancellor"},
+	{"id": "chancellery", "name": "Chancellery", "title": "Advisor"},
 	{"id": "industry", "name": "Ministry of Industry", "title": "Minister of Industry"},
 	{"id": "science", "name": "Ministry of Science", "title": "Minister of Science"},
 	{"id": "trade", "name": "Ministry of Trade", "title": "Minister of Trade"},
 ]
 const CHANCELLERY := "chancellery"
+const PRESS_ASSISTANT := "press_assistant"
+const ASSISTANT_OFFICE := {"id": PRESS_ASSISTANT, "name": "Press Office", "title": "Press Assistant"}
 var ministries_unlocked: Array = [CHANCELLERY]
 ## Other ministries' Agents (ministry id → agent id); the Chancellery's is active_advisor.
 var ministers: Dictionary = {}
@@ -110,12 +108,18 @@ func agent_level(agent_id: String) -> int:
 	return int(agent_levels.get(agent_id, 1))
 
 func ministry_def(ministry_id: String) -> Dictionary:
+	if ministry_id == PRESS_ASSISTANT:
+		return ASSISTANT_OFFICE
 	for m: Dictionary in MINISTRIES:
 		if m["id"] == ministry_id:
 			return m
 	return {}
 
 func ministry_unlocked(ministry_id: String) -> bool:
+	if ministry_id == PRESS_ASSISTANT:
+		return government_available()
+	if ministry_id != CHANCELLERY and (government_available() or story_flags.has("government:reformed")):
+		return false
 	return ministries_unlocked.has(ministry_id)
 
 ## The Agent sitting in a ministry ("" vacant).
@@ -126,6 +130,8 @@ func minister_of(ministry_id: String) -> String:
 func ministry_of(agent_id: String) -> String:
 	if agent_id == "":
 		return ""
+	if minister_of(PRESS_ASSISTANT) == agent_id:
+		return PRESS_ASSISTANT
 	for m: Dictionary in MINISTRIES:
 		if ministry_unlocked(m["id"]) and minister_of(m["id"]) == agent_id:
 			return m["id"]
@@ -140,19 +146,30 @@ func active_agents() -> Array[String]:
 			out.append(a)
 	return out
 
-## Industry, Science and Trade open once the tutorial is over.
-func _open_ministries() -> void:
-	if ministries_unlocked.size() >= MINISTRIES.size() or onboarding_stage != "done" or not Guide.side_open():
+func government_available() -> bool:
+	if ColonyTutorial.active():
+		return false
+	for pp: PlanetProgress in _planet_progress.values():
+		if pp.is_colonized and has_finished_building(pp.planet_seed, "civil_administration"):
+			return true
+	return false
+
+func legacy_government_available() -> bool:
+	return ministries_unlocked.size() > 1 and not story_flags.has("government:reformed")
+
+func press_assistant_name() -> String:
+	var id := minister_of(PRESS_ASSISTANT)
+	if id.is_empty() or not ministry_unlocked(PRESS_ASSISTANT) \
+			or not ProductionManager.has_running_facility("civil_administration"):
+		return ""
+	return _advisor_name(id)
+
+func _complete_advisor_roster() -> void:
+	if ColonyTutorial.active() or story_flags.has("government:advisor_roster") \
+			or onboarding_stage != "done" or not ColonyTutorial.facility_ready("government_building") \
+			or (not ColonyTutorial.uses_start_rules() and not Guide.side_open()):
 		return
-	var opened: Array[String] = []
-	for m: Dictionary in MINISTRIES:
-		if not ministries_unlocked.has(m["id"]):
-			ministries_unlocked.append(m["id"])
-			opened.append(String(m["name"]))
-	if not opened.is_empty() and not showcase_mode:
-		NewsFeed.post("The Government grows: %s open. Seat your Agents there." % ", ".join(opened), NewsFeed.Kind.EVENT)
-	# both ship caretakers can serve: the one not chosen at the opening joins the
-	# Agents now (the player met them both in the opening)
+	story_flags["government:advisor_roster"] = true
 	for ai: String in ["mother_superior", "high_father"]:
 		unlock_advisor(ai)
 
@@ -163,6 +180,8 @@ func ministry_ready_at(ministry_id: String) -> float:
 func early_appoint_cost(ministry_id: String = CHANCELLERY) -> float:
 	var left := ministry_ready_at(ministry_id) - calendar_seconds
 	if left <= 0.0 or minister_of(ministry_id) == "":
+		if ministry_id == CHANCELLERY and ColonyTutorial.active() and ColonyTutorial.step() == "bolo":
+			return EARLY_APPOINT_MIN
 		return 0.0
 	return maxf(EARLY_APPOINT_MIN, ceilf(EARLY_APPOINT_FULL * left / ADVISOR_TERM_SEC / 50.0) * 50.0)
 
@@ -181,11 +200,21 @@ func unlock_advisor(advisor_id: String) -> void:
 	var ib := get_node_or_null("/root/Inbox")
 	if ib != null:
 		ib.call("post", "story:agent:" + advisor_id, "story", "population", "%s joins your Agents" % c.display_name,
-			"Appoint them to a ministry in Government.", {"companions": true})
+			"Open Agents to see their profile.", {"companions": true})
 
 const MONTH_SEC := 20.0
 const CALENDAR_START_YEAR := 2465
 const ADVISOR_TERM_SEC := 1200.0   # 60 months = five colony years
+const EMERGENCY_ENERGY_MULT := 1.2
+
+func start_emergency_response() -> bool:
+	if not ProductionManager.has_running_facility("emergency_response_center"):
+		return false
+	story_flags["emergency:power_until"] = calendar_seconds + MONTH_SEC
+	return true
+
+func emergency_energy_multiplier() -> float:
+	return EMERGENCY_ENERGY_MULT if calendar_seconds < float(story_flags.get("emergency:power_until", 0.0)) else 1.0
 
 func calendar_year() -> int:
 	return CALENDAR_START_YEAR + int(calendar_seconds / (MONTH_SEC * 12.0))
@@ -224,6 +253,8 @@ func advisor_block(advisor_id: String, ministry_id: String = CHANCELLERY) -> Str
 ## What stops an appointment even for credits ("" none).
 func appoint_block(advisor_id: String, ministry_id: String = CHANCELLERY) -> String:
 	if not ministry_unlocked(ministry_id):
+		if ministry_id == PRESS_ASSISTANT:
+			return "Build a Civil Administration first."
 		return "That ministry is still closed"
 	if advisor_id == minister_of(ministry_id):
 		return "Already in office here"
@@ -231,7 +262,10 @@ func appoint_block(advisor_id: String, ministry_id: String = CHANCELLERY) -> Str
 		return "Already serves in the %s" % String(ministry_def(ministry_of(advisor_id)).get("name", "Government"))
 	if not unlocked_advisors.has(advisor_id):
 		return "Not met yet"
-	if onboarding_stage == "done" and tutorial_step != "done":
+	if ColonyTutorial.active() and (ColonyTutorial.step() != "bolo" or not ColonyTutorial.acknowledged() \
+			or advisor_id != "bolo" or ministry_id != CHANCELLERY):
+		return "After the tutorial"
+	if onboarding_stage == "done" and tutorial_step != "done" and not ColonyTutorial.active():
 		return "After the tutorial"
 	if has_node("/root/Narrative") and get_node("/root/Narrative").is_main_scene():
 		return "After the scene"
@@ -267,6 +301,9 @@ func appoint_advisor(advisor_id: String, ministry_id: String = CHANCELLERY) -> v
 	if has_node("/root/ProductionManager"):
 		get_node("/root/ProductionManager").call("_invalidate_income")
 	advisor_changed.emit(advisor_id)
+	if ministry_id == PRESS_ASSISTANT:
+		NewsFeed.post_press_statement("The press office is open.")
+		save()
 
 # ── Starting Config (edit these to change new-game defaults) ─────────────────
 ## Starting credits / Science for a new game come from the balance profile
@@ -595,7 +632,9 @@ func _ready() -> void:
 	_bootstrap_world()
 
 func _process(delta: float) -> void:
-	_open_ministries()
+	_complete_advisor_roster()
+	if not story_flags.has("government:reformed") and government_available():
+		story_flags["government:reformed"] = true
 	if not get_tree().paused:
 		play_seconds += delta
 		Excavations.tick()
@@ -658,6 +697,13 @@ func _apply_new_game_start() -> void:
 	start_world = String(setup.get("world", "terran"))
 	start_boon = String(setup.get("boon", ""))
 	if not setup.is_empty():   # only a game started from the New Game window (not a bare boot)
+		story_flags[ColonyTutorial.START_RULES] = true
+		onboarding_stage = "done"
+		if tutorial_guided:
+			story_flags[ColonyTutorial.FLAG] = true
+			tutorial_step = "colony_course"
+		else:
+			tutorial_step = "done"
 		SessionPrep.apply_boon(start_boon)
 
 func _apply_pending_pois() -> void:

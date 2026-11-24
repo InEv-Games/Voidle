@@ -11,6 +11,7 @@ enum OutputType { NONE, ENERGY, CREDITS, RAW_MINERAL, REFINED_MINERAL, SCIENCE, 
 @export var description:       String   = ""
 @export var allowed_poi_types: Array[POIData.POIType] = []
 @export var allowed_planet_types: Array[PlanetData.Type] = []
+@export var surface_only:      bool     = false
 @export var base_cost:         float    = 100.0
 ## Wonders (playtest 28.10): rare buildings that take WONDER_SLOTS slots, stand
 ## once per planet (in any one City) and show on the map inside their district's
@@ -27,11 +28,13 @@ var slot_cost: int:
 ## the Spaceport. Buildings under construction count.
 @export var max_per_planet:    int      = 0
 
-## How many of this model stand (or are being built) on the planet.
+## Wonders share a single limit across all models on the planet.
 func count_on_planet(pp: PlanetProgress) -> int:
 	var n := 0
 	for b: Dictionary in pp.buildings:
-		if String(b.get("building_id", "")) == building_id:
+		var id := String(b.get("building_id", ""))
+		var other := find(id) if is_wonder else null
+		if id == building_id or (other != null and other.is_wonder):
 			n += int(b.get("amount", 1))
 	return n
 
@@ -42,6 +45,13 @@ func planet_limit_reached(pp: PlanetProgress) -> bool:
 ## Most of this model one planet may hold (0 = no limit); a wonder: one.
 func planet_cap() -> int:
 	return 1 if is_wonder else max_per_planet
+
+func facility_build_block(pp: PlanetProgress, poi: POIData) -> String:
+	if surface_only and (poi.is_orbital() or poi.poi_type not in allowed_poi_types):
+		return "Build in a matching surface district."
+	if is_wonder and not GameState.has_finished_building(pp.planet_seed, "wonder_construction_bureau"):
+		return "Build a Wonder Construction Bureau on this world."
+	return ""
 ## Required skill node to unlock this building. Empty = unlocked by default.
 @export var unlock_skill:      String   = ""
 ## Out of the active catalogue (integration decisions 29.10 §17): never offered
@@ -328,7 +338,7 @@ static func available_buildings() -> Array[BuildingDef]:
 	var st = Engine.get_main_loop().root.get_node_or_null("SkillTree")
 	var result: Array[BuildingDef] = []
 	for b in all():
-		if b.retired:
+		if b.retired or not ColonyTutorial.building_available(b.building_id):
 			continue
 		if b.unlock_skill != "" and (st == null or not st.is_unlocked(b.unlock_skill)):
 			continue
@@ -351,10 +361,11 @@ static func find(bid: String) -> BuildingDef:
 
 ## Buildings a district of `poi_type` can hold. Cities hold the Capital's
 ## planet-wide boost buildings; each other district type its own production line.
-static func for_poi_and_planet(poi_type: POIData.POIType, planet_type: PlanetData.Type) -> Array[BuildingDef]:
+static func for_poi_and_planet(poi_type: POIData.POIType, planet_type: PlanetData.Type,
+		orbital := false) -> Array[BuildingDef]:
 	var result: Array[BuildingDef] = []
 	for b in available_buildings():
-		if poi_type in b.allowed_poi_types and b.allows_planet(planet_type, poi_type):
+		if poi_type in b.allowed_poi_types and b.allows_planet(planet_type, poi_type) and not (orbital and b.surface_only):
 			result.append(b)
 	result.sort_custom(func(x: BuildingDef, y: BuildingDef) -> bool: return x.list_order() < y.list_order())
 	return result
@@ -368,7 +379,7 @@ func list_order() -> Vector3:
 	elif outputs.is_empty() and not storage.is_empty():
 		group = 2
 	elif outputs.is_empty():
-		group = -1   # supports and the Spaceport lead the Capital's list
+		group = -1   # City support facilities lead their district's list
 	return Vector3(group, -tier, base_cost)
 
 ## Whether this building may stand on a planet of `planet_type` in a district
