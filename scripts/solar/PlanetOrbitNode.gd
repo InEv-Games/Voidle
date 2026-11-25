@@ -30,6 +30,8 @@ var _hover_tween:    Tween  = null
 var _is_home:        bool   = false
 var _settlement_lv:  int    = 0
 var _orbitron:       Font   = null
+## A neutral people holding this world (NeutralCivs): its colour, else clear.
+var _civ_color:      Color  = Color(0, 0, 0, 0)
 
 func setup(data: PlanetData, radius_x: float, start_angle: float) -> void:
 	planet_data    = data
@@ -143,6 +145,18 @@ func _build() -> void:
 
 	_hover_label = Label.new()
 	_hover_label.text    = planet_data.planet_name
+	var civ := NeutralCivs.civ_of_world(planet_data.seed)
+	if not civ.is_empty():   # a neutral people's world: their ring, their name
+		_civ_color = civ["color"]
+		_hover_label.text += "  //  " + String(civ["name"])
+	# peoples on its moons (a moon has no label of its own here)
+	var on_moons: PackedStringArray = []
+	for m: PlanetData in planet_data.moons:
+		var mc := NeutralCivs.civ_of_world(m.seed)
+		if not mc.is_empty() and mc != civ and not on_moons.has(String(mc["name"])):
+			on_moons.append(String(mc["name"]))
+	if not on_moons.is_empty():
+		_hover_label.text += "  //  moons: " + ", ".join(on_moons)
 	_orbitron = load("res://theme/fonts/Tomorrow/Tomorrow-Regular.ttf") as Font
 	if _orbitron:
 		_hover_label.add_theme_font_override("font", _orbitron)
@@ -287,6 +301,7 @@ func _on_ring_front_draw() -> void:
 func _draw() -> void:
 	# ring back half — drawn before planet child renders
 	_draw_rings(self, PI, TAU)
+	_draw_civ_mark(self, SIZE * 0.40 * (_mini.scale.x if _mini else 1.0))
 
 
 
@@ -296,6 +311,20 @@ func _draw() -> void:
 	var x0: float    = half * _side + 1.0 * _side
 	var x1: float    = half * _side + 14.0 * _side
 	draw_line(Vector2(x0, 0.0), Vector2(x1, 0.0), Color(1.0, 1.0, 1.0, 0.55), 1.0)
+
+## A neutral people's world: a broken ring round it in their colour (four
+## arcs, like a claim), a pixel apart from the disc. Shared with the moons.
+static func _draw_civ_mark_static(target: CanvasItem, col: Color, disc_r: float) -> void:
+	if col.a <= 0.0:
+		return
+	var r := disc_r + 3.0
+	for k in 4:
+		var a0 := TAU * float(k) / 4.0 + 0.25
+		target.draw_arc(Vector2.ZERO, r, a0, a0 + TAU / 4.0 - 0.5, 10, Color(0, 0, 0, 0.6), 3.0)
+		target.draw_arc(Vector2.ZERO, r, a0, a0 + TAU / 4.0 - 0.5, 10, col, 1.5)
+
+func _draw_civ_mark(target: CanvasItem, disc_r: float) -> void:
+	_draw_civ_mark_static(target, _civ_color, disc_r)
 
 func _update_position() -> void:
 	var eff:  float = angle + _view_angle

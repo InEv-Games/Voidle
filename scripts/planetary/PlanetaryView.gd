@@ -3280,10 +3280,11 @@ func _refresh_pois(data: PlanetData) -> void:
 	_clean_custom_pois(data)
 	poi_layer.clear_pois()
 	var pois: Array[Dictionary] = []
-	if data.custom_pois.size() > 0:
+	var surface := _surface_pois(data)
+	if surface.size() > 0:
 		var lf := LocationFinder.new(data.seed, data.sea_level,
 				data.terrain_roughness, data.continent_scale)
-		for pd: POIData in data.custom_pois:
+		for pd: POIData in surface:
 			if pd.is_orbital():
 				continue  # orbital districts drawn by OrbitalLayer, not POILayer
 			var lon: float
@@ -3319,6 +3320,11 @@ func _refresh_pois(data: PlanetData) -> void:
 					"night_size": _district_night_size(data, pd.label),
 				}
 			})
+			if pd.is_neutral():   # their own colour on the marker
+				var civ := NeutralCivs.civ_by_id(pd.civ_id)
+				if not civ.is_empty():
+					pois[-1]["data"]["civ_color"] = civ["color"]
+					pois[-1]["data"]["civ"] = civ["id"]
 
 	var pp_poi := GameState.get_planet(data.seed)
 	for poi in pois:
@@ -3328,6 +3334,8 @@ func _refresh_pois(data: PlanetData) -> void:
 			var dp: POIData = d.get("poi")
 			d["district_level"] = Leveling.city_level(pp_poi, dp) if dp != null and dp.is_city() \
 				else pp_poi.district_levels.get(poi["label"], 1)
+			if dp != null and dp.is_neutral():
+				d["district_level"] = dp.level
 			if dp != null and dp.is_city():
 				d["capital_level"] = pp_poi.district_levels.get(poi["label"], 1)
 		poi_layer.add_poi(poi["lon_deg"], poi["lat_deg"], poi["label"], d)
@@ -3341,6 +3349,9 @@ func _refresh_pois(data: PlanetData) -> void:
 ## overview) in place, instead of jumping back to the overview.
 func _refresh_active_panel() -> void:
 	if current_data == null:
+		return
+	if _civ_panel_poi != null and _civ_panel_poi in _surface_pois(current_data):
+		_build_civ_panel(_civ_panel_poi, current_data)
 		return
 	if _city_panel_poi != null and _city_panel_poi in current_data.custom_pois:
 		_build_city_panel(_city_panel_poi, current_data)
@@ -3471,6 +3482,9 @@ const CAPITAL_SIZE_PER_LEVEL: float = 1.2
 ## Σ settlement weights of the finished buildings in a district (the Capital
 ## District also grows with its levels).
 func _district_settlement_size(data: PlanetData, district_label: String) -> float:
+	if NeutralCivs.is_neutral_label(district_label):   # fixed: they never grow
+		var np := _neutral_poi(district_label)
+		return np.civ_size if np != null else 0.0
 	var pp := GameState.get_planet(data.seed)
 	if pp == null:
 		return 0.0
@@ -3493,6 +3507,8 @@ func _district_settlement_size(data: PlanetData, district_label: String) -> floa
 ## derives from neighbours, and neighbours from settlement size.
 func _territory_radius_deg(data: PlanetData, pd: POIData) -> float:
 	var k := TerrainSampler.body_scale(data)   # same km size on a small body
+	if pd.is_neutral():
+		return (SETTLE_BASE_DEG + SETTLE_SIZE_DEG * sqrt(pd.civ_size)) * k
 	if pd.constructing:
 		return SETTLE_BASE_DEG * 0.7 * k
 	return (SETTLE_BASE_DEG + SETTLE_SIZE_DEG * sqrt(_district_settlement_size(data, pd.label))) * k
@@ -3506,6 +3522,8 @@ func _neighbor_pairs() -> Array[Vector2i]:
 		for b in range(a + 1, _territories.size()):
 			var ta: Dictionary = _territories[a]
 			var tb: Dictionary = _territories[b]
+			if (ta["poi"] as POIData).civ_id != (tb["poi"] as POIData).civ_id:
+				continue   # a neutral people's settlements never neighbour ours
 			var ang := acos(clampf((ta["n"] as Vector3).dot(tb["n"]), -1.0, 1.0))
 			if ang <= float(ta["r"]) + float(tb["r"]) + gap:
 				pairs.append(Vector2i(a, b))
@@ -3635,12 +3653,16 @@ func _shader_slot(ti: int) -> int:
 
 func _upload_territories(data: PlanetData) -> void:
 	_territories.clear()
-	for pd: POIData in data.custom_pois:
+	for pd: POIData in _surface_pois(data):
 		if pd.is_orbital():
 			continue
 		var n := _lonlat_to_world(deg_to_rad(pd.lon_deg), deg_to_rad(pd.lat_deg))
 		var r := deg_to_rad(_territory_radius_deg(data, pd))
 		var c: Color = poi_layer._marker_color(pd.type_tag)
+		if pd.is_neutral():   # a neutral people's ground glows in its colour
+			var civ := NeutralCivs.civ_by_id(pd.civ_id)
+			if not civ.is_empty():
+				c = civ["color"]
 		# Night lights scale with active buildings: none while constructing / empty.
 		var light: float = 0.0 if pd.constructing \
 			else _territory_light(_district_night_size(data, pd.label))
@@ -3805,6 +3827,9 @@ func _road_links() -> Array[Vector2i]:
 	var cities: Array = groups.keys()
 	for i in cities.size():
 		for j in range(i + 1, cities.size()):
+			# only between cities of one owner (ours, or one neutral people's)
+			if (_territories[int(cities[i])]["poi"] as POIData).civ_id != (_territories[int(cities[j])]["poi"] as POIData).civ_id:
+				continue
 			links.append(Vector2i(int(cities[i]), int(cities[j])))
 	# every pair of neighbouring districts gets its own road as well
 	var seen := {}
@@ -3845,6 +3870,9 @@ func _sync_level_labels(data: PlanetData) -> void:
 		return
 	for i in mini(_territories.size(), poi_layer._pois.size()):
 		var pd: POIData = _territories[i]["poi"]
+		if pd.is_neutral():
+			poi_layer._pois[i]["data"]["district_level"] = pd.level
+			continue
 		poi_layer._pois[i]["data"]["district_level"] = Leveling.city_level(pp, pd) if pd.is_city() \
 			else pp.district_levels.get(pd.label, 1)
 		if pd.is_city():
@@ -3997,7 +4025,8 @@ func _add_spoke(i: int, pts: PackedVector2Array, from_end: bool, other: int) -> 
 	var other_label: String = (_territories[other]["poi"] as POIData).label if other >= 0 else ""
 	var size_now := _district_settlement_size(current_data, pd.label)
 	if not pd.spoke_birth.has(other_label):
-		pd.spoke_birth[other_label] = size_now
+		# a neutral settlement is already as big as it will get: roads in full
+		pd.spoke_birth[other_label] = 0.0 if pd.is_neutral() else size_now
 	var grown := clampf((size_now - float(pd.spoke_birth[other_label])) / SPOKE_GROWTH, 0.0, 1.0)
 	var d := t.normalized()
 	(_spokes[i] as Array).append(Vector4(d.x, d.y, d.z, grown))
@@ -4578,6 +4607,9 @@ func _fill_deposits_section(vbox: VBoxContainer, data: PlanetData) -> void:
 ## Active building count for a district (for night-light glow size).
 ## Excludes constructing and user-paused buildings.
 func _district_night_size(data: PlanetData, district_label: String) -> int:
+	if NeutralCivs.is_neutral_label(district_label):
+		var np := _neutral_poi(district_label)
+		return int(round(np.civ_size * 1.5)) if np != null else 0
 	var pp := GameState.get_planet(data.seed)
 	var total: int = 0
 	var entries := pp.buildings_in_district(district_label)
@@ -6772,6 +6804,112 @@ func _update_placement_hover() -> void:
 	poi_layer.set_ghost(hit["lon"], hit["lat"], chk["ok"] and sys["ok"], site_name, [],
 		_placing_def.type_key(), sys["neighbors"])
 
+# ── Neutral peoples (NeutralCivs) ─────────────────────────────────────────────
+# Their settlements are drawn like ours (ground, lights, roads, markers in their
+# colour) but kept out of custom_pois: the economy never sees them, and they
+# never neighbour our districts. A click opens their people's panel.
+
+## The surface settlements on a world: ours, then any neutral people's.
+func _surface_pois(data: PlanetData) -> Array[POIData]:
+	var out: Array[POIData] = []
+	out.assign(data.custom_pois)
+	out.append_array(NeutralCivs.settlements_on(data))
+	return out
+
+func _neutral_poi(poi_label: String) -> POIData:
+	if current_data == null:
+		return null
+	for p: POIData in NeutralCivs.settlements_on(current_data):
+		if p.label == poi_label:
+			return p
+	return null
+
+var _civ_panel_poi: POIData = null
+
+const CIV_RELATION_NAMES := {"uncontacted": "Uncontacted"}
+
+## The people a settlement belongs to: who they are, where they live, and the
+## ways to reach them (diplomacy comes next: the buttons are there, not live yet).
+func _build_civ_panel(poi: POIData, planet: PlanetData) -> void:
+	var civ := NeutralCivs.civ_by_id(poi.civ_id)
+	if civ.is_empty():
+		return
+	_orbit_panel_open = false
+	_active_district_poi = null
+	_city_panel_poi = null
+	_civ_panel_poi = poi
+	var panel_content := $SidePanel/Layout/PanelContent
+	var old := panel_content.get_node_or_null("DistrictBuildPanel")
+	if old:
+		old.name = "__freeing_district__"
+		old.queue_free()
+		_bar_meta.clear()
+	var col: Color = civ["color"]
+	var temp: Dictionary = civ["temperament"]
+	var rel := String(CIV_RELATION_NAMES.get(civ["relation"], String(civ["relation"]).capitalize()))
+	_set_hero("Neutral Civilization", String(civ["name"]), [
+		[String(temp["name"]), HeroTag.Tone.PLAIN, String(temp["desc"])],
+		[rel, HeroTag.Tone.PLAIN, "We have not spoken with them yet."]])
+
+	var root := VBoxContainer.new()
+	root.name = "DistrictBuildPanel"
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 8)
+	var back := LeftPanel.back_button(planet.planet_name.to_upper())
+	back.pressed.connect(func() -> void:
+		AudioManager.play("click")
+		poi_layer.deselect_all()
+		_build_planet_overview(planet))
+	_mount_above_hero(back, root)
+
+	# a colour bar: their mark, as on the map
+	var bar := ColorRect.new()
+	bar.color = col
+	bar.custom_minimum_size = Vector2(0, 3)
+	root.add_child(bar)
+
+	var about := Label.new()
+	about.text = String(temp["desc"])
+	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_apply_orbitron(about, 9)
+	about.add_theme_color_override("font_color", UIStyle.color(&"text_subtle"))
+	root.add_child(about)
+
+	# this settlement
+	root.add_child(SectionHeader.create("SETTLEMENT", ""))
+	var kind := "Capital" if poi.is_city() else poi.type_label()
+	root.add_child(_info_line("Name", poi.shown_name()))
+	root.add_child(_info_line("Kind", "%s  Lv %d" % [kind, poi.level]))
+
+	# the people
+	var worlds: Array = civ["worlds"]
+	root.add_child(SectionHeader.create("PEOPLE", ""))
+	root.add_child(_info_line("Homeworld", NeutralCivs.world_name(int(civ["home"]))))
+	var names: PackedStringArray = []
+	for w: int in worlds:
+		names.append(NeutralCivs.world_name(w))
+	root.add_child(_info_line("Worlds", ", ".join(names)))
+	root.add_child(_info_line("Settlements", str(NeutralCivs.settlement_count(civ))))
+	root.add_child(_info_line("Population", _civ_pop_text(int(civ["population"]))))
+
+	# diplomacy: laid out, not live yet
+	root.add_child(SectionHeader.create("DIPLOMACY", ""))
+	for act: String in ["Open Contact", "Send Envoy", "Propose Integration"]:
+		var b := Button.new()
+		b.text = act.to_upper()
+		b.disabled = true
+		b.focus_mode = Control.FOCUS_NONE
+		b.tooltip_text = "Diplomacy is coming in a later step."
+		root.add_child(b)
+	panel_content.add_child(root)
+
+static func _civ_pop_text(n: int) -> String:
+	if n >= 1000000:
+		return "%.1fM" % (float(n) / 1000000.0)
+	if n >= 1000:
+		return "%dK" % int(n / 1000)
+	return str(n)
+
 func _find_poi(data: PlanetData, poi_label: String) -> POIData:
 	if poi_label == "":
 		return null
@@ -7696,6 +7834,7 @@ func _make_overview_tab_btn(label: String, count: String, is_active: bool) -> Bu
 
 func _build_planet_overview(data: PlanetData) -> void:
 	_orbit_panel_open = false
+	_civ_panel_poi = null
 	if data == null:
 		return
 	# The planet view opens once a City reaches Lv 2; until then show the City.
@@ -8626,6 +8765,12 @@ func _on_district_clicked(index: int, _data: Dictionary) -> void:
 	var poi_label: String    = poi_dict.get("label", "")
 	if current_data == null:
 		return
+	if NeutralCivs.is_neutral_label(poi_label):
+		var np := _neutral_poi(poi_label)
+		if np != null:
+			_reveal_panel()
+			_build_civ_panel(np, current_data)
+		return
 	# Find matching POIData
 	var poi: POIData = null
 	for pd: POIData in current_data.custom_pois:
@@ -8659,7 +8804,14 @@ func _on_district_clicked(index: int, _data: Dictionary) -> void:
 func _on_capital_clicked(index: int) -> void:
 	if GameState.showcase_mode or current_data == null or index >= poi_layer._pois.size():
 		return
-	var poi := _find_poi(current_data, String(poi_layer._pois[index].get("label", "")))
+	var cap_label := String(poi_layer._pois[index].get("label", ""))
+	if NeutralCivs.is_neutral_label(cap_label):
+		var np := _neutral_poi(cap_label)
+		if np != null:
+			_reveal_panel()
+			_build_civ_panel(np, current_data)
+		return
+	var poi := _find_poi(current_data, cap_label)
 	if poi == null or poi.constructing:
 		return
 	if _orbital_layer != null and is_instance_valid(_orbital_layer):
@@ -12612,6 +12764,7 @@ func _city_support_tag(planet: PlanetData, pp: PlanetProgress, city: POIData) ->
 
 func _build_city_panel(city: POIData, planet: PlanetData) -> void:
 	_orbit_panel_open = false
+	_civ_panel_poi = null
 	var keep_scroll := 0
 	if _city_scroll != null and is_instance_valid(_city_scroll) and _city_scroll_label == city.label:
 		keep_scroll = _city_scroll.scroll_vertical
@@ -12775,6 +12928,7 @@ func _show_unlock_toast(title_txt: String, body_txt: String) -> void:
 
 func _build_district_panel(poi: POIData, planet: PlanetData) -> void:
 	_orbit_panel_open = false
+	_civ_panel_poi = null
 	if poi.is_city() and planet != null and planet.seed == GameState.home_planet_seed:
 		Guide.note_capital_opened()   # the tutorial's "Open the Capital District"
 	# keep the body's scroll position when the same district is rebuilt in place

@@ -11,6 +11,8 @@ var _mini:         ColorRect
 var _orbit_x:      float = 0.0
 var _start_angle:  float = 0.0
 var _y_ratio:      float = 0.38
+## A neutral people holding this moon (NeutralCivs): its colour, else clear.
+var _civ_color:    Color = Color(0, 0, 0, 0)
 
 func setup(data: PlanetData, orbit_x: float, start_angle: float) -> void:
 	moon_data    = data
@@ -52,6 +54,10 @@ func _build(data: PlanetData) -> void:
 	mat.set_shader_parameter("color_floor",    c.get("color_ocean",      Vector3(0.16,0.15,0.14)))
 	_mini.material = mat
 	add_child(_mini)
+	var civ := NeutralCivs.civ_of_world(data.seed)
+	if not civ.is_empty():
+		_civ_color = civ["color"]
+		queue_redraw()
 
 	# keys play (16.11): the hidden mouse never hovers; the keys pick instead
 	_mini.mouse_entered.connect(func() -> void:
@@ -74,3 +80,7 @@ func set_hovered(hovered: bool) -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		var t := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 		t.tween_property(_mini, "scale", Vector2(1.0, 1.0), 0.1)
+
+
+func _draw() -> void:
+	PlanetOrbitNode._draw_civ_mark_static(self, _civ_color, SIZE * 0.38)

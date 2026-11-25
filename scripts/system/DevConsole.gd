@@ -316,6 +316,8 @@ func _exec(line: String) -> void:
 			_log_info("  [color=#88ddcc]res set[/color] [color=#aaaaaa]<id> <amount>[/color]      — set exact (ignores cap)")
 			_log_info("  [color=#88ddcc]res fill[/color] [color=#aaaaaa][id][/color]              — fill to storage cap (all if no id)")
 			_log_info("  [color=#555f6a]  ids: ferrite, moonstone, goods, fuel, rare … (name or short)[/color]")
+			_log_info("[color=#33cc55]── NEUTRAL PEOPLES ──────────────────────[/color]")
+			_log_info("  [color=#88ddcc]civs[/color]  [color=#88ddcc]civs goto[/color] [color=#aaaaaa]<n> [world][/color]  [color=#88ddcc]civs reroll[/color]")
 			_log_info("[color=#33cc55]── UNLOCKS ──────────────────────────────[/color]")
 			_log_info("  [color=#88ddcc]unlock solar / galaxy / moon / all[/color]")
 			_log_info("  [color=#88ddcc]lock solar / galaxy / moon[/color]")
@@ -565,6 +567,10 @@ func _exec(line: String) -> void:
 		# ── Seed of the current view ──────────────────────────────────────────
 		"--seed", "seed":
 			_cmd_seed()
+
+		# ── Neutral peoples (Mechanic-Test/Neutral-Civs) ────────────────────
+		"civs":
+			_cmd_civs(parts)
 
 		# ── State ───────────────────────────────────────────────────────────
 		"buildings":
@@ -989,6 +995,46 @@ func _cmd_showcase(parts: Array) -> void:
 			_log_ok("Explore %s" % on_off.call(false))
 		_:
 			_log_err("Try: showcase / showcase on / showcase off")
+
+## civs — list the neutral peoples of the home system and their worlds
+## civs goto <n> [world k] — open the planet view of people n's world (homeworld)
+## civs reroll — roll new peoples (dev; nothing is saved)
+func _cmd_civs(parts: Array) -> void:
+	var sub := String(parts[1]).to_lower() if parts.size() > 1 else ""
+	if sub == "reroll":
+		NeutralCivs.salt += 1
+		NeutralCivs.all()
+		_log_ok("New neutral peoples rolled (salt %d). Reopen a planet view to see them." % NeutralCivs.salt)
+		sub = ""
+	var civs := NeutralCivs.all()
+	if sub == "goto":
+		var n := int(parts[2]) if parts.size() > 2 else 1
+		if n < 1 or n > civs.size():
+			_log_err("Usage: civs goto <1..%d> [world]" % civs.size())
+			return
+		var civ: Dictionary = civs[n - 1]
+		var worlds: Array = civ["worlds"]
+		var k := clampi(int(parts[3]) if parts.size() > 3 else 1, 1, worlds.size())
+		var pd := NeutralCivs._world(int(worlds[k - 1]))
+		if pd == null:
+			_log_err("World not found.")
+			return
+		pd.set_meta("__solar_data", GameState.get_home_solar())
+		_log_ok("Going to %s (%s)." % [pd.planet_name, civ["name"]])
+		SceneTransition.go("res://scenes/planetary/PlanetaryView.tscn", pd)
+		return
+	if civs.is_empty():
+		_log_info("No neutral peoples in this system (no free worlds).")
+		return
+	_log_info("[color=#33cc55]── NEUTRAL PEOPLES ──────────────────────[/color]")
+	for i in civs.size():
+		var c: Dictionary = civs[i]
+		var names: PackedStringArray = []
+		for w: int in c["worlds"]:
+			names.append(NeutralCivs.world_name(w) + (" (home)" if w == int(c["home"]) else ""))
+		_log_info("  [color=#%s]%d. %s[/color]  %s  //  %s" % [(c["color"] as Color).to_html(false), i + 1,
+			c["name"], (c["temperament"] as Dictionary)["name"], ", ".join(names)])
+	_log_info("  [color=#555f6a]civs goto <n> [world]  //  civs reroll[/color]")
 
 func _cmd_seed() -> void:
 	var scene := get_tree().current_scene

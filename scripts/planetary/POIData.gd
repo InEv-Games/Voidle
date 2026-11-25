@@ -109,6 +109,15 @@ static func make_key(data: PlanetData) -> String:
 @export var orbit_node:        float = 0.0   # longitude rotation offset
 @export var orbit_radius:      float = 1.35  # fraction of planet radius
 
+## A neutral people's settlement (NeutralCivs): the people's id, else "".
+## Never in a PlanetData's custom_pois — the economy never sees it.
+@export var civ_id: String = ""
+## Its settlement size (what buildings give a player district).
+@export var civ_size: float = 0.0
+
+func is_neutral() -> bool:
+	return civ_id != ""
+
 func is_orbital() -> bool:
 	return poi_type == POIType.STATION
 

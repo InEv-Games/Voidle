@@ -1380,7 +1380,7 @@ func _draw_scene(font: Font) -> void:
 		var selected: bool = (i == _selected_index)
 		var active: bool   = hovered or selected
 		var tag: String    = poi["data"].get("type", "")
-		var base_col: Color = _marker_color(tag)
+		var base_col: Color = poi["data"].get("civ_color", _marker_color(tag))   # a neutral people's own colour
 		var dot_col := base_col.lightened(0.45) if active else base_col
 		dot_col.a = alpha
 
