@@ -37,7 +37,10 @@ static func open(host: Node) -> void:
 		return
 	var p := ModalPopup.open(host, "Government", "groups", "", LAYER)
 	_popup = p
-	var hero := p.use_hero("Year %d" % GameState.calendar_year(), "GOVERNMENT")
+	var caption := "Year %d" % GameState.calendar_year()
+	if not GameState.colony_name.is_empty():
+		caption = "%s  //  %s" % [GameState.colony_name, caption]
+	var hero := p.use_hero(caption, "GOVERNMENT")
 	p.card.add_theme_stylebox_override(&"panel", StyleBoxEmpty.new())   # the ministries have their own cards
 	(p.card.get_node("VBox/Buttons") as Control).visible = false   # the ✕ by the hero, Esc
 	p.closed.connect(func() -> void: _popup = null)
@@ -50,6 +53,17 @@ static func open(host: Node) -> void:
 		p.close()
 		CompanionGallery.open(host, GameState.CHANCELLERY, func() -> void: open(host)))
 	var head := hero.get_parent()
+	if not GameState.colony_logo.is_empty():
+		var emblem := TextureRect.new()
+		emblem.texture = UIIcons.get_icon(GameState.colony_logo)
+		emblem.custom_minimum_size = Vector2(36, 36)
+		emblem.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		emblem.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		emblem.size_flags_vertical = Control.SIZE_SHRINK_END
+		emblem.modulate = UIStyle.color(&"accent")
+		emblem.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		head.add_child(emblem)
+		head.move_child(emblem, hero.get_index())
 	head.add_child(agents)
 	head.move_child(agents, hero.get_index() + 1)
 	var row := HBoxContainer.new()
@@ -102,9 +116,16 @@ static func _slot(host: Node, p: ModalPopup, m: Dictionary, i: int, fronts: Arra
 	front.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(front)
 	fronts.append(front)
-	var title := HeroHeader.create(String(m["title"]),
-		String(m["name"]).replace("Ministry of ", "").to_upper(), NAME_SIZE)
-	(title.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF
+	var office_name := String(m["name"]).replace("Ministry of ", "")
+	if leader and not GameState.colony_leader_name.is_empty():
+		office_name = GameState.colony_leader_name
+	var title := HeroHeader.create(String(m["title"]), office_name.to_upper(), NAME_SIZE)
+	var title_label := title.get_node("Title") as Label
+	title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	if leader:
+		title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		title_label.mouse_filter = Control.MOUSE_FILTER_PASS
+		title_label.tooltip_text = office_name
 	title.set_outline()   # over the minister's portrait
 	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	front.add_child(title)

@@ -38,6 +38,9 @@ var _construct:     Dictionary = {}
 var _randomize_missing := false
 var _randomize_tries := 0
 
+func _ready() -> void:
+	GameState.save_deleted.connect(_clear_world_caches)
+
 func _process(delta: float) -> void:
 	_calc_global_energy()
 	if _randomize_missing:
@@ -61,6 +64,7 @@ func get_save_data() -> Dictionary:
 
 func load_save_data(d: Dictionary) -> void:
 	_progress.clear(); _base_progress.clear(); _construct.clear(); _user_paused.clear()
+	_clear_world_caches()
 	if d.is_empty():
 		_randomize_missing = true
 		_randomize_tries = 0
@@ -69,6 +73,12 @@ func load_save_data(d: Dictionary) -> void:
 	_base_progress.merge(d.get("base", {}))
 	_construct.merge(d.get("construct", {}))
 	_user_paused.merge(d.get("user_paused", {}))
+
+func _clear_world_caches() -> void:
+	_income_cache.clear()
+	_poi_index.clear()
+	_breakdown_at = -BREAKDOWN_MS
+	Economy.invalidate_bonus_cache()
 
 func _randomize_cycles() -> bool:
 	var all_ready := true
@@ -715,10 +725,14 @@ func resource_breakdowns() -> Dictionary:
 		if pd == null:
 			continue
 		var minerals: Array = Economy.raw_for_body(pd)
-		var spread := func(label: String, v: float, unit: String) -> void:   # a mine's raw output over the body's minerals
+		var spread := func(label: String, v: float, unit: String, district_label: String) -> void:
 			add.call(Economy.RAW, label, v, unit)
+			if minerals.is_empty():
+				return
+			var bonus := Economy.colony_trait_bonus(pd, district_label, Economy.RAW)
 			for r: Dictionary in minerals:
-				add.call(String(r["id"]), label, v / float(minerals.size()), unit)
+				var id := String(r["id"])
+				add.call(id, label, _raw_output_share(v, minerals.size(), id, bonus), unit)
 		for poi: POIData in pd.custom_pois:
 			var ddef := district_def(poi)
 			if ddef == null or not makes_base(pd, poi) or ddef.base_tick <= 0.0:
@@ -732,7 +746,7 @@ func resource_breakdowns() -> Dictionary:
 					continue
 				var v: float = float(inc[id]) * st.get_global_speed_mult() * planet_pop_speed(pp.planet_seed) / ddef.base_tick
 				if id == Economy.RAW:
-					spread.call(label, v, poi.shown_name())
+					spread.call(label, v, poi.shown_name(), poi.label)
 				else:
 					add.call(id, label, v, poi.shown_name())
 		for entry: Dictionary in pp.buildings:
@@ -759,7 +773,7 @@ func resource_breakdowns() -> Dictionary:
 					continue
 				var v := output_per_cycle(pp, entry, def, id) * eff * per_s
 				if id == Economy.RAW:
-					spread.call(def.display_name, v, unit)
+					spread.call(def.display_name, v, unit, String(entry.get("district_id", "")))
 				else:
 					add.call(id, def.display_name, v, unit)
 			for id: String in def.inputs:
@@ -829,9 +843,14 @@ func _on_tick_complete(pp: PlanetProgress, def: BuildingDef,
 			var txt := "+%.1f" % value if value < 10.0 else "+%.0f" % value
 			resource_produced.emit(pp.planet_seed, poi_lbl, txt, Economy.color_of(id), UIIcons.get_icon(id))
 
-## Splits a mine's raw output evenly over the body's minerals (the ones this
-## civilization can extract). No deposits or densities: every valid site on a
-## body yields its whole mineral set.
+## Distribute the total, including any trait bonus, among the body's minerals.
+static func _raw_output_share(total: float, count: int, id: String, aggregate_bonus: float) -> float:
+	var share := total / (float(count) * (1.0 + aggregate_bonus))
+	if aggregate_bonus > 0.0 and not Economy.colony_trait_for(id).is_empty():
+		share *= 1.0 + SessionPrep.COLONY_TRAIT_BONUS
+	return share
+
+## Every valid mining site yields the body's known mineral set.
 func _produce_raw(pp: PlanetProgress, poi_lbl: String, total: float) -> void:
 	var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
 	if pd == null or total <= 0.0:
@@ -841,11 +860,12 @@ func _produce_raw(pp: PlanetProgress, poi_lbl: String, total: float) -> void:
 	var raws := Economy.raw_for_body(pd)
 	if raws.is_empty():
 		return
+	var bonus := Economy.colony_trait_bonus(pd, poi_lbl, Economy.RAW)
 	for k in raws.size():
-		var share: float = total / float(raws.size())
+		var rid: String = raws[k]["id"]
+		var share := _raw_output_share(total, raws.size(), rid, bonus)
 		if share <= 0.0:
 			continue
-		var rid: String = raws[k]["id"]
 		var before := GameState.get_resource(rid)
 		GameState.add_resource(rid, share)
 		if rid == "moonstone" and pd.planet_type == PlanetData.Type.MOON:
@@ -980,7 +1000,9 @@ func location_mult(pp: PlanetProgress, district_id: String) -> float:
 
 ## The district POI an entry belongs to, or null.
 func _district_poi(pp: PlanetProgress, district_id: String) -> POIData:
-	var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
+	return district_at(GameState.get_planet_data(pp.planet_seed), district_id)
+
+static func district_at(pd: PlanetData, district_id: String) -> POIData:
 	if pd == null:
 		return null
 	return _index(pd)["by_label"].get(district_id, null)

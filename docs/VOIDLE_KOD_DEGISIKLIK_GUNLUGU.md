@@ -279,6 +279,16 @@ Başlangıç commit’i `6eac4eb`. Godot ve testler çalıştırılmadı. Sabit 
 
 Başlangıç commit’i `6eac4eb`. Godot ve testler çalıştırılmadı.
 
+## 26 Kasım 2026
+
+### New Game koloni kurulumu
+
+- New Game'in son adımında Head Start seçeneklerini Colony Setup ile değiştirdim. Lider ve koloni adları isteğe bağlı ve 20 karakterle sınırlı. Dünya adı ve seed alanları kendi işlevlerini sürdürüyor. Logo seçici demo ve web sürümlerinde kilitli. Diğer sürümlerde oyuncu mevcut UI simgelerinden birini seçebiliyor ve logo kayıtla birlikte saklanıyor. Government iki adı ve seçili logoyu gösteriyor. Kayıt listesinde koloni adı görünüyor.
+- Öğreticisiz yeni oyunda beş Colony Trait'ten biri seçiliyor. Light Watch Energy üretimine, A Spare Room konut kapasitesine, The First Stall Credits gelirine, Second Reading Science üretimine ve The Last Crate Ferrite ile Moonstone çıkarımına %10 ekliyor. Bonus ilgili yüzey ve yörünge district ailelerinin çıktısına uygulanıyor. Birden fazla maden çıkaran gövdelerde bonus sadece Ferrite ve Moonstone payına gidiyor. Kaynak tooltip'leri özelliğin adını ve etkisini gösteriyor.
+- Rehberli başlangıçlar sabit seed ve mevcut standart bütçeyle açılıyor. Bu kayıtlarda isim seçilebiliyor ve Colony Trait uygulanmıyor. Öğreticisiz başlangıçlar da standart bütçeyi kullanıyor. Eski Head Start araştırmaları ve varsa kullanılmamış Industry district hakkı mevcut kayıtlarda okunmaya devam ediyor. İsimler ve Colony Trait isteğe bağlı kayıt alanları olarak eklendi.
+
+Başlangıç commit'i `1ecaf12`. Godot ve testler çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.

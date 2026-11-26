@@ -6,12 +6,12 @@ extends ModalPopup
 ## preview (NewGamePreview: the home world of the seed, turning, with its moon)
 ## large and without a background above, the hero (and its ✕) right under it,
 ## and at the top of the screen a trail of the steps (CIVILIZATION TYPE › START WORLD ›
-## HEAD START: the ones reached can be pressed to go back to them, the ones
+## COLONY SETUP: the ones reached can be pressed to go back to them, the ones
 ## ahead wait, dim), then one panel in three steps:
 ##   1 Civ    CIVILIZATION on a slider, 0 to 6 (only 0 is played for now;
 ##            the others show their scale, locked)                     (NEXT)
 ##   2 Start  START WORLD, MOON and what the option is           (BACK, NEXT)
-##   3 Rest   HEAD START, and the world's name and seed (typed or RANDOM)
+##   3 Rest   COLONY TRAIT, identity, and the world's name and seed
 ##            (BACK, TUTORIAL, BEGIN)
 ## The rows of options are made from SessionPrep's tables. The preview shows
 ## the option pressed last (a locked one too, though it isn't chosen), with the
@@ -37,10 +37,13 @@ var begin: Callable
 @onready var _start: VBoxContainer = $Center/Box/Pages/Steps/Start
 @onready var _rest: VBoxContainer = $Center/Box/Pages/Steps/Rest
 @onready var _info: RichTextLabel = $Center/Box/Pages/Steps/Start/Info
-@onready var _boon_head: Label = $Center/Box/Pages/Steps/Rest/BoonHead
-@onready var _boons: GridContainer = $Center/Box/Pages/Steps/Rest/Boons
-@onready var _boon_desc: RichTextLabel = $Center/Box/Pages/Steps/Rest/BoonDesc
-@onready var _boon_rule: HSeparator = $Center/Box/Pages/Steps/Rest/Rule
+@onready var _trait_head: Label = $Center/Box/Pages/Steps/Rest/TraitHead
+@onready var _traits: GridContainer = $Center/Box/Pages/Steps/Rest/Traits
+@onready var _trait_desc: RichTextLabel = $Center/Box/Pages/Steps/Rest/TraitDesc
+@onready var _trait_rule: HSeparator = $Center/Box/Pages/Steps/Rest/Rule
+@onready var _leader_edit: LineEdit = $Center/Box/Pages/Steps/Rest/IdentityRow/LeaderName
+@onready var _colony_edit: LineEdit = $Center/Box/Pages/Steps/Rest/IdentityRow/ColonyName
+@onready var _logo: OptionButton = $Center/Box/Pages/Steps/Rest/IdentityRow/Logo
 @onready var _name_edit: LineEdit = $Center/Box/Pages/Steps/Rest/SeedRow/NameEdit
 @onready var _seed_edit: LineEdit = $Center/Box/Pages/Steps/Rest/SeedRow/SeedEdit
 @onready var _dice: IconButton = $Center/Box/Pages/Steps/Rest/SeedRow/Random
@@ -55,14 +58,14 @@ var _begun := false        # BEGIN: the game opens, the menu's planets stay away
 var _switching := false    # a step is fading out
 var _last_look: Callable   # the preview's look: the option pressed last (the seed may change)
 var _start_info := ""     # the world or moon description selected by pressing its button
-var _boon_btns := {}
+var _trait_btns := {}
 var _tutorial_required := false
 var _free_seed_text := ""
 var _step := 1
 var _reached := 1          # the furthest step opened so far (the trail lets you back to it)
 const STEPS := 3
 ## The trail's names, one per step.
-const STEP_NAMES := ["CIVILIZATION TYPE", "START WORLD", "HEAD START"]
+const STEP_NAMES := ["CIVILIZATION TYPE", "START WORLD", "COLONY SETUP"]
 var _crumb_btns: Array[Button] = []
 
 func _ready() -> void:
@@ -74,7 +77,7 @@ func _ready() -> void:
 	(_hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF   # one line
 	_tutorial_required = not SettingsManager.tutorial_ever_done
 	_free_seed_text = SessionPrep._random_seed_text()
-	_choice = {"world": "terran", "moon": "rocky", "civ": "c0", "boon": "",
+	_choice = {"world": "terran", "moon": "rocky", "civ": "c0", "colony_trait": "",
 		"tutorial": _tutorial_required, "seed": SessionPrep.SEED_MIN,
 		"seed_text": "", "name": ""}
 	# the main menu's planets give way to the preview while it is open
@@ -88,7 +91,8 @@ func _ready() -> void:
 	_apply_start_options()
 	_build_civ()
 	_build_start()
-	_build_boons()
+	_build_traits()
+	_build_logos()
 	_build_buttons()
 
 func cancel_button() -> IconButton:
@@ -277,34 +281,55 @@ func _build_start() -> void:
 	_start_info = _info_of(SessionPrep.WORLDS, String(_choice["world"]), true)
 	_show_description(_info, _start_info)
 
-# ── Step 3: the head start ───────────────────────────────────────────────────
+# Step 3: the colony's identity and its lasting trait.
 
-func _show_boon(id: String) -> void:
-	var description := "[color=#%s]%s[/color]%s" % [UIStyle.hex(&"text_subtle"), String(SessionPrep.BOONS[id][2]),
-		("  " + SessionPrep._bonus_bb()) if id == "" else ""]
-	_show_description(_boon_desc, description)
+func _show_trait(id: String) -> void:
+	var trait_def: Dictionary = SessionPrep.COLONY_TRAITS.get(id, {})
+	if trait_def.is_empty():
+		_show_description(_trait_desc, "Choose one trait for this colony.")
+		return
+	_show_description(_trait_desc, "[color=#%s]%s[/color]\n%s" % [
+		UIStyle.hex(&"good"), trait_def["effect"], trait_def["story"]])
 
-func _paint_boons() -> void:
-	for id: String in _boon_btns:
-		(_boon_btns[id] as IconButton).variant = IconButton.Variant.NEUTRAL if id == _choice["boon"] \
+func _paint_traits() -> void:
+	for id: String in _trait_btns:
+		(_trait_btns[id] as IconButton).variant = IconButton.Variant.NEUTRAL if id == _choice["colony_trait"] \
 			else IconButton.Variant.DEFAULT
+	_ok.disabled = not _uses_tutorial() and String(_choice["colony_trait"]).is_empty()
 
-func _build_boons() -> void:
-	for id: String in SessionPrep.BOON_ORDER:
-		var bn: Array = SessionPrep.BOONS[id]
-		var b := IconButton.create(String(bn[0]), String(bn[1]), IconButton.Variant.DEFAULT)
+func _build_traits() -> void:
+	for id: String in SessionPrep.COLONY_TRAITS:
+		var trait_def: Dictionary = SessionPrep.COLONY_TRAITS[id]
+		var b := IconButton.create(String(trait_def["title"]).to_upper(), String(trait_def["resource"]))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.mouse_entered.connect(func() -> void: _show_boon(id))
-		b.mouse_exited.connect(func() -> void: _show_boon(String(_choice["boon"])))
+		b.mouse_entered.connect(func() -> void: _show_trait(id))
+		b.mouse_exited.connect(func() -> void: _show_trait(String(_choice["colony_trait"])))
+		b.focus_entered.connect(func() -> void: _show_trait(id))
+		b.focus_exited.connect(func() -> void: _show_trait(String(_choice["colony_trait"])))
 		b.pressed.connect(func() -> void:
 			AudioManager.play("click")
-			_choice["boon"] = id
-			_paint_boons()
-			_show_boon(id))
-		_boons.add_child(b)
-		_boon_btns[id] = b
-	_paint_boons()
-	_show_boon("")
+			_choice["colony_trait"] = id
+			_paint_traits()
+			_show_trait(id))
+		_traits.add_child(b)
+		b.focus_mode = Control.FOCUS_ALL
+		_trait_btns[id] = b
+	_paint_traits()
+	_show_trait("")
+
+func _build_logos() -> void:
+	if GameState.demo_build:
+		_logo.add_icon_item(UIIcons.get_icon("flag"), "LOGO LOCKED")
+		_logo.select(0)
+		_logo.tooltip_text = "Colony logo selection is locked in the demo."
+		_logo.disabled = true
+		return
+	_logo.add_icon_item(UIIcons.get_icon("flag"), "No logo")
+	_logo.set_item_metadata(0, "")
+	for id: String in SessionPrep.COLONY_LOGOS:
+		_logo.add_icon_item(UIIcons.get_icon(id), String(SessionPrep.COLONY_LOGOS[id]))
+		_logo.set_item_metadata(_logo.item_count - 1, id)
+	_logo.select(0)
 
 # ── The buttons and the steps ────────────────────────────────────────────────
 
@@ -313,25 +338,24 @@ func _uses_tutorial() -> bool:
 
 func _tut_tip() -> void:
 	if _tutorial_required:
-		TooltipManager.show_tip("Guided tutorial", "Complete the tutorial once to unlock custom seeds and Head Starts.")
+		TooltipManager.show_tip("Guided tutorial", "Complete the tutorial once to unlock custom seeds and colony traits.")
 	elif _uses_tutorial():
-		TooltipManager.show_tip("Tutorial on", "Use the tutorial world and Standard start.")
+		TooltipManager.show_tip("Tutorial on", "Use the fixed tutorial world and economy.")
 	else:
-		TooltipManager.show_tip("Tutorial off", "Choose your seed and Head Start and play without the guide.")
+		TooltipManager.show_tip("Tutorial off", "Choose your seed and colony trait for an unguided game.")
 
 func _apply_start_options() -> void:
 	var guided := _uses_tutorial()
 	_tut.icon_name = "confirm" if guided else "empty"
 	_tut.disabled = _tutorial_required
-	_boon_head.visible = not guided
-	_boons.visible = not guided
-	_boon_desc.visible = not guided
-	_boon_rule.visible = not guided
+	_trait_head.visible = not guided
+	_traits.visible = not guided
+	_trait_desc.visible = not guided
+	_trait_rule.visible = not guided
 	_seed_edit.visible = not guided
 	_dice.visible = not guided
 	_set_seed(_free_seed_text)
-	if _crumb_btns.size() == STEPS:
-		_crumb_btns[STEPS - 1].text = "PLANET" if guided else String(STEP_NAMES[STEPS - 1])
+	_paint_traits()
 
 func _build_buttons() -> void:
 	_tut.mouse_entered.connect(func() -> void:
@@ -383,7 +407,7 @@ func _build_crumbs() -> void:
 			sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			_crumbs.add_child(sep)
 		var b := Button.new()
-		b.text = "PLANET" if i == STEPS - 1 and _uses_tutorial() else String(STEP_NAMES[i])
+		b.text = String(STEP_NAMES[i])
 		b.theme_type_variation = UIStyle.FLAT
 		b.focus_mode = Control.FOCUS_NONE
 		var step := i + 1
@@ -456,16 +480,22 @@ func _go_step(step: int) -> void:
 		_switching = false)
 
 func _on_begin() -> void:
-	AudioManager.play("click")
 	var guided := _uses_tutorial()
+	if not guided and String(_choice["colony_trait"]).is_empty():
+		return
+	AudioManager.play("click")
 	if not guided and _seed_edit.text.strip_edges() != String(_choice["seed_text"]):
 		_set_seed(_seed_edit.text)
 	_set_name(_name_edit.text)
 	var setup := _choice.duplicate()
 	setup["tutorial"] = guided
+	setup["colony_leader_name"] = _leader_edit.text.strip_edges()
+	setup["colony_name"] = _colony_edit.text.strip_edges()
+	if not GameState.demo_build and _logo.selected >= 0:
+		setup["colony_logo"] = String(_logo.get_item_metadata(_logo.selected))
 	if guided:
 		setup["seed"] = SessionPrep.tutorial_seed()
-		setup["boon"] = ""
+		setup["colony_trait"] = ""
 		setup["world"] = "terran"
 		setup["moon"] = "rocky"
 		setup["civ"] = "c0"
@@ -491,4 +521,9 @@ func _hold_height(done: Callable) -> void:
 		h = maxf(h, st.get_combined_minimum_size().y)
 	_steps.custom_minimum_size.y = h
 	done.call()
+	var stage := _pv.get_parent() as Control
+	var box := stage.get_parent() as VBoxContainer
+	var overflow := box.get_combined_minimum_size().y + 64.0 - get_viewport_rect().size.y
+	if overflow > 0.0:
+		stage.custom_minimum_size.y = maxf(stage.custom_minimum_size.y - overflow, 0.0)
 	_pages.create_tween().tween_property(_pages, "modulate:a", 1.0, 0.15)

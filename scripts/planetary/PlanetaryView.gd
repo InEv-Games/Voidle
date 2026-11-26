@@ -9153,7 +9153,8 @@ func _district_supports(poi: POIData, planet: PlanetData) -> Dictionary:
 			continue
 		out[id] = {"city": Economy.city_support(pp, city, id, planet) - 1.0,
 			"planet": Economy.planet_bonus(pp, id, planet) - 1.0,
-			"companions": Excavations.global_mult(id) - 1.0, "all": all}
+			"companions": Excavations.global_mult(id) - 1.0,
+			"trait": Economy.colony_trait_bonus(planet, poi.label, id), "all": all}
 	return out
 
 func _supports_tip(sup: Dictionary) -> String:
@@ -9161,7 +9162,8 @@ func _supports_tip(sup: Dictionary) -> String:
 	for id: String in sup:
 		var s: Dictionary = sup[id]
 		var parts: Array[String] = []
-		for k: Array in [["city", "Capital"], ["planet", "Planet"], ["companions", _agents_name()]]:
+		for k: Array in [["city", "Capital"], ["planet", "Planet"], ["companions", _agents_name()],
+			["trait", String(Economy.colony_trait_for(id).get("title", "Colony Trait"))]]:
 			if float(s[k[0]]) > 0.0005:
 				parts.append("%s +%s%%" % [k[1], _pct(snappedf(float(s[k[0]]), 0.01))])
 		lines.append("%s  %s   %s" % [UIIcons.bb(id, 11, Economy.color_of(id)),

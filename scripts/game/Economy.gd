@@ -620,18 +620,43 @@ static func city_key(pd: PlanetData, district_label: String) -> String:
 		_city_maps[pd.seed] = m
 	return m.get(district_label, "")
 
-## Multiplier for `id` produced in `district_label`: (1 + its City's supports)
-## × (1 + the planet's supports).
+## The selected colony trait for a resource or one of its named raw minerals.
+static func colony_trait_for(id: String) -> Dictionary:
+	var trait_def: Dictionary = SessionPrep.COLONY_TRAITS.get(GameState.colony_trait, {})
+	if id == trait_def.get("resource", "") or id in trait_def.get("minerals", []):
+		return trait_def
+	return {}
+
+## The bonus on one district's output. A mixed mineral yield only gets the
+## bonus on the affected share of its total.
+static func colony_trait_bonus(pd: PlanetData, district_label: String, id: String) -> float:
+	var trait_def := colony_trait_for(id)
+	if trait_def.is_empty() or pd == null:
+		return 0.0
+	var district := ProductionManager.district_def(ProductionManager.district_at(pd, district_label))
+	if district == null or not (district.id in trait_def["districts"]):
+		return 0.0
+	if id != RAW:
+		return SessionPrep.COLONY_TRAIT_BONUS
+	var minerals := raw_for_body(pd)
+	if minerals.is_empty():
+		return 0.0
+	var affected := 0
+	for mineral: Dictionary in minerals:
+		if mineral["id"] in trait_def["minerals"]:
+			affected += 1
+	return SessionPrep.COLONY_TRAIT_BONUS * float(affected) / float(minerals.size())
+
+## Multiplier for `id` produced in `district_label`: local supports, companion
+## effects and, where applicable, the colony's founding trait.
 static func scope_bonus(pp: PlanetProgress, district_label: String, id: String, pd: PlanetData = null) -> float:
 	if pd == null:
 		pd = GameState.get_planet_data(pp.planet_seed)
 	var city := city_key(pd, district_label)
 	var ck := "%d|%s|%s" % [pp.planet_seed, city, id]
-	if _bonus_cache.has(ck):
-		return _bonus_cache[ck]
-	var mult := city_support(pp, city, id, pd) * planet_bonus(pp, id, pd) * Excavations.global_mult(id)
-	_bonus_cache[ck] = mult
-	return mult
+	if not _bonus_cache.has(ck):
+		_bonus_cache[ck] = city_support(pp, city, id, pd) * planet_bonus(pp, id, pd) * Excavations.global_mult(id)
+	return float(_bonus_cache[ck]) * (1.0 + colony_trait_bonus(pd, district_label, id))
 
 ## A world's supports, gathered once per frame: { "city": { city label:
 ## { id: +fraction } }, "planet": { id: +fraction } } (Capital supports, Orbit

@@ -313,7 +313,7 @@ func _bind_chip(cell: ResourceChip) -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
 		if id == Economy.RAW:
 			if _raw_dd == null:
-				TooltipManager.show_tip(title, "Click to show every raw resource.")
+				TooltipManager.show_tip(title, _description_with_trait(id, "Click to show every raw resource."))
 				TooltipManager.set_title_icon(id)
 			return
 		TooltipManager.live(func() -> void: _show_cell_tip(id, title)))   # amounts and rates stay current
@@ -418,12 +418,18 @@ func _show_cell_tip(id: String, title: String) -> void:
 				corner = "%s %s %s" % [Economy.fmt(_stock_amount(id)), _ic("warehouse", DIM_HEX), Economy.fmt(Economy.cap(cap_id))]
 			detail = breakdown_text(id)
 			foot = "Click to open Trade"
-	TooltipManager.show_tip(title, desc)
+	TooltipManager.show_tip(title, _description_with_trait(id, desc))
 	TooltipManager.set_title_icon(id)
 	TooltipManager.set_corner(corner)
 	TooltipManager.set_detail(detail)
 	if foot != "":
 		TooltipManager.set_footer("[font_size=10]%s[/font_size]" % _c(foot, DIM_HEX), "")
+
+static func _description_with_trait(id: String, description: String) -> String:
+	var trait_def := Economy.colony_trait_for(id)
+	if trait_def.is_empty():
+		return description
+	return "%s\n\n[b]%s[/b]\n%s" % [description, trait_def["title"], trait_def["effect"]]
 
 ## "+24  Market" lines of a resource per colony month, largest first, then the net (all worlds).
 static func breakdown_text(id: String) -> String:
@@ -718,7 +724,8 @@ func _fill_raw_dropdown() -> void:
 			chip.mouse_filter = Control.MOUSE_FILTER_STOP
 			var mineral_tip := func() -> void:
 				if Economy.is_mineral_discovered(rid) or Economy.amount(rid) > 0.0:
-					TooltipManager.show_tip(nm, "A raw mineral, mined by %s." % Glossary.t("industrial", "Production districts"))
+					var description := "A raw mineral, mined by %s." % Glossary.t("industrial", "Production districts")
+					TooltipManager.show_tip(nm, _description_with_trait(rid, description))
 					TooltipManager.set_corner("%s %s %s" % [Economy.fmt(Economy.amount(rid)), _ic("warehouse", DIM_HEX), Economy.fmt(Economy.cap(rid))])
 					TooltipManager.set_detail(breakdown_text(rid))
 				else:

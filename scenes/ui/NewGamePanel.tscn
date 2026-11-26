@@ -160,19 +160,19 @@ autowrap_mode = 3
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="BoonHead" type="Label" parent="Center/Box/Pages/Steps/Rest"]
+[node name="TraitHead" type="Label" parent="Center/Box/Pages/Steps/Rest"]
 layout_mode = 2
 theme_type_variation = &"HeaderLabel"
-text = "HEAD START"
+text = "COLONY TRAIT"
 
-[node name="Boons" type="GridContainer" parent="Center/Box/Pages/Steps/Rest"]
+[node name="Traits" type="GridContainer" parent="Center/Box/Pages/Steps/Rest"]
 layout_mode = 2
 theme_override_constants/h_separation = 6
 theme_override_constants/v_separation = 6
-columns = 2
+columns = 3
 
-[node name="BoonDesc" type="RichTextLabel" parent="Center/Box/Pages/Steps/Rest"]
-custom_minimum_size = Vector2(420, 72)
+[node name="TraitDesc" type="RichTextLabel" parent="Center/Box/Pages/Steps/Rest"]
+custom_minimum_size = Vector2(420, 58)
 layout_mode = 2
 mouse_filter = 1
 theme_type_variation = &"PopupBody"
@@ -182,6 +182,25 @@ scroll_active = true
 autowrap_mode = 3
 
 [node name="Rule" type="HSeparator" parent="Center/Box/Pages/Steps/Rest"]
+layout_mode = 2
+
+[node name="IdentityRow" type="HBoxContainer" parent="Center/Box/Pages/Steps/Rest"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LeaderName" type="LineEdit" parent="Center/Box/Pages/Steps/Rest/IdentityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Leader name"
+max_length = 20
+
+[node name="ColonyName" type="LineEdit" parent="Center/Box/Pages/Steps/Rest/IdentityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Colony name"
+max_length = 20
+
+[node name="Logo" type="OptionButton" parent="Center/Box/Pages/Steps/Rest/IdentityRow"]
 layout_mode = 2
 
 [node name="PlanetHead" type="Label" parent="Center/Box/Pages/Steps/Rest"]

@@ -1406,8 +1406,12 @@ static func _slot_lines(info: Dictionary, blocked: String) -> Array[String]:
 	var played := "%dh %02dm" % [secs / 3600, (secs / 60) % 60] if secs >= 3600 else "%dm" % (secs / 60)
 	var t: int = int(info.get("saved_at", 0.0)) + Time.get_time_zone_from_system().get("bias", 0) * 60
 	var d := Time.get_datetime_dict_from_unix_time(t)
-	return ["Civilization Type %d" % int(info.get("civilization_type", 0)), "%s played" % played,
+	var lines: Array[String] = ["Civilization Type %d" % int(info.get("civilization_type", 0)), "%s played" % played,
 		"Saved %02d.%02d  %02d:%02d" % [d["day"], d["month"], d["hour"], d["minute"]]]
+	var colony_name := String(info.get("colony_name", ""))
+	if not colony_name.is_empty():
+		lines.push_front(colony_name)
+	return lines
 
 func _play_slot(slot: int) -> void:
 	AudioManager.play("click", 0.0)

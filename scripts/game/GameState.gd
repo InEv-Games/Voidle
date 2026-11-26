@@ -58,9 +58,14 @@ var tutorial_step: String = ""
 ## Guided tutorial for this save. New starts with it off mark tutorial_step
 ## done. Older saves can still have an unfinished optional checklist.
 var tutorial_guided: bool = true
-## The game's start (SessionPrep): world kind and head start ("" = none).
+## The choices made on the New Game screen.
 var start_world: String = "terran"
+## Read for the research and district allowances of older saves.
 var start_boon: String = ""
+var colony_trait: String = ""
+var colony_name: String = ""
+var colony_leader_name: String = ""
+var colony_logo: String = ""
 ## Set by SessionPrep right before a new game; read once by _apply_new_game_start.
 var pending_setup: Dictionary = {}
 ## The colony calendar (docs/design/narrative/IMPLEMENTATION.md "Koloni
@@ -690,12 +695,15 @@ func _apply_new_game_start() -> void:
 	galaxy_unlocked = start_galaxy_unlocked
 	get_planet(home_planet_seed).is_colonized = start_colonized
 	_loaded_from_save = true   # this world is now the game in progress
-	# the New Game choices (SessionPrep): tutorial, start world, head start
+	# The New Game choices are applied once, when the world is created.
 	var setup := pending_setup
 	pending_setup = {}
 	tutorial_guided = bool(setup.get("tutorial", not SettingsManager.tutorial_ever_done))
 	start_world = String(setup.get("world", "terran"))
-	start_boon = String(setup.get("boon", ""))
+	start_boon = ""
+	_set_colony_identity(setup)
+	if tutorial_guided:
+		colony_trait = ""
 	if not setup.is_empty():   # only a game started from the New Game window (not a bare boot)
 		story_flags[ColonyTutorial.START_RULES] = true
 		onboarding_stage = "done"
@@ -704,7 +712,16 @@ func _apply_new_game_start() -> void:
 			tutorial_step = "colony_course"
 		else:
 			tutorial_step = "done"
-		SessionPrep.apply_boon(start_boon)
+		earn_credits(float(SessionPrep.STANDARD_BONUS["credits"]))
+		add_science(float(SessionPrep.STANDARD_BONUS["science"]))
+
+func _set_colony_identity(data: Dictionary) -> void:
+	var trait_id := String(data.get("colony_trait", ""))
+	colony_trait = trait_id if SessionPrep.COLONY_TRAITS.has(trait_id) else ""
+	var logo_id := String(data.get("colony_logo", ""))
+	colony_logo = logo_id if SessionPrep.COLONY_LOGOS.has(logo_id) else ""
+	colony_name = String(data.get("colony_name", "")).strip_edges().left(SessionPrep.NAME_MAX)
+	colony_leader_name = String(data.get("colony_leader_name", "")).strip_edges().left(SessionPrep.NAME_MAX)
 
 func _apply_pending_pois() -> void:
 	for seed_val: int in _pending_poi_restore:
@@ -1483,7 +1500,7 @@ static func _write_last_slot(slot: int) -> void:
 	cfg.save(SLOT_FILE)
 
 ## What the save in a slot holds, for the slot list: {} when empty, else
-## { saved_at, play_seconds, civilization_type, credits, home_name, ok, why }.
+## Save metadata used by the slot picker.
 static func slot_info(slot: int) -> Dictionary:
 	var path := save_path(slot)
 	if not FileAccess.file_exists(path):
@@ -1497,7 +1514,8 @@ static func slot_info(slot: int) -> Dictionary:
 	var ok := v >= MIN_SAVE_VERSION and v <= SAVE_VERSION
 	return {"ok": ok, "why": "" if ok else "Save v%d: this build reads v%d" % [v, SAVE_VERSION],
 		"saved_at": float(d.get("saved_at", 0.0)), "play_seconds": float(d.get("play_seconds", 0.0)),
-		"civilization_type": int(d.get("civilization_type", 0)), "credits": float(d.get("credits", 0.0))}
+		"civilization_type": int(d.get("civilization_type", 0)), "credits": float(d.get("credits", 0.0)),
+		"colony_name": String(d.get("colony_name", ""))}
 
 ## True after the current slot was deleted, until a slot is opened again.
 var _save_suspended := false
@@ -1586,6 +1604,10 @@ func save() -> void:
 		"tutorial_guided":      tutorial_guided,
 		"start_world":          start_world,
 		"start_boon":           start_boon,
+		"colony_trait":         colony_trait,
+		"colony_name":          colony_name,
+		"colony_leader_name":   colony_leader_name,
+		"colony_logo":          colony_logo,
 		"calendar_seconds":     calendar_seconds,
 		"advisor_ready_at":     advisor_ready_at,
 		"ministries_unlocked":  ministries_unlocked,
@@ -1753,6 +1775,7 @@ func load_save() -> bool:
 	tutorial_guided = bool(data.get("tutorial_guided", not SettingsManager.tutorial_ever_done))
 	start_world = String(data.get("start_world", "terran"))
 	start_boon = String(data.get("start_boon", ""))
+	_set_colony_identity(data)
 	calendar_seconds = float(data.get("calendar_seconds", 0.0))
 	advisor_ready_at = float(data.get("advisor_ready_at", 0.0))
 	ministries_unlocked = data.get("ministries_unlocked", [CHANCELLERY])
@@ -1941,6 +1964,8 @@ func delete_save(remove_file := true, rebuild := true) -> void:
 	active_advisor = ""
 	unlocked_advisors.clear()
 	tutorial_step = ""
+	start_boon = ""
+	_set_colony_identity({})
 	calendar_seconds = 0.0
 	advisor_ready_at = 0.0
 	ministries_unlocked = [CHANCELLERY]

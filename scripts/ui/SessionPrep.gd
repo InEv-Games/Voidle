@@ -11,7 +11,7 @@ extends RefCounted
 ##                 others open across games once a City stands on such a world
 ##                 (SettingsManager.unlocked_starts), played in a later build.
 ##   MOON          the home world's moon. Only the rocky moon for now (locked).
-##   HEAD START    one of BOONS: a small push in one direction.
+##   COLONY SETUP  the leader and colony names, plus a trait for unguided starts.
 ##   TUTORIAL      required until completed once, then optional. Guided starts
 ##                 use the tutorial seed and Standard starting resources.
 ## The choices go to GameState.pending_setup (the seed is read by delete_save,
@@ -59,14 +59,37 @@ const CIVS := {
 ## is a spoiler (playtest 12.11): it stays out of the slider for now.
 const CIV_ORDER := ["c0", "c1", "c2", "c3", "c4", "c5", "c6"]
 
-## Head starts: id → [title, icon, what it gives].
-const BOONS := {
-	"":         ["STANDARD", "city", "A little more to begin with:"],   # + STANDARD_BONUS in icons
-	"merchant": ["TRADER", "trade", "Trade Access is researched: buy and sell from the first day."],
-	"industry": ["INDUSTRY", "factory", "Mining Operations and Basic Processing are researched, and your first Production District is free."],
-	"gifted":   ["GIFTED WORLD", "planet", "Your home world opens its second trait at once: pick one of three."],
+const COLONY_TRAIT_BONUS := 0.10
+const COLONY_LOGOS := {
+	"star": "Star",
+	"orbit": "Orbit",
+	"rocket": "Rocket",
+	"castle": "Citadel",
+	"planet": "World",
 }
-const BOON_ORDER := ["", "merchant", "industry", "gifted"]
+const COLONY_TRAITS := {
+	"light_watch": {"title": "Light Watch", "resource": "energy",
+		"districts": [DistrictDef.Type.GENERATOR, DistrictDef.Type.ORBITAL_ENERGY],
+		"effect": "Energy Districts generate 10% more Energy.",
+		"story": "After the first blackout, every neighborhood began training a keeper for the night shift."},
+	"spare_room": {"title": "A Spare Room", "resource": "population",
+		"districts": [DistrictDef.Type.RESIDENTIAL, DistrictDef.Type.ORBITAL_RESIDENTIAL],
+		"effect": "Residential Districts provide 10% more housing.",
+		"story": "The first houses kept a room empty for someone who had yet to arrive."},
+	"first_stall": {"title": "The First Stall", "resource": "credits",
+		"districts": [DistrictDef.Type.COMMERCIAL, DistrictDef.Type.ORBITAL_COMMERCIAL],
+		"effect": "Commercial Districts produce 10% more Credits.",
+		"story": "The colony posted its first price list before it built a town hall. The plate still hangs at the market."},
+	"second_reading": {"title": "Second Reading", "resource": "science",
+		"districts": [DistrictDef.Type.SCIENCE, DistrictDef.Type.ORBITAL_SCIENCE],
+		"effect": "Science Districts produce 10% more Science.",
+		"story": "An error on the first surface map nearly sent the settlers into the wrong valley. Labs have checked each other's readings ever since."},
+	"last_crate": {"title": "The Last Crate", "resource": "raw",
+		"districts": [DistrictDef.Type.MINING, DistrictDef.Type.ORBITAL_PRODUCTION],
+		"minerals": ["ferrite", "moonstone"],
+		"effect": "Production Districts extract 10% more Ferrite and Moonstone.",
+		"story": "On the first quarry's last shift, the crew filled one more crate by sorting the discarded stone."},
+}
 
 ## The worlds' noise reads the seed as a float offset: seeds stay in this
 ## range. Anything typed (a long number, a word) is folded into it (seed_of).
@@ -136,22 +159,13 @@ static func note_city(pd: PlanetData) -> void:
 	SettingsManager.save_settings()
 	NewsFeed.post("New start world unlocked: %s." % String(WORLDS[id][0]).capitalize(), NewsFeed.Kind.EVENT)
 
-## Gives the head start of a new game (GameState._apply_new_game_start).
-## STANDARD's head start: a little more of both, flat (11.11).
+## The standard starting supplies given to every run started from New Game.
 const STANDARD_BONUS := {"credits": 500.0, "science": 50.0}
-## The research a head start grants: not the player's own, so it neither opens
-## the Upgrade Tree nor ticks "Research a technology" (11.11).
+## Legacy saves may have received this research from a head start.
 const BOON_SKILLS := {
 	"merchant": ["trade_access"],
 	"industry": ["start_production", "processing_basics"],
 }
-
-static func _bonus_bb() -> String:
-	var parts: Array[String] = []
-	for id: String in STANDARD_BONUS:
-		parts.append("%s [color=#%s]+%s[/color]" % [UIIcons.bb(id, 11, Economy.color_of(id)),
-			UIStyle.hex(&"good"), Economy.fmt(float(STANDARD_BONUS[id]))])
-	return "   ".join(parts)
 
 ## Something researched beyond the start and its head start.
 static func researched_beyond_start() -> bool:
@@ -161,26 +175,7 @@ static func researched_beyond_start() -> bool:
 			return true
 	return false
 
-## Gives the head start of a new game (GameState._apply_new_game_start).
-static func apply_boon(boon: String) -> void:
-	if boon == "":
-		GameState.earn_credits(float(STANDARD_BONUS["credits"]))
-		GameState.add_science(float(STANDARD_BONUS["science"]))
-		return
-	var tree := Engine.get_main_loop() as SceneTree
-	var st: Node = tree.root.get_node_or_null("SkillTree") if tree != null else null
-	if st != null:
-		for id: String in BOON_SKILLS.get(boon, []):
-			st.call("grant", id)
-	match boon:
-		"industry":
-			GameState.story_flags[FREE_DISTRICT] = true
-		"gifted":
-			var home := GameState.get_home_planet()
-			PlanetTags.ensure_home(home)
-			PlanetTags.queue_offer(home)
-
-## The first Production District on the home world costs nothing (INDUSTRY).
+## An unused free Production District from a legacy Industry start.
 const FREE_DISTRICT := "free_district:mining"
 
 static func free_district(def: DistrictDef, data: PlanetData) -> bool:
