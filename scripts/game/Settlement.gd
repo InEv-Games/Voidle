@@ -398,13 +398,10 @@ static func move_block(pd: PlanetData, poi: POIData) -> String:
 ## New positions (lon/lat degrees) for the subtree when `poi` goes to `site`
 ## (radians): a City's districts keep their layout around it.
 static func moved_positions(pd: PlanetData, poi: POIData, site: Vector2) -> Dictionary:
-	var from := _unit(deg_to_rad(poi.lon_deg), deg_to_rad(poi.lat_deg))
-	var to := _unit(site.x, site.y)
-	var q := Quaternion(from, to) if not from.is_equal_approx(to) and not from.is_equal_approx(-to) else Quaternion.IDENTITY
+	var rotation := _move_rotation(poi, site)
 	var out := {}
 	for p: POIData in subtree(pd, poi):
-		var v: Vector3 = q * _unit(deg_to_rad(p.lon_deg), deg_to_rad(p.lat_deg))
-		out[p] = Vector2(fposmod(rad_to_deg(atan2(v.z, v.x)), 360.0), rad_to_deg(asin(clampf(v.y, -1.0, 1.0))))
+		out[p] = _rotated_position(rotation, p.lon_deg, p.lat_deg)
 	return out
 
 ## Why the subtree can't stand at `site` (radians) ("" when it can): every moved
@@ -425,6 +422,15 @@ static func move_site_block(pd: PlanetData, poi: POIData, site: Vector2) -> Stri
 static func _unit(lon: float, lat: float) -> Vector3:
 	return Vector3(cos(lat) * cos(lon), sin(lat), cos(lat) * sin(lon))
 
+static func _move_rotation(poi: POIData, site: Vector2) -> Quaternion:
+	var from := _unit(deg_to_rad(poi.lon_deg), deg_to_rad(poi.lat_deg))
+	var to := _unit(site.x, site.y)
+	return Quaternion(from, to) if not from.is_equal_approx(to) and not from.is_equal_approx(-to) else Quaternion.IDENTITY
+
+static func _rotated_position(rotation: Quaternion, lon_deg: float, lat_deg: float) -> Vector2:
+	var v: Vector3 = rotation * _unit(deg_to_rad(lon_deg), deg_to_rad(lat_deg))
+	return Vector2(fposmod(rad_to_deg(atan2(v.z, v.x)), 360.0), rad_to_deg(asin(clampf(v.y, -1.0, 1.0))))
+
 ## Moves the subtree (positions from moved_positions) and charges the fee.
 static func move(pd: PlanetData, poi: POIData, site: Vector2) -> bool:
 	if move_block(pd, poi) != "" or move_site_block(pd, poi, site) != "":
@@ -432,8 +438,15 @@ static func move(pd: PlanetData, poi: POIData, site: Vector2) -> bool:
 	var fee := move_fee(pd, poi)
 	if not GameState.spend_credits(fee):
 		return false
+	var pp := GameState.get_planet(pd.seed)
 	var pos := moved_positions(pd, poi, site)
+	var rotation := _move_rotation(poi, site)
 	for p: POIData in pos:
+		for entry: Dictionary in pp.buildings_in_district(p.label):
+			if entry.has("wonder_lon") and entry.has("wonder_lat"):
+				var wonder_site := _rotated_position(rotation, float(entry["wonder_lon"]), float(entry["wonder_lat"]))
+				entry["wonder_lon"] = wonder_site.x
+				entry["wonder_lat"] = wonder_site.y
 		var v: Vector2 = pos[p]
 		p.lon_deg = v.x
 		p.lat_deg = v.y
@@ -444,7 +457,7 @@ static func move(pd: PlanetData, poi: POIData, site: Vector2) -> bool:
 		p.coastal = t["coastal"]
 		p.resource_tags = ResourceMap.sample(pd.seed, lon, lat)
 		p.site_features = FeatureMap.shares(pd, lon, lat)
-	_changed(GameState.get_planet(pd.seed))
+	_changed(pp)
 	return true
 
 static func _changed(pp: PlanetProgress) -> void:

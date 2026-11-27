@@ -308,7 +308,7 @@ func _init() -> void:
 	_n("deep_drilling", "Deep Drilling", "Drills that reach through bedrock and storage for the ore they bring up.",
 		350.0, _at("surface_excavation", -160, 1.15), ["surface_excavation"], "production", "Unlocks Deep Drill and Storage Facility",
 		{"grants": ["deep_drill", "storage_facility"]})
-	_n("wonder_construction", "Wonder Construction", "Plan structures on the scale of a city.",
+	_n("wonder_construction", "Wonder Construction", "Build a Bureau so each City can commission a Wonder in one of its districts.",
 		350.0, _at("deep_drilling", -125, 1.2), ["deep_drilling"], "production", "Unlocks Wonder Construction Bureau",
 		{"grants": ["wonder_construction_bureau"]})
 	_n("geothermal_drilling", "Plains Manufacturing", "Process Ferrite into Goods at a factory on a Plain.",

@@ -6,7 +6,7 @@
 script = ExtResource("1_def")
 building_id = "wonder_construction_bureau"
 display_name = "Wonder Construction Bureau"
-description = "Allows one Wonder to be built on this world."
+description = "Allows each City on this world to build one Wonder."
 allowed_poi_types = Array[int]([1])
 surface_only = true
 base_cost = 450.0

@@ -22,6 +22,7 @@ var _selected_index: int = -1
 ## District placement preview. While placement_mode is on, POI clicks are ignored
 ## and spacing rings are drawn around existing districts.
 var placement_mode: bool = false
+var wonder_placement := false
 var spacing_deg:    float = 8.0
 ## Placement guide rings: [{lon, lat, r (radians), color}] (city zones / reach).
 var placement_rings: Array = []
@@ -230,11 +231,12 @@ func _draw_placement_overlay(font: Font) -> void:
 		groups[key]["circles"].append([ring["lon"], ring["lat"], ring["r"]])
 	for key in groups:
 		_draw_circle_union(groups[key]["circles"], groups[key]["color"])
-	# no-build spacing around every district
-	var spacing_circles: Array = []
-	for poi in _pois:
-		spacing_circles.append([poi["lon"], poi["lat"], spacing])
-	_draw_circle_union(spacing_circles, Color(1.0, 0.45, 0.35, 0.45))
+	if not wonder_placement:
+		# No-build spacing applies to settlement sites.
+		var spacing_circles: Array = []
+		for poi in _pois:
+			spacing_circles.append([poi["lon"], poi["lat"], spacing])
+		_draw_circle_union(spacing_circles, Color(1.0, 0.45, 0.35, 0.45))
 	_draw_suggested(font)
 	_draw_ghost_roads()
 	if _ghost.is_empty():
@@ -244,12 +246,15 @@ func _draw_placement_overlay(font: Font) -> void:
 		return
 	var ok: bool = _ghost["ok"]
 	var col := Color(0.45, 1.0, 0.55) if ok else Color(1.0, 0.40, 0.35)
-	_draw_surface_circle(_ghost["lon"], _ghost["lat"], spacing * 0.5, Color(col, 0.85), 1.5)
 	var sp := _snap(Vector2(pt.x, pt.y)) - global_position
 	var block := maxf(2.0, roundf(_pixel_size() * 0.5))
-	_draw_site_beam(_ghost["lon"], _ghost["lat"], col)
 	var gtag: String = _ghost.get("tag", "")
-	_draw_pixel_icon(sp, _marker_icon(gtag, gtag == "city"), block, col, 1.0)
+	if gtag == "wonder":
+		_draw_pixel_icon(sp, WONDER_ICON, block * WONDER_ICON_SCALE, col, 1.0)
+	else:
+		_draw_surface_circle(_ghost["lon"], _ghost["lat"], spacing * 0.5, Color(col, 0.85), 1.5)
+		_draw_site_beam(_ghost["lon"], _ghost["lat"], col)
+		_draw_pixel_icon(sp, _marker_icon(gtag, gtag == "city"), block, col, 1.0)
 	_draw_pixel_brackets(sp, block * 6.0, block, Color(col, 0.9))
 	# preview arcs to the districts this one would neighbour
 	for ni in _ghost.get("neighbors", []):
@@ -528,21 +533,6 @@ const _ICONS := {
 		"#####",
 		".###.",
 	],
-	# big (2-slot) buildings, drawn beside their district's marker
-	"big_spaceport": [
-		"..#..",
-		".###.",
-		".###.",
-		"#####",
-		"#.#.#",
-	],
-	"big_other": [
-		"#####",
-		"#...#",
-		"#.#.#",
-		"#...#",
-		"#####",
-	],
 	# small crown beside a City's marker: its Capital District
 	"capital_badge": [
 		"#.#.#",
@@ -555,8 +545,9 @@ const CAPITAL_BADGE_COL := Color(1.0, 0.82, 0.25)
 ## Index of the City whose Capital badge the mouse is over, -1 otherwise.
 var hovered_capital := -1
 
-## Wonders (BuildingDef.is_wonder): [{ lon, lat (radians), name, spaceport: bool }],
-## each at its own spot inside its district's borders (set by PlanetaryView).
+## Wonder markers at the player's selected sites inside district borders.
+const WONDER_ICON := ["..#..", ".###.", "..#..", ".###.", "#####"]
+const WONDER_ICON_SCALE := 0.8
 var wonders: Array = []
 var _hover_wonder: Dictionary = {}
 
@@ -579,12 +570,16 @@ func _draw_wonders() -> void:
 		if at == null:
 			continue
 		var sp := _snap_local((at as Vector2) - global_position)
-		var hov: bool = _hover_wonder.get("name", "") == w["name"]
-		var icon: Array = _ICONS["big_spaceport"] if w.get("spaceport", false) else _ICONS["big_other"]
-		_draw_pixel_icon(sp, icon, block, Color(BIG_ICON_COL.lightened(0.3) if hov else BIG_ICON_COL, marker_vis), marker_vis)
+		var hov: bool = _hover_wonder.get("id", "") == w["id"]
+		var building := bool(w.get("constructing", false))
+		var alpha := marker_vis * (0.6 if building else 1.0)
+		_draw_pixel_icon(sp, WONDER_ICON, block * WONDER_ICON_SCALE,
+			Color(BIG_ICON_COL.lightened(0.3) if hov else BIG_ICON_COL, alpha), alpha)
 		if hov:   # its name, like a port's
 			var font: Font = _orbitron if _orbitron else ThemeDB.fallback_font
 			var text := String(w["name"]).to_upper()
+			if building:
+				text += " // UNDER CONSTRUCTION"
 			const SIZE := 9
 			var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, SIZE).x
 			var box := Rect2(sp + Vector2(-tw * 0.5 - 5.0, -block * 3.0 - 13.0), Vector2(tw + 10.0, 15.0))
@@ -1533,9 +1528,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func update_hover_at(global_pos: Vector2, allow_territory: bool = true) -> void:
 	_hover_port = _port_at(global_pos)
-	var prev_w: String = _hover_wonder.get("name", "")
+	var prev_w: String = _hover_wonder.get("id", "")
 	_hover_wonder = _wonder_at(global_pos)
-	if String(_hover_wonder.get("name", "")) != prev_w:
+	if String(_hover_wonder.get("id", "")) != prev_w:
 		queue_redraw()
 	var prev := _hovered_index
 	var prev_cap := hovered_capital

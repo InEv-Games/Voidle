@@ -9,4 +9,5 @@
 
 - [x] **Ay'a özel T3 binaları.** Beş model, dış halkadaki ayrı araştırmalardan açılıyor. Modeller yalnızca ilgili Ay yüzey district'inde, arazi şartı olmadan tam T3 tarifesiyle kuruluyor.
   - Cavern Refinery ayda 72 enerji ve 53 Moonstone tüketir. Diğer dört modelin aylık giderlerine bina başına 18 Moonstone eklendi.
+- [x] **Wonder binaları.** Capital dışındaki beş yüzey district'ine birer T4 model eklendi. Her Wonder kendi City'sine %10 destek veriyor, iki bina yuvası kullanıyor ve daha yüksek bir bina kartıyla gösteriliyor. City başına tek Wonder, oyuncunun seçtiği harita konumu ve geçici işaret oyuna işlendi.
 - [ ] **Son iş olarak tutorial incelemesi.** Coğrafya, araştırma ağacı, Ay binaları, ekonomi ve narrative kararları uygulandıktan sonra öğreticiyi ekipçe baştan sona gözden geçir. Sabit seed'deki yer önerilerini, enerji ve nüfus açıklarını, kaynak desteğini ve araştırma sırasını yeni kurallara göre ele al.

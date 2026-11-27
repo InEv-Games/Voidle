@@ -119,6 +119,7 @@ func toggle_user_pause(key: String) -> void:
 	if ColonyTutorial.active():
 		return
 	_user_paused[key] = not _user_paused.get(key, false)
+	_invalidate_wonder_support()
 	_calc_global_energy()
 	building_toggled.emit(key, _user_paused[key])
 
@@ -131,14 +132,15 @@ func has_running_facility(building_id: String) -> bool:
 		return false
 	for pp: PlanetProgress in _all_colonies():
 		for entry: Dictionary in pp.buildings:
-			if entry.get("building_id", "") != building_id or entry.get("constructing", false):
-				continue
-			var key := _key(pp.planet_seed, entry.get("district_id", ""), entry.get("uid", "-1"))
-			if is_user_paused(key):
-				continue
-			if float(_progress.get(key, 0.0)) > 0.0 or Economy.can_pay(def.inputs):
+			if entry.get("building_id", "") == building_id and facility_entry_running(pp, entry, def):
 				return true
 	return false
+
+func facility_entry_running(pp: PlanetProgress, entry: Dictionary, def: BuildingDef) -> bool:
+	if entry.get("constructing", false):
+		return false
+	var key := _key(pp.planet_seed, entry.get("district_id", ""), entry.get("uid", "-1"))
+	return not is_user_paused(key) and (get_progress(key) > 0.0 or Economy.can_pay(def.inputs))
 
 ## A City finished levelling up (`unlocked_planet_view`: that opened the planet view).
 signal city_leveled(planet_seed: int, city_label: String, level: int, unlocked_planet_view: bool)
@@ -162,6 +164,7 @@ func get_global_energy_split() -> Vector2:
 
 ## Called by PlanetaryView after building is placed so UI can refresh immediately.
 func invalidate(planet_seed: int) -> void:
+	_invalidate_wonder_support()
 	building_ticked.emit(planet_seed, "")
 
 # ── Internal ──────────────────────────────────────────────────────────────────
@@ -304,6 +307,8 @@ func _tick_all(delta: float) -> void:
 				if cp >= 1.0:
 					_construct.erase(ck)
 					entry["constructing"] = false
+					if def.is_wonder:
+						_invalidate_wonder_support()
 					pending_merges.append(entry)
 					# Spaceport starts paused after construction — player launches manually
 					if def.building_id == "spaceport":
@@ -342,6 +347,8 @@ func _tick_all(delta: float) -> void:
 				if not _pay_inputs(def, amount, entry):
 					if not _paused.get(key, false):
 						_paused[key] = true
+						if def.is_wonder:
+							_invalidate_wonder_support()
 						building_ticked.emit(planet_seed, key)
 					_emit_progress(planet_seed, key)
 					continue   # can't start — wait for resources
@@ -366,12 +373,16 @@ func _tick_all(delta: float) -> void:
 			if next >= 1.0:
 				_on_tick_complete(pp, def, key, amount, entry)
 				_progress[key] = 0.0
+				if def.is_wonder:
+					_invalidate_wonder_support()
 				# Spaceport: re-pause after each launch cycle so player must trigger manually
 				if def.building_id == "spaceport":
 					_user_paused[key] = true
 				building_ticked.emit(planet_seed, key)
 			else:
 				_progress[key] = next
+				if def.is_wonder and prev <= 0.0:
+					_invalidate_wonder_support()
 
 			_emit_progress(planet_seed, key)
 
@@ -543,6 +554,10 @@ var _income_cache: Dictionary = {}   # "seed:label" -> [time_ms, income]
 
 func _invalidate_income(_seed: int = 0) -> void:
 	_income_cache.clear()
+
+func _invalidate_wonder_support() -> void:
+	Economy.invalidate_bonus_cache()
+	_invalidate_income()
 
 func district_income(pp: PlanetProgress, poi: POIData) -> Dictionary:
 	if not makes_base(GameState.get_planet_data(pp.planet_seed), poi):

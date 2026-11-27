@@ -349,7 +349,7 @@ func _poi_at_screen(global_pos: Vector2) -> POIData:
 
 ## Right-click: the actions for what's under the cursor (a POI, else the surface).
 func _open_context_menu(global_pos: Vector2) -> void:
-	if current_data == null or _placing_def != null or _naming_open or GameState.showcase_mode:
+	if current_data == null or _is_placing_site() or _naming_open or GameState.showcase_mode:
 		return
 	if not _is_over_planet_area(global_pos):   # e.g. over the side panel
 		return
@@ -368,7 +368,7 @@ func _open_context_menu(global_pos: Vector2) -> void:
 
 ## Opens the context menu for a specific POI by label (or active panel POI if label is empty).
 func open_poi_context_menu(poi_label: String, global_pos: Vector2) -> bool:
-	if current_data == null or _placing_def != null or _naming_open or GameState.showcase_mode:
+	if current_data == null or _is_placing_site() or _naming_open or GameState.showcase_mode:
 		return false
 	var poi := _find_poi(current_data, poi_label)
 	if poi == null:
@@ -1168,7 +1168,7 @@ func _gui_input(event: InputEvent) -> void:
 	if planet_renderer == null or SkillTreeView.is_open or TradePanel.covers(at) \
 			or _naming_open or not _is_over_planet_area(at):
 		return
-	if _placing_def != null:
+	if _is_placing_site():
 		if not _mandatory_city:
 			_end_district_placement()
 			AudioManager.play("click")
@@ -1206,6 +1206,9 @@ func _try_force_buy() -> bool:
 	var planet: PlanetData = _force_row["planet"]
 	var def: BuildingDef = _force_row["def"]
 	var pp := GameState.get_planet(planet.seed)
+	if def.is_wonder:
+		_begin_wonder_placement(def, poi, planet, true)
+		return true
 	if not Trade.force_buy(Economy.building_full_cost(pp, def, poi.label)):
 		AudioManager.play("error")
 		return true
@@ -1277,14 +1280,14 @@ func _input(event: InputEvent) -> void:
 			planet_renderer.end_drag()
 		_rmb = {}
 		return
-	if event is InputEventMouseButton and (event as InputEventMouseButton).double_click \
+	if not _is_placing_site() and event is InputEventMouseButton and (event as InputEventMouseButton).double_click \
 			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		if _try_follow_lander((event as InputEventMouseButton).global_position):
 			get_viewport().set_input_as_handled()
 			return
 	# ESC / Backspace / Joy B cancels district placement;
 	# Enter / Space / Joy A confirms placement at globe center when using controller/keyboard.
-	if _placing_def != null and not _naming_open:
+	if _is_placing_site() and not _naming_open:
 		var cancel := false
 		var confirm_center := false
 		if event is InputEventKey:
@@ -1320,7 +1323,7 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 	# World Center Cursor actions when not in district placement mode and LeftPanel nav is inactive
-	if _world_cursor_active and _placing_def == null and not _naming_open and _key_spin_allowed() and planet_renderer != null:
+	if _world_cursor_active and not _is_placing_site() and not _naming_open and _key_spin_allowed() and planet_renderer != null:
 		var sp := get_node_or_null("SidePanel") as LeftPanel
 		var nav_on := sp != null and sp._nav_active
 		if not nav_on:
@@ -1346,7 +1349,7 @@ func _input(event: InputEvent) -> void:
 	# Pad B in Globe mode (when LeftPanel has no focus): unwind radial menu, active lens, inspect mode, or world cursor
 	if event is InputEventJoypadButton and (event as InputEventJoypadButton).pressed \
 			and (event as InputEventJoypadButton).button_index == JOY_BUTTON_B \
-			and _placing_def == null and not _naming_open and _key_spin_allowed():
+			and not _is_placing_site() and not _naming_open and _key_spin_allowed():
 		var sp_b := get_node_or_null("SidePanel") as LeftPanel
 		if sp_b == null or not sp_b._nav_active:
 			if _radial_menu != null:
@@ -1747,7 +1750,7 @@ func _tick_key_spin(delta: float) -> void:
 			dir.y += 1.0
 		if Input.is_physical_key_pressed(KEY_S):
 			dir.y -= 1.0
-		if _placing_def != null and not _naming_open:
+		if _is_placing_site() and not _naming_open:
 			# placing: the arrows turn the globe too (the panel is shut)
 			if Input.is_physical_key_pressed(KEY_LEFT):
 				dir.x -= 1.0
@@ -3248,7 +3251,7 @@ func _hold_ui() -> void:
 
 func _release_ui() -> void:
 	_ui_held = false
-	if not _panel_open and _placing_def == null and not GameState.showcase_mode:
+	if not _panel_open and not _is_placing_site() and not GameState.showcase_mode:
 		_set_panel_open(true)   # the interface comes in with the planet panel
 	HUDManager.fade_in_game_hud(UI_REVEAL_SEC)
 	NewsFeed.fade_in(UI_REVEAL_SEC)
@@ -3638,9 +3641,7 @@ func _push_shader_spokes() -> void:
 	if mat != null:
 		mat.set_shader_parameter("district_spokes", buf)
 
-## Built wonders of a world for the map: each gets a random spot inside its
-## district's borders as they were when it went up (kept in the building entry,
-## so it never moves), clear of the district's own marker.
+## Wonder markers use the site saved on the building entry.
 func _wonder_sites(data: PlanetData) -> Array:
 	var out: Array = []
 	var pp := GameState.get_planet(data.seed)
@@ -3648,12 +3649,13 @@ func _wonder_sites(data: PlanetData) -> Array:
 		return out
 	for b: Dictionary in pp.buildings:
 		var def := BuildingDef.find(String(b.get("building_id", "")))
-		if def == null or not def.is_wonder or b.get("constructing", false):
+		if def == null or not def.is_wonder:
 			continue
 		var poi := _find_poi(data, String(b.get("district_id", "")))
 		if poi == null or poi.is_orbital():
 			continue
-		if not b.has("wonder_lon"):
+		if not b.has("wonder_lon") or not b.has("wonder_lat"):
+			# Older entries without a site keep a stable fallback marker.
 			var rng := RandomNumberGenerator.new()
 			rng.seed = hash(String(b.get("uid", def.building_id)))
 			var r := TerrainSampler.territory_radius_deg(data, poi)
@@ -3663,7 +3665,8 @@ func _wonder_sites(data: PlanetData) -> Array:
 			b["wonder_lat"] = clampf(lat0 + d * sin(ang), -80.0, 80.0)
 			b["wonder_lon"] = poi.lon_deg + d * cos(ang) / maxf(cos(deg_to_rad(lat0)), 0.2)
 		out.append({"lon": deg_to_rad(float(b["wonder_lon"])), "lat": deg_to_rad(float(b["wonder_lat"])),
-			"name": def.display_name, "spaceport": def.building_id.contains("spaceport")})
+			"id": String(b.get("uid", poi.label + ":" + def.building_id)), "name": def.display_name,
+			"constructing": b.get("constructing", false)})
 	return out
 
 ## Territory index → shader slot (-1 when not drawn).
@@ -6118,7 +6121,7 @@ func pad_radial_center() -> Vector2:
 
 ## Cycles between the home world and its moons (controller Select + LB).
 func cycle_celestial_body(step: int = 1) -> bool:
-	if _placing_def != null or _naming_open or GameState.showcase_mode:
+	if _is_placing_site() or _naming_open or GameState.showcase_mode:
 		AudioManager.play("denied")
 		return false
 	var home := GameState.get_home_planet()
@@ -6177,7 +6180,7 @@ func _cycle_lens_pad(device: int, step: int) -> bool:
 ## Shift + 1 / 2 / 3 …: the home world, then its moons (10.11: the keys had no
 ## way to the Moon). The body in view needs nothing.
 func _try_body_hotkey(ke: InputEventKey) -> bool:
-	if not ke.shift_pressed or ke.ctrl_pressed or ke.meta_pressed or _placing_def != null or _naming_open:
+	if not ke.shift_pressed or ke.ctrl_pressed or ke.meta_pressed or _is_placing_site() or _naming_open:
 		return false
 	var pk := ke.physical_keycode if ke.physical_keycode != KEY_NONE else ke.keycode
 	if pk < KEY_1 or pk > KEY_9:
@@ -6249,7 +6252,7 @@ func _tick_lens_tip() -> void:
 	# (playtest 30.10: the plain map must tell Mountain, Plain, Rift … apart)
 	# the plain map names its geography only while Alt is held (playtest 31.10:
 	# a tip always under the mouse got in the way); a lens always explains
-	if _placing_def == null and current_data != null and _is_over_planet_area(mouse) \
+	if not _is_placing_site() and current_data != null and _is_over_planet_area(mouse) \
 			and not covered and poi_layer._hovered_index < 0 and poi_layer._hover_site.is_empty() \
 			and not TutorialManager.is_narrating() \
 			and GameState.is_scanned(current_data.seed) \
@@ -6608,6 +6611,120 @@ func _screen_to_lonlat(global_pos: Vector2) -> Dictionary:
 ## The side panel slides away while placing (more map to aim at) and comes
 ## back afterwards if it was open.
 var _reopen_panel_after_place := false
+var _placing_wonder: BuildingDef
+var _wonder_district: POIData
+var _wonder_force_buy := false
+
+func _is_placing_site() -> bool:
+	return _placing_def != null or _placing_wonder != null
+
+func _begin_wonder_placement(def: BuildingDef, district: POIData, planet: PlanetData,
+		force_buy := false) -> void:
+	if current_data != planet:
+		return
+	var pp := GameState.get_planet(planet.seed)
+	if Economy.building_room(pp, def, district) == 0 or ColonyTutorial.build_limit(planet, district, def.building_id) <= 0:
+		AudioManager.play("denied")
+		return
+	_end_district_placement()
+	if is_instance_valid(_dd_layer):
+		_dd_layer.queue_free()
+	_dd_layer = null
+	_active_slot_dropdown = null
+	_force_row = {}
+	_build_tip_ctx = {}
+	TooltipManager.hide_tip()
+	var sp := get_node_or_null("SidePanel") as LeftPanel
+	if sp != null and sp._nav_active:
+		_using_right_stick = true
+	_reopen_panel_after_place = _panel_open
+	if _panel_open:
+		_set_panel_open(false)
+	_placing_wonder = def
+	_wonder_district = district
+	_wonder_force_buy = force_buy
+	if CursorManager.keys_mode or _using_right_stick:
+		_set_world_cursor(true)
+	VAM.start_snapshot(PLACE_SNAPSHOT, &"placement")
+	poi_layer.placement_mode = true
+	poi_layer.wonder_placement = true
+	poi_layer.placement_rings = []
+	poi_layer.deselect_all()
+	_focus_on_site(district.lon_deg, district.lat_deg)
+	var center := planet_renderer.global_position + planet_renderer.size * 0.5
+	_set_zoom_target(maxf(_zoom_target, minf(PLACE_ZOOM_MAX, _zoom_max())), center)
+	var hint := "Choose a site inside %s  //  Right-click to cancel" % district.shown_name()
+	NewsFeed.show_message(PLACE_MSG, planet.planet_name, "PLACE " + def.display_name.to_upper(), hint,
+		{"sec": 0.0, "extra": Economy.cost_text(Economy.building_full_cost(pp, def, district.label)), "extra_color": &"neutral_stroke"})
+
+func _wonder_site_block(site: Vector2) -> String:
+	var owner := _territory_owner(site.x, site.y)
+	if owner < 0 or _territories[owner]["poi"] != _wonder_district:
+		return "Choose a site inside " + _wonder_district.shown_name()
+	var center_gap := TerrainSampler.angular_distance(site.x, site.y,
+		deg_to_rad(_wonder_district.lon_deg), deg_to_rad(_wonder_district.lat_deg))
+	if center_gap < deg_to_rad(TerrainSampler.territory_radius_deg(current_data, _wonder_district)) * 0.15:
+		return "Leave space around the district marker."
+	var pp := GameState.get_planet(current_data.seed)
+	var block := _placing_wonder.facility_build_block(pp, _wonder_district)
+	if block != "":
+		return block
+	if Economy.building_room(pp, _placing_wonder, _wonder_district) == 0:
+		return "No free building slots."
+	return ""
+
+func _update_wonder_hover() -> void:
+	var mouse := get_viewport().get_mouse_position()
+	var aim_center := _world_cursor_active or _using_right_stick
+	if aim_center:
+		mouse = planet_renderer.global_position + planet_renderer.size * 0.5
+	var hit := _screen_to_lonlat(mouse)
+	if not hit["hit"] or (not aim_center and not _is_over_planet_area(mouse)):
+		poi_layer.clear_ghost()
+		return
+	var site := Vector2(hit["lon"], hit["lat"])
+	var block := _wonder_site_block(site)
+	var valid := block.is_empty()
+	var caption := "Place Wonder" if valid else block
+	var color := UIStyle.color(&"text_bright") if valid else UIStyle.color(&"bad")
+	poi_layer.set_ghost(site.x, site.y, valid, _placing_wonder.display_name, [[caption, color]], "wonder")
+
+func _try_place_wonder(global_pos: Vector2) -> void:
+	var hit := _screen_to_lonlat(global_pos)
+	if not hit["hit"] or not _is_over_planet_area(global_pos):
+		return
+	var site := Vector2(hit["lon"], hit["lat"])
+	var block := _wonder_site_block(site)
+	if block != "":
+		AudioManager.play("denied")
+		return
+	var planet := current_data
+	var district := _wonder_district
+	var def := _placing_wonder
+	var pp := GameState.get_planet(planet.seed)
+	if ColonyTutorial.build_limit(planet, district, def.building_id) <= 0:
+		_end_district_placement()
+		return
+	var cost := Economy.building_full_cost(pp, def, district.label)
+	if not Economy.can_pay(cost):
+		if _wonder_force_buy and Economy.free_population(planet, pp) < def.pop_use():
+			AudioManager.play("denied")
+			_show_unlock_toast("Can't build here yet", "Force Buy needs enough available workers.")
+			return
+		if not _wonder_force_buy or not Trade.force_buy(cost):
+			AudioManager.play("error")
+			_show_unlock_toast("Can't build here yet", Economy.cost_block(cost))
+			return
+	var mats := cost.duplicate()
+	mats.erase(Economy.CREDITS)
+	if not pp.build_in_district(district, def.building_id, "", float(cost.get(Economy.CREDITS, 0.0)), mats, site):
+		AudioManager.play("denied")
+		return
+	Economy.pay(cost)
+	_end_district_placement()
+	_on_buildings_queued(planet, def)
+	GameState.save()
+	_build_district_panel(district, planet)
 
 func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void:
 	if not ColonyTutorial.permits_district(def.id):
@@ -6697,15 +6814,19 @@ func _end_district_placement() -> void:
 	_ghost_road_key = ""
 	if poi_layer:
 		poi_layer.ghost_roads = []
-	if _placing_def != null:
+	if _is_placing_site():
 		VAM.stop_snapshot(PLACE_SNAPSHOT, &"placement")
 		if _world_cursor_active and Input.get_connected_joypads().is_empty():
 			_set_world_cursor(false)   # the keys' aim ends with the placing (a pad keeps R3's)
 	_placing_def = null
 	_placing_parent = null
+	_placing_wonder = null
+	_wonder_district = null
+	_wonder_force_buy = false
 	_moving_poi = null
 	if poi_layer:
 		poi_layer.placement_mode = false
+		poi_layer.wonder_placement = false
 		poi_layer.clear_ghost()
 		poi_layer.suggested_sites = []
 	NewsFeed.clear_message(PLACE_MSG)
@@ -6794,6 +6915,9 @@ var _hover_at := 0
 var _hover_road_args: Array = []   # [lon, lat, neighbours] of the spot the card shows
 
 func _update_placement_hover() -> void:
+	if _placing_wonder != null and current_data != null:
+		_update_wonder_hover()
+		return
 	if _placing_def == null or current_data == null:
 		return
 	if _naming_open:   # naming the spot: it stays marked, its card goes (it sat over the popup, 10.11)
@@ -7517,6 +7641,9 @@ func _snap_to_tutorial_site(hit: Dictionary) -> bool:
 	return true
 
 func _try_place_district(global_pos: Vector2) -> void:
+	if _placing_wonder != null:
+		_try_place_wonder(global_pos)
+		return
 	var hit := _screen_to_lonlat(global_pos)
 	if not hit["hit"] or current_data == null:
 		return
@@ -7604,7 +7731,7 @@ func _prompt_city_name(def: DistrictDef, site: Vector2, cost: float) -> void:
 func _on_planet_clicked(_screen_pos: Vector2) -> void:
 	if _naming_open or GameState.showcase_mode:
 		return
-	if _placing_def != null:
+	if _is_placing_site():
 		_try_place_district(_screen_pos)
 		return
 	var owned := _territory_at_screen(_screen_pos)
@@ -8980,7 +9107,7 @@ func _refresh_building_item(key: String, m: Dictionary, item: ListItem) -> void:
 	var user_off := ProductionManager.is_user_paused(key)
 	var paused := ProductionManager.is_paused(key)
 	item.modulate.a = 0.55 if user_off else 1.0
-	item.cycle = ProductionManager.cycle_text(ProductionManager.building_cycle_sec(def)) if _has_stock_output(def) else ""
+	item.cycle = ProductionManager.cycle_text(ProductionManager.building_cycle_sec(def)) if _shows_building_cycle(def) else ""
 	if user_off:
 		item.stats = PackedStringArray()
 		item.description = "Switched off  //  right-click to resume"
@@ -8996,7 +9123,7 @@ func _refresh_building_item(key: String, m: Dictionary, item: ListItem) -> void:
 			return
 		var stats := _building_stats(r_pp, m.get("entry", {}), def, int(m.get("count", 1)))
 		var er := ProductionManager.get_energy_ratio(m.get("planet_seed", -1))
-		if def.energy_per_tick < 0.0 and er < 0.999:
+		if not def.is_wonder and def.energy_per_tick < 0.0 and er < 0.999:
 			stats.append("warning:Slowed %d%%" % int((1.0 - er) * 100))
 		item.stats = stats
 
@@ -10052,6 +10179,8 @@ func _tick_deploy_anims(delta: float) -> void:
 func _card_panel_style() -> StyleBoxFlat:
 	return UIStyle.box(&"ItemPanel").duplicate() as StyleBoxFlat
 
+const WONDER_CARD_HEIGHT_MULT := 1.5
+
 ## Orb-of-Creation style: card whose background fills left→right as production ticks.
 ## count = number of this building type in this POI (for ×N badge)
 ## poi/planet/pp needed for "+" stacking button
@@ -10059,6 +10188,8 @@ func _build_construction_bar(def: BuildingDef, pm_key: String, entry: Dictionary
 	# ListItem look (scenes/ui/components/ListItem.tscn); its background fill is the build progress
 	var card := ListItem.create(def.display_name.to_upper(), _building_icon(def), "", [], "Constructing...  0%")
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if def.is_wonder:
+		card.custom_minimum_size.y *= WONDER_CARD_HEIGHT_MULT
 	card.clickable = false
 	card.icon_color = UIStyle.color(&"neutral_stroke")
 	card.progress_color = UIStyle.color(&"neutral_stroke")
@@ -10083,9 +10214,10 @@ func _build_construction_bar(def: BuildingDef, pm_key: String, entry: Dictionary
 	row.add_child(x_btn)
 	return row
 
-## Icon for a building: its first output's resource icon, else a factory.
+## Icon for a building: its first output or Wonder support, else a factory.
 func _building_icon(def: BuildingDef) -> String:
-	for id: String in def.outputs:
+	var resources := def.planet_bonus if def.is_wonder else def.outputs
+	for id: String in resources:
 		if id == Economy.RAW:
 			var rid := shown_raw_id()
 			return rid if rid != Economy.RAW else UIIcons.RAW_PLACEHOLDER
@@ -10173,6 +10305,19 @@ static func _has_stock_output(def: BuildingDef) -> bool:
 		if id != Economy.ENERGY and id != Economy.POPULATION:
 			return true
 	return false
+
+static func _shows_building_cycle(def: BuildingDef) -> bool:
+	return _has_stock_output(def) or (def.is_wonder and not def.inputs.is_empty())
+
+func _building_bonus_lines(def: BuildingDef, count: int) -> Array[String]:
+	var lines: Array[String] = []
+	for id: String in def.planet_bonus:
+		var color := Economy.color_of(id)
+		var label := "raw minerals" if def.is_wonder and id == Economy.RAW else PlanetTags.resource_label(id)
+		var scope := "planet-wide" if def.planet_wide else "in this City"
+		var percent := roundi(float(def.planet_bonus[id]) * count * 100.0)
+		lines.append(UIIcons.bb(id, 11, color) + " " + _bb("+%d%% %s %s" % [percent, label, scope], color))
+	return lines
 
 ## The icon a mine's "raw" output shows: the world's mineral when exactly one
 ## is discovered there and has an icon (10.11: Surface Quarry showed the raw
@@ -10301,11 +10446,7 @@ func _show_build_row_tip() -> void:
 	_build_tip_key = key
 	var sk := get_node("/root/SkillTree")
 	var body: Array[String] = [def.description]
-	var bonus: Array[String] = []
-	for bid_: String in def.planet_bonus:
-		bonus.append(UIIcons.bb(bid_, 11, Economy.color_of(bid_)) + " " + _bb("+%d%% %s %s" % [
-			int(round(float(def.planet_bonus[bid_]) * 100.0 * n)), PlanetTags.resource_label(bid_),
-			"planet-wide" if def.planet_wide else "in this City"], Economy.color_of(bid_)))
+	var bonus := _building_bonus_lines(def, n)
 	for sid: String in def.storage:
 		var scol: Color = Economy.color_of(sid) if sid != Economy.RAW else Color(0.85, 0.78, 0.70)
 		bonus.append(UIIcons.bb("warehouse", 11, scol) + " " + _bb("+%s storage" % Economy.fmt(float(def.storage[sid]) * n), scol))
@@ -10332,7 +10473,7 @@ func _show_build_row_tip() -> void:
 		flow.append(_res_bb(Economy.ENERGY, def.energy_per_tick * n * float(sk.get_energy_consume_mult()), "−"))
 	for iid: String in def.inputs:
 		flow.append(_res_bb(iid, float(def.inputs[iid]) * n, "−"))
-	var foot_l := (_cycle_bb(ProductionManager.building_cycle_sec(def)) + "   " if _has_stock_output(def) else "") + "   ".join(flow)
+	var foot_l := (_cycle_bb(ProductionManager.building_cycle_sec(def)) + "   " if _shows_building_cycle(def) else "") + "   ".join(flow)
 	var foot_r := (_bb("×%d  " % n, "#e8ecf6") if n > 1 else "") + _full_cost_bb(cost, int(c["pop"]) * n, planet, pp)
 	TooltipManager.show_tip(String(c["title"]), "\n".join(body))
 	TooltipManager.set_footer(foot_l, foot_r, Economy.can_pay(cost))
@@ -10346,6 +10487,9 @@ func _live_build_reason(c: Dictionary) -> Array:
 	var def: BuildingDef = c["def"]
 	var poi: POIData = c["poi"]
 	var pp: PlanetProgress = c["pp"]
+	var facility_block := def.facility_build_block(pp, poi)
+	if facility_block != "":
+		return [facility_block, false]
 	var cost := Economy.building_full_cost(pp, def, poi.label)
 	var has_slots := pp.district_slots(poi) - pp.slots_used_in_district(poi.label) >= def.slot_cost
 	var can_pay := Economy.can_pay(cost)
@@ -10444,6 +10588,8 @@ func _bulk_options_bb() -> String:
 ## never more than slots, limits and every part of the cost allow. Returns how
 ## many were queued (0 = nothing bought, error sound played).
 func _buy_buildings(poi: POIData, planet: PlanetData, def: BuildingDef, want: int) -> int:
+	if def.is_wonder:
+		return 0
 	var pp := GameState.get_planet(planet.seed)
 	var n := Economy.max_buildable(pp, def, poi, mini(want, ColonyTutorial.build_limit(planet, poi, def.building_id)))
 	if n <= 0 or not Economy.pay(Economy.building_full_cost(pp, def, poi.label, n)):
@@ -10454,12 +10600,15 @@ func _buy_buildings(poi: POIData, planet: PlanetData, def: BuildingDef, want: in
 		var mats := each.duplicate()
 		mats.erase(Economy.CREDITS)
 		pp.build_in_district(poi, def.building_id, "", float(each.get(Economy.CREDITS, 0.0)), mats)
+	_on_buildings_queued(planet, def)
+	return n
+
+func _on_buildings_queued(planet: PlanetData, def: BuildingDef) -> void:
 	AudioManager.play("construct")
 	AchievementManager.notify_trigger(AchievementDef.Trigger.FIRST_BUILDING)
 	ProductionManager.building_queued.emit(planet.seed, def.building_id)
 	GameState.planet_progress_changed.emit(planet.seed)
 	_refresh_overview_energy()
-	return n
 
 ## "+4 cr // +0.5 ⚡" for an income dictionary (neighbour gains).
 func _income_text(inc: Dictionary) -> String:
@@ -10781,7 +10930,9 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	if b_lv > 1: badges.append("Lv%d" % b_lv)
 	var card := ListItem.create(def.display_name.to_upper(), _building_icon(def), "  ".join(badges))
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if _has_stock_output(def):
+	if def.is_wonder:
+		card.custom_minimum_size.y *= WONDER_CARD_HEIGHT_MULT
+	if _shows_building_cycle(def):
 		card.cycle = ProductionManager.cycle_text(ProductionManager.building_cycle_sec(def))
 	card.icon_color = fc
 	card.progress_color = fc
@@ -10791,11 +10942,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 	# the standard tip (playtest 31.10): description and bonuses above; what it
 	# makes and uses with its cycle bottom-left; its workers bottom-right
 	var tip_str := def.description
-	var bonus: Array[String] = []
-	for bid_: String in def.planet_bonus:
-		bonus.append(UIIcons.bb(bid_, 11, Economy.color_of(bid_)) + " " + _bb("+%d%% %s %s" % [
-			int(round(float(def.planet_bonus[bid_]) * 100.0 * count)), PlanetTags.resource_label(bid_),
-			"planet-wide" if def.planet_wide else "in this City"], Economy.color_of(bid_)))
+	var bonus := _building_bonus_lines(def, count)
 	if not bonus.is_empty():
 		tip_str += "\n\n" + "\n".join(bonus)
 	var flow: Array[String] = []
@@ -10807,7 +10954,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 			* float(get_node("/root/SkillTree").get_energy_consume_mult()), "−"))
 	for iid: String in def.inputs:
 		flow.append(_res_bb(iid, float(def.inputs[iid]) * float(count), "−"))
-	var foot_l := (_cycle_bb(ProductionManager.building_cycle_sec(def)) + "   " if _has_stock_output(def) and not paused else "") + "   ".join(flow)
+	var foot_l := (_cycle_bb(ProductionManager.building_cycle_sec(def)) + "   " if _shows_building_cycle(def) and not paused else "") + "   ".join(flow)
 	var foot_r := (UIIcons.bb("worker", 11, Color(0.85, 0.88, 1.0)) + " " + _bb(Economy.fmt(def.pop_use() * count), Color(0.85, 0.88, 1.0))) \
 		if def.pop_use() > 0 else ""
 
@@ -10884,7 +11031,7 @@ func _build_production_bar(def: BuildingDef, pm_key: String, _planet_seed: int,
 		if _buy_buildings(cap_poi, cap_planet, cap_def, _bulk_n(pp, cap_def, cap_poi)) > 0:
 			_build_district_panel(cap_poi, cap_planet))
 
-	if single:
+	if single or def.is_wonder:
 		add_btn.visible = false
 	var tip_rem_title := "Remove one %s" % def.display_name if count > 1 else "Demolish %s" % def.display_name
 	var _cap_pp := pp
@@ -12319,7 +12466,12 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		# a row like the Add District list (playtest 31.10): icon, name, cost on
 		# the right; its tip ends with what it makes (cycle beside) and the cost
 		var preview_entry := {"amount": 1, "district_id": poi.label, "building_id": def.building_id}
-		var row_panel := IconButton.create(def.display_name.to_upper() + ("  //  MOON ONLY" if def.is_moon_only() else ""), _building_icon(def))
+		var row_label := def.display_name.to_upper()
+		if def.is_wonder:
+			row_label += "  //  T4 WONDER"
+		elif def.is_moon_only():
+			row_label += "  //  MOON ONLY"
+		var row_panel := IconButton.create(row_label, _building_icon(def))
 		row_panel.counter_items = _cost_items(full_cost, pop_need)
 		row_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row_panel.disabled = not enabled
@@ -12334,7 +12486,7 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		# Force Buy (research): short only of tradeable materials → buy them and
 		# build in one go with F while hovering the row
 		var can_force := not enabled and not can_afford and has_slots and not at_limit and known \
-			and Trade.has_force_buy()
+			and facility_block.is_empty() and Trade.has_force_buy()
 		if can_force and Trade.force_buy_cost(full_cost) >= INF:
 			can_force = false
 		# reasons that don't change while the list is open; slots, cost and
@@ -12347,6 +12499,7 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 		# hovering, which nobody found); F still works
 		var force_now := func() -> bool:
 			return can_force and Trade.force_buy_cost(Economy.building_full_cost(pp, cap_def, cap_poi.label, 1)) <= GameState.credits \
+				and cap_def.facility_build_block(pp, cap_poi).is_empty() \
 				and Economy.free_population(cap_planet, pp) >= cap_def.pop_use()   # never buy for a build that can't go up
 		if static_reason == "":   # enables as credits / slots come (playtest 07.11)
 			_live_enable(row_panel, func() -> bool: return bool(_live_build_reason(ctx)[1]) or bool(force_now.call()))
@@ -12372,6 +12525,9 @@ func _toggle_slot_dropdown(card: PanelContainer, poi: POIData, planet: PlanetDat
 					if bool(force_now.call()):
 						_force_row = {"poi": cap_poi, "planet": cap_planet, "def": cap_def, "overlay": cap_overlay}
 						_try_force_buy()
+					return
+				if cap_def.is_wonder:
+					_begin_wonder_placement(cap_def, cap_poi, cap_planet)
 					return
 				if _buy_buildings(cap_poi, cap_planet, cap_def, _bulk_n(pp, cap_def, cap_poi)) > 0:
 					if is_instance_valid(cap_overlay):
@@ -12805,7 +12961,7 @@ func _city_support_tag(planet: PlanetData, pp: PlanetProgress, city: POIData) ->
 	if lines.is_empty():
 		return []
 	return ["Supports +%d%%" % roundi(best * 100.0), HeroTag.Tone.GOOD,
-		"Capital supports raise this City's total. Districts and buildings show their own output without it.\n\n" \
+		"City support applies to the combined output of its districts and buildings.\n\n" \
 			+ "\n".join(lines) + "\n\nPlanet supports from the Orbit come on top of this result."]
 
 func _build_city_panel(city: POIData, planet: PlanetData) -> void:

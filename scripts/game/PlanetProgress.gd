@@ -165,12 +165,29 @@ func slots_used_in_district(district_label: String) -> int:
 			total += def.slot_cost * b.get("amount", 1)
 	return total
 
+## Construction reserves the City's single Wonder as soon as it is queued.
+func has_wonder_in_city(city_label: String) -> bool:
+	var planet := GameState.get_planet_data(planet_seed)
+	if planet == null:
+		return false
+	for entry: Dictionary in buildings:
+		var def := BuildingDef.find(String(entry.get("building_id", "")))
+		if def == null or not def.is_wonder:
+			continue
+		for poi: POIData in planet.custom_pois:
+			if poi.label == entry.get("district_id", "") and poi.parent_city == city_label:
+				return true
+	return false
+
 ## `paid` = credits really paid for this one building (the refund ledger's C,
 ## GDD §15.6); merged stacks add their C together.
 func build_in_district(district: POIData, building_id: String,
-		target_mineral: String = "", paid: float = 0.0, paid_mats: Dictionary = {}) -> bool:
+		target_mineral: String = "", paid: float = 0.0, paid_mats: Dictionary = {},
+		wonder_site: Vector2 = Vector2.INF) -> bool:
 	var def := BuildingDef.find(building_id)
 	if def == null:
+		return false
+	if def.is_wonder and not wonder_site.is_finite():
 		return false
 	if not def.facility_build_block(self, district).is_empty():
 		return false
@@ -179,7 +196,7 @@ func build_in_district(district: POIData, building_id: String,
 	if def.planet_limit_reached(self):
 		return false   # unique on the planet
 	
-	# Try to find an identical existing building to merge into
+	# Try to find an identical existing building to merge into.
 	var merge_idx := -1
 	for i in buildings.size():
 		var b: Dictionary = buildings[i]
@@ -190,6 +207,9 @@ func build_in_district(district: POIData, building_id: String,
 				break
 	
 	var entry := { "district_id": district.label, "building_id": building_id, "amount": 1, "constructing": true, "uid": str(randi()), "paid": paid, "paid_mats": paid_mats.duplicate() }
+	if def.is_wonder:
+		entry["wonder_lon"] = fposmod(rad_to_deg(wonder_site.x), 360.0)
+		entry["wonder_lat"] = rad_to_deg(wonder_site.y)
 	if merge_idx != -1:
 		entry["merge_into"] = merge_idx
 		
@@ -214,6 +234,9 @@ func place_prefab(district: POIData, def: DistrictDef) -> void:
 
 ## Stack one more of an existing building — goes through construction before merging.
 func stack_building_unchecked(district_label: String, building_id: String, merge_into_entry: Dictionary = {}) -> bool:
+	var def := BuildingDef.find(building_id)
+	if def != null and def.is_wonder:
+		return false
 	for i in buildings.size():
 		var b: Dictionary = buildings[i]
 		# If we specified an exact entry, merge into that, otherwise find any matching one

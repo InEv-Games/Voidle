@@ -259,6 +259,8 @@ static func building_materials(def: BuildingDef) -> Dictionary:
 	if def.retired and not def.build_materials.is_empty():
 		return def.build_materials
 	var c: BalanceConfig = Balance.cfg
+	if def.is_wonder:
+		return PlanetProgress.scale_mats(c.build_materials_tier3, BuildingDef.WONDER_TIER_MULTIPLIER)
 	match def.econ_tier():
 		0: return {}
 		1: return c.build_materials_tier1
@@ -355,6 +357,8 @@ static func building_room(pp: PlanetProgress, def: BuildingDef, poi: POIData) ->
 		return 0
 	var free_slots: int = pp.district_slots(poi) - pp.slots_used_in_district(poi.label)
 	var n := int(floor(float(free_slots) / float(maxi(def.slot_cost, 1))))
+	if def.is_wonder:
+		return clampi(n, 0, 1)
 	if def.max_per_district > 0:
 		var have := 0
 		for b: Dictionary in pp.buildings_in_district(poi.label):
@@ -592,9 +596,10 @@ static var _cache_frame: int = -1
 static var _city_maps: Dictionary = {}     # planet seed -> { district label -> city label }
 static var _bonus_cache: Dictionary = {}   # "seed|city|id" -> multiplier
 
-## Drops this frame's support multipliers (a trait or companion changed them).
+## Drops this frame's support multipliers and the housing totals they affect.
 static func invalidate_bonus_cache() -> void:
 	_cache_frame = -1
+	_pop_frame = -1
 
 static func _frame_caches() -> void:
 	var f := Engine.get_process_frames()
@@ -669,6 +674,8 @@ static func _supports(pp: PlanetProgress, pd: PlanetData) -> Dictionary:
 			continue
 		var def := BuildingDef.find(b.get("building_id", ""))
 		if def == null or def.planet_bonus.is_empty():
+			continue
+		if def.is_wonder and not ProductionManager.facility_entry_running(pp, b, def):
 			continue
 		var n := float(b.get("amount", 1))
 		var into: Dictionary = planet

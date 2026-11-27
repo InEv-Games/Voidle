@@ -337,6 +337,17 @@ Başlangıç commit'i `dae9ed2`. Godot ve oyun testleri çalıştırılmadı. So
 
 Başlangıç commit'i `dae9ed2`. Kaynak ve veri referansları incelendi. Godot ve oyun testleri çalıştırılmadı.
 
+### City başına bir T4 Wonder
+
+- Wonder'lar bir yüzey district'inde iki bina yuvası kullanıyor. `PlanetProgress.has_wonder_in_city()` aynı City'ye bağlı district'lerdeki tamamlanmış ve inşaatı süren Wonder'ları sayıyor. Her City'nin hakkı ayrı. Construction Bureau bir kez tamamlandığında gezegenin City'leri Wonder kurabiliyor. Capital listesine Wonder eklenmedi.
+- `BuildingDef` ve `Economy`, Wonder'ın baz inşa Credits, malzeme ve iş gücü değerlerini aktif T3 tarifesinden üç katlıyor. Güncel profilde her Wonder 6.750 iş gücü istiyor. Baz inşa paketi 4.050 Credits, 540 Ferrite, 135 Goods, 45 Fuel ve 15 Rare Elements. Mevcut district içi fiyat artışı uygulanıyor.
+- Beş Wonder'ın sabit çıktısı City desteğine çevrildi. Continental Power Station enerji üretimine, Grand Habitat konut kapasitesine, Deep Excavation Complex ham maden, Goods, Fuel ve Rare Elements üretimine, Grand Exchange Credits üretimine, Planetary Research Complex Science üretimine %10 ekliyor. `Economy._supports()` çalışabilen Wonder'ları mevcut City destek hesabına katıyor.
+- Beş Wonder da ayda 54 Energy, 27 Goods, 9 Fuel ve 3 Rare Elements harcıyor. `ProductionManager` Wonder duraklatıldığında ve işletme durumu değiştiğinde destek önbelleğini yeniliyor.
+- `PlanetaryView` bina listesinden Wonder seçilince konum seçimine geçiyor. Normal tıklama ve Force Buy yolu yalnızca geçerli alan onaylandıktan sonra ücret alıyor. Seçilen nokta `PlanetProgress.build_in_district()` üzerinden bina kaydına yazılıyor. `POILayer` inşaat ve tamamlanmış bina için, normal district ikonundan %20 küçük geçici anıt simgesini kullanıyor. `Settlement.move()` taşınan district ile Wonder konumunu aynı dönüşle taşıyor.
+- Wonder'ın yapım ve işletme kartlarında standart bina kartının 1,5 katı asgari yükseklik kullanılıyor. Bina tooltip'i City desteğini ve ilgili giderleri gösteriyor.
+
+Başlangıç commit'i `dae9ed2`. Kaynak referansları incelendi. Godot ve oyun testleri çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.
@@ -381,6 +392,7 @@ Bu günlüğü bağlam olarak kullan ve Git farkını kaynak kodla karşılaşt�
 12. First Residents satırının üretilmediğini ve kayıt silme ile üst bar etiketlerinin medeniyet seviyesini doğru kaynaktan aldığını incele.
 13. Eski tutorial görevleri sökülürken final roketi bildiriminin kaldığını, çıkarılan kodun referanslarının temizlendiğini ve eski kayıt alanlarının hâlâ okunduğunu incele.
 14. Tip 0 ağacında iki girişin Fuel Processing'de birleştiğini, dıştaki Ay düğümlerinin ayrı alındığını ve eski Recycling seviyeleriyle Ay bina haklarının yeni kayıtta korunduğunu incele.
+15. Wonder için City başına sınırın inşaatı da saydığını, yer seçilmeden ödeme alınmadığını ve taşımada seçilen koordinatın ev sahibi district ile hareket ettiğini incele.
 
 Her bulguda önem derecesini, dosya ve satırı, tetikleyen koşulu ve oyuncuya
 etkisini ver. Oyun içinde doğrulama isteyen ihtimalleri açıkça belirt.

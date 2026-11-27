@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="BuildingDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/BuildingDef.gd" id="1_def"]
+
+[resource]
+script = ExtResource("1_def")
+building_id = "wonder_research_complex"
+display_name = "Planetary Research Complex"
+description = "Increases Science production in this City by 10%."
+allowed_poi_types = Array[int]([4])
+surface_only = true
+is_wonder = true
+construct_duration = 36.0
+tick_duration = 20.0
+energy_per_tick = -54.0
+planet_bonus = {"science": 0.1}
+inputs = {"goods": 27.0, "fuel": 9.0, "rare_elements": 3.0}
+tier = 4

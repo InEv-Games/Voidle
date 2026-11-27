@@ -14,12 +14,10 @@ enum OutputType { NONE, ENERGY, CREDITS, RAW_MINERAL, REFINED_MINERAL, SCIENCE, 
 @export var surface_only:      bool     = false
 ## Original model price, used for old refunds and retired building definitions.
 @export var base_cost:         float    = 100.0
-## Wonders (playtest 28.10): rare buildings that take WONDER_SLOTS slots, stand
-## once per planet (in any one City) and show on the map inside their district's
-## borders. Every other building takes one slot. Which ones are wonders is set
-## per building (the team's building table).
+## Wonders occupy two slots in a surface district and are unique per City.
 @export var is_wonder:         bool     = false
 const WONDER_SLOTS := 2
+const WONDER_TIER_MULTIPLIER := 3
 var slot_cost: int:
 	get: return WONDER_SLOTS if is_wonder else 1
 @export var min_planet_lv:     int      = 1
@@ -29,13 +27,10 @@ var slot_cost: int:
 ## the Spaceport. Buildings under construction count.
 @export var max_per_planet:    int      = 0
 
-## Wonders share a single limit across all models on the planet.
 func count_on_planet(pp: PlanetProgress) -> int:
 	var n := 0
 	for b: Dictionary in pp.buildings:
-		var id := String(b.get("building_id", ""))
-		var other := find(id) if is_wonder else null
-		if id == building_id or (other != null and other.is_wonder):
+		if b.get("building_id", "") == building_id:
 			n += int(b.get("amount", 1))
 	return n
 
@@ -43,15 +38,20 @@ func count_on_planet(pp: PlanetProgress) -> int:
 func planet_limit_reached(pp: PlanetProgress) -> bool:
 	return planet_cap() > 0 and count_on_planet(pp) >= planet_cap()
 
-## Most of this model one planet may hold (0 = no limit); a wonder: one.
+## Most of this model one planet may hold (0 = no limit).
 func planet_cap() -> int:
-	return 1 if is_wonder else max_per_planet
+	return max_per_planet
 
 func facility_build_block(pp: PlanetProgress, poi: POIData) -> String:
 	if surface_only and (poi.is_orbital() or poi.poi_type not in allowed_poi_types):
 		return "Build in a matching surface district."
-	if is_wonder and not GameState.has_finished_building(pp.planet_seed, "wonder_construction_bureau"):
-		return "Build a Wonder Construction Bureau on this world."
+	if is_wonder:
+		if poi.parent_city == "":
+			return "Build in a surface district attached to a City."
+		if pp.has_wonder_in_city(poi.parent_city):
+			return "This City already has a Wonder or a Wonder under construction."
+		if not GameState.has_finished_building(pp.planet_seed, "wonder_construction_bureau"):
+			return "Build a Wonder Construction Bureau on this world."
 	return ""
 ## Required skill node to unlock this building. Empty = unlocked by default.
 @export var unlock_skill:      String   = ""
@@ -73,14 +73,15 @@ func econ_tier() -> int:
 
 func base_build_credits() -> float:
 	var prices := Balance.cfg.building_credits_by_tier
+	if is_wonder:
+		return prices[3] * WONDER_TIER_MULTIPLIER
 	var t := econ_tier()
 	return prices[t] if not retired and t >= 0 and t < prices.size() else base_cost
 
 ## True for models only the Moon allows ("Moon-only" in the build list).
 func is_moon_only() -> bool:
 	return allowed_planet_types.size() == 1 and allowed_planet_types[0] == PlanetData.Type.MOON
-## Lowest civilization type (0–5) that can build it. Tier 4 models belong to
-## the upper scales' plans and stay closed in Tip 0.
+## Lowest civilization type that can build it. Civilization Type is independent of tier.
 @export var min_civilization:  int      = 0
 
 ## Production
@@ -119,6 +120,8 @@ func is_moon_only() -> bool:
 
 func pop_use() -> int:
 	var workers := Balance.cfg.building_workers_by_tier
+	if is_wonder:
+		return workers[3] * WONDER_TIER_MULTIPLIER
 	var t := econ_tier()
 	if not retired and t >= 0 and t < workers.size():
 		return workers[t]
