@@ -273,11 +273,7 @@ static func prefab_items(def: DistrictDef) -> Array:
 			continue
 		for i in int(row[1]):
 			var owned := placed.size() if c.building_counter_scope != "model" else placed.count(bdef.building_id)
-			var cost := {Economy.CREDITS: roundf(Balance.geometric(bdef.base_cost, c.building_cost_growth, owned))}
-			var mats := Economy.building_materials(bdef)
-			for rid: String in mats:
-				cost[rid] = ceilf(Balance.geometric(float(mats[rid]), c.building_cost_growth, owned) - 0.0001)
-			out.append([bdef.building_id, cost])
+			out.append([bdef.building_id, Economy.building_repeat_cost(bdef, owned)])
 			placed.append(bdef.building_id)
 	return out
 

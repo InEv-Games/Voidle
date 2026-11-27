@@ -27,4 +27,5 @@ tier = 2
 cost_tier = 1
 min_civilization = 0
 required_features = Array[String](["terrain_seacoast"])
+retired = true
 unlocked_by_default = true

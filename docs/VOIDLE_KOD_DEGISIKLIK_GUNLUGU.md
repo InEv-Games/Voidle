@@ -289,6 +289,54 @@ Başlangıç commit’i `6eac4eb`. Godot ve testler çalıştırılmadı.
 
 Başlangıç commit'i `1ecaf12`. Godot ve testler çalıştırılmadı.
 
+### Coğrafya ve özel binalar
+
+- `Kitap1.xlsx` dosyasındaki X işaretleri baz district çıktısının arazi bonusu, O işaretleri özel bina şartı olarak uygulandı. 14 coğrafyada 25 bonus ve 15 özel bina eşleşmesi var. Arazinin üzerinde ve yakınındaki mevcut bonus oranları korundu. Plain, Residential ve Commercial lenslerinde kendi rengiyle gösteriliyor.
+- Glacier harita üretiminden, lenslerden ve bonuslardan çıkarıldı. Eski kayıtlardaki Glacier etiketi yüklemede temizleniyor. Kar görseli ve Tundra arazi türü devam ediyor.
+- Geothermal Plant → River Hydro Plant (River), Geothermal Drill → Plains Factory (Plain), Glacier Exchange → Tundra Exchange (Tundra), Volcanic Market → Rift Market (Geothermal Rift), Mountain Observatory → Volcanic Observatory (Volcanic Field), Forest Research Station → Rift Research Station (Geothermal Rift). Araştırma adları ve yerleşim şartları güncellendi. Bina kimlikleri, tier, inşa maliyeti, iş gücü, gider ve baz çıktı değerleri korundu.
+- Coastal Apartments, Crater Habitat, Deep-Core Refinery, Cavern Refinery ve Ion Research Lab yeni inşadan çıkarıldı. Eski kayıtlardaki inşa edilmiş modellerin tanımları duruyor. Yalnızca emekli modelleri açan dört araştırma kaldırıldı. Rare Refining, Rare Metal Refinery'yi açmaya devam ediyor. Coğrafya uzmanlıkları geçerli düğümlere bağlandı ve Plain uzmanlığı eklendi.
+- Yeni öğretici yerleşimleri Wind Turbine için Mountain seçiyor. Önceden Tundra'ya kurulmuş bir öğretici Energy District'i, mevcut oyununda türbin adımını tamamlayabiliyor. Yeni arazi bonusları aynı seed'de yer seçimi ve baz gelir dağılımını değiştirebilir.
+- Denge açısından Plains Factory'nin düzlükte daha geniş yer seçimi var. Ay'da yeni Crater Habitat, Cavern Refinery ve Ion Research Lab kurulamadığı için aynı tier'deki standart modeller ve ayrı ürün hatları daha önemli. Godot çalıştırılmadı.
+
+## 27 Kasım 2026
+
+### Tip 0 Upgrade Tree
+
+- `TipZeroLayout.gd` onaylanan 87 düğümün konumlarını ve bağlantılarını tutuyor. Beş dal şimşek, fabrika, çift ok, ev ve laboratuvar şişesini çiziyor. Dıştaki 18 düğüm kapalı bir 0 oluşturuyor. Tepedeki hat Spaceport, yörünge, Ay ve Tip 1 önizlemesine çıkıyor.
+- `SkillTree.gd` çizilen bağlantılardan iki yönlü araştırma komşuluğunu kuruyor. Photovoltaics ile Geothermal Rift, Old Ruins ile Tidal Power ve Rift Trade ile High-Rise Housing arasında geçiş var. Forest Specialisation, Production tarafından Energy'ye bağlanıyor. Plain Specialisation ile Market Stalls arasında doğrudan geçiş yok. Kaynak erişiminin ve uzay hattının zorunlu araştırmaları ile fiziksel koşulları korunuyor. Science taban fiyatlarında mevcut değerler kullanılıyor.
+- `SkillTreeView.gd` ilk açılışta Tip 0 ağacını ekrana sığdırıyor. Satın alınan düğümler dolgu ve kenar rengiyle ayrılıyor. Öğreticide bütün düğümler görünür ve danışmanın istediği araştırma vurgulanır. Satın alma kısıtı, Wind Power öğretici adımı ve dev konsolunun görünürlük komutları korunuyor.
+- Taslaktan çıkarılan on araştırma yeni alım, fiyat artışı ve buyout kapsamından çıkarıldı. Eski kayıtlar satın alınmış seviyeleri ve etkilerini okumaya devam ediyor. Storage Facility yeni oyunlarda Deep Drilling ile açılıyor. Bulk Storage almış eski kayıtlar mevcut yapı hakkını koruyor.
+- District Charter, `Leveling.city_max_districts()` üzerinden her City'ye +1 district yeri veriyor. Yerleştirme ve City paneli aynı sınırı okuyor.
+
+Başlangıç commit'i `dae9ed2`. Kaynak farkı incelendi. Godot ve oyun testleri çalıştırılmadı.
+
+### Coğrafya uzmanlığı göstergeleri
+
+- `FeatureMap.feature_base_bonus()` baz arazi katkısını ortak kaynaktan hesaplıyor. `FeatureMap.bonus_for()` üretim için uzmanlığı dahil ediyor, district paneli için yalnız baz katkıyı da döndürebiliyor.
+- `PlanetaryView.gd` yerleştirme kartında ve harita lensinin tooltip'inde her arazinin baz bonusuyla araştırma katkısını ayrı satırlarda gösteriyor. District panelinde ilgili araştırma etkisi varsa `Specialisation` satırı çıkıyor. Mevcut toplamlar baz ve araştırma katkısını birlikte kullanıyor.
+
+Başlangıç commit'i `dae9ed2`. Godot ve oyun testleri çalıştırılmadı.
+
+### Ortak bina inşa tarifesi
+
+- `BalanceConfig.gd` demonun T0–T3 binalarını ortak baz Credits, iş gücü ve malzeme tarifesine bağlıyor. T0 75 Credits ve 125 çalışan, T1 150 ve 250, T2 450 ve 750, T3 1.350 ve 2.250. Konut ve Capital binaları da kendi tier tarifesini kullanıyor.
+- `BuildingDef.econ_tier()` gerçek arazi yerleşim şartı olan aktif binalarda maliyet tier'ını bir düşürüyor. İndirim Credits, iş gücü ve inşa malzemelerinin üçünü de kapsıyor. Bir modele yalnızca Ay'da izin verilmesi indirim sağlamıyor. Üretim ve aylık işletme tarifeleri kendi bina değerlerinden okunuyor.
+- `Economy.building_repeat_cost()` yüzey inşası ve yörünge hazır paketleri için ortak fiyatı ve mevcut tekrar çarpanını hesaplıyor. Eski kayıtlarda ödenmiş ücretler ve iade kayıtları korunuyor. Emekli modellerin eski tanımları kayıtlarda kullanılabiliyor.
+- `ColonyTutorial.gd` Archaeology Bureau için Trade'de hedef Goods stokunu gerçek inşa maliyeti ve mevcut iki Goods payıyla hesaplıyor. Yapım adımındaki kaynak desteği aynı tarife üzerinden geliyor. Eski öğretici kaydında onaylanmış bina adımı yeni tarifeye göre eksik kalırsa mevcut destek diyaloğu bir kez yeniden açılıyor.
+
+Başlangıç commit'i `dae9ed2`. Godot ve oyun testleri çalıştırılmadı. Son öğretici turunda standart iş gücü değerlerinin eşiklere etkisi de incelenecek.
+
+### Simetrik Tip 0 ağacı ve Ay araştırmaları
+
+- `TipZeroLayout.gd` onaylanan 91 düğümlü yerleşimi ve 11 düğümlü dış 0 halkasını kullanıyor. Beş Ay araştırması doğrudan halka üzerinde. Dış bağlantılar dalların dış ucundan çıkıyor. `SkillTreeView._draw_tip_zero_connections()` iç bağlantıları düz çizgi parçalarıyla ve dış halkayı elips yaylarıyla çiziyor.
+- `SkillTree._ready()` bina açan Tip 0 araştırmalarına binanın gerçek T0, T1, T2 veya T3 tier'ına göre 100, 300, 900 veya 2.700 baz Science veriyor. Birden çok bina açılıyorsa en yüksek tier kullanılıyor. Araziye özel inşa indirimi araştırma fiyatını etkilemiyor. Ücretsiz başlangıç hakları, bina açmayan araştırmaların baz fiyatları ve mevcut Science fiyat artışı korunuyor.
+- Fuel Processing ilk Fuel açılışı. Production District'i açtıktan sonra Basic Processing veya Mining üzerinden ulaşılabiliyor. Dense Fuel, Volcanic Mining, Fuel Processes, Heat Recovery ve Rare Processing Fuel Processing istiyor. Rocketry ve Fission Power aynı Fuel erişimine bağlı. Mantle Cracking için Rare Processing gerekiyor.
+- `Settlement.refund_rate()` Recycling'in iki seviyesini kullanıyor. Söküm iadesi araştırmasız %50, ilk seviyede %65 ve ikinci seviyede %75. `SkillTree.load_save_data()` eski Recycling düğümlerini birleşik araştırmanın karşılık gelen seviyelerine dönüştürüyor.
+- Lunar Materials, farklı dallardaki beş Ay binası araştırmasının ortak önkoşulu. Bu binalar kendi türündeki Ay yüzey district'inde arazi şartı olmadan tam T3 inşa tarifesiyle kuruluyor. Dört model ayda 18 Moonstone ek gider ödüyor. Cavern Refinery ayda 72 enerji ve 53 Moonstone ile 8 Goods, 4 Fuel ve 2 Rare Elements üretiyor.
+- Eski kayıtların Lunar Materials ile açtığı Helium-3 Reactor ve Low-Gravity Exchange hakları korunuyor. Önceki Volcanic Mining veya Dense Fuel sahibi kayıtlar Fuel erişimini miras alıyor. Yeni kayıtlarda her Ay binası ayrı araştırma istiyor. Final roketi hattı Lunar Materials ve Ay'da çıkarılan Moonstone üzerinden ilerliyor.
+
+Başlangıç commit'i `dae9ed2`. Kaynak ve veri referansları incelendi. Godot ve oyun testleri çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.
@@ -303,6 +351,8 @@ git diff --no-ext-diff 5eed8c0680bfee5184da6f07ec9c92a3088c6b46 -- scenes/ui/com
 git diff --no-ext-diff 185a44ea1d3c890ad0af6f9845ef535ea5fcae2b -- scripts/planetary/POILayer.gd scripts/planetary/PlanetaryView.gd scripts/system/TooltipManager.gd
 git diff --no-ext-diff 81f004ebd39244643ed4006ac478f46e1dc35acc -- scripts/system/Inbox.gd scripts/ui/components/ResourceBar.gd scripts/system/MainMenu.gd
 git diff --no-ext-diff 2a47432055cdbccda5f18d91c054658c49a26a4c -- scripts/system/Inbox.gd scripts/system/MainMenu.gd scenes/ui/IntroCard.tscn scripts/ui/IntroCard.gd scripts/ui/IntroCard.gd.uid scripts/ui/SessionPrep.gd scripts/planetary/PlanetaryView.gd scripts/game/PlanetProgress.gd scripts/game/BuildingDef.gd scripts/game/SkillTree.gd scripts/game/GameState.gd scripts/game/balance/BalanceConfig.gd
+git diff --no-ext-diff dae9ed2 -- scripts/game/TipZeroLayout.gd scripts/game/SkillTree.gd scripts/game/Settlement.gd scripts/ui/SkillTreeView.gd scripts/system/TutorialManager.gd resources/buildings/cavern_refinery.tres resources/buildings/crater_habitat.tres resources/buildings/helium3_reactor.tres resources/buildings/ion_research_lab.tres resources/buildings/low_gravity_exchange.tres
+Get-Content -LiteralPath scripts/game/TipZeroLayout.gd
 ```
 
 İnceleyen AI’a bu dosyayı ve komutların çıktısını ver. Repo erişimi varsa ilgili çağrıları da açabilir. Kullanılacak talimat aşağıda.
@@ -330,6 +380,7 @@ Bu günlüğü bağlam olarak kullan ve Git farkını kaynak kodla karşılaşt�
 11. Kazı tooltip’inin ortak kartta doğru durumu ve canlı süreyi gösterdiğini, kazı açılınca veya görünüm kapanınca kaldırıldığını incele.
 12. First Residents satırının üretilmediğini ve kayıt silme ile üst bar etiketlerinin medeniyet seviyesini doğru kaynaktan aldığını incele.
 13. Eski tutorial görevleri sökülürken final roketi bildiriminin kaldığını, çıkarılan kodun referanslarının temizlendiğini ve eski kayıt alanlarının hâlâ okunduğunu incele.
+14. Tip 0 ağacında iki girişin Fuel Processing'de birleştiğini, dıştaki Ay düğümlerinin ayrı alındığını ve eski Recycling seviyeleriyle Ay bina haklarının yeni kayıtta korunduğunu incele.
 
 Her bulguda önem derecesini, dosya ve satırı, tetikleyen koşulu ve oyuncuya
 etkisini ver. Oyun içinde doğrulama isteyen ihtimalleri açıkça belirt.

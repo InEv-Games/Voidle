@@ -751,6 +751,7 @@ func _apply_pending_pois() -> void:
 			poi.parent_city        = pd_entry.get("parent_city",        "")
 			poi.resource_tags      = pd_entry.get("resource_tags",      {})
 			poi.site_features      = pd_entry.get("site_features",      {})
+			poi.site_features.erase("terrain_glacier")
 			poi.paid_credits       = float(pd_entry.get("paid_credits",  -1.0))
 			poi.paid_materials     = pd_entry.get("paid_materials",     {})
 			poi.spoke_birth        = pd_entry.get("spoke_birth",        {})

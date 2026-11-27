@@ -27,21 +27,21 @@ extends RefCounted
 ## the windy region is no longer a feature (integration decisions 29.10 §3):
 ## nothing marks it any more.
 enum F { MOUNTAIN, PLAIN, FOREST, SEACOAST, LAKESIDE, RIVER, DESERT, TUNDRA,
-	GLACIER, VOLCANIC, GEOTHERMAL, WIND, RUINS, CRATER, CAVES, ION_STORM }
+	VOLCANIC, GEOTHERMAL, WIND, RUINS, CRATER, CAVES, ION_STORM }
 
 ## Ids by F (index = bit). Use CATALOGUE for the features that exist.
 const IDS: Array[String] = ["terrain_mountain", "terrain_plain", "terrain_forest",
 	"terrain_seacoast", "terrain_lakeside", "terrain_river", "terrain_desert",
-	"terrain_tundra", "terrain_glacier", "terrain_volcanic", "terrain_geothermal",
+	"terrain_tundra", "terrain_volcanic", "terrain_geothermal",
 	"terrain_wind", "terrain_ruins", "terrain_crater", "terrain_caves", "terrain_ion_storm"]
 const NAMES: Array[String] = ["Mountain", "Plain", "Forest", "Sea coast", "Lakeside",
-	"River", "Desert", "Tundra", "Glacier", "Volcanic field", "Geothermal rift",
+	"River", "Desert", "Tundra", "Volcanic field", "Geothermal rift",
 	"Windy region", "Old ruins", "Crater", "Caves", "Ion storm region"]
 
-## The 15 geography types: 12 general ones and three found only on the Moon.
+## The 14 geography types: 11 general ones and three found only on the Moon.
 const CATALOGUE: Array[String] = ["terrain_mountain", "terrain_plain", "terrain_forest",
 	"terrain_seacoast", "terrain_lakeside", "terrain_river", "terrain_desert",
-	"terrain_tundra", "terrain_glacier", "terrain_volcanic", "terrain_geothermal",
+	"terrain_tundra", "terrain_volcanic", "terrain_geothermal",
 	"terrain_ruins", "terrain_crater", "terrain_caves", "terrain_ion_storm"]
 ## Shown with a "Moon only" tag (tables, build list, tooltips).
 const MOON_ONLY: Array[String] = ["terrain_crater", "terrain_caves", "terrain_ion_storm"]
@@ -58,7 +58,7 @@ const COVER_FOREST := 1
 const COVER_DESERT := 2
 const COVER_TUNDRA := 3
 const COVER_VOLCANIC := 4
-## Lowest wind value a Mountain / Tundra cell gets in the lens texture.
+## Lowest wind value a Mountain cell gets in the lens texture.
 const WIND_LENS_MIN := 0.45
 const COVER_CAVES := 5
 const COVER_ION_STORM := 6
@@ -76,7 +76,7 @@ const WINDY_MIN := 0.25
 const MOUNTAIN_H := 0.32
 const SNOW_H := 0.44
 const PLAIN_TOP_H := 0.26
-const GLACIER_LAT_DEG := 72.0
+const POLAR_SNOW_LAT_DEG := 72.0
 
 static var _maps: Dictionary = {}   # seed -> { "mask": PackedInt32Array, "tex": ImageTexture }
 
@@ -87,7 +87,7 @@ static func texture(planet_seed: int) -> ImageTexture:
 	return _maps[planet_seed]["tex"] if _maps.has(planet_seed) else null
 
 ## Wind strength on the feature grid for the Energy lens's wind currents —
-## Mountain and Tundra cells only (see _compute); null without a wind field.
+## Mountain cells only (see _compute). Null without a wind field.
 static func wind_texture(planet_seed: int) -> ImageTexture:
 	return _maps[planet_seed].get("wind", null) if _maps.has(planet_seed) else null
 
@@ -185,18 +185,21 @@ static func step_bonus(share: float) -> float:
 		return Balance.cfg.terrain_on_bonus
 	return Balance.cfg.terrain_near_bonus if share > 0.0 else 0.0
 
+## What this feature contributes to a family before its research bonus.
+static func feature_base_bonus(fid: String, family: String, share: float) -> float:
+	var row: Dictionary = Balance.cfg.terrain_bonuses.get(fid, {})
+	return float(row.get(family, 0.0)) * step_bonus(share)
+
 ## Bonus fraction of a set of feature shares for one family (§3.1): every
 ## distinct feature type that helps it adds its step — on +1 (×2), near +0.5
 ## (×1.5) — and the steps add up, e.g. on a Mountain and near a Volcanic field
 ## = +1.5 (×2.5). A site holds each type once (shares()), so the same type
 ## never counts twice; on and near of one type is its "on".
-static func bonus_for(site: Dictionary, family: String) -> float:
-	var table: Dictionary = Balance.cfg.terrain_bonuses
+static func bonus_for(site: Dictionary, family: String, include_specialisation: bool = true) -> float:
 	var total := 0.0
 	for fid: String in site:
-		var row: Dictionary = table.get(fid, {})
-		total += float(row.get(family, 0.0)) * step_bonus(float(site[fid])) \
-			* SkillTree.get_feature_mult(fid)   # Geography Specialisation
+		var base := feature_base_bonus(fid, family, float(site[fid]))
+		total += base * SkillTree.get_feature_mult(fid) if include_specialisation else base
 	return total
 
 ## Families a feature helps, as labels: "Production, Science".
@@ -296,8 +299,7 @@ static func role_texture(planet_seed: int, role: String) -> ImageTexture:
 			var cell: Array = by_mask[mv]
 			var b: float = cell[0]
 			var col: Color = cell[1]
-			# two helping features on one cell: a checker of both colours, so
-			# overlapping ones (Tundra under Glacier …) both show (playtest 12.11)
+			# A checker shows both colours when two features help on one cell.
 			var col2: Color = cell[2]
 			if col2.a > 0.0 and (x + y) % 2 == 1:
 				col = col2
@@ -313,13 +315,13 @@ static func role_texture(planet_seed: int, role: String) -> ImageTexture:
 ## features apart by hue, not by shade — a darker tint would read as "better".
 const FEATURE_COLORS := {
 	"terrain_mountain":   Color(0.80, 0.68, 0.55),
+	"terrain_plain":      Color(0.76, 0.78, 0.49),
 	"terrain_forest":     Color(0.30, 0.80, 0.35),
 	"terrain_seacoast":   Color(0.30, 0.72, 1.00),
 	"terrain_lakeside":   Color(0.45, 0.92, 0.92),
 	"terrain_river":      Color(0.35, 0.50, 1.00),
 	"terrain_desert":     Color(1.00, 0.86, 0.35),
-	"terrain_tundra":     Color(0.30, 0.72, 0.58),   # 12.11: a pale mint read as Glacier
-	"terrain_glacier":    Color(0.92, 0.97, 1.00),
+	"terrain_tundra":     Color(0.30, 0.72, 0.58),
 	"terrain_volcanic":   Color(1.00, 0.24, 0.12),
 	"terrain_geothermal": Color(1.00, 0.62, 0.18),
 	"terrain_ruins":      Color(0.85, 0.55, 0.98),
@@ -473,13 +475,11 @@ static func _compute(data: PlanetData) -> Dictionary:
 		out["lake"] = lake
 	if not river_paths.is_empty() or lake.count(1) > 0:
 		out["river_img"] = _bake_rivers(river_paths, data.seed, land, lake)
-	# Wind currents for the Energy lens: only where wind is used — on Mountains
-	# and Tundra of a world with an atmosphere (the Wind Turbine's sites; the
-	# windy region is no longer a feature). Every such cell shows some current,
-	# windier ones more (the shader draws from 0.35 up).
+	# The Energy lens shows wind currents on mountains with an atmosphere.
+	# Windier cells have stronger currents.
 	if ResourceMap.has_map(data.seed) and data.has_atmosphere:
 		var wb := PackedByteArray(); wb.resize(n)
-		var windy_bits := (1 << F.MOUNTAIN) | (1 << F.TUNDRA)
+		var windy_bits := 1 << F.MOUNTAIN
 		for y in HEIGHT:
 			for x in WIDTH:
 				var i := y * WIDTH + x
@@ -555,8 +555,6 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 			var m := 0
 
 			# from the height bands the planet already shows
-			if lat_deg >= GLACIER_LAT_DEG or h >= SNOW_H:
-				m |= 1 << F.GLACIER
 			if h >= mountain_h:
 				m |= 1 << F.MOUNTAIN
 			for j in _neighbours8(i):
@@ -577,11 +575,11 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 				PlanetData.Type.ICE:
 					if h < MOUNTAIN_H: c = COVER_TUNDRA
 				PlanetData.Type.TERRAN:
-					# Tundra, Volcanic and the reachable Glacier get their shares
+					# Tundra and Volcanic fields get their shares
 					# after this loop (_terran_shares); past the placement band
 					# the old polar Tundra stays for the look
 					var arid := _n3(arid_n, ll.x, ll.y) + 0.35 * (1.0 - absf(lat_deg - 25.0) / 25.0)
-					if h < MOUNTAIN_H and lat_deg > TerrainSampler.MAX_PLACE_LAT_DEG and lat_deg < GLACIER_LAT_DEG:
+					if h < MOUNTAIN_H and lat_deg > TerrainSampler.MAX_PLACE_LAT_DEG and lat_deg < POLAR_SNOW_LAT_DEG:
 						c = COVER_TUNDRA
 					elif h < MOUNTAIN_H and arid > 0.42:
 						c = COVER_DESERT
@@ -593,7 +591,7 @@ static func _build_rocky(data: PlanetData, rng: RandomNumberGenerator, height: P
 				COVER_DESERT:   m |= 1 << F.DESERT
 				COVER_TUNDRA:   m |= 1 << F.TUNDRA
 				COVER_VOLCANIC: m |= 1 << F.VOLCANIC
-			if c == 0 and h < PLAIN_TOP_H and not (m & (1 << F.GLACIER)):
+			if c == 0 and h < PLAIN_TOP_H and lat_deg < POLAR_SNOW_LAT_DEG:
 				m |= 1 << F.PLAIN
 
 			# geothermal rifts: the strongest fault-line ridges on land
@@ -660,7 +658,7 @@ static func _place_lakes(data: PlanetData, height: PackedFloat32Array, land: Pac
 			continue
 		reach += 1
 		if lat_deg <= LAKE_MAX_LAT and dist[i] >= LAKE_SEA_GAP and height[i] < PLAIN_TOP_H \
-				and (mask[i] & (1 << F.GLACIER)) == 0 and cover[i] != COVER_VOLCANIC:
+				and cover[i] != COVER_VOLCANIC:
 			cand.append(i)
 	if cand.is_empty():
 		return lake
@@ -709,26 +707,19 @@ static func _place_lakes(data: PlanetData, height: PackedFloat32Array, land: Pac
 	return lake
 
 # ── Terran shares (playtest 07.11) ───────────────────────────────────────────
-## Every Terran world has some of each land: Tundra was only a polar band (from
-## 0.8% to 25% of the buildable land), Glacier none and Volcanic ~0.2% where
-## districts can go. Each now takes a share of the buildable land (|lat| ≤
-## TerrainSampler.MAX_PLACE_LAT_DEG), picked by a score, so every world gets
-## about the same amount, in the places that suit it.
+## Give Tundra and Volcanic fields a share of the buildable part of each Terran
+## world. Cells are ranked by latitude, height, or geothermal activity.
 const TUNDRA_SHARE := 0.08     # cold land: high latitudes first, then cold highlands
 const VOLCANIC_SHARE := 0.025  # around the geothermal fault lines
-const GLACIER_SHARE := 0.02    # the snowiest high mountains outside the tropics
 const TUNDRA_MIN_LAT := 35.0
-const GLACIER_MIN_LAT := 28.0
 
 static func _terran_shares(data: PlanetData, height: PackedFloat32Array, land: PackedByteArray,
 		geo: PackedFloat32Array, mountain_h: float, cover: PackedByteArray, mask: PackedInt32Array) -> void:
 	var tundra_n := _noise(data.seed ^ 0x7D2A, 0.045, 3)
 	var volc_n := _noise(data.seed ^ 0x701C, 0.05, 2)
-	var glacier_bit := 1 << F.GLACIER
 	var reach := 0
 	var t_cells := PackedInt32Array(); var t_score := PackedFloat32Array()
 	var v_cells := PackedInt32Array(); var v_score := PackedFloat32Array()
-	var g_cells := PackedInt32Array(); var g_score := PackedFloat32Array()
 	for y in HEIGHT:
 		for x in WIDTH:
 			var i := y * WIDTH + x
@@ -740,7 +731,7 @@ static func _terran_shares(data: PlanetData, height: PackedFloat32Array, land: P
 				continue
 			reach += 1
 			var h := height[i]
-			if mask[i] & glacier_bit:
+			if h >= SNOW_H:
 				continue
 			v_cells.append(i)
 			v_score.append(geo[i] + 0.6 * _n3(volc_n, ll.x, ll.y))
@@ -750,9 +741,6 @@ static func _terran_shares(data: PlanetData, height: PackedFloat32Array, land: P
 				# mid-latitudes too, not just the edge of the buildable band
 				t_score.append(0.35 * (lat_deg - TUNDRA_MIN_LAT) / 35.0 + 1.5 * maxf(h - TerrainSampler.SHORE_H, 0.0)
 					+ 0.6 * _n3(tundra_n, ll.x, ll.y))
-			if lat_deg >= GLACIER_MIN_LAT and h >= mountain_h * 0.9:
-				g_cells.append(i)
-				g_score.append(h + 0.004 * lat_deg + 0.05 * _n3(tundra_n, ll.x, ll.y))
 	var volcanic := _top_share(v_cells, v_score, int(reach * VOLCANIC_SHARE))
 	var cover_bits := (1 << F.FOREST) | (1 << F.DESERT) | (1 << F.PLAIN) | (1 << F.TUNDRA) | (1 << F.VOLCANIC)
 	for i: int in volcanic:
@@ -763,13 +751,6 @@ static func _terran_shares(data: PlanetData, height: PackedFloat32Array, land: P
 			continue
 		cover[i] = COVER_TUNDRA
 		mask[i] = (mask[i] & ~cover_bits) | (1 << F.TUNDRA)
-	# glacier: only the high mountains; at most half of what qualifies
-	@warning_ignore("integer_division")
-	var g_want := mini(int(reach * GLACIER_SHARE), g_cells.size() / 2)
-	for i: int in _top_share(g_cells, g_score, g_want):
-		if cover[i] == COVER_VOLCANIC:
-			continue
-		mask[i] = (mask[i] & ~((1 << F.PLAIN) | (1 << F.FOREST) | (1 << F.DESERT))) | glacier_bit
 
 ## The `want` cells with the highest scores.
 static func _top_share(cells: PackedInt32Array, scores: PackedFloat32Array, want: int) -> PackedInt32Array:

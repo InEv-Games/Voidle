@@ -99,12 +99,6 @@ func recalculate_limits() -> void:
 	max_districts         = BASE_DISTRICTS + (level - 1)
 	max_orbital_districts = orbit_level + 1 if orbit_level > 0 else 0   # Orbit districts, the Orbit City not counted (§6.1)
 
-	var st = null
-	if Engine.has_singleton("SceneTree") and Engine.get_main_loop():
-		st = Engine.get_main_loop().root.get_node_or_null("SkillTree")
-	if st and st.has_method("get_max_districts_add"):
-		max_districts += st.get_max_districts_add()
-
 	max_mining_lv  = 1 + (level - 1)
 	max_generators = 2 + (level - 1) * 2
 	max_spaceports = 1 if level >= 2 else 0

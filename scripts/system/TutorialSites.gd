@@ -65,9 +65,7 @@ static func _wind_neighbourhoods(pd: PlanetData, limit: int) -> Array:
 	return out
 
 static func wind_cells(pd: PlanetData) -> Array:
-	var cells := FeatureMap.cells_with(pd.seed, FeatureMap.F.MOUNTAIN)
-	cells.append_array(FeatureMap.cells_with(pd.seed, FeatureMap.F.TUNDRA))
-	return cells
+	return FeatureMap.cells_with(pd.seed, FeatureMap.F.MOUNTAIN)
 
 static func marker(site: Vector2, pd: PlanetData) -> Dictionary:
 	return {"lon": site.x, "lat": site.y, "r": deg_to_rad(TerrainSampler.min_spacing_deg(pd)) * 0.47}
@@ -128,7 +126,7 @@ static func _find(pd: PlanetData, city: POIData, def: DistrictDef, centre: Vecto
 
 static func _wind_cell(pd: PlanetData, site: Vector2) -> bool:
 	var mask := FeatureMap.mask_at(pd.seed, site.x, site.y)
-	return (mask & ((1 << FeatureMap.F.MOUNTAIN) | (1 << FeatureMap.F.TUNDRA))) != 0
+	return (mask & (1 << FeatureMap.F.MOUNTAIN)) != 0
 
 static func _needs_full_location(def: DistrictDef) -> bool:
 	return def.id in [DistrictDef.Type.GENERATOR, DistrictDef.Type.RESIDENTIAL]

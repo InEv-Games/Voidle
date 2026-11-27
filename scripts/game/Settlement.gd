@@ -9,7 +9,7 @@
 ##   levels           PlanetProgress.level_paid    (district label, "city:<label>")
 ## k of N buildings give back rate × C//k/N and C drops by the whole share, so
 ## nothing is refunded twice. Credits and materials come back at the same rate
-## (KARARLAR §10): 50%, 65% with Recycling I, 75% with Recycling II.
+## (KARARLAR §10): 50%, 65% at Recycling level 1, 75% at level 2.
 ##
 ## Moving (§15.9–§15.11) needs Settlement Layout and costs 10% of the moved
 ## subtree's paid credits (a service fee: not added to the ledger). A City moves
@@ -18,13 +18,10 @@ class_name Settlement
 extends RefCounted
 
 const MOVE_FEE := 0.10
+const REFUND_RATES := [0.50, 0.65, 0.75]
 
 static func refund_rate() -> float:
-	if SkillTree.is_unlocked("recycling_2"):
-		return 0.75
-	if SkillTree.is_unlocked("recycling_1"):
-		return 0.65
-	return 0.50
+	return REFUND_RATES[SkillTree.get_skill_level("recycling")]
 
 ## The settlement and every district under it (a City's children).
 static func subtree(pd: PlanetData, poi: POIData) -> Array[POIData]:

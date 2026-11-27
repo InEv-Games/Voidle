@@ -29,7 +29,7 @@ const GREEN_H: float = 0.12
 ## Tundra): kept as it is, worlds would change otherwise.
 const MAX_PLACE_LAT_DEG: float = 70.0
 ## Districts can't be placed beyond this latitude (11.11: was 70°, "too close to
-## the pole" blocked good Glacier / Tundra land): where roads still reach
+## the pole" blocked good Tundra land): where roads still reach
 ## (RoadNetwork.LAT_LIMIT, 1.40 rad ≈ 80°), less a margin.
 const MAX_SITE_LAT_DEG: float = 78.0
 ## Minimum angular distance between two surface districts.

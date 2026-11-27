@@ -1,5 +1,5 @@
 ## SkillTreeView — Graph representation of the Skill/Upgrade Tree.
-## Renders nodes, draws connections procedurally, and allows credits purchase.
+## Renders and navigates the research graph. Purchases spend Science.
 class_name SkillTreeView
 extends Control
 
@@ -113,6 +113,8 @@ func _ready() -> void:
 		SkillTreeView._view_civ = GameState.civilization_type
 	_build_tree_graph()
 	_update_ring_radii()
+	if SkillTreeView._view_civ == 0 and _saved_position == Vector2.ZERO and _saved_zoom == 1.0:
+		_fit_tip_zero()
 
 	# (no title: playtest — the tree speaks for itself)
 
@@ -186,38 +188,54 @@ func _show_civ(civ: int) -> void:
 		_title.text = _title_text()
 	_build_tree_graph()
 	_update_ring_radii()
-	_bg.queue_redraw()
+	if SkillTreeView._view_civ == 0:
+		_fit_tip_zero()
+	else:
+		_zoom = 1.0
+		_zoom_t = _zoom
+		_center_ctrl.scale = Vector2.ONE
 	_connections_draw.queue_redraw()
 	_bg.queue_redraw()
 	if _kb_id != "":   # the keys go on from the other tree's centre
 		(func() -> void: _kb_light(_kb_start())).call_deferred()
 
-## Nodes of the tree on screen. Later trees show whole (as previews).
+## Every non-retired node in the selected civilization is visible.
 func _in_view(st: Node, id: String) -> bool:
-	if not ColonyTutorial.research_visible(id):
-		return false
 	var node = st.get("nodes")[id]
-	if int(node.civilization) != SkillTreeView._view_civ:
-		return false
-	if SkillTreeView._view_civ > 0:
-		return true
-	return st.call("is_visible", id)
+	return int(node.civilization) == SkillTreeView._view_civ and bool(st.call("is_visible", id))
+
+func _fit_tip_zero() -> void:
+	var bounds := Rect2()
+	for id: String in _ui_nodes:
+		var node_position: Vector2 = SkillTree.nodes[id].pos
+		bounds = bounds.expand(node_position)
+	bounds = bounds.grow(40.0)
+	var viewport_size := get_viewport_rect().size
+	var available := (viewport_size - Vector2(64.0, 132.0)).max(Vector2.ONE)
+	_zoom = clampf(minf(available.x / bounds.size.x, available.y / bounds.size.y), TIP_ZERO_MIN_ZOOM, 1.0)
+	_zoom_t = _zoom
+	_center_ctrl.scale = Vector2.ONE * _zoom
+	_center_ctrl.position = viewport_size * 0.5 - bounds.get_center() * _zoom
+	_pos_t = _center_ctrl.position
 
 ## Node names show from this zoom up (smaller, they are unreadable specks).
 const NAME_MIN_ZOOM := 0.6
+const TIP_ZERO_MIN_ZOOM := 0.15
 var _name_labels: Array[Label] = []
 
 func _build_tree_graph() -> void:
 	for c in _nodes_container.get_children():
+		_nodes_container.remove_child(c)
 		c.queue_free()
 	_ui_nodes.clear()
 	_name_labels.clear()
 
 	var st: Node = get_node("/root/SkillTree")
+	var tip_zero := SkillTreeView._view_civ == 0
+	var course_target := String(ColonyTutorial.RESEARCH.get(ColonyTutorial.step(), "")) if ColonyTutorial.active() else ""
 	for id in st.get("nodes").keys():
 		var node = st.get("nodes")[id]
 		
-		# Kilitli ve görünmezse hiç oluşturma (açıldıkça etrafı görünür)
 		if not _in_view(st, id):
 			continue
 
@@ -233,6 +251,11 @@ func _build_tree_graph() -> void:
 		var card_size := 48.0
 		if shape_type == 2:
 			card_size = 72.0
+		if tip_zero:
+			match shape_type:
+				SkillTree.NodeShape.CIRCLE: card_size = 62.0 if id == "root" else 44.0
+				SkillTree.NodeShape.DIAMOND: card_size = 30.0
+				_: card_size = 36.0
 			
 		card.custom_minimum_size = Vector2(card_size, card_size)
 		card.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -249,6 +272,9 @@ func _build_tree_graph() -> void:
 		var fam: Color = LINE_COLORS.get(String(node.line) if "line" in node else "", Color(0.75, 0.70, 1.0))
 		if id == "root":
 			fam = Color(0.95, 0.82, 0.40)
+		if tip_zero and not unlocked:
+			border_color = Color(fam.lerp(UIStyle.color(&"text_muted"), 0.45), 0.9)
+			border_width = 2.0
 		if is_max_level:
 			bg_color = Color(UIStyle.color(&"item_bg").lerp(fam, 0.38), 0.97)
 			border_color = fam.lightened(0.3)
@@ -259,7 +285,7 @@ func _build_tree_graph() -> void:
 			border_color = fam
 			shadow_color = Color(fam, 0.32)
 			border_width = 2.0
-		elif purchasable:
+		elif purchasable and not tip_zero:
 			bg_color = Color(UIStyle.color(&"item_bg_hover"), 0.95)
 			border_color = UIStyle.color(&"accent")
 			shadow_color = Color(UIStyle.color(&"accent"), 0.25)
@@ -290,18 +316,24 @@ func _build_tree_graph() -> void:
 			var glow_pts := PackedVector2Array()
 			
 			if shape_type == 2: # CIRCLE (Large)
-				r = 30.0
+				r = card_size * 0.42
 				for i in range(13):
 					var angle = i * PI * 2.0 / 12.0
 					pts.append(c + Vector2(cos(angle), sin(angle)) * r)
 					glow_pts.append(c + Vector2(cos(angle), sin(angle)) * (r + 2.0))
 			elif shape_type == 1: # DIAMOND (Small)
-				r = 16.0
+				r = card_size * 0.36 if tip_zero else 16.0
 				for i in range(5):
 					var angle = i * PI / 2.0
 					pts.append(c + Vector2(cos(angle), sin(angle)) * r)
 					glow_pts.append(c + Vector2(cos(angle), sin(angle)) * (r + 2.0))
+			elif shape_type == SkillTree.NodeShape.SQUARE:
+				r = card_size * 0.34
+				for dir: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(-1, -1)]:
+					pts.append(c + dir * r)
+					glow_pts.append(c + dir * (r + 2.0))
 			else: # HEXAGON
+				r = card_size * 0.39 if tip_zero else r
 				for i in range(7):
 					var angle = i * PI / 3.0 + PI / 6.0
 					pts.append(c + Vector2(cos(angle), sin(angle)) * r)
@@ -326,6 +358,10 @@ func _build_tree_graph() -> void:
 		var texture_rect := TextureRect.new()
 		texture_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		if tip_zero:
+			texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			texture_rect.custom_minimum_size = Vector2.ONE * roundf(card_size * 0.50)
 		
 		# Generate custom color & tier icons based on tech type
 		var icon_col := Color(0.5, 0.5, 0.5)
@@ -354,7 +390,7 @@ func _build_tree_graph() -> void:
 			icon_col = Color(0.5, 0.45, 0.65)
 
 		# De-saturate color slightly if locked/unpurchasable
-		if not unlocked and not purchasable:
+		if not unlocked and (tip_zero or not purchasable):
 			icon_col = icon_col.lerp(Color(0.25, 0.27, 0.32), 0.4)
 		elif purchasable:
 			icon_col = icon_col.lightened(0.1)
@@ -362,8 +398,8 @@ func _build_tree_graph() -> void:
 		texture_rect.texture = TechIcon.make(icon_tier, icon_col)
 		center.add_child(texture_rect)
 
-		# can be bought now: a soft ring breathes out of it
-		if purchasable and not unlocked:
+		# Call out the advisor's current research while the whole tree is visible.
+		if not unlocked and (id == course_target or (not tip_zero and purchasable)):
 			var ring := Control.new()
 			ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			ring.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -384,18 +420,19 @@ func _build_tree_graph() -> void:
 		name_l.add_theme_font_size_override("font_size", 9 if shape_type != 2 else 11)
 		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		name_l.custom_minimum_size = Vector2(110, 0)
-		name_l.size = Vector2(110, 0)
+		var name_width := 80.0 if tip_zero else 110.0
+		name_l.custom_minimum_size = Vector2(name_width, 0)
+		name_l.size = Vector2(name_width, 0)
 		name_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var name_col := UIStyle.color(&"text_muted")
 		if unlocked:
 			name_col = fam.lightened(0.25)
-		elif purchasable:
+		elif purchasable and not tip_zero:
 			name_col = UIStyle.color(&"text_bright")
-		name_l.add_theme_color_override("font_color", Color(name_col, 0.9 if (unlocked or purchasable) else 0.55))
+		name_l.add_theme_color_override("font_color", Color(name_col, 0.9 if unlocked or (purchasable and not tip_zero) else 0.72))
 		name_l.add_theme_color_override("font_outline_color", Color(UIStyle.color(&"panel_bg"), 0.9))
 		name_l.add_theme_constant_override("outline_size", 4)
-		name_l.position = node.pos + Vector2(-55, card_size * 0.5 + 2.0)
+		name_l.position = node.pos + Vector2(-name_width * 0.5, card_size * 0.5 + 2.0)
 		name_l.visible = _zoom >= NAME_MIN_ZOOM
 		if id != "civilization_0_tree":   # its BUYOUT button sits there
 			_nodes_container.add_child(name_l)
@@ -512,11 +549,13 @@ func _build_tree_graph() -> void:
 				var gate_txt: String = st.call("gate_block", id)
 				if gate_txt != "":
 					body_str += "\n\n[color=#ffaa44]" + gate_txt + "[/color]"
+				if not ColonyTutorial.permits_research(id):
+					body_str += "\n\n[color=#ffaa44]Follow the advisor's current research.[/color]"
 			
 			tip_body.append(body_str)
 
 		# Pivot offset at center for clean scaling
-		card.pivot_offset = Vector2(24, 24)
+		card.pivot_offset = Vector2.ONE * (card_size * 0.5)
 
 		var cap_cost := tip_cost
 		card.mouse_entered.connect(func() -> void:
@@ -780,14 +819,15 @@ func _apply_tutorial_skill_overlay() -> void:
 			var tw := create_tween().set_loops()
 			tw.tween_property(card, "modulate", Color(1.6, 1.55, 0.7, 1.0), 0.55)
 			tw.tween_property(card, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.55)
-		elif nid != "root":
-			card.modulate = Color(0.35, 0.35, 0.35, 0.6)
 
 ## Distances (node space) the background's orbit rings are drawn at: one per
 ## band of the visible nodes' distances from the centre.
 var _ring_radii: Array[float] = []
 
 func _update_ring_radii() -> void:
+	_ring_radii.clear()
+	if SkillTreeView._view_civ == 0:
+		return
 	var st: Node = get_node("/root/SkillTree")
 	var seen := {}
 	for id in st.get("nodes").keys():
@@ -797,7 +837,6 @@ func _update_ring_radii() -> void:
 		if d < 40.0:
 			continue
 		seen[int(round(d / 120.0))] = true
-	_ring_radii.clear()
 	for b: int in seen:
 		_ring_radii.append(float(b) * 120.0)
 
@@ -805,9 +844,11 @@ func _update_ring_radii() -> void:
 const PULSE_SPEED := 0.35
 
 func _draw_connections() -> void:
-	# Draw all connection lines between parent/child nodes
-	var st: Node = get_node("/root/SkillTree")
 	var draw_offset := Vector2(10000, 10000)
+	if SkillTreeView._view_civ == 0:
+		_draw_tip_zero_connections(draw_offset)
+		return
+	var st: Node = get_node("/root/SkillTree")
 	var now := float(Time.get_ticks_msec()) / 1000.0
 	_draw_family_labels(st, draw_offset)
 	
@@ -869,6 +910,33 @@ func _draw_connections() -> void:
 				_connections_draw.draw_circle(start_pos.lerp(end_pos, t), line_width * 0.55,
 					Color(fam.lightened(0.5), 0.85 * sin(t * PI)))
 
+func _draw_tip_zero_connections(offset: Vector2) -> void:
+	_connections_draw.draw_set_transform(offset)
+	for link: Dictionary in SkillTree.tip_zero_links:
+		if not _ui_nodes.has(link["a"]) or not _ui_nodes.has(link["b"]):
+			continue   # Developer partial-visibility mode.
+		var line := String(link["line"])
+		var style := String(link["style"])
+		var fam: Color = LINE_COLORS.get(line, UIStyle.color(&"neutral_stroke"))
+		var active := SkillTree.is_unlocked(String(link["a"])) and SkillTree.is_unlocked(String(link["b"]))
+		var main := style in ["rim", "outline", "crossing"] or line == "exploration"
+		var width := 3.5 if main else 2.0
+		var col := Color(fam, 0.86 if main else 0.52)
+		if active:
+			col = fam.lightened(0.32)
+			width += 1.5
+		_connections_draw.draw_polyline(link["points"], col, maxf(width, 1.0 / _zoom), true)
+	if _font != null:
+		var font_size := clampi(roundi(12.0 / _zoom), 13, 48)
+		for label: String in SkillTree.TIP_ZERO_LAYOUT.LABELS:
+			var entry: Array = SkillTree.TIP_ZERO_LAYOUT.LABELS[label]
+			var at: Vector2 = SkillTree.TIP_ZERO_LAYOUT.position(entry[0])
+			var text_size := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+			var col: Color = LINE_COLORS.get(entry[1], UIStyle.color(&"text_bright"))
+			_connections_draw.draw_string(_font, at + Vector2(-text_size.x * 0.5, font_size * 0.35), label,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, col.lightened(0.25))
+	_connections_draw.draw_set_transform(Vector2.ZERO)
+
 var _zoom: float = 1.0
 
 ## Each line's name, large and faint, past the end of its farthest visible node:
@@ -913,20 +981,21 @@ static func _ring_arc(a: Vector2, b: Vector2, offset: Vector2) -> PackedVector2A
 
 ## Colour of each research line (SkillTree.LINE_DIRS).
 const LINE_COLORS := {
-	"exploration": Color(0.75, 0.70, 1.0),
+	"exploration": Color(0.78, 0.82, 0.88),
+	"bridge":      Color(0.72, 0.76, 0.82),
 	"planning":    Color(0.55, 0.90, 0.90),
-	"energy":      Color(1.0, 0.75, 0.25),
-	"population":  Color(0.45, 0.95, 0.55),
-	"trade":       Color(1.0, 0.88, 0.30),
+	"energy":      Color(0.70, 0.60, 0.97),
+	"population":  Color(0.35, 0.80, 0.79),
+	"trade":       Color(0.98, 0.66, 0.40),
 	"science":     Color(0.35, 0.70, 1.0),
-	"industry":    Color(0.95, 0.50, 0.30),
+	"industry":    Color(0.47, 0.82, 0.58),
 	"admin":       Color(0.80, 0.80, 0.85),
 	"orbital":     Color(0.55, 0.72, 1.0),
 	"lunar":       Color(0.85, 0.85, 0.72),
 }
 
 func _on_skill_unlocked(_id: String) -> void:
-	# Rebuild tree to show newly unlocked nodes & connections
+	# Refresh ownership styling, costs and requirements.
 	_build_tree_graph()
 	if _kb_id != "":   # the keys stay on the node just researched
 		(func() -> void: _kb_light(_kb_id)).call_deferred()
@@ -1054,7 +1123,8 @@ func _tick_pad(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_tick_pad(delta)
-	_connections_draw.queue_redraw()   # the pulses along owned links move every frame
+	if SkillTreeView._view_civ > 0:
+		_connections_draw.queue_redraw()   # pulses along owned links in the preview
 	var names_on := _zoom >= NAME_MIN_ZOOM
 	if not _name_labels.is_empty() and _name_labels[0].visible != names_on:
 		for l in _name_labels:
@@ -1081,7 +1151,8 @@ func _process(delta: float) -> void:
 
 ## Zooms toward `factor` × the target zoom, keeping `at` (global) under the cursor.
 func _zoom_at(at: Vector2, factor: float) -> void:
-	var new_zoom := clampf(_zoom_t * factor, 0.25, 2.0)
+	var minimum := TIP_ZERO_MIN_ZOOM if SkillTreeView._view_civ == 0 else 0.25
+	var new_zoom := clampf(_zoom_t * factor, minimum, 2.0)
 	_pos_t = at + (_pos_t - at) * (new_zoom / _zoom_t)
 	_zoom_t = new_zoom
 

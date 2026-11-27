@@ -410,7 +410,7 @@ func _exec(line: String) -> void:
 				var n := 0
 				for nid in ids:
 					var node = st.nodes.get(nid, null)
-					if node == null or node.act2 or nid == "root" or node.civilization > GameState.playable_content_type:
+					if node == null or node.retired or node.act2 or nid == "root" or node.civilization > GameState.playable_content_type:
 						continue
 					st.grant(nid, node.max_level)
 					n += 1
@@ -733,7 +733,7 @@ func _cmd_building(q: String) -> void:
 	if b.pop_use() > 0:
 		_log_info("  workers %s" % Economy.fmt(b.pop_use()))
 	_log_info("  cycle   %s // build %ss // base cost %s credits" % [ProductionManager.cycle_text(ProductionManager.building_cycle_sec(b)),
-		BuildingDef._num(b.construct_duration if b.construct_duration > 0.0 else b.tick_duration), Economy.fmt(b.base_cost)])
+		BuildingDef._num(b.construct_duration if b.construct_duration > 0.0 else b.tick_duration), Economy.fmt(b.base_build_credits())])
 	var site := _building_site_needs(b)
 	if site != "":
 		_log_info("  site    needs %s" % site)

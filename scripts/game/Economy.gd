@@ -251,23 +251,12 @@ static func mult_delta_text(d: float) -> String:
 ## (Balance.cfg.building_cost_growth each). The profile picks what counts: every
 ## building in the district, or only the same model. Districts don't affect each other.
 static func building_cost(pp: PlanetProgress, def: BuildingDef, district_label: String) -> float:
-	var c: BalanceConfig = Balance.cfg
-	var same_model_only := c.building_counter_scope == "model"
-	var owned := 0
-	if pp != null:
-		for b: Dictionary in pp.buildings_in_district(district_label):
-			if same_model_only and String(b.get("building_id", "")) != def.building_id:
-				continue
-			owned += int(b.get("amount", 1))
-	return roundf(Balance.geometric(def.base_cost, c.building_cost_growth, owned))
+	return float(building_full_cost(pp, def, district_label)[CREDITS])
 
 ## Named materials the first building of this model costs on top of credits
-## (repeats grow like credits, see building_full_cost). Its own list, else the
-## package of its economic tier (§19.2): Tier 0 — Capital supports and the
-## geographic models costed at Tier 0 included — pays none on purpose; Tier 1,
-## 2 and 3 pay their shared packages.
+## (repeats grow like credits). Active models use their economic tier's package.
 static func building_materials(def: BuildingDef) -> Dictionary:
-	if not def.build_materials.is_empty():
+	if def.retired and not def.build_materials.is_empty():
 		return def.build_materials
 	var c: BalanceConfig = Balance.cfg
 	match def.econ_tier():
@@ -289,15 +278,21 @@ static func building_full_cost(pp: PlanetProgress, def: BuildingDef, district_la
 			if c.building_counter_scope == "model" and String(b.get("building_id", "")) != def.building_id:
 				continue
 			owned += int(b.get("amount", 1))
+	return building_repeat_cost(def, owned, count)
+
+## Priced from the position in a district's build sequence, including prefabs.
+static func building_repeat_cost(def: BuildingDef, owned: int, count: int = 1) -> Dictionary:
+	var growth := Balance.cfg.building_cost_growth
+	var base_credits := def.base_build_credits()
 	var credits := 0.0
 	for i in count:
-		credits += roundf(Balance.geometric(def.base_cost, c.building_cost_growth, owned + i))
+		credits += roundf(Balance.geometric(base_credits, growth, owned + i))
 	var out := {CREDITS: credits}
 	var mats := building_materials(def)
 	for id: String in mats:
 		var total := 0.0
 		for i in count:
-			total += ceilf(Balance.geometric(float(mats[id]), c.building_cost_growth, owned + i) - 0.0001)
+			total += ceilf(Balance.geometric(float(mats[id]), growth, owned + i) - 0.0001)
 		out[id] = total
 	return out
 
@@ -516,7 +511,7 @@ static func world_used_population(pd: PlanetData, pp: PlanetProgress) -> int:
 		if pp.district_upgrading.has(poi.label):
 			lv += 1
 		if poi.poi_type == POIData.POIType.RESIDENTIAL:
-			pass   # housing never costs population
+			pass   # The Residential District itself has no founding or level workforce.
 		elif poi.is_city():
 			used += district_pop_cost(poi, lv, null)
 		else:

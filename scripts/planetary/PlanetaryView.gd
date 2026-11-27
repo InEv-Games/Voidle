@@ -247,6 +247,7 @@ func _ready() -> void:
 	TutorialManager.highlight_changed.connect(_on_tutorial_highlight)
 	TutorialManager.highlight_cleared.connect(_on_tutorial_highlight_clear)
 	get_node("/root/SkillTree").skill_unlocked.connect(func(_id: String) -> void:
+		_lens_tip_cell = ""
 		for k: String in _bar_meta:
 			_refresh_bar_label_status(k)
 		_refresh_district_energy_lbl()
@@ -6292,10 +6293,14 @@ func _tick_lens_tip() -> void:
 	for fid: String in FeatureMap.CATALOGUE:
 		if not site.has(fid):
 			continue
-		var v := FeatureMap.bonus_for({fid: site[fid]}, fam)
-		if v > 0.004:
-			lines.append("%s %s  %s" % ["On" if float(site[fid]) >= 1.0 else "Near",
-				FeatureMap.feature_label(fid), "+%d%%" % roundi(v * 100.0)])
+		var share := float(site[fid])
+		var base := FeatureMap.feature_base_bonus(fid, fam, share)
+		if base > 0.004:
+			lines.append("%s %s  +%s%%" % ["On" if share >= 1.0 else "Near",
+				FeatureMap.feature_label(fid), _pct(base)])
+			var extra := base * (SkillTree.get_feature_mult(fid) - 1.0)
+			if extra > 0.0005:
+				lines.append("  %s Specialisation  +%s%%" % [FeatureMap.feature_name(fid), _pct(extra)])
 	var head := "No bonus for %s here." % String(info["label"]).to_lower() if total <= 0.004 \
 		else "%s here  %s" % [info["label"], Economy.mult_text(1.0 + total)]
 	if not lines.is_empty():
@@ -6360,7 +6365,7 @@ func _refresh_lens() -> void:
 		tex = FeatureMap.role_texture(current_data.seed, _role)
 	mat.set_shader_parameter("lens_tex", tex)
 	mat.set_shader_parameter("lens_alpha", 1.0 if tex != null else 0.0)
-	mat.set_shader_parameter("wind_vis", 1.0 if _role == "energy" else 0.0)   # Mountain / Tundra currents (FeatureMap.wind_texture)
+	mat.set_shader_parameter("wind_vis", 1.0 if _role == "energy" else 0.0)   # Mountain currents
 	var wind_tex: ImageTexture = FeatureMap.wind_texture(current_data.seed) if current_data != null else null
 	mat.set_shader_parameter("wind_tex", wind_tex)
 	mat.set_shader_parameter("wind_on", 1.0 if wind_tex != null else 0.0)
@@ -7015,15 +7020,12 @@ func _location_lines(loc: Dictionary, detailed: bool = false) -> Array[String]:
 
 const GEO_KEY_COL := Color(0.75, 0.82, 0.95)
 
-## Geography as [left, right] BBCode rows (playtest 31.10): per output the
-## district makes, a head row with just its icon and the total multiplier, then one
-## row per feature (lens colour) with what it gives. The Orbit takes none.
-func _geo_rows(site: Dictionary, outputs: Dictionary, in_orbit: bool) -> Array:
+## Geography rows show the land's own bonus and any research increment separately.
+func _geo_rows(site: Dictionary, outputs: Dictionary, in_orbit: bool, research_only: bool = false) -> Array:
 	var head := UIIcons.bb("map", 11, GEO_KEY_COL) + " Geography"
 	if in_orbit:
-		return [[head, _bb("none in orbit", BB_DIM)]]
+		return [] if research_only else [[head, _bb("none in orbit", BB_DIM)]]
 	var good := UIStyle.color(&"good")
-	var table: Dictionary = Balance.cfg.terrain_bonuses
 	var fams: Array[String] = []
 	var icon_of := {}
 	for id: String in outputs:
@@ -7035,15 +7037,22 @@ func _geo_rows(site: Dictionary, outputs: Dictionary, in_orbit: bool) -> Array:
 	for fam in fams:
 		var id: String = icon_of[fam]
 		var col := Economy.color_of(id) if id != Economy.RAW else Color(0.85, 0.78, 0.70)
+		var output_icon := UIIcons.bb(id, 11, col) + " " if fams.size() > 1 else ""
 		for fid: String in FeatureMap.CATALOGUE:
-			var per := float(table.get(fid, {}).get(fam, 0.0))
-			if site.has(fid) and per > 0.0:
-				var m := 1.0 + per * FeatureMap.step_bonus(float(site[fid])) * SkillTree.get_feature_mult(fid)
-				# several kinds of output: each row says which it helps by its icon
-				rows.append([(UIIcons.bb(id, 11, col) + " " if fams.size() > 1 else "")
-					+ _bb("[b]%s[/b]" % FeatureMap.feature_name(fid), FeatureMap.feature_color(fid))   # bold, same size (revision 12.11)
-					+ (_bb(" nearby", BB_DIM) if float(site[fid]) < 1.0 else ""), _bb(Economy.mult_text(m), good)])
-	if rows.is_empty():
+			var share := float(site.get(fid, 0.0))
+			var base := FeatureMap.feature_base_bonus(fid, fam, share)
+			if base <= 0.0:
+				continue
+			var feature_name := FeatureMap.feature_name(fid)
+			var color := FeatureMap.feature_color(fid)
+			if not research_only:
+				rows.append([output_icon + _bb("[b]%s[/b]" % feature_name, color)
+					+ (_bb(" nearby", BB_DIM) if share < 1.0 else ""), _bb(Economy.mult_text(1.0 + base), good)])
+			var extra := base * (SkillTree.get_feature_mult(fid) - 1.0)
+			if extra > 0.0005:
+				rows.append([output_icon + _bb("%s Specialisation" % feature_name, color),
+					_bb(Economy.mult_delta_text(extra), good)])
+	if rows.is_empty() and not research_only:
 		rows.append([head, _bb("none here", BB_DIM)])
 	return rows
 
@@ -9088,15 +9097,21 @@ func _build_district_bonus_row(poi: POIData, planet: PlanetData) -> Control:
 	chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var good := UIStyle.color(&"good")
 	var geo := 0.0
+	var specialisations := {}
 	if not poi.is_orbital():   # Cities take it too (playtest 07.11); the Orbit none
 		for id: String in ddef.base_outputs:
-			geo = maxf(geo, FeatureMap.bonus_for(poi.site_features, FeatureMap.family_of(id)))
+			var fam := FeatureMap.family_of(id)
+			var base := FeatureMap.bonus_for(poi.site_features, fam, false)
+			var extra := FeatureMap.bonus_for(poi.site_features, fam) - base
+			geo = maxf(geo, base)
+			if extra > 0.0005 and not specialisations.has(fam):
+				specialisations[fam] = {"output": id, "extra": extra}
 	# geography reads as a multiplier, as everywhere else ("2x")
 	var geo_lines := _family_bonus_lines(poi.site_features, ddef.base_outputs, poi.is_orbital())
 	# 10.11: only the bonuses it has; an empty one ("Location —") is left out
 	if geo > 0.0005:
 		chips.add_child(_mini_chip("map", "Geography %s" % Economy.mult_text(1.0 + geo), good, "Geography",
-			"What the land around it adds:\n\n" + "\n".join(geo_lines)))
+			"Terrain and research contributions to the district's own output.\n\n" + "\n".join(geo_lines)))
 	var loc := Location.breakdown(planet, poi)
 	var lm := float(loc["mult"])
 	if loc.get("nearest", null) != null:
@@ -9129,7 +9144,28 @@ func _build_district_bonus_row(poi: POIData, planet: PlanetData) -> Control:
 	m.align = 1.0
 	m.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(m)
-	return row
+	if specialisations.is_empty():
+		return row
+
+	var tip := "Adds to the geography multiplier for the district's own output.\n\n" \
+		+ "\n".join(_rows_text(_geo_rows(poi.site_features, ddef.base_outputs, false, true)))
+	var research_row := HBoxContainer.new()
+	research_row.add_child(_key_label("upgrade", "Specialisation", tip))
+	var research_chips := HBoxContainer.new()
+	research_chips.add_theme_constant_override("separation", 8)
+	research_chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for entry: Dictionary in specialisations.values():
+		research_chips.add_child(_mini_chip(String(entry["output"]), Economy.mult_delta_text(float(entry["extra"])),
+			good, "Geography Specialisation", tip))
+	var research_marquee := MarqueeLabel.wrap(research_chips)
+	research_marquee.align = 1.0
+	research_marquee.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	research_row.add_child(research_marquee)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	box.add_child(row)
+	box.add_child(research_row)
+	return box
 
 ## The supports on what a district makes, per resource it makes (base and
 ## buildings; energy and housing left out): { id: { "city", "planet",

@@ -283,13 +283,13 @@ const QUESTS := [
 	{"id": "lander", "title": "To the Moon", "desc": "Open the Moon and prepare the lander (3,000 credits, 40 Ferrite, 20 Fuel).",
 		"reward_credits": 1000.0, "reward_science": 0.0, "reward_text": "+1000 credits",
 		"sub_steps": [{"type": "event", "target": "lander_arrived"}]},
-	{"id": "moon_city", "title": "First Lunar City", "desc": "The lander set up the Moon's Central Orbit. Scan the surface (free) and look around with the lenses, then initiate colonization and pick the site of the first City. Your Earth buildings work there too; three Moon-only buildings use its Craters, Caves and Ion storm regions.",
+	{"id": "moon_city", "title": "First Lunar City", "desc": "The lander set up the Moon's Central Orbit. Scan the surface (free) and look around with the lenses, then initiate colonization and pick the site of the first City. Craters, caves and ion storm regions each offer different district bonuses.",
 		"reward_credits": 500.0, "reward_science": 150.0, "reward_text": "+500 credits  +150 sci",
 		"sub_steps": [{"type": "event", "target": "moon_city"}]},
 	{"id": "moon_mining", "title": "Lunar Mining", "desc": "Build a Production district on the Moon (300 credits, 30 Ferrite). It finds the Moon's mineral; your extraction buildings mine Moonstone there.",
 		"reward_credits": 800.0, "reward_science": 0.0, "reward_text": "+800 credits",
 		"sub_steps": [{"type": "event", "target": "moon_production"}]},
-	{"id": "lunar_materials", "title": "Lunar Materials", "desc": "Research Lunar Materials: it opens the Moon's own Tier 3 buildings.",
+	{"id": "lunar_materials", "title": "Lunar Materials", "desc": "Research Lunar Materials. It is required for the Moon's building research and the final rocket.",
 		"reward_credits": 1500.0, "reward_science": 300.0, "reward_text": "+1500 credits  +300 sci",
 		"sub_steps": [{"type": "skill", "target": "lunar_materials"}]},
 	{"id": "moonstone_100", "title": "100 Local Moonstone", "desc": "Mine 100 Moonstone on the Moon. Bought Moonstone doesn't count.",
@@ -600,7 +600,7 @@ func _step_needs(targets: Array, id_key: String) -> Dictionary:
 			"building":
 				var bdef := BuildingDef.find(String(tgt[id_key]))
 				if bdef != null:
-					need["credits"] += bdef.base_cost   # first building of a fresh district
+					need["credits"] += bdef.base_build_credits()   # first building of a fresh district
 			"skill":
 				need["science"] += float(get_node("/root/SkillTree").get_next_cost(String(tgt[id_key])))
 			"district_upgrade":

@@ -4,6 +4,7 @@ extends RefCounted
 # New guided saves use this course. The old Guide still reads older saves.
 const FLAG := "colony_tutorial"
 const START_RULES := "colony_start_rules"
+const BUILD_TARIFF_FLAG := "course:shared_building_tariff"
 const FIRST_DIG := "vesyn_toppled_stones"
 const CITY_HOUSING := 200
 const CITY_LV2_HOUSING := 10000
@@ -63,7 +64,7 @@ const LINES := {
 	"solar_four": "Build one more Solar Array. Leave the fifth slot free for a stronger generator.",
 	"science": "Use the Science lens and place the Science District.",
 	"lab": "Build a Field Lab. Its Science pays for research in the Upgrade Tree.",
-	"mining": "Buy Mining Operations in the Upgrade Tree. Look at the new nodes and hover a price before closing the tree. Each purchase raises the price of other research.",
+	"mining": "Buy Mining Operations in the Upgrade Tree. Hover over a connected node before closing the tree. Each purchase raises the price of other research.",
 	"production": "Open the Production lens and establish the Production District at the marked site.",
 	"quarry": "Build a Surface Quarry to extract Ferrite. The first delivery will show how much stock we can hold.",
 	"overflow": "The first load is coming in. Check how much the temporary store accepts and how much spills.",
@@ -100,6 +101,11 @@ static func uses_start_rules() -> bool:
 
 static func facility_ready(id: String) -> bool:
 	return not uses_start_rules() or GameState.has_finished_building(GameState.home_planet_seed, id)
+
+## Older guided starts sometimes placed their Energy District on Tundra.
+static func allows_legacy_wind_site(pd: PlanetData, poi: POIData) -> bool:
+	return pd != null and pd.seed == GameState.home_planet_seed and active() and step() == "turbine" \
+		and poi == host(pd, "energy") and float(poi.site_features.get("terrain_tundra", 0.0)) >= 1.0
 
 static func seed_label(seed: int) -> String:
 	if seed == GameState.home_planet_seed and GameState.story_flags.get(FLAG, false):
@@ -158,14 +164,6 @@ static func permits_district(id: int) -> bool:
 
 static func permits_research(id: String) -> bool:
 	return not active() or (acknowledged() and String(RESEARCH.get(step(), "")) == id)
-
-static func research_visible(id: String) -> bool:
-	if not active():
-		return true
-	if id == "root" or id == RESEARCH.get(step(), "") or SkillTree.is_unlocked(id):
-		return true
-	# After the first purchase, existing tree rules reveal the connections and new prices.
-	return SkillTree.is_unlocked("start_production")
 
 static func allows_ui(which: String) -> bool:
 	if not active():
@@ -264,8 +262,14 @@ static func _trade_amount(kind: String, id: String) -> float:
 	return total
 
 static func _goods_to_buy() -> float:
+	var pd := GameState.get_home_planet()
+	var pp := GameState.get_planet(pd.seed) if pd != null else null
 	var bought := _trade_amount("buy", "goods")
-	return maxf(ceilf(27.0 - Trade.stock("goods")), 1.0 if bought <= 0.0 else 0.0)
+	return maxf(ceilf(_bureau_goods_target(pd, pp) - Trade.stock("goods")), 1.0 if bought <= 0.0 else 0.0)
+
+static func _bureau_goods_target(pd: PlanetData, pp: PlanetProgress) -> float:
+	var bureau_cost := _building_cost(pd, pp, BUILDINGS["bureau"])
+	return float(bureau_cost.get(Economy.GOODS, 0.0)) + 2.0
 
 static func _building_cost(pd: PlanetData, pp: PlanetProgress, s: Array) -> Dictionary:
 	var poi := host(pd, s[1])
@@ -330,7 +334,7 @@ static func _done(pd: PlanetData, pp: PlanetProgress, id: String) -> bool:
 		"advisor": return not GameState.active_advisor.is_empty()
 		"first_goods": return Trade.stock("goods") >= 1.0
 		"sell": return _trade_amount("sell", "ferrite") >= 50.0
-		"buy": return _trade_amount("buy", "goods") > 0.0 and Trade.stock("goods") >= 27.0
+		"buy": return _trade_amount("buy", "goods") > 0.0 and Trade.stock("goods") >= _bureau_goods_target(pd, pp)
 		"dig": return GameState.excavations_digging.has(FIRST_DIG) or Excavations.is_done(FIRST_DIG)
 		"dig_result": return Excavations.is_done(FIRST_DIG) and GameState.unlocked_advisors.has("bolo")
 		"bolo": return GameState.active_advisor == "bolo"
@@ -345,6 +349,12 @@ static func tick(view: Node) -> void:
 		return
 	var pp := GameState.get_planet(pd.seed)
 	var id := step()
+	# A previously confirmed construction step was funded at the old price.
+	if acknowledged() and BUILDINGS.has(id) and not GameState.story_flags.has(BUILD_TARIFF_FLAG):
+		if not _done(pd, pp, id) and not _missing(_cost(pd, pp, id)).is_empty():
+			GameState.story_flags["course:confirmed"] = false
+		GameState.story_flags[BUILD_TARIFF_FLAG] = true
+		GameState.save()
 	if acknowledged():
 		if _done(pd, pp, id):
 			if id == "mining" and SkillTreeView.is_open:
@@ -389,6 +399,7 @@ static func tick(view: Node) -> void:
 				Economy.add(resource, float(supplies[resource]))
 			if not supplies.is_empty():
 				Narrative.log_event("Tutorial supplies: " + Narrative.amounts_text(supplies))
+			GameState.story_flags[BUILD_TARIFF_FLAG] = true
 			GameState.story_flags["course:confirmed"] = true
 			GameState.save()
 			_open_action(view, id)

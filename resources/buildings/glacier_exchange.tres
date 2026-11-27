@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_def")
 building_id = "glacier_exchange"
-display_name = "Glacier Exchange"
-description = "Ice trade. Must stand on a Glacier."
+display_name = "Tundra Exchange"
+description = "A trading post for cold settlements. Must stand on Tundra."
 allowed_poi_types = Array[int]([8])
 allowed_planet_types = Array[int]([])
 base_cost = 75.0
@@ -26,5 +26,5 @@ pop_cost = 125
 tier = 1
 cost_tier = 0
 min_civilization = 0
-required_features = Array[String](["terrain_glacier"])
+required_features = Array[String](["terrain_tundra"])
 unlocked_by_default = true

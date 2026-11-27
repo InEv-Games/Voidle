@@ -12,6 +12,7 @@ enum OutputType { NONE, ENERGY, CREDITS, RAW_MINERAL, REFINED_MINERAL, SCIENCE, 
 @export var allowed_poi_types: Array[POIData.POIType] = []
 @export var allowed_planet_types: Array[PlanetData.Type] = []
 @export var surface_only:      bool     = false
+## Original model price, used for old refunds and retired building definitions.
 @export var base_cost:         float    = 100.0
 ## Wonders (playtest 28.10): rare buildings that take WONDER_SLOTS slots, stand
 ## once per planet (in any one City) and show on the map inside their district's
@@ -57,15 +58,23 @@ func facility_build_block(pp: PlanetProgress, poi: POIData) -> String:
 ## Out of the active catalogue (integration decisions 29.10 §17): never offered
 ## for building, but instances in older saves keep working.
 @export var retired:           bool     = false
-## Tier for default build materials and worker costs. A value of -1 uses the
-## building's own tier.
+## Original construction tier for retired models. Active models use site rules.
 @export var cost_tier:         int      = -1
 ## Needs a world with an atmosphere (Wind Turbine) / a liquid sea (Tidal Generator).
 @export var requires_atmosphere: bool   = false
 @export var requires_liquid_sea: bool   = false
 
 func econ_tier() -> int:
-	return tier if cost_tier < 0 else cost_tier
+	if retired:
+		return tier if cost_tier < 0 else cost_tier
+	var needs_site := not required_features.is_empty() or requires_coastal \
+		or not required_terrain.is_empty() or required_tag != ""
+	return maxi(0, tier - 1) if needs_site else tier
+
+func base_build_credits() -> float:
+	var prices := Balance.cfg.building_credits_by_tier
+	var t := econ_tier()
+	return prices[t] if not retired and t >= 0 and t < prices.size() else base_cost
 
 ## True for models only the Moon allows ("Moon-only" in the build list).
 func is_moon_only() -> bool:
@@ -103,14 +112,16 @@ func is_moon_only() -> bool:
 ## Storage limit raised per building: { resource_id: +amount }. "raw" raises
 ## every raw resource's cap. See Economy.cap.
 @export var storage: Dictionary = {}
-## Named materials to build one, on top of credits: { resource_id: amount }.
-## Empty = the tier's default from the balance profile (Economy.building_materials).
+## Original custom materials for retired models. Active models use the tier package.
 @export var build_materials: Dictionary = {}
-## Workers a building employs (population it uses). -1 = derive: housing 0,
-## City (planet-wide boost) buildings 1K, others by tier (500 / 1.5K / 3K …).
+## Original workforce for retired models. Active models use the tier workforce.
 @export var pop_cost: int = -1
 
 func pop_use() -> int:
+	var workers := Balance.cfg.building_workers_by_tier
+	var t := econ_tier()
+	if not retired and t >= 0 and t < workers.size():
+		return workers[t]
 	if pop_cost >= 0:
 		return pop_cost
 	if outputs.has(Economy.POPULATION):
@@ -262,7 +273,7 @@ func site_block_reason(poi: POIData, pd: PlanetData = null) -> String:
 	if poi == null:
 		return ""
 	var feat := FeatureMap.requirement_block(poi.site_features, required_features)
-	if feat != "":
+	if feat != "" and not (building_id == "wind_turbine" and ColonyTutorial.allows_legacy_wind_site(pd, poi)):
 		return feat
 	if requires_coastal and not poi.coastal:
 		return "Needs a coastal site"
@@ -380,7 +391,7 @@ func list_order() -> Vector3:
 		group = 2
 	elif outputs.is_empty():
 		group = -1   # City support facilities lead their district's list
-	return Vector3(group, -tier, base_cost)
+	return Vector3(group, -tier, base_build_credits())
 
 ## Whether this building may stand on a planet of `planet_type` in a district
 ## of `poi_type`. An empty allowed_planet_types means any world, the Moon
