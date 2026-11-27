@@ -698,7 +698,7 @@ func _apply_new_game_start() -> void:
 	# The New Game choices are applied once, when the world is created.
 	var setup := pending_setup
 	pending_setup = {}
-	tutorial_guided = bool(setup.get("tutorial", not SettingsManager.tutorial_ever_done))
+	tutorial_guided = not setup.is_empty() or not SettingsManager.tutorial_ever_done
 	start_world = String(setup.get("world", "terran"))
 	start_boon = ""
 	_set_colony_identity(setup)
@@ -706,12 +706,10 @@ func _apply_new_game_start() -> void:
 		colony_trait = ""
 	if not setup.is_empty():   # only a game started from the New Game window (not a bare boot)
 		story_flags[ColonyTutorial.START_RULES] = true
+		story_flags[ColonyTutorial.FLAG] = true
+		story_flags[ColonyTutorial.PLACEMENT_ASSIST] = bool(setup.get("placement_assist", true))
 		onboarding_stage = "done"
-		if tutorial_guided:
-			story_flags[ColonyTutorial.FLAG] = true
-			tutorial_step = "colony_course"
-		else:
-			tutorial_step = "done"
+		tutorial_step = "colony_course"
 		earn_credits(float(SessionPrep.STANDARD_BONUS["credits"]))
 		add_science(float(SessionPrep.STANDARD_BONUS["science"]))
 

@@ -1,9 +1,10 @@
 class_name ColonyTutorial
 extends RefCounted
 
-# New guided saves use this course. The old Guide still reads older saves.
+# New colonies use this course. The old Guide still reads older saves.
 const FLAG := "colony_tutorial"
 const START_RULES := "colony_start_rules"
+const PLACEMENT_ASSIST := "course:placement_assist"
 const BUILD_TARIFF_FLAG := "course:shared_building_tariff"
 const FIRST_DIG := "vesyn_toppled_stones"
 const CITY_HOUSING := 200
@@ -29,25 +30,25 @@ const BUILDINGS := {
 	"market": ["commercial", "commercial", 1], "housing_five": ["low_rise_housing", "residential", 5],
 	"solar_four": ["solar_panel", "energy", 4], "lab": ["field_observatory", "science", 1],
 	"quarry": ["surface_quarry", "production", 1], "warehouse": ["warehouse", "production", 1],
-	"factory": ["refinery", "production", 1], "turbine": ["wind_turbine", "energy", 1],
+	"factory": ["refinery", "production", 1],
 	"habitat": ["residential", "residential", 1], "bureau": ["archaeology_bureau", "city", 1],
 }
 const DISTRICT_LEVELS := {"capital_2": ["city", 2], "residential_2": ["residential", 2],
 	"energy_2": ["energy", 2], "capital_3": ["city", 3]}
 const RESEARCH := {"mining": "start_production", "civilization": "civilization_studies",
-	"processing": "processing_basics", "wind": "wind_power", "habitat_research": "neighborhood_building",
+	"processing": "processing_basics", "habitat_research": "neighborhood_building",
 	"trade": "trade_access"}
 const LENSES := {"residential": "residential", "energy": "energy", "commercial": "commercial",
 	"science": "science", "production": "production"}
 const LINES := {
 	"turn": "This is the surface feed from I-330. Hold the right mouse button and drag to turn the globe. WASD works here too.",
-	"zoom": "Roll the wheel to bring the landing area closer. I'll put our survey mark on the map.",
-	"city": "Found the City at the marked site and give it a name.",
+	"zoom": "Roll the wheel to bring the landing area closer.",
+	"city": "Choose a site for the City and give it a name.",
 	"survey": "Build a Survey Office in the Capital. We need a surface survey before placing the other districts.",
-	"residential": "Open the Population lens and place a Residential District at the marked site.",
+	"residential": "Open the Population lens and place a Residential District.",
 	"housing": "The population indicator shows our housing and available workers. Open the district and build one Low-rise Housing.",
 	"comms": "Build a Communications Station in the other Capital slot. We can start receiving the news.",
-	"energy": "The transmitter has put the grid in deficit. Open the Energy lens and build at the marked site. The wind here will be useful later.",
+	"energy": "Open the Energy lens and place an Energy District. A mountain site will let us build a Wind Turbine later.",
 	"solar": "Build a Solar Array. Check the power indicator after it starts supplying the grid.",
 	"capital_2": "We need room for a government. Upgrade the Capital District to open a third building slot.",
 	"government": "Build the Government Building in the new slot. Then you can appoint an advisor.",
@@ -57,7 +58,7 @@ const LINES := {
 	"solar_fill": "The new homes have put the grid in deficit. Follow the energy warning and fill both Solar Array slots.",
 	"commercial": "Follow the City notification. Select the Commercial lens and use the City's last district slot for Commerce.",
 	"market": "Open the Commercial District and build a Market. Compare its monthly income with the district's own income.",
-	"residential_2": "We are short on housing again. A district needs a road to a neighbour at the next level. The Capital is already level 2. Upgrade Residential.",
+	"residential_2": "We'll need more housing for the labs and factories. A district needs a road to a neighbour at the next level. The Capital is already level 2. Upgrade Residential.",
 	"housing_five": "Fill both new housing slots. Check available workers once the homes are ready.",
 	"city_2": "We need a Science District. Look at the City panel: all three district slots are full. Upgrade the City to make room.",
 	"energy_2": "The labs and the refinery will draw from this grid too. Upgrade the Energy District. It has a road to the level 2 Capital.",
@@ -65,7 +66,7 @@ const LINES := {
 	"science": "Use the Science lens and place the Science District.",
 	"lab": "Build a Field Lab. Its Science pays for research in the Upgrade Tree.",
 	"mining": "Buy Mining Operations in the Upgrade Tree. Hover over a connected node before closing the tree. Each purchase raises the price of other research.",
-	"production": "Open the Production lens and establish the Production District at the marked site.",
+	"production": "Open the Production lens and establish a Production District.",
 	"quarry": "Build a Surface Quarry to extract Ferrite. The first delivery will show how much stock we can hold.",
 	"overflow": "The first load is coming in. Check how much the temporary store accepts and how much spills.",
 	"warehouse": "Our Ferrite store has filled up. Build a Warehouse and inspect the new storage limits.",
@@ -73,8 +74,8 @@ const LINES := {
 	"processing": "Research Basic Processing so the quarry's Ferrite can be turned into Goods.",
 	"factory": "Build a Goods Factory. The start-up supplies include enough Ferrite for its first production cycle.",
 	"first_goods": "Watch the factory's first cycle. It consumes four Ferrite and adds Goods to the stock.",
-	"wind": "The factory has overloaded the grid. Research Wind Power. We picked a site that can take a turbine.",
-	"turbine": "Build the Wind Turbine. Its terrain requirement lets it use cheaper construction materials. It consumes one Goods per month.",
+	"wind": "Research Wind Power to supply the factory. Our Energy District can take a Wind Turbine.",
+	"turbine": "Build the Wind Turbine in the fifth slot. The mountain site makes it cheaper to build. Set aside one Goods for each month it runs.",
 	"habitat_research": "We need more workers for the bureau. Research Habitat Blocks so we can fit more housing in the same district.",
 	"remove_house": "Use Remove on one Low-rise Housing. Check its refund before opening the new slot.",
 	"habitat": "Build a Habitat Block in the empty slot. Its housing rises by five thousand and it needs one Goods per month.",
@@ -92,6 +93,9 @@ static func active() -> bool:
 	return bool(GameState.story_flags.get(FLAG, false)) and GameState.tutorial_step != "done" \
 		and not GameState.showcase_mode
 
+static func placement_assisted() -> bool:
+	return active() and bool(GameState.story_flags.get(PLACEMENT_ASSIST, true))
+
 static func building_available(id: String) -> bool:
 	return id not in ["survey_office", "communications_station", "government_building", "archaeology_bureau"] \
 		or uses_start_rules()
@@ -104,7 +108,8 @@ static func facility_ready(id: String) -> bool:
 
 ## Older guided starts sometimes placed their Energy District on Tundra.
 static func allows_legacy_wind_site(pd: PlanetData, poi: POIData) -> bool:
-	return pd != null and pd.seed == GameState.home_planet_seed and active() and step() == "turbine" \
+	return pd != null and pd.seed == GameState.home_planet_seed and active() \
+		and not GameState.story_flags.has(PLACEMENT_ASSIST) and step() in ["wind", "turbine"] \
 		and poi == host(pd, "energy") and float(poi.site_features.get("terrain_tundra", 0.0)) >= 1.0
 
 static func seed_label(seed: int) -> String:
@@ -163,7 +168,12 @@ static func permits_district(id: int) -> bool:
 	return current != "commercial" or _noted("commercial")
 
 static func permits_research(id: String) -> bool:
-	return not active() or (acknowledged() and String(RESEARCH.get(step(), "")) == id)
+	return not active() or (acknowledged() and research_for_step(step()) == id)
+
+static func research_for_step(id: String) -> String:
+	if id == "wind":
+		return "wind_power" if _grid_building(GameState.get_home_planet()) == "wind_turbine" else "solar_matrix"
+	return String(RESEARCH.get(id, ""))
 
 static func allows_ui(which: String) -> bool:
 	if not active():
@@ -214,10 +224,22 @@ static func count(pp: PlanetProgress, poi: POIData, id: String, finished := fals
 			n += int(b.get("amount", 1))
 	return n
 
+static func _grid_building(pd: PlanetData) -> String:
+	var energy := host(pd, "energy")
+	var turbine := BuildingDef.find("wind_turbine")
+	if energy != null and turbine != null and turbine.site_block_reason(energy, pd).is_empty():
+		return "wind_turbine"
+	return "solar_matrix"
+
+static func _building_for_step(pd: PlanetData, id: String) -> Array:
+	if id == "turbine":
+		return [_grid_building(pd), "energy", 1]
+	return BUILDINGS.get(id, [])
+
 static func build_limit(pd: PlanetData, poi: POIData, id: String) -> int:
 	if not active():
 		return 999
-	var spec: Array = BUILDINGS.get(step(), [])
+	var spec := _building_for_step(pd, step())
 	if not acknowledged() or spec.is_empty() or spec[0] != id or poi == null or poi != host(pd, spec[1]):
 		return 0
 	if step() in ["housing_fill", "solar_fill"] and not _noted(step()):
@@ -277,8 +299,8 @@ static func _building_cost(pd: PlanetData, pp: PlanetProgress, s: Array) -> Dict
 	if poi == null or b == null:
 		return {}
 	var cost := Economy.building_full_cost(pp, b, poi.label, maxi(0, int(s[2]) - count(pp, poi, s[0])))
-	if s[0] == "wind_turbine":
-		cost["goods"] = 1.0
+	if s[0] in ["wind_turbine", "solar_matrix"]:
+		cost["goods"] = float(cost.get("goods", 0.0)) + float(b.inputs.get("goods", 0.0))
 	elif s[0] == "residential":
 		cost["goods"] = float(cost.get("goods", 0.0)) + 2.0
 	elif s[0] == "refinery":
@@ -286,15 +308,17 @@ static func _building_cost(pd: PlanetData, pp: PlanetProgress, s: Array) -> Dict
 	return cost
 
 static func _cost(pd: PlanetData, pp: PlanetProgress, id: String) -> Dictionary:
-	if BUILDINGS.has(id):
-		return _building_cost(pd, pp, BUILDINGS[id])
+	var building := _building_for_step(pd, id)
+	if not building.is_empty():
+		return _building_cost(pd, pp, building)
 	if DISTRICTS.has(id):
 		var parent := host(pd, "city")
 		return DistrictDef.placement_full_cost(DistrictDef.find(DISTRICTS[id]), pd, parent.label if parent else "")
 	if DISTRICT_LEVELS.has(id):
 		return {"credits": Leveling.district_level_credits(int(DISTRICT_LEVELS[id][1]) - 1)}
-	if RESEARCH.has(id):
-		return {"science": SkillTree.get_next_cost(RESEARCH[id])}
+	var research := research_for_step(id)
+	if not research.is_empty():
+		return {"science": SkillTree.get_next_cost(research)}
 	match id:
 		"city_2": return {"credits": Leveling.city_level_credits(2)}
 		"sell": return {"ferrite": 54.0}
@@ -315,9 +339,12 @@ static func _missing(cost: Dictionary) -> Dictionary:
 	return short
 
 static func _done(pd: PlanetData, pp: PlanetProgress, id: String) -> bool:
-	if BUILDINGS.has(id):
-		var s: Array = BUILDINGS[id]
-		return count(pp, host(pd, s[1]), s[0], true) >= int(s[2])
+	var building := _building_for_step(pd, id)
+	if not building.is_empty():
+		var poi := host(pd, building[1])
+		if id == "turbine":
+			return count(pp, poi, "wind_turbine", true) > 0 or count(pp, poi, "solar_matrix", true) > 0
+		return count(pp, poi, building[0], true) >= int(building[2])
 	if DISTRICTS.has(id):
 		var poi := host(pd, id)
 		return poi != null and not poi.constructing
@@ -325,8 +352,9 @@ static func _done(pd: PlanetData, pp: PlanetProgress, id: String) -> bool:
 		var s: Array = DISTRICT_LEVELS[id]
 		var poi := host(pd, s[0])
 		return poi != null and int(pp.district_levels.get(poi.label, 1)) >= int(s[1])
-	if RESEARCH.has(id):
-		return SkillTree.is_unlocked(RESEARCH[id])
+	var research := research_for_step(id)
+	if not research.is_empty():
+		return SkillTree.is_unlocked(research)
 	match id:
 		"city_2":
 			var city := host(pd, "city")
@@ -349,8 +377,16 @@ static func tick(view: Node) -> void:
 		return
 	var pp := GameState.get_planet(pd.seed)
 	var id := step()
+	var building := _building_for_step(pd, id)
+	# An older save can already be at construction after buying only Wind Power.
+	if id == "turbine" and not _done(pd, pp, id) and not SkillTree.is_unlocked(research_for_step("wind")):
+		GameState.story_flags["course:index"] = STEPS.find("wind")
+		GameState.story_flags["course:confirmed"] = false
+		view.call("_refresh_colony_course")
+		GameState.save()
+		return
 	# A previously confirmed construction step was funded at the old price.
-	if acknowledged() and BUILDINGS.has(id) and not GameState.story_flags.has(BUILD_TARIFF_FLAG):
+	if acknowledged() and not building.is_empty() and not GameState.story_flags.has(BUILD_TARIFF_FLAG):
 		if not _done(pd, pp, id) and not _missing(_cost(pd, pp, id)).is_empty():
 			GameState.story_flags["course:confirmed"] = false
 		GameState.story_flags[BUILD_TARIFF_FLAG] = true
@@ -374,7 +410,7 @@ static func tick(view: Node) -> void:
 				GameState.story_flags["course:confirmed"] = false
 			if id == "buy" and TradePanel.is_open:
 				HUDManager.toggle_trade_panel()
-			if RESEARCH.has(id) and SkillTreeView.is_open:
+			if not research_for_step(id).is_empty() and SkillTreeView.is_open:
 				HUDManager._try_close_skill_tree()
 			view.call("_refresh_colony_course")
 			GameState.save()
@@ -384,7 +420,22 @@ static func tick(view: Node) -> void:
 	var speaker := ""
 	if GameState.active_advisor.is_empty():
 		speaker = "Mother Superior" if index() % 2 == 0 else "High Father"
-	var lines := [[speaker, LINES[id]]]
+	var line: String = LINES[id]
+	match id:
+		"housing_fill":
+			if Economy.free_population(pd, pp) >= 0:
+				line = "Open the Residential slot notice and fill both housing slots before we expand."
+		"solar_fill":
+			var power := ProductionManager.get_global_energy_split()
+			if power.x >= power.y:
+				line = "Open the Energy District's slot notice and fill both slots with Solar Arrays."
+		"wind":
+			if research_for_step(id) == "solar_matrix":
+				line = "Research Solar Matrix to supply the factory. We can install it in our Energy District on this terrain."
+		"turbine":
+			if building[0] == "solar_matrix":
+				line = "Build the Solar Matrix in the fifth slot. Set aside one Goods for each month it runs."
+	var lines := [[speaker, line]]
 	if id == "buy":
 		lines.append([speaker, "If the Goods store is full, sell two to make room for the order."])
 	var short := _missing(_cost(pd, pp, id))
@@ -412,9 +463,9 @@ static func _supply_line(id: String) -> String:
 		return "The Ferrite sale covered part of this order. The colony's supply budget will cover the difference."
 	if id == "bolo":
 		return "The treasury can cover the remainder of the handover fee."
-	if RESEARCH.has(id):
+	if not research_for_step(id).is_empty():
 		return "The survey archive has the research data we're missing. I'll release it to the lab."
-	if BUILDINGS.has(id) or DISTRICTS.has(id) or DISTRICT_LEVELS.has(id) or id == "city_2":
+	if BUILDINGS.has(id) or id == "turbine" or DISTRICTS.has(id) or DISTRICT_LEVELS.has(id) or id == "city_2":
 		return "I've approved the supplies missing from this construction order."
 	return "I've approved the supplies needed for this assignment."
 
@@ -425,14 +476,15 @@ static func _focus_action(view: Node, pd: PlanetData, id: String) -> void:
 		Inbox.open()
 		return
 	var poi: POIData
-	if BUILDINGS.has(id):
-		poi = host(pd, BUILDINGS[id][1])
+	var building := _building_for_step(pd, id)
+	if not building.is_empty():
+		poi = host(pd, building[1])
 	elif DISTRICT_LEVELS.has(id):
 		poi = host(pd, DISTRICT_LEVELS[id][0])
 	elif DISTRICTS.has(id) or id == "city_2":
 		poi = host(pd, "city")
 	if poi != null:
-		view.call("_open_tutorial_district", poi.label, BUILDINGS.has(id) or DISTRICT_LEVELS.has(id))
+		view.call("_open_tutorial_district", poi.label, not building.is_empty() or DISTRICT_LEVELS.has(id))
 	if id == "dig" or id == "dig_result":
 		Inbox.open()
 

@@ -11,11 +11,11 @@ extends ModalPopup
 ##   1 Civ    CIVILIZATION on a slider, 0 to 6 (only 0 is played for now;
 ##            the others show their scale, locked)                     (NEXT)
 ##   2 Start  START WORLD, MOON and what the option is           (BACK, NEXT)
-##   3 Rest   COLONY TRAIT, identity, and the world's name and seed
-##            (BACK, TUTORIAL, BEGIN)
+##   3 Rest   Colony identity, world name and placement assistance
+##            (BACK, PLACEMENT ASSIST, BEGIN)
 ## The rows of options are made from SessionPrep's tables. The preview shows
 ## the option pressed last (a locked one too, though it isn't chosen), with the
-## seed of the moment; hovering only tells about it. The choices go to
+## tutorial seed; hovering only tells about it. The choices go to
 ## GameState.pending_setup (see SessionPrep). A ModalPopup without a PopupCard:
 ## its parts are its own (the dim, the hero's ✕, Esc).
 
@@ -37,30 +37,21 @@ var begin: Callable
 @onready var _start: VBoxContainer = $Center/Box/Pages/Steps/Start
 @onready var _rest: VBoxContainer = $Center/Box/Pages/Steps/Rest
 @onready var _info: RichTextLabel = $Center/Box/Pages/Steps/Start/Info
-@onready var _trait_head: Label = $Center/Box/Pages/Steps/Rest/TraitHead
-@onready var _traits: GridContainer = $Center/Box/Pages/Steps/Rest/Traits
-@onready var _trait_desc: RichTextLabel = $Center/Box/Pages/Steps/Rest/TraitDesc
-@onready var _trait_rule: HSeparator = $Center/Box/Pages/Steps/Rest/Rule
 @onready var _leader_edit: LineEdit = $Center/Box/Pages/Steps/Rest/IdentityRow/LeaderName
 @onready var _colony_edit: LineEdit = $Center/Box/Pages/Steps/Rest/IdentityRow/ColonyName
 @onready var _logo: OptionButton = $Center/Box/Pages/Steps/Rest/IdentityRow/Logo
-@onready var _name_edit: LineEdit = $Center/Box/Pages/Steps/Rest/SeedRow/NameEdit
-@onready var _seed_edit: LineEdit = $Center/Box/Pages/Steps/Rest/SeedRow/SeedEdit
-@onready var _dice: IconButton = $Center/Box/Pages/Steps/Rest/SeedRow/Random
+@onready var _name_edit: LineEdit = $Center/Box/Pages/Steps/Rest/NameEdit
 @onready var _buttons: HBoxContainer = $Center/Box/Buttons
 @onready var _back: IconButton = $Center/Box/Buttons/Back
-@onready var _tut: IconButton = $Center/Box/Buttons/Tutorial
+@onready var _assist: IconButton = $Center/Box/Buttons/PlacementAssist
 @onready var _ok: IconButton = $Center/Box/Buttons/Begin
 @onready var _next: IconButton = $Center/Box/Buttons/Next
 
 var _choice := {}
 var _begun := false        # BEGIN: the game opens, the menu's planets stay away
 var _switching := false    # a step is fading out
-var _last_look: Callable   # the preview's look: the option pressed last (the seed may change)
+var _last_look: Callable   # the preview's look: the option pressed last
 var _start_info := ""     # the world or moon description selected by pressing its button
-var _trait_btns := {}
-var _tutorial_required := false
-var _free_seed_text := ""
 var _step := 1
 var _reached := 1          # the furthest step opened so far (the trail lets you back to it)
 const STEPS := 3
@@ -75,11 +66,8 @@ func _ready() -> void:
 	# choices were lost by a stray click); the ✕ and Esc still do. The Dim
 	# still takes the click, so nothing behind it reacts.
 	(_hero.get_node("Title") as Label).autowrap_mode = TextServer.AUTOWRAP_OFF   # one line
-	_tutorial_required = not SettingsManager.tutorial_ever_done
-	_free_seed_text = SessionPrep._random_seed_text()
-	_choice = {"world": "terran", "moon": "rocky", "civ": "c0", "colony_trait": "",
-		"tutorial": _tutorial_required, "seed": SessionPrep.SEED_MIN,
-		"seed_text": "", "name": ""}
+	_choice = {"world": "terran", "moon": "rocky", "civ": "c0", "placement_assist": true,
+		"seed": SessionPrep.tutorial_seed(), "name": ""}
 	# the main menu's planets give way to the preview while it is open
 	_menu_planets(false)
 	closed.connect(func() -> void:
@@ -87,11 +75,9 @@ func _ready() -> void:
 		if not _begun:
 			_menu_planets(true))
 	_pv.reveal(SessionPrep.PREVIEW_DELAY, SessionPrep.PREVIEW_IN)
-	_build_seed()
-	_apply_start_options()
+	_build_world_name()
 	_build_civ()
 	_build_start()
-	_build_traits()
 	_build_logos()
 	_build_buttons()
 
@@ -106,7 +92,7 @@ func _menu_planets(on: bool) -> void:
 	if is_instance_valid(host) and host.has_method(&"set_planets_shown"):
 		host.call(&"set_planets_shown", on)
 
-# ── The world: its name and seed ─────────────────────────────────────────────
+# ── The world name ───────────────────────────────────────────────────────────
 
 func _show_choice() -> void:
 	_pv.show_home(int(_choice["seed"]), String(_choice["moon"]))
@@ -117,20 +103,6 @@ func _show_last() -> void:
 	else:
 		_show_choice()
 
-func _set_seed(text: String) -> void:
-	var t := SessionPrep.TUTORIAL_SEED_CODE
-	if not _uses_tutorial():
-		t = text.strip_edges()
-		if t.is_empty():
-			t = SessionPrep._random_seed_text()
-		_free_seed_text = t
-	_choice["seed_text"] = t
-	_choice["seed"] = SessionPrep.seed_of(t)
-	_seed_edit.text = t
-	if String(_choice["name"]) == "":   # not renamed: the new world's own name
-		_name_edit.text = SessionPrep._home_name(int(_choice["seed"]))
-	_show_last()
-
 ## The world's name: the seed's own until the player writes another (11.11).
 func _set_name(t: String) -> void:
 	var n := t.strip_edges()
@@ -138,20 +110,12 @@ func _set_name(t: String) -> void:
 	_choice["name"] = "" if n == "" or n == own else n
 	_name_edit.text = n if n != "" else own
 
-func _build_seed() -> void:
-	_seed_edit.text_submitted.connect(func(t: String) -> void:
-		_set_seed(t)
-		_seed_edit.release_focus())
-	_seed_edit.focus_exited.connect(func() -> void:
-		if not _uses_tutorial() and _seed_edit.text.strip_edges() != String(_choice["seed_text"]):
-			_set_seed(_seed_edit.text))
+func _build_world_name() -> void:
+	_name_edit.text = SessionPrep._home_name(int(_choice["seed"]))
 	_name_edit.text_submitted.connect(func(t: String) -> void:
 		_set_name(t)
 		_name_edit.release_focus())
 	_name_edit.focus_exited.connect(func() -> void: _set_name(_name_edit.text))
-	_dice.pressed.connect(func() -> void:
-		AudioManager.play("click")
-		_set_seed(SessionPrep._random_seed_text()))
 
 # ── Step 1: the civilization ─────────────────────────────────────────────────
 
@@ -281,41 +245,7 @@ func _build_start() -> void:
 	_start_info = _info_of(SessionPrep.WORLDS, String(_choice["world"]), true)
 	_show_description(_info, _start_info)
 
-# Step 3: the colony's identity and its lasting trait.
-
-func _show_trait(id: String) -> void:
-	var trait_def: Dictionary = SessionPrep.COLONY_TRAITS.get(id, {})
-	if trait_def.is_empty():
-		_show_description(_trait_desc, "Choose one trait for this colony.")
-		return
-	_show_description(_trait_desc, "[color=#%s]%s[/color]\n%s" % [
-		UIStyle.hex(&"good"), trait_def["effect"], trait_def["story"]])
-
-func _paint_traits() -> void:
-	for id: String in _trait_btns:
-		(_trait_btns[id] as IconButton).variant = IconButton.Variant.NEUTRAL if id == _choice["colony_trait"] \
-			else IconButton.Variant.DEFAULT
-	_ok.disabled = not _uses_tutorial() and String(_choice["colony_trait"]).is_empty()
-
-func _build_traits() -> void:
-	for id: String in SessionPrep.COLONY_TRAITS:
-		var trait_def: Dictionary = SessionPrep.COLONY_TRAITS[id]
-		var b := IconButton.create(String(trait_def["title"]).to_upper(), String(trait_def["resource"]))
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.mouse_entered.connect(func() -> void: _show_trait(id))
-		b.mouse_exited.connect(func() -> void: _show_trait(String(_choice["colony_trait"])))
-		b.focus_entered.connect(func() -> void: _show_trait(id))
-		b.focus_exited.connect(func() -> void: _show_trait(String(_choice["colony_trait"])))
-		b.pressed.connect(func() -> void:
-			AudioManager.play("click")
-			_choice["colony_trait"] = id
-			_paint_traits()
-			_show_trait(id))
-		_traits.add_child(b)
-		b.focus_mode = Control.FOCUS_ALL
-		_trait_btns[id] = b
-	_paint_traits()
-	_show_trait("")
+# Step 3: the colony's identity and placement assistance.
 
 func _build_logos() -> void:
 	if GameState.demo_build:
@@ -333,44 +263,25 @@ func _build_logos() -> void:
 
 # ── The buttons and the steps ────────────────────────────────────────────────
 
-func _uses_tutorial() -> bool:
-	return _tutorial_required or bool(_choice["tutorial"])
-
-func _tut_tip() -> void:
-	if _tutorial_required:
-		TooltipManager.show_tip("Guided tutorial", "Complete the tutorial once to unlock custom seeds and colony traits.")
-	elif _uses_tutorial():
-		TooltipManager.show_tip("Tutorial on", "Use the fixed tutorial world and economy.")
+func _assist_tip() -> void:
+	if bool(_choice["placement_assist"]):
+		TooltipManager.show_tip("Placement assist on", "The tutorial marks one site for each City and district you build.")
 	else:
-		TooltipManager.show_tip("Tutorial off", "Choose your seed and colony trait for an unguided game.")
-
-func _apply_start_options() -> void:
-	var guided := _uses_tutorial()
-	_tut.icon_name = "confirm" if guided else "empty"
-	_tut.disabled = _tutorial_required
-	_trait_head.visible = not guided
-	_traits.visible = not guided
-	_trait_desc.visible = not guided
-	_trait_rule.visible = not guided
-	_seed_edit.visible = not guided
-	_dice.visible = not guided
-	_set_seed(_free_seed_text)
-	_paint_traits()
+		TooltipManager.show_tip("Placement assist off", "Choose any valid site for your City and districts during the tutorial.")
 
 func _build_buttons() -> void:
-	_tut.mouse_entered.connect(func() -> void:
+	_assist.mouse_entered.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.POINTER)
-		_tut_tip())
-	_tut.mouse_exited.connect(func() -> void:
+		_assist_tip())
+	_assist.mouse_exited.connect(func() -> void:
 		CursorManager.set_state(CursorManager.State.NORMAL)
 		TooltipManager.hide_tip())
-	_tut.pressed.connect(func() -> void:
-		if _tutorial_required:
-			return
+	_assist.pressed.connect(func() -> void:
 		AudioManager.play("click")
-		_choice["tutorial"] = not bool(_choice["tutorial"])
-		_apply_start_options()
-		_tut_tip())
+		var enabled := not bool(_choice["placement_assist"])
+		_choice["placement_assist"] = enabled
+		_assist.icon_name = "confirm" if enabled else "empty"
+		_assist_tip())
 	_next.pressed.connect(func() -> void:
 		AudioManager.play("click")
 		_go_step(mini(_step + 1, STEPS)))
@@ -451,7 +362,7 @@ func _show_step(step: int) -> void:
 		_page(i).visible = i == step
 	_next.visible = step < STEPS
 	_back.visible = step > 1
-	_tut.visible = step == STEPS
+	_assist.visible = step == STEPS
 	_ok.visible = step == STEPS
 	_next.disabled = step == 1 and _civ_slider.value != SessionPrep.CIV_ORDER.find(String(_choice["civ"]))
 	_hero.caption = "Prepare your colony  //  %d / %d" % [step, STEPS]
@@ -480,25 +391,16 @@ func _go_step(step: int) -> void:
 		_switching = false)
 
 func _on_begin() -> void:
-	var guided := _uses_tutorial()
-	if not guided and String(_choice["colony_trait"]).is_empty():
-		return
 	AudioManager.play("click")
-	if not guided and _seed_edit.text.strip_edges() != String(_choice["seed_text"]):
-		_set_seed(_seed_edit.text)
 	_set_name(_name_edit.text)
 	var setup := _choice.duplicate()
-	setup["tutorial"] = guided
 	setup["colony_leader_name"] = _leader_edit.text.strip_edges()
 	setup["colony_name"] = _colony_edit.text.strip_edges()
 	if not GameState.demo_build and _logo.selected >= 0:
 		setup["colony_logo"] = String(_logo.get_item_metadata(_logo.selected))
-	if guided:
-		setup["seed"] = SessionPrep.tutorial_seed()
-		setup["colony_trait"] = ""
-		setup["world"] = "terran"
-		setup["moon"] = "rocky"
-		setup["civ"] = "c0"
+	setup["world"] = "terran"
+	setup["moon"] = "rocky"
+	setup["civ"] = "c0"
 	GameState.pending_setup = setup
 	TooltipManager.hide_tip()
 	_begun = true

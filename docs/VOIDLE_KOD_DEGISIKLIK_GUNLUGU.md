@@ -348,6 +348,15 @@ Başlangıç commit'i `dae9ed2`. Kaynak ve veri referansları incelendi. Godot v
 
 Başlangıç commit'i `dae9ed2`. Kaynak referansları incelendi. Godot ve oyun testleri çalıştırılmadı.
 
+### Zorunlu öğretici ve yerleşim yardımı
+
+- `NewGamePanel` aynı öğretici dünyasını iki yerleşim seçeneğiyle sunuyor. `Placement Assist` varsayılan olarak açık. `GameState._apply_new_game_start()` yeni kolonilerde öğreticiyi başlatıyor ve tercihi `story_flags` içinde saklıyor. Mevcut kayıtlar aynı ilerleme noktasından yükleniyor. Tercih alanı bulunmayan öğretici kayıtları yardımlı kabul ediliyor.
+- `PlanetaryView` yerleşim işaretini ve tıklamanın o noktaya oturmasını yardım seçeneğine bağlıyor. Yardım kapalıyken yer seçimi normal arazi, mesafe ve City bağlantısı kontrollerinden geçiyor. Dağlık Energy önerisi bulunamazsa geçerli diğer arazilerden öneri aranıyor.
+- `ColonyTutorial` mevcut Energy District'in bina kurma şartına göre Wind Power ve Wind Turbine ya da Solar Matrix araştırması ve binasını hedefliyor. Araştırma vurgusu, danışman metni, inşa izni ve eksik kaynak desteği aynı seçimi kullanıyor. İnşa bedeli standart tarifeden hesaplanıyor ve destek ilk aylık Goods giderini de kapsıyor.
+- `SkillTreeView` seçilen araştırmayı vurguluyor. `HUDManager` ayarlarda yeni oyunların öğreticiyle açıldığını gösteriyor.
+
+Başlangıç commit'i `3b45694`. Godot ve oyun testleri çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.

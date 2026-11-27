@@ -905,17 +905,15 @@ func show_settings_popup() -> void:
 	p.add_content(fs_chk)
 	slider_row.call("Night Shadows", SettingsManager.night_shadow, func(v: float): SettingsManager.set_night_shadow(v))
 	_add_theme_builder(p)
-	# 10.11: back, as in the first tutorial: played once, the guided run gives
-	# way to an optional checklist; this brings the guided run back
 	p.add_content(HSeparator.new())
 	section.call("TUTORIAL")
 	var note := Label.new()
 	note.theme_type_variation = &"SubLabel"
-	var note_text := func() -> String:
-		return "Played once: new games get an optional checklist." if SettingsManager.tutorial_ever_done \
-			else "Guided: the advisor shows each step."
-	note.text = note_text.call()
+	note.text = "Every new colony begins with the tutorial. Choose placement assist in New Game."
 	p.add_content(note)
+	# The old checklist still supports resetting its steps in existing saves.
+	if GameState.story_flags.get(ColonyTutorial.FLAG, false):
+		return
 	var reset := IconButton.create("RESET TUTORIAL", "notes", IconButton.Variant.DEFAULT)
 	reset.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	reset.disabled = not SettingsManager.tutorial_ever_done
@@ -925,8 +923,7 @@ func show_settings_popup() -> void:
 	reset.pressed.connect(func() -> void:
 		AudioManager.play("ui_click")
 		Guide.reset_tutorial()
-		reset.disabled = true
-		note.text = note_text.call())
+		reset.disabled = true)
 	p.add_content(reset)
 
 ## Credits / science changes show through the resource bar's gain animation.

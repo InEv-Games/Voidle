@@ -232,7 +232,7 @@ func _build_tree_graph() -> void:
 
 	var st: Node = get_node("/root/SkillTree")
 	var tip_zero := SkillTreeView._view_civ == 0
-	var course_target := String(ColonyTutorial.RESEARCH.get(ColonyTutorial.step(), "")) if ColonyTutorial.active() else ""
+	var course_target := ColonyTutorial.research_for_step(ColonyTutorial.step()) if ColonyTutorial.active() else ""
 	for id in st.get("nodes").keys():
 		var node = st.get("nodes")[id]
 		

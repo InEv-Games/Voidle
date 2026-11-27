@@ -160,30 +160,6 @@ autowrap_mode = 3
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="TraitHead" type="Label" parent="Center/Box/Pages/Steps/Rest"]
-layout_mode = 2
-theme_type_variation = &"HeaderLabel"
-text = "COLONY TRAIT"
-
-[node name="Traits" type="GridContainer" parent="Center/Box/Pages/Steps/Rest"]
-layout_mode = 2
-theme_override_constants/h_separation = 6
-theme_override_constants/v_separation = 6
-columns = 3
-
-[node name="TraitDesc" type="RichTextLabel" parent="Center/Box/Pages/Steps/Rest"]
-custom_minimum_size = Vector2(420, 58)
-layout_mode = 2
-mouse_filter = 1
-theme_type_variation = &"PopupBody"
-theme_override_font_sizes/normal_font_size = 12
-bbcode_enabled = true
-scroll_active = true
-autowrap_mode = 3
-
-[node name="Rule" type="HSeparator" parent="Center/Box/Pages/Steps/Rest"]
-layout_mode = 2
-
 [node name="IdentityRow" type="HBoxContainer" parent="Center/Box/Pages/Steps/Rest"]
 layout_mode = 2
 theme_override_constants/separation = 6
@@ -208,29 +184,11 @@ layout_mode = 2
 theme_type_variation = &"HeaderLabel"
 text = "PLANET"
 
-[node name="SeedRow" type="HBoxContainer" parent="Center/Box/Pages/Steps/Rest"]
+[node name="NameEdit" type="LineEdit" parent="Center/Box/Pages/Steps/Rest"]
 layout_mode = 2
-theme_override_constants/separation = 6
-
-[node name="NameEdit" type="LineEdit" parent="Center/Box/Pages/Steps/Rest/SeedRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_stretch_ratio = 1.7
 placeholder_text = "World name"
 alignment = 1
 max_length = 20
-
-[node name="SeedEdit" type="LineEdit" parent="Center/Box/Pages/Steps/Rest/SeedRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-placeholder_text = "Seed"
-alignment = 1
-max_length = 32
-
-[node name="Random" parent="Center/Box/Pages/Steps/Rest/SeedRow" instance=ExtResource("4_button")]
-layout_mode = 2
-label_text = "RANDOM"
-icon_name = "cycle"
 
 [node name="Buttons" type="HBoxContainer" parent="Center/Box"]
 layout_mode = 2
@@ -243,10 +201,10 @@ size_flags_horizontal = 4
 label_text = "BACK"
 icon_name = "cancel"
 
-[node name="Tutorial" parent="Center/Box/Buttons" instance=ExtResource("4_button")]
+[node name="PlacementAssist" parent="Center/Box/Buttons" instance=ExtResource("4_button")]
 layout_mode = 2
 size_flags_horizontal = 4
-label_text = "TUTORIAL"
+label_text = "PLACEMENT ASSIST"
 icon_name = "confirm"
 
 [node name="Begin" parent="Center/Box/Buttons" instance=ExtResource("4_button")]

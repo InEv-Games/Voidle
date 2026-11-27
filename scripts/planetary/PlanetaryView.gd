@@ -3052,8 +3052,9 @@ func _maybe_require_first_city() -> void:
 	# on a new game it was never open here, so it stayed shut afterwards)
 	_reopen_panel_after_place = was_open or not GameState.showcase_mode
 	if lead_in and not GameState.showcase_mode:
-		if ColonyTutorial.active() or not ColonyTutorial.uses_start_rules():
+		if ColonyTutorial.placement_assisted() or not ColonyTutorial.uses_start_rules():
 			poi_layer.suggested_sites = _suggest_city_sites(city_def)
+			_show_place_hint(city_def)
 		if not ColonyTutorial.active():
 			_play_capital_lead_in()
 		elif not poi_layer.suggested_sites.is_empty():
@@ -6754,15 +6755,16 @@ func _begin_district_placement(def: DistrictDef, parent: POIData = null) -> void
 	poi_layer.placement_rings = _placement_rings(def, parent)
 	poi_layer.deselect_all()
 	CursorManager.set_state(CursorManager.State.NORMAL)
-	_show_place_hint(def)
+	poi_layer.suggested_sites = []
 	_suggest_guide_site(def, parent)
+	_show_place_hint(def)
 	# show where this district type thrives; the lens the player had comes back after
 	var lens := _placement_lens(def)
 	if lens != "" and GameState.is_scanned(current_data.seed) and _role != lens:
 		_role_before_place = _role
 		_set_role(lens)
 	_place_zoom_in(def, parent)
-	if ColonyTutorial.active() and not poi_layer.suggested_sites.is_empty():
+	if ColonyTutorial.placement_assisted() and not poi_layer.suggested_sites.is_empty():
 		var target: Dictionary = poi_layer.suggested_sites[0]
 		_focus_on_site(rad_to_deg(target["lon"]), rad_to_deg(target["lat"]))
 
@@ -6846,7 +6848,7 @@ func _show_place_hint(def: DistrictDef) -> void:
 		title = "CHOOSE THE SITE OF YOUR CAPITAL"
 		help = "Click a site on %s  //  Drag to rotate  //  Scroll to zoom" \
 			% TerrainSampler.placement_label(def.placement)
-	if ColonyTutorial.active():
+	if ColonyTutorial.placement_assisted() and not poi_layer.suggested_sites.is_empty():
 		help = "Click the marked site  //  Drag to rotate  //  Scroll to zoom"
 	NewsFeed.show_message(PLACE_MSG, current_data.planet_name if current_data != null else "Placement",
 		title, help, {"sec": 0.0, "extra": extra, "extra_color": &"neutral_stroke"})
@@ -7462,6 +7464,8 @@ const GUIDE_KINDS := [DistrictDef.Type.GENERATOR, DistrictDef.Type.MINING, Distr
 	DistrictDef.Type.COMMERCIAL, DistrictDef.Type.RESIDENTIAL]
 
 func _suggest_guide_site(def: DistrictDef, parent: POIData) -> void:
+	if ColonyTutorial.active() and not ColonyTutorial.placement_assisted():
+		return
 	if parent == null or current_data == null or def.is_system_anchor() or def.is_orbital \
 			or not Guide.is_active() or Guide.checklist_mode() or not GUIDE_KINDS.has(def.id):
 		return
@@ -7479,7 +7483,7 @@ func _suggest_guide_site(def: DistrictDef, parent: POIData) -> void:
 			var wind_site := _find_tutorial_wind_site(def, parent)
 			if wind_site != Vector2.INF:
 				poi_layer.suggested_sites = [TutorialSites.marker(wind_site, current_data)]
-			return
+				return
 		if def.id == DistrictDef.Type.RESIDENTIAL:
 			planned_energy = plan.get("energy", Vector2.INF)
 
@@ -7629,10 +7633,8 @@ func _reach_rows(lon: float, lat: float) -> Array:
 	return rows
 
 func _snap_to_tutorial_site(hit: Dictionary) -> bool:
-	if not ColonyTutorial.active():
+	if not ColonyTutorial.placement_assisted() or poi_layer.suggested_sites.is_empty():
 		return true
-	if poi_layer.suggested_sites.is_empty():
-		return false
 	var target: Dictionary = poi_layer.suggested_sites[0]
 	if TerrainSampler.angular_distance(hit["lon"], hit["lat"], target["lon"], target["lat"]) > float(target["r"]):
 		return false
