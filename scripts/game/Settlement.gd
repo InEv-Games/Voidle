@@ -115,15 +115,29 @@ static func remove_buildings(pp: PlanetProgress, entry: Dictionary, k: int) -> f
 	var share := c * float(k) / float(n)
 	var refund := share * refund_rate()
 	_give(remove_refund_mats(entry, k))
-	if k >= n:
-		pp.remove_building_stack(entry)
-	else:
-		entry["amount"] = n - k
-		entry["paid"] = c - share
-		entry["paid_mats"] = PlanetProgress.scale_mats(PlanetProgress.stack_mats(entry), float(n - k) / float(n))
+	_reduce_stack(pp, entry, k, n, c - share)
 	GameState.earn_credits(refund)
 	_changed(pp)
 	return refund
+
+## An incident removes one completed unit, without a demolition refund. Its
+## caller saves after recording the outcome and all other damage.
+static func destroy_incident_building(pp: PlanetProgress, entry: Dictionary) -> bool:
+	var n := int(entry.get("amount", 1))
+	if pp == null or n <= 0 or entry.get("constructing", false) or pp.building_real_index(entry) < 0:
+		return false
+	_reduce_stack(pp, entry, 1, n, PlanetProgress.stack_paid(entry) * float(n - 1) / float(n))
+	_changed(pp, false)
+	return true
+
+static func _reduce_stack(pp: PlanetProgress, entry: Dictionary, k: int, n: int, paid_after: float) -> void:
+	if k >= n:
+		pp.remove_building_stack(entry)
+	else:
+		var materials := PlanetProgress.stack_mats(entry)
+		entry["amount"] = n - k
+		entry["paid"] = paid_after
+		entry["paid_mats"] = PlanetProgress.scale_mats(materials, float(n - k) / float(n))
 
 # ── Previews ─────────────────────────────────────────────────────────────────
 
@@ -460,11 +474,12 @@ static func move(pd: PlanetData, poi: POIData, site: Vector2) -> bool:
 	_changed(pp)
 	return true
 
-static func _changed(pp: PlanetProgress) -> void:
+static func _changed(pp: PlanetProgress, save_game := true) -> void:
 	pp.has_spaceport = GameState.has_finished_building(pp.planet_seed, "spaceport")
 	Location.invalidate(pp.planet_seed)
 	Economy.invalidate_caps()
 	ProductionManager.invalidate(pp.planet_seed)
 	pp.recalculate_limits()
 	GameState.planet_progress_changed.emit(pp.planet_seed)
-	GameState.save()
+	if save_game:
+		GameState.save()

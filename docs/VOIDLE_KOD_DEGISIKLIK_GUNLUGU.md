@@ -365,6 +365,22 @@ Başlangıç commit'i `3b45694`. Godot ve oyun testleri çalıştırılmadı.
 
 Başlangıç commit'i `99d7977`. Godot ve oyun testleri çalıştırılmadı.
 
+### Rastgele koloni olayları
+
+- `ColonyEvents.gd` öğretici tamamlandıktan sonra her koloni ayını bir kez değerlendirir. Minör olay için 6, majör olay için 24 aylık asgari ara vardır. Ardından aylık ihtimal minörde %5–20, majörde %3–8 arasında yükselir. Kayıt slotunun takvimi, bekleyen olayları ve takip sahneleri `GameState.story_flags` içinde saklanır.
+- `colony_events.csv` iki minör örnek, gezegen ölçeğinde toz fırtınası ve City ölçeğinde kıyı taşkını içerir. `colony_event_advisors.csv` olay kimliği, sahne ve danışman kimliğine göre farklı replik kullanılmasını sağlar. İçerik hedefi Narrative turunda 20 majör ve 100 minör olaydır.
+- `Narrative.gd` mevcut DialoguePanel'e koşullu seçenekleri ve etkilerinin tooltip'lerini bağlar. Minör seçim ödül havuzunu değiştirir. Majör kararda malzeme harcaması, geçici enerji üretimi düşüşü veya kalıcı bina kaybı olaya göre gösterilir. Hasar seçeneği en fazla iki sıradan Market ya da Research Lab türü bina kaybettirir. `Settlement.gd` incident kaybına yıkım iadesi ödemez. Çalışan Emergency Response Center hasarı önler ve toplam enerji talebini bir ay boyunca %20 artırır.
+- `ProductionManager.gd` geçici şebeke kısıtını ilgili gezegenin üretimine yansıtır ve enerji tooltip'inde ayrı satırda gösterir. Majör kararlar 24–48 koloni ayı sonra seçime göre farklı sahne ve sonuç üretir.
+- Çevrimdışı simülasyon en fazla üç yeni minör olayı o sırada aktif danışmana çözdürür. Gerçek ödüller dahil net kaynak değişimi ve danışmanın olay özeti Welcome Back sahnesine kaydedilir. Bekleyen tek majör karar dönüş özetinden sonra açılır. Çevrimdışı süre, üretim ve depolama kuralları mevcut ekonomi akışından gelir.
+
+Başlangıç commit'i `8282c3f`. Godot ve oyun testleri çalıştırılmadı.
+
+### Olay seçimleri, tooltip ve Inbox düzeltmesi
+
+- `TooltipManager.gd` duraklatma sırasında da açıklamaları yerleştirir. `DialoguePanel.gd` fareyle veya klavye ve gamepad ile vurgulanan seçeneğin açıklamasını düğmenin yanında açar. Kilitli seçeneklerde de koşul metni gösterilir.
+- Oyun sırasında minör olaylar mevcut diyalog panelinde zamanı durdurur. Minör ve majör kararlar açıklamadan sonra ayrıca Continue istemeden seçenekleri açar. Notifications paneli açıkken olay sahnesi sırasını bekler.
+- `Inbox.gd` kart yenilendiğinde veya kapandığında sırada kalan boyutlandırma ve odak işini iptal eder. Böylece `_fit_card` serbest bırakılmış bir kontrolle çağrılmaz.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.

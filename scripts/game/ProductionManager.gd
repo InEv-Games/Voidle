@@ -566,12 +566,15 @@ func _invalidate_wonder_support() -> void:
 func district_income(pp: PlanetProgress, poi: POIData) -> Dictionary:
 	var income := _cached_district_income(pp, poi)
 	var storage_scale := Economy.storage_output_multiplier()
-	if storage_scale == 1.0:
+	var incident_scale := ColonyEvents.energy_factor(pp.planet_seed) if income.has(Economy.ENERGY) else 1.0
+	if storage_scale == 1.0 and incident_scale == 1.0:
 		return income
 	var adjusted := income.duplicate()
 	for id: String in adjusted:
 		if id != Economy.POPULATION:
 			adjusted[id] = float(adjusted[id]) * storage_scale
+	if adjusted.has(Economy.ENERGY):
+		adjusted[Economy.ENERGY] = float(adjusted[Economy.ENERGY]) * incident_scale
 	return adjusted
 
 func _cached_district_income(pp: PlanetProgress, poi: POIData) -> Dictionary:
@@ -637,6 +640,8 @@ func city_support_breakdown(pp: PlanetProgress, pd: PlanetData, city: POIData) -
 
 func district_base(pp: PlanetProgress, poi: POIData, id: String) -> float:
 	var income := float(_cached_district_income(pp, poi).get(id, 0.0))
+	if id == Economy.ENERGY:
+		income *= ColonyEvents.energy_factor(pp.planet_seed)
 	return income if id == Economy.POPULATION else income * Economy.storage_output_multiplier()
 
 ## True when the building makes stored resources and every one of them is at
@@ -921,6 +926,8 @@ func output_per_cycle(pp: PlanetProgress, entry: Dictionary, def: BuildingDef, i
 	v *= Economy.site_mult(1.0, location_mult(pp, entry.get("district_id", ""))) \
 		* Economy.scope_bonus(pp, entry.get("district_id", ""), id)
 	v = _skill_mods(pp, id, v, def.output_tag)
+	if id == Economy.ENERGY:
+		v *= ColonyEvents.energy_factor(pp.planet_seed)
 	return v if id == Economy.POPULATION else v * Economy.storage_output_multiplier()
 
 ## Skill / planet-modifier multipliers shared by buildings and district base income.
@@ -1158,6 +1165,7 @@ func energy_sources() -> Dictionary:
 		var pd: PlanetData = GameState.get_planet_data(pp.planet_seed)
 		if pd == null:
 			continue
+		var incident_scale := ColonyEvents.energy_factor(pp.planet_seed)
 		for entry: Dictionary in _running_entries(pp):
 			var def := BuildingDef.find(entry.get("building_id", ""))
 			if def == null:
@@ -1166,7 +1174,7 @@ func energy_sources() -> Dictionary:
 			var n := int(entry.get("amount", 1))
 			var unit := (dpoi.shown_name() if dpoi != null else pd.planet_name) + (" ×%d" % n if n > 1 else "")
 			if def.outputs.has(Economy.ENERGY):
-				add.call(def.display_name, unit, output_per_cycle(pp, entry, def, Economy.ENERGY))
+				add.call(def.display_name, unit, output_per_cycle(pp, entry, def, Economy.ENERGY) / incident_scale)
 			if def.energy_per_tick < 0.0:
 				add.call(def.display_name, unit, def.energy_per_tick * float(n) * consume)
 		for poi: POIData in pd.custom_pois:
@@ -1175,9 +1183,11 @@ func energy_sources() -> Dictionary:
 				continue
 			if makes_base(pd, poi):
 				var label := "Capital Districts" if poi.is_city() else ("Orbit City" if poi.is_orbital() else ddef.display_name + "s")
-				add.call(label, poi.shown_name(), district_base(pp, poi, Economy.ENERGY))
+				add.call(label, poi.shown_name(), district_base(pp, poi, Economy.ENERGY) / incident_scale)
 			if poi.is_orbital() and not poi.constructing and ddef.own_energy_use > 0.0:
 				add.call("Orbit districts", poi.shown_name(), -ddef.own_energy_use * consume)
+		if incident_scale < 1.0:
+			add.call("Grid isolation", pd.planet_name, _planet_energy(pp).x * (1.0 - 1.0 / incident_scale))
 		var emergency := GameState.emergency_energy_multiplier()
 		if emergency > 1.0:
 			var extra := _planet_energy(pp).y * (1.0 - 1.0 / emergency)

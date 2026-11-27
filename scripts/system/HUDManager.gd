@@ -980,43 +980,14 @@ func go_to_lander(moon_seed: int) -> void:
 
 ## "While you were away" (PLAN M8): once after loading, in a gameplay scene.
 func _maybe_show_offline() -> void:
-	if not GameState.offline_pending or GameState.showcase_mode:
+	if GameState.showcase_mode or (not GameState.offline_pending and not ColonyEvents.has_welcome()):
 		return
 	var scene := get_tree().current_scene
 	if scene == null or scene.scene_file_path.ends_with("MainMenu.tscn"):
 		return
-	var r := GameState.run_offline()
-	# the hero's caption says how long ("Away for 4 min")
-	var body := "Nothing was produced while the game was closed. Your economy picks up where you left it."
-	if GameState.offline_progress_enabled():
-		# the colony ran on at a tenth of the speed (playtest 12.11)
-		var dim := UIStyle.hex(&"text_subtle")
-		var lines: Array[String] = []
-		lines.append("The colony ran on at %d%% of the speed: %s of play, %d colony month%s." % [
-			roundi(Balance.cfg.offline_speed * 100.0), _duration_text(float(r["sim"])), int(r["months"]),
-			"" if int(r["months"]) == 1 else "s"])
-		if bool(r["capped"]):
-			lines.append("[color=#%s]Only the first %s away count.[/color]" % [dim, _duration_text(Balance.cfg.offline_max_real_sec)])
-		var parts: Array[String] = []
-		var g: Dictionary = r["gains"]
-		for id: String in g:
-			var v := float(g[id])
-			parts.append("%s [color=#%s]%s%s[/color]" % [UIIcons.bb(id, 12, Economy.color_of(id)),
-				UIStyle.hex(&"good") if v >= 0.0 else UIStyle.hex(&"bad"), "+" if v >= 0.0 else "−", Economy.fmt(absf(v))])
-		lines.append("\n" + ("   ".join(parts) if not parts.is_empty() else "[color=#%s]Nothing changed in your stores.[/color]" % dim))
-		body = "\n".join(lines)
-	ConfirmPanel.ask(self, "WELCOME BACK", body, "CONTINUE", Callable(), false) \
-		.use_hero("Away for %s" % _duration_text(GameState.offline_seconds), "WELCOME BACK")
-
-static func _duration_text(sec: float) -> String:
-	var d := floori(sec / 86400.0)
-	var h := floori(fmod(sec, 86400.0) / 3600.0)
-	var m := floori(fmod(sec, 3600.0) / 60.0)
-	if d > 0:
-		return "%d day%s %d h" % [d, "" if d == 1 else "s", h]
-	if h > 0:
-		return "%d h %d min" % [h, m]
-	return "%d min" % maxi(m, 1)
+	if GameState.offline_pending:
+		GameState.run_offline()
+	ColonyEvents.present_welcome()
 
 ## Spawn a small "+X" chip that floats upward from the given HUD panel then fades.
 func _spawn_hud_chip(text: String, color: Color, panel: PanelContainer) -> void:

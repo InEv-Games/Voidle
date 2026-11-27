@@ -1096,7 +1096,9 @@ func run_offline() -> Dictionary:
 	if not offline_pending:
 		return out
 	if not offline_progress_enabled() or sim < OFFLINE_STEP:
+		ColonyEvents.remember_welcome({}, [])
 		offline_pending = false
+		save()
 		return out
 	var ids: Array[String] = [Economy.CREDITS, Economy.SCIENCE, Economy.GOODS, Economy.FUEL, Economy.RARE]
 	for r: Dictionary in Economy.RAW_TABLE:
@@ -1105,6 +1107,7 @@ func run_offline() -> Dictionary:
 	for id: String in ids:
 		before[id] = Economy.payable_amount(id)
 	var cal0 := calendar_seconds
+	var event_reports: Array = []
 	var moon := home_moon()
 	var lander_target := int(expedition("lander").get("target_seed", moon.seed if moon != null else -1))
 	var left := sim
@@ -1117,13 +1120,16 @@ func run_offline() -> Dictionary:
 		play_seconds += step
 		Excavations.tick()
 		if onboarding_stage == "done":
+			var previous_month := floori(calendar_seconds / MONTH_SEC)
 			calendar_seconds += step
+			ColonyEvents.advance_offline(previous_month, floori(calendar_seconds / MONTH_SEC), event_reports)
 	for id: String in ids:
 		var d := Economy.payable_amount(id) - float(before[id])
 		if absf(d) >= 0.5:
 			out["gains"][id] = d
 	out["sim"] = sim
 	out["months"] = int((calendar_seconds - cal0) / MONTH_SEC)
+	ColonyEvents.remember_welcome(out["gains"], event_reports)
 	offline_pending = false
 	save()
 	return out

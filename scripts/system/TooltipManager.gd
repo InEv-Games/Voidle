@@ -46,6 +46,11 @@ func set_focus_anchor(c: Control) -> void:
 		_focus_point = Vector2(-1.0, -1.0)
 		_unlock()
 
+func hide_anchored_tip(owner: Control) -> void:
+	if _focus_anchor == owner:
+		set_focus_anchor(null)
+		hide_tip()
+
 func set_focus_point(pt: Vector2) -> void:
 	_focus_point = pt
 	_unlock()
@@ -189,6 +194,7 @@ func _hide_nest() -> void:
 	_nest_hide = 0.0
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS   # choice and menu tips must lay out while the game is paused
 	layer = 300
 	_hbox = (load(VIEW_SCENE) as PackedScene).instantiate() as HBoxContainer
 	_panel     = _hbox.get_node("Card")

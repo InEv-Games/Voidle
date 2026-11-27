@@ -99,6 +99,8 @@ func show_panel() -> void:
 
 func hide_panel() -> void:
 	_kill_typing()
+	if _has_choices:
+		_clear_choices()
 	_show_n += 1
 	if not _card.visible:
 		return
@@ -149,13 +151,14 @@ func show_choices(texts: Array[String], tips: Array[String] = [], locked := Pack
 				_skip_typing()
 				return
 			AudioManager.play("click")
-			TooltipManager.hide_tip()
 			_clear_choices()
 			choice_made.emit(at, label))
 		var tip := tips[i] if i < tips.size() else ""
 		if tip != "":   # what it leads to (the keys / pad light it as a hover: the tip shows too)
-			b.mouse_entered.connect(func() -> void: TooltipManager.show_tip(label, tip))
-			b.mouse_exited.connect(func() -> void: TooltipManager.hide_tip())
+			b.mouse_entered.connect(func() -> void:
+				TooltipManager.set_focus_anchor(b)
+				TooltipManager.show_tip(label, tip))
+			b.mouse_exited.connect(func() -> void: TooltipManager.hide_anchored_tip(b))
 		_choices.add_child(b)
 	_choices.modulate.a = 0.0 if _typing != null else 1.0
 
@@ -163,7 +166,8 @@ func _clear_choices() -> void:
 	_has_choices = false
 	_side.custom_minimum_size.x = 0.0
 	_lit = -1
-	for c in _choices.get_children():
+	for c: Control in _choices.get_children():
+		TooltipManager.hide_anchored_tip(c)
 		_choices.remove_child(c)
 		c.queue_free()
 

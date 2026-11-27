@@ -17,6 +17,7 @@
 ##   "once"    true (default): a scene that played to its end never plays again
 ##             (GameState.completed_scenes)
 ##   "on_done" Callable(exit_name: String), called when the scene ends
+##   "choices" Callable returning the options for the last plain line of a main scene
 ##   "outcomes" { exit_name: bbcode }: what an ending does in the game (what
 ##             on_done gives). An answer that leads to that ending (past lines
 ##             with one way on) shows it in its tooltip: nothing in the panel.
@@ -81,7 +82,7 @@ func play(graph_path: String, entry: String, opts: Dictionary = {}) -> bool:
 		"pause": bool(opts.get("pause", main)), "once": once, "on_done": opts.get("on_done", Callable()),
 		"now": bool(opts.get("now", false)), "lines": opts.get("lines", []),
 		"skippable": bool(opts.get("skippable", false)), "outcomes": opts.get("outcomes", {}),
-		"incident_damage": opts.get("incident_damage", "")}
+		"incident_damage": opts.get("incident_damage", ""), "plain_choices": opts.get("choices", Callable())}
 	if item["now"]:
 		if not _current.is_empty() and not bool(_current["main"]):
 			_end_scene("", true)   # a short line gives way (it stays in the log)
@@ -135,6 +136,8 @@ func reset() -> void:
 var _waited := 0.0
 
 func _process(delta: float) -> void:
+	if not get_tree().paused:
+		ColonyEvents.tick(_current.is_empty() and _queue.is_empty())
 	_tick_barks(delta)
 	if not _current.is_empty() or _queue.is_empty():
 		_waited = 0.0
@@ -157,7 +160,7 @@ func _process(delta: float) -> void:
 ## a popup, a placement or its naming, a scene change.
 func _can_present_main() -> bool:
 	var scene := get_tree().current_scene
-	if scene == null:
+	if scene == null or Inbox.is_open():
 		return false
 	if scene.get("_placing_def") != null or bool(scene.get("_naming_open")):
 		return false
@@ -176,6 +179,8 @@ func _wait_reason() -> String:
 	var scene := get_tree().current_scene
 	if scene == null:
 		return "no scene"
+	if Inbox.is_open():
+		return "notifications open"
 	if scene.get("_placing_def") != null:
 		return "placing"
 	if bool(scene.get("_naming_open")):
@@ -198,6 +203,8 @@ func _show_plain_line() -> void:
 	var lines: Array = _current["lines"]
 	var l: Array = lines[_line_i]
 	_on_line(String(l[0]), String(l[1]))
+	if _line_i == lines.size() - 1 and not _on_comms:
+		_show_plain_choices()
 
 func _begin(item: Dictionary) -> void:
 	if not (item.get("lines", []) as Array).is_empty():
@@ -264,7 +271,7 @@ func _ensure_ui(main: bool) -> void:
 
 ## CONTINUE, a click on the card: the next line, or the scene's end.
 func _advance() -> void:
-	if not String(_current.get("incident_damage", "")).is_empty():
+	if _current.has("displayed_choices") or not String(_current.get("incident_damage", "")).is_empty():
 		return
 	if _mgr != null:
 		_mgr.advance()
@@ -274,6 +281,25 @@ func _advance() -> void:
 			_show_plain_line()
 		else:
 			_end_scene("", true)
+
+## Plain scenes can resolve their answer list against the current game state.
+func _show_plain_choices() -> void:
+	var provider: Callable = _current.get("plain_choices", Callable())
+	if not provider.is_valid():
+		return
+	var choices: Array = provider.call()
+	if choices.is_empty():
+		return
+	var labels: Array[String] = []
+	var tips: Array[String] = []
+	var locked := PackedInt32Array()
+	for choice: Dictionary in choices:
+		if not bool(choice.get("enabled", true)):
+			locked.append(labels.size())
+		labels.append(String(choice["label"]))
+		tips.append(String(choice.get("tip", "")))
+	_current["displayed_choices"] = choices
+	_panel.show_choices(labels, tips, locked)
 
 ## No narrator in the game (playtest 12.11): a line with no speaker is said by
 ## the AIs before an advisor is chosen (taking turns), then by that advisor.
@@ -353,6 +379,14 @@ func _on_choice_made(index: int, text: String) -> void:
 			return
 		_log("choice", "Player", text)
 		_end_scene("accept" if index == 0 else "respond", true)
+		return
+	if _current.has("displayed_choices"):
+		var choices: Array = _current["displayed_choices"]
+		if index < 0 or index >= choices.size() or not bool(choices[index].get("enabled", true)):
+			_show_plain_choices()
+			return
+		_log("choice", "Player", text)
+		_end_scene(String(choices[index]["id"]), true)
 		return
 	_log("choice", "Player", text)
 	if _mgr != null:

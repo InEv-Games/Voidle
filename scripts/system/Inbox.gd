@@ -465,15 +465,18 @@ func _refresh_panel(focus_first := false) -> void:
 	_fit_card(card, scroll, list)
 	# wrapped row texts know their height only once laid out at the list's
 	# width: fit again whenever the rows' size changes, and the next frame
-	list.minimum_size_changed.connect(func() -> void: _fit_card.call_deferred(card, scroll, list))
-	(func() -> void:
-		await get_tree().process_frame
-		_fit_card(card, scroll, list)).call()
+	var fit_if_current := func() -> void:
+		if not is_open() or not is_instance_valid(card) or card.get_parent() != _layer:
+			return
+		if is_instance_valid(scroll) and is_instance_valid(list):
+			_fit_card(card, scroll, list)
+	list.minimum_size_changed.connect(func() -> void: fit_if_current.call_deferred())
+	get_tree().process_frame.connect(fit_if_current, CONNECT_ONE_SHOT)
 	# the keys start on the first row (Esc / O / B goes back to where they were)
 	if first != null and focus_first:
 		var f := first
 		(func() -> void:
-			if not is_instance_valid(f):
+			if not is_open() or not is_instance_valid(card) or card.get_parent() != _layer or not is_instance_valid(f):
 				return
 			for lp in get_tree().get_nodes_in_group(LeftPanel.GROUP):
 				if lp is LeftPanel:
