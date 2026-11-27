@@ -254,6 +254,8 @@ func _tick_all(delta: float) -> void:
 						poi.constructing = false
 						poi.construct_progress = 1.0
 						district_changed = true
+						if poi.is_orbital():
+							Economy.invalidate_caps()
 						# a finished Mining district surveys the body's minerals
 						var built_def := district_def(poi)
 						if built_def != null and built_def.id == DistrictDef.Type.MINING:
@@ -307,6 +309,8 @@ func _tick_all(delta: float) -> void:
 				if cp >= 1.0:
 					_construct.erase(ck)
 					entry["constructing"] = false
+					if not def.storage.is_empty():
+						Economy.invalidate_caps()
 					if def.is_wonder:
 						_invalidate_wonder_support()
 					pending_merges.append(entry)
@@ -560,6 +564,17 @@ func _invalidate_wonder_support() -> void:
 	_invalidate_income()
 
 func district_income(pp: PlanetProgress, poi: POIData) -> Dictionary:
+	var income := _cached_district_income(pp, poi)
+	var storage_scale := Economy.storage_output_multiplier()
+	if storage_scale == 1.0:
+		return income
+	var adjusted := income.duplicate()
+	for id: String in adjusted:
+		if id != Economy.POPULATION:
+			adjusted[id] = float(adjusted[id]) * storage_scale
+	return adjusted
+
+func _cached_district_income(pp: PlanetProgress, poi: POIData) -> Dictionary:
 	if not makes_base(GameState.get_planet_data(pp.planet_seed), poi):
 		return {}
 	var ck := "%d:%s" % [pp.planet_seed, poi.label]
@@ -621,7 +636,8 @@ func city_support_breakdown(pp: PlanetProgress, pd: PlanetData, city: POIData) -
 	return out
 
 func district_base(pp: PlanetProgress, poi: POIData, id: String) -> float:
-	return float(district_income(pp, poi).get(id, 0.0))
+	var income := float(_cached_district_income(pp, poi).get(id, 0.0))
+	return income if id == Economy.POPULATION else income * Economy.storage_output_multiplier()
 
 ## True when the building makes stored resources and every one of them is at
 ## its cap (mines: every raw resource of the planet). Flow / capacity outputs
@@ -715,12 +731,15 @@ func resource_units(id: String, label: String) -> Dictionary:
 	resource_breakdowns()
 	return _breakdown_units.get(id, {}).get(label, {})
 var _breakdown_at := -100000
+var _breakdown_storage_scale := 1.0
 
 func resource_breakdowns() -> Dictionary:
 	var now := Time.get_ticks_msec()
-	if now - _breakdown_at < BREAKDOWN_MS:
+	var storage_scale := Economy.storage_output_multiplier()
+	if now - _breakdown_at < BREAKDOWN_MS and storage_scale == _breakdown_storage_scale:
 		return _breakdown
 	_breakdown_at = now
+	_breakdown_storage_scale = storage_scale
 	var out := {}
 	var units := {}
 	var add := func(id: String, label: String, v: float, unit: String) -> void:
@@ -901,7 +920,8 @@ func output_per_cycle(pp: PlanetProgress, entry: Dictionary, def: BuildingDef, i
 	var v: float = float(def.outputs[id]) * float(entry.get("amount", 1))
 	v *= Economy.site_mult(1.0, location_mult(pp, entry.get("district_id", ""))) \
 		* Economy.scope_bonus(pp, entry.get("district_id", ""), id)
-	return _skill_mods(pp, id, v, def.output_tag)
+	v = _skill_mods(pp, id, v, def.output_tag)
+	return v if id == Economy.POPULATION else v * Economy.storage_output_multiplier()
 
 ## Skill / planet-modifier multipliers shared by buildings and district base income.
 func _skill_mods(_pp: PlanetProgress, id: String, v: float, output_tag: String) -> float:
@@ -968,7 +988,7 @@ func idle_ratio() -> float:
 ## Idle income per second: { credits, science } (0 until researched).
 func idle_income_rates() -> Dictionary:
 	var st := get_node("/root/SkillTree")
-	var k := empire_idle().x / 1000.0 / 60.0
+	var k := empire_idle().x / 1000.0 / 60.0 * Economy.storage_output_multiplier()
 	return {Economy.CREDITS: k * float(st.idle_credits_per_1000()),
 		Economy.SCIENCE: k * float(st.idle_science_per_1000())}
 

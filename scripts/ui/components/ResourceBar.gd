@@ -394,6 +394,7 @@ func _show_cell_tip(id: String, title: String) -> void:
 			if net < 0.0:
 				detail += "\n\n" + _c("Energy %s: buildings that use energy make %d%% of their output." % [
 					Glossary.t("deficit", "deficit"), int(round(pm.get_energy_ratio() * 100.0))], BAD_HEX)
+			detail += _storage_penalty_text()
 		Economy.POPULATION:
 			# one pool for every world: the home world answers for all of them
 			var pd: PlanetData = GameState.get_planet_data(GameState.home_planet_seed)
@@ -431,6 +432,14 @@ static func _description_with_trait(id: String, description: String) -> String:
 		return description
 	return "%s\n\n[b]%s[/b]\n%s" % [description, trait_def["title"], trait_def["effect"]]
 
+static func _storage_penalty_text() -> String:
+	var id := Economy.over_capacity_resource()
+	if id.is_empty():
+		return ""
+	var percent := roundi(Economy.STORAGE_OVER_CAPACITY_PENALTY * 100.0)
+	return "\n\n" + _c("The %s stock exceeds storage capacity. Production is down %d%%." % [
+		Economy.display_name(id), percent], BAD_HEX)
+
 ## "+24  Market" lines of a resource per colony month, largest first, then the net (all worlds).
 static func breakdown_text(id: String) -> String:
 	var parts: Dictionary = ProductionManager.resource_breakdowns().get(id, {})
@@ -452,7 +461,7 @@ static func breakdown_text(id: String) -> String:
 		lines.append(_c("Nothing makes or uses it yet.", DIM_HEX))
 	else:
 		lines.append(TooltipCard.total_line("Net", _c(("+" if net >= 0.0 else "−") + Economy.fmt(absf(net)) + " /mo", GOOD_HEX if net >= 0.0 else BAD_HEX)))
-	return "\n".join(lines)
+	return "\n".join(lines) + _storage_penalty_text()
 
 ## Group lines "+32 Solar Arrays" (largest first), each opening its units in a
 ## nested tip (Glossary.put), then the net. `groups`: { group: { unit: v } }.

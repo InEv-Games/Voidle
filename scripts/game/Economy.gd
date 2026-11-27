@@ -159,6 +159,9 @@ static func base_cap(key: String) -> float:
 
 static var _cap_cache: Dictionary = {}
 static var _cap_frame: int = -1
+static var _over_capacity_frame: int = -1
+static var _over_capacity_resource: String = ""
+const STORAGE_OVER_CAPACITY_PENALTY := 0.10
 
 static func is_capped(id: String) -> bool:
 	return id != CREDITS and id != SCIENCE and id != POPULATION and id != ENERGY and id != ""
@@ -198,6 +201,26 @@ static func cap(id: String) -> float:
 ## Drops cached caps (call after buildings change mid-frame).
 static func invalidate_caps() -> void:
 	_cap_frame = -1
+	invalidate_storage_stock()
+
+static func invalidate_storage_stock() -> void:
+	_over_capacity_frame = -1
+
+## Existing stock can exceed a reduced cap. One affected resource is enough.
+static func over_capacity_resource() -> String:
+	var frame := Engine.get_process_frames()
+	if frame == _over_capacity_frame:
+		return _over_capacity_resource
+	_over_capacity_frame = frame
+	_over_capacity_resource = ""
+	for id: String in GameState.global_resources:
+		if (id in PROCESSED or is_raw(id)) and amount(id) > cap(id) + 0.0001:
+			_over_capacity_resource = id
+			break
+	return _over_capacity_resource
+
+static func storage_output_multiplier() -> float:
+	return 1.0 if over_capacity_resource().is_empty() else 1.0 - STORAGE_OVER_CAPACITY_PENALTY
 
 static func is_full(id: String) -> bool:
 	return is_capped(id) and amount(id) >= cap(id) - 0.001

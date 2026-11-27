@@ -357,6 +357,14 @@ Başlangıç commit'i `dae9ed2`. Kaynak referansları incelendi. Godot ve oyun t
 
 Başlangıç commit'i `3b45694`. Godot ve oyun testleri çalıştırılmadı.
 
+### Depo kapasitesi aşımında üretim cezası
+
+- `Economy.over_capacity_resource()` ham maden ve işlenmiş kaynak stoklarını güncel depolama sınırlarıyla karşılaştırıyor. Herhangi bir stok sınırı aştığında %10 üretim cezası uygulanıyor. Kapasiteyle eşit stok normal. Birden fazla kaynak sınırı aşsa da ceza sabit ve bütün stoklar kapasiteye sığdığında kalkıyor. Depo yıkımı sonrası eldeki fazla stok mevcut kuralla korunuyor.
+- `ProductionManager` cezayı bina ve district üretim miktarına, enerji üretimine ve boştaki nüfusun sağladığı Credits ile Science gelirlerine uyguluyor. Konut kapasitesi ve işletme girdileri kendi tarifelerini kullanıyor. Çevrimdışı ilerleme aynı üretim yolunu kullanıyor. Depo tamamlandığında, kapasite düştüğünde ve stok değiştiğinde ilgili önbellekler yenileniyor.
+- `ResourceBar.gd` üretim tooltip'lerinde kapasiteyi aşan kaynağı ve cezanın yüzdesini gösteriyor.
+
+Başlangıç commit'i `99d7977`. Godot ve oyun testleri çalıştırılmadı.
+
 ## Başka bir AI ile kod incelemesi
 
 Repo kökünde ilk komut dalı ve çalışma ağacını, ayrı `git diff` komutları ise değişiklik gruplarının başlangıç commit’ine göre güncel farklarını gösterir. Bu dosyalarda yeni işler başladıysa inceleme çıktısı onları da kapsar.

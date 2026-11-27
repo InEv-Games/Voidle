@@ -463,8 +463,8 @@ static func move(pd: PlanetData, poi: POIData, site: Vector2) -> bool:
 static func _changed(pp: PlanetProgress) -> void:
 	pp.has_spaceport = GameState.has_finished_building(pp.planet_seed, "spaceport")
 	Location.invalidate(pp.planet_seed)
-	ProductionManager.invalidate(pp.planet_seed)
 	Economy.invalidate_caps()
+	ProductionManager.invalidate(pp.planet_seed)
 	pp.recalculate_limits()
 	GameState.planet_progress_changed.emit(pp.planet_seed)
 	GameState.save()

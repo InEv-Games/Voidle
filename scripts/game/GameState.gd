@@ -408,6 +408,7 @@ func add_resource(resource_id: String, amount: float) -> void:
 		if overflow > 0.0001:
 			Trade.sell_overflow(resource_id, overflow)
 	global_resources[resource_id] = v
+	Economy.invalidate_storage_stock()
 	global_resources_changed.emit()
 
 func consume_resource(resource_id: String, amount: float) -> bool:
@@ -415,6 +416,7 @@ func consume_resource(resource_id: String, amount: float) -> bool:
 	if have < amount:
 		return false
 	global_resources[resource_id] = have - amount
+	Economy.invalidate_storage_stock()
 	global_resources_changed.emit()
 	return true
 
@@ -1826,6 +1828,7 @@ func load_save() -> bool:
 
 	global_resources    = data.get("global_resources",   {})
 	global_resources.erase(Economy.ENERGY)   # energy is a flow; older saves stored it
+	Economy.invalidate_caps()
 	unlocked_buildings  = data.get("unlocked_buildings", {})
 	revealed_resources  = data.get("revealed_resources", [])
 	civilization_type   = int(data.get("civilization_type", 0))
@@ -1977,6 +1980,7 @@ func delete_save(remove_file := true, rebuild := true) -> void:
 		get_node("/root/Narrative").reset()   # nothing of the old game stays queued or on screen
 	planet_view_unlocked = false
 	global_resources.clear()
+	Economy.invalidate_caps()
 	_planet_progress.clear()
 	# the old game's ships (freighters, landers) must not keep flying in the new one
 	if has_node("/root/ShipManager"):
